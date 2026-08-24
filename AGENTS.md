@@ -19,18 +19,25 @@ Antes de implementar, consulte nesta ordem:
 3. `docs/architecture/adr-*.md` — decisões e trade-offs arquiteturais aceitos;
 4. `docs/engineering/PRINCIPLES.md` — regras permanentes de engenharia;
 5. `DESIGN.md` — UX/UI, responsividade, acessibilidade, estados e direção visual;
-6. `docs/specs/<feature>/SPEC.md`, quando existir — comportamento e contrato da feature;
-7. `docs/specs/<feature>/PLAN.md`, quando existir — plano de implementação aprovado.
+6. `docs/delivery/SLICES.md` — mapa oficial de construção do MVP, ordem, dependências e boundaries dos slices;
+7. `docs/specs/<slice>/SPEC.md`, quando existir — comportamento e contrato do slice atual;
+8. `docs/specs/<slice>/PLAN.md`, quando existir — plano de implementação aprovado.
 
 ### Autoridade dos documentos
 
 - PRD governa produto, domínio e escopo.
+- SYSTEM-DESIGN representa a arquitetura vigente.
 - ADR aceito governa a decisão arquitetural específica que registra.
-- SYSTEM-DESIGN representa a arquitetura vigente do sistema.
 - PRINCIPLES governa práticas permanentes de engenharia.
 - DESIGN governa UX/UI.
-- SPEC governa o comportamento da feature.
-- PLAN governa a estratégia de implementação da feature.
+- SLICES governa a decomposição e sequência macro de entrega do MVP.
+- SPEC governa o comportamento do slice atual.
+- PLAN governa a estratégia de implementação do slice atual.
+
+Antes de iniciar um novo slice, consulte `docs/delivery/SLICES.md`.
+
+Não implemente comportamento pertencente a slices futuros apenas por conveniência.
+Se a implementação revelar que o mapa precisa ser dividido, unido, reordenado ou corrigido, atualize o mapa deliberadamente antes de expandir o escopo.
 
 Em caso de conflito ou inconsistência relevante entre fontes, não escolha
 silenciosamente uma interpretação. Preserve o comportamento existente e
@@ -42,7 +49,7 @@ sinalize a inconsistência antes de introduzir uma nova decisão.
   diretamente para o problema definido no PRD.
 
 - Alinhe UX/UI ao `DESIGN.md`, arquitetura ao SYSTEM-DESIGN/ADRs,
-  implementação ao `PRINCIPLES.md` e comportamento da feature à sua SPEC.
+  implementação ao `PRINCIPLES.md` e comportamento do slice à sua SPEC.
 
 - Não introduza patterns, abstrações ou infraestrutura por preferência pessoal.
 
@@ -56,9 +63,9 @@ sinalize a inconsistência antes de introduzir uma nova decisão.
   arquitetural, fronteira de módulo, persistência, segurança, contrato externo,
   serviço externo ou dependência transversal relevante.
 
-- Não altere PRD, ADR, SYSTEM-DESIGN, DESIGN ou PRINCIPLES apenas para fazer
-  a implementação atual parecer compatível. Mudanças nessas fontes devem ser
-  deliberadas.
+- Não altere PRD, ADRs, SYSTEM-DESIGN, DESIGN, PRINCIPLES ou SLICES
+  apenas para fazer a implementação atual parecer compatível.
+  Mudanças nessas fontes devem ser deliberadas.
 
 - Releia as fontes relevantes quando a tarefa mudar de escopo, contrato,
   domínio ou fronteira.
