@@ -30,6 +30,12 @@ model Tenant {
   products    Product[]
   entitlement Entitlement?
   idempotencyRecords IdempotencyRecord[]
+  generationIntents GenerationIntent[]
+  generationRuns GenerationRun[]
+  usageReservations GenerationUsageReservation[]
+  strategies Strategy[]
+  plans Plan[]
+  contents Content[]
 
   @@map("tenants")
 }
@@ -71,6 +77,10 @@ model Product {
   tenant           Tenant    @relation(fields: [tenantId], references: [id])
   context          ProductContext?
   idempotencyRecords IdempotencyRecord[]
+  generationRuns   GenerationRun[]
+  strategies       Strategy[]
+  plans            Plan[]
+  contents         Content[]
 
   @@index([tenantId])
   @@map("products")
@@ -119,4 +129,166 @@ model Entitlement {
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
 
   @@map("entitlements")
+}
+
+model GenerationWorkerState {
+  id              String   @id // singleton "default"
+  lastHeartbeatAt DateTime
+  updatedAt       DateTime @updatedAt
+
+  @@map("generation_worker_state")
+}
+
+model GenerationIntent {
+  id                String        @id @default(uuid())
+  tenantId          String
+  idempotencyKey    String
+  intentFingerprint String
+  inputSnapshotHash String
+  generationRunId   String        @unique
+  createdAt         DateTime      @default(now())
+  expiresAt         DateTime
+  tenant            Tenant        @relation(fields: [tenantId], references: [id])
+  generationRun     GenerationRun @relation(fields: [generationRunId], references: [id])
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([expiresAt])
+  @@index([tenantId])
+  @@map("generation_intents")
+}
+
+model GenerationRun {
+  id                 String        @id @default(uuid())
+  tenantId           String
+  productId          String
+  operation          String
+  status             String        @default("queued")
+  quantity           Int
+  objective          String?
+  contractVersion    String        @default("1")
+  inputSnapshot      Json
+  inputSnapshotHash  String
+  historySnapshot    Json
+  attemptCount       Int           @default(0)
+  leaseToken         String?
+  leaseExpiresAt     DateTime?
+  nextAttemptAt      DateTime      @default(now())
+  queuedAt           DateTime      @default(now())
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  lastError          String?
+  previousRunId      String?
+  engineVersion      String?
+  provider           String?
+  model              String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  tenant             Tenant        @relation(fields: [tenantId], references: [id])
+  product            Product       @relation(fields: [productId], references: [id])
+  previousRun        GenerationRun? @relation("GenerationRetry", fields: [previousRunId], references: [id])
+  retryRuns          GenerationRun[] @relation("GenerationRetry")
+  intents            GenerationIntent[]
+  usageReservation   GenerationUsageReservation?
+  strategy           Strategy?
+  plan               Plan?
+  contents           Content[]
+
+  @@index([status, nextAttemptAt])
+  @@index([status, leaseExpiresAt])
+  @@index([tenantId, productId])
+  @@index([tenantId, createdAt])
+  @@map("generation_runs")
+}
+
+model GenerationUsageReservation {
+  id             String        @id @default(uuid())
+  tenantId       String
+  generationRunId String       @unique
+  periodStart    DateTime
+  quantity       Int
+  status         String        @default("reserved")
+  reason         String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  releasedAt     DateTime?
+  confirmedAt    DateTime?
+  tenant         Tenant        @relation(fields: [tenantId], references: [id])
+  generationRun  GenerationRun @relation(fields: [generationRunId], references: [id])
+
+  @@index([tenantId, periodStart, status])
+  @@map("generation_usage_reservations")
+}
+
+model Strategy {
+  id                String        @id @default(uuid())
+  tenantId          String
+  productId         String
+  generationRunId   String        @unique
+  contractVersion   String        @default("1")
+  payload           Json
+  provenance        Json
+  createdAt         DateTime      @default(now())
+  tenant            Tenant        @relation(fields: [tenantId], references: [id])
+  product           Product       @relation(fields: [productId], references: [id])
+  generationRun     GenerationRun @relation(fields: [generationRunId], references: [id])
+  plan              Plan?
+  contents          Content[]
+
+  @@index([tenantId, productId])
+  @@map("strategies")
+}
+
+model Plan {
+  id                String        @id @default(uuid())
+  tenantId          String
+  productId         String
+  generationRunId   String        @unique
+  strategyId        String        @unique
+  contractVersion   String        @default("1")
+  payload           Json
+  provenance        Json
+  createdAt         DateTime      @default(now())
+  tenant            Tenant        @relation(fields: [tenantId], references: [id])
+  product           Product       @relation(fields: [productId], references: [id])
+  generationRun     GenerationRun @relation(fields: [generationRunId], references: [id])
+  strategy          Strategy      @relation(fields: [strategyId], references: [id])
+  contents          Content[]
+
+  @@index([tenantId, productId])
+  @@map("plans")
+}
+
+model Content {
+  id             String        @id @default(uuid())
+  tenantId       String
+  productId      String
+  generationRunId String
+  strategyId     String
+  planId         String
+  position       Int
+  audienceId     String
+  painId         String
+  desireId       String? // SPEC: desejo OU benefício — ao menos um (CHECK no banco)
+  benefitId      String?
+  objectionId    String?
+  angleId        String
+  hook           String
+  normalizedHook String
+  structure      String
+  script         String
+  scenes         Json
+  cta            String
+  explanation    String
+  provenance     Json
+  createdAt      DateTime      @default(now())
+  tenant         Tenant        @relation(fields: [tenantId], references: [id])
+  product        Product       @relation(fields: [productId], references: [id])
+  generationRun  GenerationRun @relation(fields: [generationRunId], references: [id])
+  strategy       Strategy      @relation(fields: [strategyId], references: [id])
+  plan           Plan          @relation(fields: [planId], references: [id])
+
+  @@unique([generationRunId, position])
+  @@unique([generationRunId, normalizedHook])
+  @@index([tenantId, productId])
+  @@map("contents")
 }

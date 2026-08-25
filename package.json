@@ -8,8 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/components/products/product-form-model.test.ts src/modules/entitlements/service.test.ts src/modules/identity/http.test.ts src/modules/identity/password.test.ts src/modules/identity/service.test.ts src/modules/product/http.test.ts src/modules/product/service.test.ts src/modules/product/url-guard.test.ts src/modules/product/validation.test.ts",
-    "smoke:product": "tsx scripts/smoke-product.mts"
+    "test": "tsx --test src/components/products/product-form-model.test.ts src/modules/entitlements/service.test.ts src/modules/entitlements/generation.test.ts src/modules/identity/http.test.ts src/modules/identity/password.test.ts src/modules/identity/service.test.ts src/modules/product/http.test.ts src/modules/product/service.test.ts src/modules/product/url-guard.test.ts src/modules/product/validation.test.ts src/modules/generation/contract.test.ts src/modules/generation/runtime.test.ts src/modules/generation/service.test.ts src/modules/generation/worker.test.ts src/modules/generation/http.test.ts src/modules/generation/health.test.ts",
+    "smoke:product": "tsx scripts/smoke-product.mts",
+    "worker:generation": "tsx scripts/worker.mts"
   },
   "dependencies": {
     "@prisma/client": "6.12.0",

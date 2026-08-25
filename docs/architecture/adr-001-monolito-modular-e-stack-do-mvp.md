@@ -6,7 +6,7 @@ Aceito — baseline arquitetural do MVP.
 
 ## Contexto
 
-O produto ainda não possui implementação nem decisões registradas em `docs/architecture` ou `docs/design`. O PRD pede simplicidade agora, modularidade para evoluir depois e explicitamente não pede integrações externas, mídia ou microserviços no MVP.
+O produto pede simplicidade agora, modularidade para evoluir depois e uma importação browser-based do TikTok Shop sem transformar a frente em uma integração geral de plataforma, serviço externo ou microserviço.
 
 O fluxo principal é coeso: produto → estratégia → plano → conteúdo → produção. Separar esses passos em serviços distintos criaria rede, deploys, observabilidade e consistência distribuída antes de existir pressão real para isso.
 
@@ -23,7 +23,7 @@ Adotar um monólito modular em um único repositório e unidade principal de dep
 - um processo de worker assíncrono, usando o mesmo código e os mesmos módulos do monólito, para gerações demoradas;
 - adaptadores estreitos para serviços externos, sem SDK de fornecedor vazando para o domínio.
 
-Os módulos iniciais são limites de código, não serviços independentes: identidade/tenant (conforme ADR-009), produto, estratégia, plano/conteúdo, produção, geração e uso/plano. Dependências atravessam esses limites por casos de uso e contratos do módulo; detalhes de infraestrutura ficam nas bordas.
+Os módulos iniciais são limites de código, não serviços independentes: identidade/tenant (conforme ADR-009), browser service/importação (conforme ADR-011), produto, estratégia, plano/conteúdo, produção, geração e uso/plano. Dependências atravessam esses limites por casos de uso e contratos do módulo; detalhes de infraestrutura ficam nas bordas.
 
 O fornecedor específico de modelo de linguagem não é fixado neste ADR. O MVP terá uma implementação de provedor por vez, atrás do limite definido no ADR-002.
 
@@ -59,7 +59,7 @@ O fornecedor específico de modelo de linguagem não é fixado neste ADR. O MVP 
 
 ## Fora do MVP
 
-Microserviços, event bus, service mesh, data warehouse, integrações TikTok/TikTok Shop, publicação automática, analytics externo e serviço dedicado de vídeo/IA.
+Microserviços, event bus, service mesh, data warehouse, TikTok OAuth, TikTok Shop API, publicação automática, analytics externo e serviço dedicado de vídeo/IA. A importação browser-based definida no ADR-011 é a única capacidade TikTok do MVP.
 
 ## Gatilhos de revisão
 

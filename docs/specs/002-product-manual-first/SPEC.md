@@ -1,186 +1,246 @@
-# SPEC — Slice 002: Product manual-first pronto para Strategy
+# SPEC — Slice 002: Importação de Product via Browser com confirmação
 
 ## User Outcome
 
-O creator consegue cadastrar um Product com fatos suficientes, completar seu contexto estratégico e deixá-lo pronto para a primeira Strategy do próximo slice.
+O creator consegue colar uma URL do TikTok Shop, reutilizar ou criar um browser profile isolado, autenticar manualmente quando necessário, revisar os fatos extraídos e confirmar um Product ativo. Se a importação falhar ou não for desejada, consegue criar o Product pelo fallback manual mínimo.
 
 ## Contexto
 
-Este é o próximo slice após o Workspace pessoal e o primeiro acesso. O fluxo começa em um Tenant/Workspace resolvido pela sessão server-side e prepara o primeiro objeto real do core loop: Product.
+Este slice sucede o Workspace pessoal do Slice 001 e entrega o Product factual que inicia o core loop. O novo PRD de Importação define Browser Service + Chromium + Browser Profile + Browser Harness como o caminho principal.
 
-A entrada manual é o caminho canônico. Nome e descrição são suficientes para criar um Product inicial. Categoria, preço, características, referências de imagens, observações e URL podem enriquecer o registro sem transformar a entrada em dependência de scraping ou de uma integração de marketplace.
+A aplicação descobre fatos. O creator confirma. A Commerce Intelligence Engine descobre estratégia posteriormente. O cadastro não solicita público, dores, desejos, objetivo, estilo, mercado, posicionamento ou qualquer outro campo estratégico.
 
-O contexto estratégico pertence ao Product e usa o locale operacional `pt-BR`. Ele pode ser completado antes da primeira geração, mas a decisão comercial, Strategy, Plan e Content pertencem a slices posteriores.
+A sessão autenticada fica no profile persistente do Chromium. A aplicação principal guarda somente a associação server-side ao profile e o estado operacional necessário; não coleta nem manipula senha, cookie ou token do TikTok.
 
-O entitlement inicial de Products ativos é provisionado server-side para todo Tenant conforme o ADR-006. Seu limite vem de configuração do servidor; o cliente não escolhe plano, limite ou contador.
+A importação externa sempre produz primeiro um `ProductCandidate`. Candidate é um rascunho não confiável e não ativa Product. Somente confirmação humana, com os fatos revisados, cria o Product ativo.
+
+## Gate obrigatório de infraestrutura
+
+Antes de declarar o slice pronto, uma POC isolada e reproduzível deve comprovar:
+
+1. Browser Harness instalado, versionado e executável no ambiente responsável pela automação.
+2. Browser Service criando um profile persistente isolado por usuário/Tenant.
+3. Chromium abrindo uma URL real do TikTok Shop no profile.
+4. Login manual do creator dentro do browser, sem senha/cookie/token passados à aplicação.
+5. Encerramento e reabertura do Chromium reutilizando a sessão do profile.
+6. Browser Harness inspecionando e controlando a página.
+7. Product Extraction Agent extraindo um produto real e produzindo Candidate revisável.
+8. Backup/restauração protegidos e testados em cópia isolada, com binding ao Tenant, retenção/deleção definida e revogação do acesso ao profile no desprovisionamento; sem esse gate, não aceitar produção.
+
+Se o gate falhar, o fluxo deve comunicar a falha e oferecer fallback manual. Não inventar uma integração de API, OAuth ou scraper alternativo para contornar o gate.
 
 ## In Scope
 
-- Abrir a entrada de criação de Product a partir da ação `Adicionar produto`.
-- Criar e abrir um Product ativo com nome e descrição manual válidos.
-- Aceitar categoria, preço em BRL, características, referências de imagens, observações e URL como dados opcionais.
-- Permitir abrir um Product do próprio Tenant e complementar seus fatos antes da geração.
-- Registrar contexto estratégico em `pt-BR`, incluindo objetivo, público, estilo, presença do creator, experiência, restrições, mercado e observações quando informados.
-- Permitir salvar um Product com poucos dados e retornar posteriormente para completá-lo.
-- Aplicar o limite server-side de Products ativos do Tenant antes de ativar um novo Product.
-- Permitir Products adicionais no mesmo Workspace enquanto houver capacidade autorizada.
-- Usar uma chave de idempotência por intenção de criação para que retry da mesma submissão resolva o mesmo Product sem impor unicidade de nome ou URL.
-- Tentar enriquecimento por URL somente de forma best-effort, sem bloquear o Product manual quando a URL falhar, for bloqueada ou retornar conteúdo incompleto.
-- Exibir `Produto pronto para Strategy` como estado informativo quando os fatos obrigatórios e o contexto necessário estiverem completos, sem iniciar Strategy.
-- Manter Product e contexto escopados ao Tenant resolvido pela sessão.
+- Abrir `Adicionar produto` a partir de Hoje/Produtos.
+- Aceitar URL `http`/`https` do TikTok Shop como entrada principal, sem credenciais embutidas e dentro do limite de tamanho vigente do produto.
+- Delegar inspeção e interação ao Browser Service através do contrato que ele expõe sobre o Browser Harness, priorizando Accessibility Tree, DOM/CDP, Structured Data e Network.
+- Pausar automação quando o TikTok exigir `LOGIN_REQUIRED`, `CAPTCHA_REQUIRED`, `2FA_REQUIRED` ou `USER_INTERACTION_REQUIRED`; QR Code é uma forma de `LOGIN_REQUIRED`.
+- Entregar browser interativo para o creator resolver login, QR Code, CAPTCHA, 2FA ou confirmação humana.
+- Detectar conclusão da intervenção e retomar a extração sem exigir nova URL.
+- Executar Product Extraction Agent somente nas áreas necessárias para entender o produto aberto; o Agent não acessa Harness/CDP diretamente.
+- Produzir Candidate com o contrato factual:
+
+```ts
+interface ProductCandidate {
+  name: string;
+  description?: string;
+  category?: string;
+  brand?: string;
+  price?: { amount: number; currency: string };
+  features: string[];
+  images: string[];
+  seller?: string;
+  variants?: string[];
+  sourceUrl: string;
+}
+```
+
+`variants` é uma extensão factual opcional do contrato mínimo do PRD para cobrir variantes relevantes quando a página as expuser; ausência permanece válida e não é inventada.
+
+- Preservar origem, lacunas, estado e instante da tentativa junto do Candidate, sem transformar metadados em fatos inventados.
+- Exibir preview factual e permitir confirmar sem editar ou editar nome, descrição, categoria, marca, preço/moeda, características, variantes e imagens antes da confirmação; seller fica visível como fato de origem e pode ser corrigido quando a UI oferecer esse campo factual.
+- Criar Product ativo no Tenant da sessão após confirmação humana.
+- Preservar correções confirmadas, fonte e proveniência; nova extração não sobrescreve correção silenciosamente.
+- Detectar Product já confirmado para o mesmo Tenant e origem/identidade comprovada, orientando `Abrir produto` sem duplicar.
+- Oferecer `Adicionar manualmente` a qualquer momento em que a importação falhe, exija interação não concluída ou não seja desejada.
+- No fallback manual, exigir nome e descrição; aceitar categoria, preço, características, imagens, URL e observações opcionais.
+- Aplicar limite server-side de Products ativos e isolamento por Tenant.
+- Encaminhar Product confirmado para a próxima ação do Slice 003 sem iniciar Strategy, Plan, Content ou Generation.
 
 ## Out of Scope
 
-- Decisão comercial, análise de Product, Strategy, Plan ou Content.
-- Geração síncrona ou assíncrona, provider textual, fila, retry de geração ou quota de Contents.
-- Scraping complexo, crawler, login ou conexão com TikTok/TikTok Shop.
-- Importação em lote, sincronização ou atualização automática de catálogo.
-- Upload ou processamento de mídia; imagens neste slice são referências opcionais, não arquivos gerados ou publicados.
-- Publicação, analytics, métricas externas ou dashboard.
-- Colaboração, membros, convites, RBAC ou troca de Tenant.
-- Product compartilhado entre Workspaces.
-- Troca de plano, cobrança, upgrade, downgrade ou edição do limite comercial.
+- TikTok OAuth, TikTok Shop API, OAuth callback, scopes, Connection ou armazenamento de tokens.
+- Receber, copiar ou manipular senha, cookie, session ID, QR Code ou token do TikTok.
+- Automatizar CAPTCHA, senha, QR Code, 2FA ou confirmação humana.
+- Scraping universal, crawler, navegação fora do produto ou nova engine genérica de browser automation.
+- Product Extraction Agent gerar Strategy, público, dores, desejos, objeções, benefícios, argumentos, posicionamento, ângulos, hooks ou scripts.
+- Strategy, análise comercial, Plan, Content, Generation, Production ou integração com Commerce Intelligence.
+- Publicação, agendamento, analytics, vendas, pedidos, sincronização contínua, catálogo de seller, campanhas ou outros marketplaces.
+- Download, upload, processamento ou armazenamento próprio obrigatório das imagens.
+- Importação em lote ou atualização automática posterior de preço/descrição.
 
 ## Comportamentos
 
-### Criar Product manualmente
+### Entrada e abertura do browser
 
-1. Uma pessoa autenticada escolhe `Adicionar produto` em `Hoje`.
-2. A aplicação resolve o Tenant/Workspace pela sessão, nunca por `tenant_id` enviado pelo cliente.
-3. A pessoa informa nome e descrição e pode preencher os campos opcionais disponíveis.
-4. A interface cria uma `idempotency_key` opaca para a intenção e reutiliza a mesma chave em retry da submissão.
-5. Com dados válidos e capacidade de Products ativos disponível, a aplicação cria um Product ativo pertencente ao Tenant resolvido.
-6. A aplicação preserva o locale `pt-BR` no contexto estratégico associado ao Product.
-7. Repetir dentro da retenção de 24 horas a mesma intenção com a mesma chave e o mesmo payload normalizado retorna o mesmo Product; reutilizar a chave com payload diferente falha sem nova mutação; após a retenção, a mesma chave inicia obrigatoriamente uma nova intenção, retorna um novo Product e não altera o Product anterior.
-8. Após salvar, a pessoa consegue abrir o Product, completar o contexto e identificar a próxima ação `Completar contexto` ou o estado informativo `Produto pronto para Strategy`.
-9. Nenhuma Strategy, Plan, Content, fila ou dado de outro Tenant é criado implicitamente.
+1. Pessoa autenticada escolhe `Adicionar produto`.
+2. A interface mostra URL como ação principal e `Adicionar manualmente` como fallback visível.
+3. URL inválida é rejeitada antes de iniciar Chromium; a mensagem fica associada ao campo e preserva os valores válidos.
+4. Para URL válida, o Browser Service resolve o Tenant da sessão, cria ou reutiliza o profile correto e abre a página.
+5. Enquanto o browser está abrindo ou extraindo, a intenção permanece preservada e o duplo acionamento é impedido.
+6. O Browser Service não expõe o filesystem, cookies, tokens, CDP secret ou conteúdo bruto do profile à UI.
 
-### Completar Product e contexto
+### Human-in-the-loop
 
-1. A pessoa abre um Product pertencente ao próprio Workspace.
-2. A pessoa pode completar ou corrigir fatos do Product e contexto estratégico sem perder os dados já salvos.
-3. O contexto informado permanece ligado ao Product de origem e disponível para o próximo slice.
-4. Salvar alterações mantém o mesmo Product e não cria uma cópia silenciosa.
-5. A atualização envia a versão observada do Product; se outra edição tiver sido salva antes, a aplicação rejeita a versão obsoleta com conflito recuperável, preserva a versão mais recente e permite recarregar antes de tentar novamente.
-6. Um Product de outro Tenant não pode ser aberto, alterado ou inferido por identificador enviado pelo cliente.
+1. Se a página estiver acessível e a sessão válida, a extração continua sem exibir browser interativo.
+2. Se houver bloqueio humano, o estado informa a ação necessária e o browser interativo é exibido com nome acessível, foco inicial no contexto da ação e foco de retorno ao gatilho após fechar/retomar.
+3. O creator resolve o bloqueio no próprio browser. A aplicação não automatiza senha, CAPTCHA, QR Code, 2FA ou confirmação solicitada pelo TikTok.
+4. Cada estado de bloqueio oferece `Cancelar análise`; cancelar preserva URL, intenção e profile, transita para `CANCELLED` e mantém `Tentar novamente`/`Adicionar manualmente`.
+5. `Retomar análise` só aparece depois de o Browser Service verificar a conclusão; o sistema retorna à extração e não reinicia a intenção.
+6. Se a superfície interativa não puder ser fechada pelo runtime, `Cancelar análise` permanece disponível na superfície da aplicação e encerra a tentativa server-side sem exigir fechar Chromium manualmente.
 
-### URL como enriquecimento opcional
+### Extração e Candidate
 
-1. A pessoa pode informar uma URL `http` ou `https` com até 2.048 caracteres e sem credenciais embutidas.
-2. A aplicação pode tentar enriquecê-la de forma isolada e best-effort, fora da transação de Product.
-3. A tentativa aceita no máximo 3 redirecionamentos, 5 segundos de tempo total e 1 MiB de conteúdo; o destino final deve continuar em `http`/`https` e não pode resolver para loopback, rede privada, link-local, multicast ou faixa reservada.
-4. Conteúdo externo limitado a tipos textuais suportados é tratado como não confiável; conteúdo incompleto, tipo não suportado, bloqueio, timeout, DNS ou falha de rede não impede salvar os dados manuais.
-5. O resultado externo, quando houver, é apresentado como enriquecimento pendente, concluído ou indisponível e nunca substitui silenciosamente os fatos manuais.
-6. A experiência não promete importação integral, scraping garantido ou conexão com marketplace.
+1. O Product Extraction Agent solicita ao Browser Service observações e ações semanticamente necessárias; o Browser Service é o único dono do acesso ao Browser Harness/CDP. A prioridade é Accessibility Tree, depois DOM/CDP, Structured Data e Network.
+2. O agente expande descrição, abre `Ver mais` ou navega em seções somente quando isso for necessário para os fatos do produto atual.
+3. O agente não segue recomendações, busca outros produtos ou executa ações comerciais.
+4. Fatos ausentes permanecem ausentes. Normalização pode limpar representação, mas não pode inventar preço, moeda, característica, seller, variante ou categoria.
+5. Candidate `READY` mostra fatos encontrados, origem, lacunas e aviso de que ainda não são fatos confirmados. Quando faltarem fatos, `Editar candidate` é a ação para completar os campos permitidos.
+6. Candidate estruturalmente inválido, expirado ou cuja origem não possa ser validada vai para `ERROR`, não pode ser confirmado e oferece retry/fallback. Candidate válido porém incompleto permanece `READY` somente para edição/confirmar após os campos mínimos serem satisfeitos.
 
-### Limite de Products ativos
+### Revisão, edição e confirmação
 
-1. Todo Tenant possui um entitlement default server-side conforme o ADR-006; sua capacidade `active_products` vem de configuração server-side.
-2. Antes de ativar um Product, a aplicação resolve o entitlement vigente no servidor para o Tenant.
-3. Se a configuração estiver ausente ou inválida, a ativação falha fechada com estado recuperável de capacidade indisponível e nenhuma mutação parcial.
-4. Se houver capacidade, a ativação e a atualização do uso ocorrem de forma consistente com a criação do Product.
-5. Se o limite estiver atingido, a aplicação rejeita a ativação sem criar Product ativo parcial ou ultrapassar a capacidade.
-6. Duas criações concorrentes no limite resultam em no máximo o número configurado de Products ativos; a requisição vencedora salva, e a perdedora recebe erro recuperável de capacidade sem Product ou uso parcial.
-7. O cliente não pode escolher plano, limite, período ou contador para contornar a regra.
+1. Creator pode confirmar Candidate sem editar quando os fatos forem suficientes.
+2. `Editar` permite corrigir nome, descrição, categoria, marca, seller, preço/moeda, características, variantes e imagens dentro das validações do Product; todo valor corrigido mantém a proveniência `creator-confirmed`.
+3. A confirmação recarrega Candidate no servidor, verifica Tenant, estado e versão, valida os valores e somente então cria Product ativo.
+4. Product guarda fatos confirmados, URL original, origem/proveniência e referências de imagens; não guarda dados internos do profile.
+5. Product já existente para a mesma URL de origem canônica, normalizada pelo Browser Service e escopada ao Tenant, retorna orientação para abrir o existente; quando não houver identidade canônica comprovada, não declarar duplicação apenas por nome ou URL não normalizada. Retry não cria segundo Product.
+6. Confirmar Product não executa Strategy nem cria contexto estratégico; a interface apenas oferece a próxima ação quando Slice 003 estiver disponível.
+
+### Fallback manual
+
+1. Creator pode escolher `Adicionar manualmente` antes ou depois de qualquer falha de importação.
+2. Nome e descrição válidos criam Product ativo; categoria, preço, características, imagens, URL e observações são opcionais.
+3. Fallback não solicita público, dores, desejos, objetivo, estilo, mercado, posicionamento ou qualquer decisão da Strategy.
+4. Falha da importação não remove Product manual previamente confirmado nem destrói o profile persistente.
+
+### Profile e encerramento
+
+1. O profile é reutilizado para o mesmo Tenant/usuário e nunca compartilhado entre Tenants.
+2. Encerrar Chromium libera o processo e preserva cookies, localStorage, IndexedDB e demais dados do profile no volume protegido.
+3. Falha de encerramento é registrada de forma sanitizada e não transforma o profile em resposta da API.
+4. Profile corrompido ou indisponível gera erro recuperável; não apagar automaticamente o único profile sem uma ação operacional explícita.
 
 ## Regras e invariantes
 
-- Todo Product pertence a exatamente um Tenant/Workspace.
-- Identificadores de Product são UUID v4 ou equivalente com pelo menos 122 bits de entropia e não são previsíveis.
-- Toda leitura e escrita do slice usa o Tenant resolvido server-side pela sessão.
-- `tenant_id` recebido do cliente nunca seleciona o escopo de autorização.
-- Nome e descrição manual são suficientes para criar um Product inicial; os demais campos são opcionais salvo validação específica do campo informado.
-- Product adicional não é rejeitado por uma unicidade artificial de nome ou URL.
-- A chave de idempotência é opaca, obrigatória para criação, escopada ao Tenant, gerada com pelo menos 128 bits de entropia e distingue retry da criação intencional de outro Product igual.
-- O payload normalizado para idempotência aparará espaços externos e quebras de linha, aplicará Unicode NFC, representará preço em centavos, campos opcionais ausentes como `null` e preservará maiúsculas/minúsculas e a ordem das listas; a mesma chave com payload normalizado diferente nunca cria ou altera Product silenciosamente.
-- O registro de idempotência é retido por 24 horas após conclusão ou falha terminal; dentro da retenção a mesma chave resolve o resultado original, e após a expiração inicia obrigatoriamente nova intenção sem alterar o Product anterior.
-- O locale operacional persistido para contexto é `pt-BR`.
-- Preço é BRL, não negativo, finito, com no máximo duas casas decimais e sem arredondamento silencioso; a persistência representa centavos inteiros.
-- Salvar novamente atualiza o Product existente sob controle de versão; conflito não sobrescreve a edição mais recente.
-- Nenhuma entrada de Product cria Strategy, Plan, Content, Production ou Generation.
-- URL e qualquer conteúdo externo são entrada não confiável e não podem acessar credenciais, rede interna ou dados de outro Tenant.
-- O limite de Products ativos é decidido no servidor e respeitado sob concorrência.
-- Product que não pode ser ativado por limite não deve aparecer como ativo nem consumir capacidade parcialmente.
+- Todo Candidate e Product pertence ao Tenant resolvido pela sessão.
+- Candidate nunca é Product ativo sem confirmação humana.
+- Browser profile é isolado por Tenant/usuário e tratado como credencial sensível.
+- A aplicação guarda `browserProfileId`, não login, senha, cookie, token, session ID ou conteúdo integral do profile.
+- Login, CAPTCHA, QR Code, 2FA e confirmação humana nunca são automatizados.
+- ProductCandidate contém fatos descobertos e sua origem; lacunas não são preenchidas por inferência.
+- Correção confirmada pelo creator prevalece sobre nova extração automática.
+- Product Import não contém decisões estratégicas e não inicia Strategy.
+- Browser Service é o único dono do lifecycle do Chromium e do acesso ao Browser Harness/CDP.
+- O Product Extraction Agent não implementa capacidades genéricas já fornecidas pelo Harness.
+- Product ativo usa limite server-side, sem confiar em Tenant, limite ou contador enviados pelo cliente.
+- Product, Candidate, profile e browser interativo não atravessam Tenant.
+- Falhas externas não removem Product manual confirmado nem invalidam o profile por padrão.
 
 ## Validações e erros
 
-- Nome obrigatório: texto Unicode aparado entre 1 e 200 caracteres.
-- Descrição obrigatória: texto Unicode aparado entre 1 e 5.000 caracteres.
-- Categoria opcional: texto aparado de até 120 caracteres.
-- Preço opcional: valor BRL finito, entre `0,00` e `99.999.999,99`, com até duas casas decimais; entradas inválidas, `NaN` e infinito são rejeitados.
-- Características opcionais: até 20 itens, cada um com até 300 caracteres.
-- Observações e campos de contexto opcionais: texto aparado de até 5.000 caracteres por campo.
-- Referências de imagens opcionais: até 10 referências `http`/`https`, cada uma com até 2.048 caracteres; nenhuma referência dispara upload ou processamento de mídia neste slice.
-- URL de Product opcional: `http`/`https`, até 2.048 caracteres, sem credenciais; limites de rede e conteúdo seguem o comportamento de enriquecimento desta SPEC.
-- A chave de idempotência deve ser opaca, não vazia, ter entre 22 e 128 caracteres e representar pelo menos 128 bits de entropia; chave reutilizada com payload diferente retorna conflito sem mutação.
-- Dados inválidos retornam mensagens associadas aos campos e não criam nem alteram Product parcialmente.
-- Limite atingido ou configuração de capacidade ausente retorna erro recuperável, sem Product ativo ou uso parcial e sem revelar dados de outro Tenant.
-- Product inexistente ou pertencente a outro Tenant falha com `404` e corpo uniforme não enumerável, sem revelar se o identificador existe.
-- Versão obsoleta em atualização retorna conflito recuperável, preserva o Product mais recente e não descarta dados silenciosamente.
-- Sessão ausente, inválida, expirada ou revogada impede a operação e conduz ao acesso.
-- Falha no enriquecimento de URL preserva o Product manual e comunica o estado opcional de enriquecimento quando relevante; enriquecimento parcial, concluído ou rejeitado nunca sobrescreve silenciosamente fatos manuais.
-- Retry dentro da retenção de 24 horas com a mesma chave e payload retorna o resultado original; após expiração a mesma chave inicia obrigatoriamente nova intenção e retorna novo Product; retry sem a chave obrigatória falha antes da persistência.
-- Nenhum erro ou log deve expor cookie, token, segredo, identificador de sessão ou dados de outro Tenant.
+- URL ausente, inválida, não `http/https`, com credenciais ou acima do limite: erro associado e fallback manual.
+- URL fora do TikTok Shop ou não reconhecida: erro recuperável, retry e `Adicionar manualmente`.
+- Profile ausente/corrompido ou Chromium indisponível: estado de capacidade/infraestrutura, sem perda de Candidate ou Product manual.
+- `LOGIN_REQUIRED`, `CAPTCHA_REQUIRED`, `2FA_REQUIRED` e `USER_INTERACTION_REQUIRED`: pausar, exibir browser interativo, oferecer `Cancelar análise` e orientar a próxima ação humana.
+- Interação abandonada ou não concluída: `CANCELLED`, mantendo URL, intenção, chave de idempotência e profile para retry; oferecer fallback manual.
+- Browser Harness indisponível ou POC não aprovada: não declarar importação bem-sucedida; fallback manual continua disponível.
+- Página alterada, dados insuficientes, preço/moeda inválidos ou resposta externa inconsistente: Candidate válido e incompleto permanece em `READY` para edição; Candidate inválido/expirado vai para `ERROR` sem confirmar e oferece retry/fallback.
+- Candidate inexistente, expirado, de outro Tenant ou com versão obsoleta: falha uniforme sem aceitar snapshot do cliente.
+- Nome manual: Unicode aparado entre 1 e 200 caracteres.
+- Descrição manual: Unicode aparado entre 1 e 5.000 caracteres.
+- Categoria: opcional até 120 caracteres; características e variantes até 20 itens de 300 caracteres; imagens até 10 URLs `http/https` de 2.048 caracteres; observações até 5.000 caracteres.
+- Preço: finito, não negativo, em moeda informada quando existente e com no máximo duas casas; sem arredondamento silencioso.
+- Retry da mesma intenção devolve o estado original; chave com payload diferente falha sem nova mutação.
+- Product fora do Tenant retorna `404` uniforme, sem enumeração.
+- Origin ausente/nula/divergente em mutações é rejeitada pela proteção existente do Slice 001.
+- Nenhuma resposta ou log expõe senha, cookie, token, session ID, CDP secret, profile bruto, erro cru do TikTok ou dado de outro Tenant.
 
 ## Estados de UX relevantes
 
-- **Não autenticado:** retorno ao fluxo de acesso; nenhum Product é exibido.
-- **Criando:** submissão em andamento, chave de idempotência preservada, duplo acionamento impedido e progresso comunicado.
-- **Criado:** Product persistido, confirmação textual e próximo passo explícito.
-- **Editando:** Product e contexto carregados, labels persistentes, campos operáveis e ação `Salvar alterações` clara.
-- **Salvando:** botão de salvar desabilitado, `aria-busy` comunicado e valores preservados.
-- **Salvo:** confirmação textual; a ação seguinte é `Completar contexto` quando faltarem dados, ou o estado informativo `Produto pronto para Strategy` quando o contexto estiver completo.
-- **Conflito de edição:** aviso associado, versão mais recente preservada e ações `Recarregar` e `Continuar` sem sobrescrita automática.
-- **Erro de validação:** campos inválidos destacados, mensagens associadas, foco no primeiro campo inválido e correção possível.
-- **Erro de capacidade:** limite de Products ativos atingido ou configuração indisponível, sem mutação parcial e com orientação recuperável.
-- **Enriquecimento pendente:** tentativa de URL em andamento; salvar manualmente permanece disponível.
-- **Enriquecimento indisponível:** aviso não bloqueante com retry opcional; fatos manuais continuam salváveis.
-- **Product salvo incompleto:** Product persistido com ação prioritária `Completar contexto`.
-- **Produto pronto para Strategy:** estado informativo sem botão, rota ou ação executável de Strategy neste slice.
-- **Falha de carregamento:** sessão preservada quando possível, mensagem recuperável e retry sem duplicação.
+- **IDLE:** URL e `Analisar produto`; `Adicionar manualmente` visível.
+- **OPENING:** URL preservada, `Abrindo TikTok...`, `aria-busy` e `role=status`; `Cancelar análise` sempre disponível na aplicação e ação duplicada bloqueada. Se Chromium não puder ser encerrado imediatamente, a aplicação confirma `CANCELLED` e informa que o encerramento será concluído pelo Browser Service.
+- **LOGIN_REQUIRED:** inclui QR Code; `Faça login no TikTok nesta janela para continuar`; browser interativo visível, com nome acessível, foco de entrada no contexto e foco de retorno ao gatilho.
+- **CAPTCHA_REQUIRED:** `Conclua a verificação no TikTok para continuar`; `Cancelar análise` disponível; nenhum bypass oferecido.
+- **2FA_REQUIRED:** `Conclua a confirmação em duas etapas no TikTok`; `Cancelar análise` disponível.
+- **USER_INTERACTION_REQUIRED:** `Conclua a confirmação solicitada no TikTok`; `Cancelar análise` disponível.
+- **PAUSED:** automação suspensa aguardando interação ou retomada; URL, intenção e profile preservados; `Retomar análise` só após verificação do Browser Service.
+- **CANCELLED:** creator encerrou a tentativa; URL, intenção, chave e profile permanecem para retry; ações `Tentar novamente` e `Adicionar manualmente`.
+- **EXTRACTING:** `Analisando produto...`, `aria-busy` e `role=status`; detalhes internos do Harness ficam ocultos e timeout/error mantém retry/fallback.
+- **READY:** Candidate com fatos, origem, lacunas, edição e `Confirmar produto`; Candidate incompleto não confirma até os campos mínimos serem válidos.
+- **ERROR:** mensagem junto do campo/região que falhou, `role=alert`, foco no primeiro erro, retry quando aplicável e `Adicionar manualmente`; Candidate inválido/expirado não mostra `Confirmar`.
+- **CONFIRMING:** valores preservados, ação bloqueada, `aria-busy` e retorno do foco ao gatilho após confirmação/erro.
+- **CONFIRMED:** Product ativo, origem preservada e nenhuma Strategy executada. Oferecer ação para o Slice 003 somente quando ele estiver disponível; caso contrário, `Abrir produto`/retornar a Products, sem CTA desabilitado ou enganoso.
+- **DUPLICATE:** `Você já adicionou este produto` e `Abrir produto`.
+- **PROFILE_UNAVAILABLE:** browser/profile indisponível, `Tentar novamente` e fallback manual sem expor detalhes sensíveis.
+- **LIMIT:** capacidade de Products indisponível; preservar URL/Candidate, permitir revisar Products existentes ou `Tentar novamente` e não sugerir preço/upgrade não definido. Fallback manual só confirma quando a capacidade estiver disponível.
 
-`Produto pronto para Strategy` aparece quando nome e descrição válidos e um registro de contexto `pt-BR` foram salvos sem erro; todos os campos de contexto são opcionais neste slice, e a validação de dados necessários para gerar Strategy pertence ao Slice 003.
+Quando Candidate, confirmação, fallback ou browser interativo abrirem modal/sheet, a superfície deve ter nome acessível, foco de entrada, trapping de Tab, fechamento com `Escape` sem mutar, retorno de foco ao gatilho e ação primária alcançável. O browser interativo pode ser modal ou não-modal, mas deve comunicar claramente seu contexto, como retornar à aplicação e como cancelar. A capacidade é a mesma em mobile, tablet e desktop: mobile pode usar tela cheia em uma coluna com safe area; tablet mantém rail acessível com nomes completos; desktop não adiciona ação exclusiva.
 
-Composição responsiva obrigatória:
-
-- **Mobile até 767px:** uma coluna, header contextual, formulário completo e ação de salvar acessível acima da navegação inferior; região rolável respeita `--safe-bottom` e `scroll-padding-block-end`.
-- **Tablet de 768px a 1199px:** rail lateral persistente de `72px`, região principal com grid de oito colunas, gutter de `24px` e formulário sem remover capacidades.
-- **Desktop a partir de 1200px:** sidebar fixa de `240px`, toolbar contextual de referência `56px` e coluna de conteúdo limitada conforme `DESIGN.md`.
-- A ação primária, estados de erro e conclusão permanecem acessíveis em mobile, tablet e desktop; nenhuma capacidade de Product fica exclusiva do desktop.
-
-A experiência deve manter locale `pt-BR`, labels persistentes, foco visível, ordem de teclado, mensagens `role="alert"` ou `role="status"` associadas, foco no primeiro erro, alvos de toque mínimos de `44×44px` e estados independentes de cor.
+Composição obrigatória conforme `DESIGN.md`: mobile usa `--safe-bottom: env(safe-area-inset-bottom, 0px)`, navegação inferior de `64px + --safe-bottom`, `padding-block-end` e `scroll-padding-block-end: calc(64px + var(--safe-bottom) + 16px)`; tablet usa rail de `72px`, nomes acessíveis, tooltip ao foco e grid de oito colunas; desktop usa sidebar de `240px`, toolbar de `56px`, padding lateral de `32px` e coluna limitada a `1440px` a partir de `1440px`. Nenhuma capacidade de importação, interação, confirmação, edição ou fallback é exclusiva do desktop; labels persistentes, foco, teclado, `aria-invalid`, `aria-describedby`, `role=alert/status`, foco no primeiro erro, reduced motion, contraste, `aria-busy` e alvos mínimos de `44×44px` são obrigatórios.
 
 ## Segurança e autorização
 
-- Toda operação mutável baseada em cookie exige a mesma proteção de origem/CSRF aprovada no Slice 001; Origin ausente, nula ou divergente é rejeitada antes de alterar Product, contexto ou entitlement.
-- Usuário e Tenant/Workspace são derivados da sessão server-side em cada request protegido.
-- `tenant_id`, plano, limite, período, contadores e versões de autorização enviados pelo cliente não são autoridade.
-- Product e contexto são sempre consultados e persistidos dentro do Tenant resolvido.
-- Identificadores de Product e chaves de idempotência não carregam segredo ou escopo confiável do cliente.
-- URL e conteúdo externo devem respeitar os limites de tamanho, tempo, redirecionamento, tipo e rede desta SPEC e do ADR-008.
-- Nenhuma credencial de marketplace ou segredo interno é enviado ao enriquecimento de URL.
-- Logs e respostas de erro não registram cookies, tokens, segredos, IDs de sessão ou payloads de outro Tenant.
-- Não há colaboração, RBAC ou troca de Tenant neste slice.
+- Sessão server-side resolve usuário e Tenant em toda operação; `tenant_id`, profile ID, Product ID, URL canônica, limite e estado enviados pelo cliente não concedem autorização.
+- A chave de idempotência é escopada ao Tenant resolvido e comparada ao hash do payload canônico; replay cross-tenant nunca retorna estado nem revela conflito de outro Tenant.
+- URLs aceitas usam allowlist server-side dos hosts/origens TikTok Shop suportados, rejeitam userinfo e portas não permitidas, revalidam cada redirect e a origem final, e bloqueiam loopback, rede privada, link-local, multicast, metadata e resolução DNS para faixas reservadas.
+- O Browser Service limita popups, navegação e egress às origens necessárias; conteúdo de página, DOM, Accessibility Tree e Network são dados não confiáveis e o Agent usa uma allowlist de ações de extração sem executar instruções da página.
+- Browser profile, Chromium, CDP e operações de interação são escopados ao Tenant; não permitir path traversal, profile compartilhado ou acesso cross-tenant.
+- A superfície interativa não expõe porta/CDP bruto: o Browser Service entrega uma sessão vinculada a Tenant + operação, com referência não reutilizável, expiração e revogação ao cancelar, concluir, sair ou perder autorização.
+- O profile persistente recebe proteção operacional de filesystem, volume, processos, backup, restauração e retenção equivalente a uma credencial sensível.
+- Antes de criar um novo profile, a aplicação executa preflight de capacidade server-side; profile já existente pode ser reutilizado. A confirmação repete a verificação atomicamente: corrida que perde não cria Product ou uso parcial, e um profile já aberto pode permanecer para reutilização.
+- Sucesso, erro, cancelamento, timeout e crash executam cleanup do Browser Service, detectam processos órfãos e verificam que a sessão/CDP não continua acessível; nunca encerram processo/profile de outro Tenant.
+- Nunca enviar cookies, tokens ou conteúdo do profile ao frontend, Product Import Agent, logs ou provider textual.
+- ProductCandidate, URL, redirects, página, Accessibility Tree, DOM, Network e saída do Agent são não confiáveis; validar schema, tamanho, origem, URLs de imagem, preço e cardinalidade.
+- Chamadas ao browser ocorrem fora da transação de confirmação; confirmação recarrega Candidate no servidor e grava somente fatos validados.
+- Erros e métricas são sanitizados e não registram conteúdo de sessão, segredo, resposta bruta ou dados cross-tenant.
+- Não implementar autenticação própria do TikTok nem aceitar credenciais fornecidas pelo usuário.
+
+## Estratégia de testes
+
+Testar contratos observáveis e invariantes, não seletores específicos, nomes de classes ou detalhes de Prisma:
+
+- Gate da POC: Browser Harness disponível; profile persiste após encerrar/reabrir; login manual e extração real funcionam sem secrets versionados.
+- Profile: criação, reutilização, isolamento entre Tenants, encerramento sem apagar dados e recuperação de profile indisponível.
+- URL: URL válida, inválida, com credencial, não TikTok, tracking e redirect conforme limites reais do Browser Service; redirects para rede reservada são rejeitados.
+- Human-in-the-loop: cada estado de login/CAPTCHA/2FA/interação pausa, exibe browser, não automatiza desafio e retoma após conclusão; abandono preserva fallback.
+- Extraction Agent: produto completo, descrição expandida, facts ausentes, página alterada, bloqueio, erro do Harness, prompt injection na página e ausência de invenção factual.
+- Candidate: persistência server-side, versionamento, lacunas, edição, reload no confirm, confirmação única e proveniência.
+- Product: confirmação sem edição, correção prevalente, fallback manual, Product duplicado, limite concorrente e prontidão sem contexto estratégico.
+- Segurança: nenhum token/cookie/profile bruto em resposta/log/frontend; Tenant B não abre profile, Candidate ou Product de Tenant A; sessão interativa expira/revoga e cleanup não deixa CDP órfão.
+- Backup/restore: profile cifrado/protegido, restauração em cópia isolada mantém Tenant binding, retenção/deleção remove acesso no prazo e desprovisionamento revoga profile; falha bloqueia aceitação de produção.
+- HTTP/UX: estados, mensagens, `aria-busy`, foco, teclado, retry, mobile/tablet/desktop; ação estratégica não aparece como campo do cadastro.
+- Regressão: Slice 001 continua autenticando; Slice 003 inicia somente para Product ativo com fatos confirmados e não exige `ProductContext`.
 
 ## Critérios de aceite verificáveis
 
-1. Uma pessoa autenticada consegue abrir `Adicionar produto` e chegar à criação de Product.
-2. Nome e descrição válidos, com chave de idempotência válida, criam um Product ativo no Workspace da sessão.
-3. Um Product pode ser criado com os campos opcionais ausentes e posteriormente completado.
-4. Categoria, preço BRL, características, referências de imagens, observações e URL opcionais são preservados quando válidos.
-5. O contexto estratégico informado é persistido em `pt-BR` e permanece ligado ao Product correto.
-6. Reabrir e salvar o mesmo Product atualiza o registro sem criar cópia silenciosa; versão obsoleta retorna conflito e preserva a edição mais recente.
-7. Dois Products distintos podem existir no mesmo Workspace enquanto o entitlement default e a configuração server-side permitirem.
-8. Products de outro Tenant não podem ser lidos ou alterados por `tenant_id` ou identificador manipulável; a resposta é `404` uniforme, não revela existência e os identificadores de Product são UUID v4 ou equivalente com pelo menos 122 bits de entropia.
-9. O limite de Products ativos é aplicado server-side; duas criações concorrentes no limite deixam no máximo a capacidade configurada e a perdedora não cria nem consome uso parcial.
-10. Entitlement default é criado de modo idempotente para Tenant; configuração ausente ou inválida impede ativação sem fallback do cliente.
-11. Tenant A não consegue usar `tenant_id`, Product ID, plano, limite ou contador de Tenant B para ler, alterar ou consumir capacidade; a tentativa falha sem efeito em B, e a capacidade de B permanece inalterada.
-12. Dentro da retenção de 24 horas, chave de idempotência repetida com o mesmo payload normalizado retorna o mesmo Product; a mesma chave com payload normalizado diferente falha sem nova mutação; após expiração a mesma chave inicia obrigatoriamente nova intenção e retorna novo Product sem alterar o anterior; nomes e URLs iguais com chaves diferentes continuam podendo representar Products distintos.
-13. URL inválida, bloqueada, indisponível, com redirecionamento proibido, destino privado, MIME não suportado ou conteúdo incompleto não impede salvar os dados manuais; fatos manuais permanecem inalterados e o estado não bloqueante é comunicado.
-14. O fluxo não implementa scraping complexo, login ou conexão com TikTok/TikTok Shop, importação em lote, Strategy, Plan, Content, Generation ou Production.
-15. Sessão ausente, expirada ou revogada impede criação, leitura e atualização e retorna ao acesso sem revelar dados.
-16. Mutação com Origin ausente, nula ou divergente é rejeitada antes de alterar Product, contexto ou entitlement.
-17. Dados inválidos exibem mensagens associadas, focam o primeiro campo inválido e não persistem estado parcial.
-18. O fluxo de salvar comunica loading, sucesso, erro, conflito e retry sem submissão duplicada e preserva os valores digitados.
-19. O fluxo é utilizável em mobile, tablet e desktop conforme a matriz responsiva desta SPEC, com foco-visible, teclado, mensagens associadas, alvos de toque de pelo menos `44×44px` e estados independentes de cor.
-20. Depois de salvar nome, descrição e o registro de contexto `pt-BR` — mesmo com campos opcionais de contexto vazios — o Product exibe somente o estado informativo `Produto pronto para Strategy`; nenhuma Strategy é criada ou iniciada neste slice.
+1. Browser Harness está instalado/versionado e a POC comprova profile persistente, login manual, reabertura autenticada, controle/inspeção e extração de um produto real.
+2. Creator autenticado abre `Adicionar produto`, vê URL como ação principal e `Adicionar manualmente` como fallback.
+3. URL válida abre Chromium pelo Browser Service com profile isolado do Tenant; URL inválida não inicia browser.
+4. Profile reutilizado mantém sessão após encerramento/reabertura, sem a aplicação guardar login, senha, cookie ou token.
+5. Quando TikTok exige login, CAPTCHA, QR Code, 2FA ou confirmação, automação pausa, browser interativo é exibido e o creator resolve a etapa manualmente.
+6. Após a intervenção, Product Extraction Agent usa Browser Service/Harness e produz Candidate factual com nome, URL original, features, variantes relevantes quando disponíveis e campos opcionais disponíveis.
+7. Candidate exibe fatos, origem, lacunas e aviso de não confirmação; nenhum Candidate vira Product ativo antes de confirmação.
+8. Creator confirma ou edita nome, descrição, categoria, marca, seller, preço/moeda, características, variantes e imagens permitidos; Product ativo preserva correções, proveniência, URL, variantes e Tenant.
+9. Falha de browser, Harness, página, extração ou interação comunica erro recuperável e oferece retry/fallback sem apagar profile ou Product manual.
+10. Product já confirmado para a mesma URL canônica comprovada é detectado e aberto sem duplicação acidental.
+11. Fallback manual cria Product ativo com nome e descrição válidos, aceita opcionais e não solicita campos estratégicos.
+12. Limite server-side de Products ativos é aplicado sob concorrência sem Product parcial e sem destruir profile.
+13. Retry idêntico é idempotente; payload diferente conflita sem nova mutação.
+14. Tenant A não acessa profile, browser, Candidate ou Product de Tenant B; respostas fora do escopo são uniformes.
+15. Nenhuma resposta, log ou frontend contém senha, cookie, token, CDP secret, profile bruto ou erro externo não sanitizado.
+16. Estados IDLE, OPENING, LOGIN_REQUIRED, CAPTCHA_REQUIRED, 2FA_REQUIRED, USER_INTERACTION_REQUIRED, PAUSED, CANCELLED, EXTRACTING, READY e ERROR comunicam a próxima ação, preservam contexto e expõem retry/cancelamento/fallback conforme o caso.
+17. Fluxo é utilizável em mobile, tablet e desktop conforme `DESIGN.md`, com foco, teclado, contraste, reduced motion e alvos de `44×44px`.
+18. Product confirmado encaminha para Slice 003 somente quando disponível, mas não cria Strategy, Plan, Content, Generation ou contexto estratégico.
+19. Não existe TikTok OAuth, TikTok Shop API, login por senha/cookies, automação de desafio humano, scraping universal, sincronização contínua, publicação ou integração fora do Browser Service.
+20. O profile persistente possui backup/restauração protegidos e testados em cópia isolada, binding ao Tenant, retenção/deleção definida e revogação no desprovisionamento; sem essa evidência o Slice 002 não é aceito para produção.

@@ -195,7 +195,7 @@
     padding-inline: 4px;
   }
 
-  .rail .navLabel {
+.rail .navLabel {
     block-size: 1px;
     clip: rect(0 0 0 0);
     clip-path: inset(50%);
@@ -203,6 +203,47 @@
     position: absolute;
     white-space: nowrap;
     width: 1px;
+  }
+
+  .rail .navLink,
+  .rail .navDisabled {
+    position: relative;
+  }
+
+  .rail .navLink::after,
+  .rail .navDisabled::after {
+    background: var(--color-text);
+    border-radius: 6px;
+    color: var(--color-surface);
+    content: attr(data-tooltip);
+    font-size: 12px;
+    font-weight: 600;
+    left: calc(100% + 8px);
+    line-height: 16px;
+    opacity: 0;
+    padding: 8px 10px;
+    pointer-events: none;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%) translateX(-4px);
+    transition: opacity 120ms ease, transform 120ms ease;
+    white-space: nowrap;
+    z-index: 4;
+  }
+
+  .rail .navLink:hover::after,
+  .rail .navLink:focus-visible::after,
+  .rail .navDisabled:hover::after,
+  .rail .navDisabled:focus-visible::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail .navLink::after,
+  .rail .navDisabled::after {
+    transition: none;
   }
 }
 

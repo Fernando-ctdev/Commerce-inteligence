@@ -467,7 +467,12 @@ Status são labels + texto/ícone e, quando útil, semântica `color.feedback.su
 - erro aparece junto do campo, explica como corrigir e mantém o valor digitado;
 - foco visível em teclado e toque;
 - área tocável mínima de `44px`;
-- entrada de Produto começa por descrição manual; URL é opcional e não bloqueia o fluxo.
+- entrada de Product começa por URL com a ação primária `Analisar produto`;
+- `Analisar produto` mostra loading, preview, origem, lacunas e falha recuperável; extração nunca aparece como fato confirmado automaticamente;
+- `Adicionar manualmente` permanece visível como fallback quando não houver URL, a análise falhar ou o creator preferir informar os fatos;
+- a confirmação humana cria o Product ativo; antes dela, o preview pode ser corrigido campo a campo;
+- depois de confirmado, edição de fatos é uma ação excepcional e explícita, sem formulário de público, Strategy ou contexto estratégico no cadastro;
+- labels, erros, foco, `aria-busy`, teclado, alvos de `44×44px` e estados de confirmação seguem as regras deste documento.
 
 ### Busca e filtros
 

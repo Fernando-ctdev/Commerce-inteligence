@@ -1,57 +1,61 @@
-# ADR-008: Entrada de produto manual-first
+# ADR-008: Product URL-first com importação browser e fallback manual
 
 ## Status
 
-Aceito — escopo de entrada do MVP.
+Aceito — base de entrada factual; os detalhes de Browser Service, profile persistente, Human-in-the-loop e Browser Harness estão no ADR-011.
 
 ## Contexto
 
-O PRD permite iniciar com link ou descrição, mas a URL pode exigir fetch, autenticação ou scraping que não são parte do foco. A engine precisa de fatos suficientes e não pode depender de uma integração frágil para o primeiro valor.
+O creator normalmente já possui a URL do produto. O novo PRD de Importação define que essa URL deve abrir o TikTok em um Chromium associado ao usuário, reutilizar uma sessão persistente quando possível e pedir intervenção humana somente quando o TikTok exigir. A aplicação precisa descobrir fatos sem transformar login, cookie ou token do TikTok em dados próprios.
 
-**Relação com o PRD:** §§ 6, 10 e 32; a revisão do PRD conduzida pelo Sentinel apontou a dependência oculta de scraping como risco P1.
+A entrada externa é não confiável. Um preview nunca é Product ativo: fatos, lacunas e origem precisam ser apresentados para confirmação humana. Quando a importação não puder ser concluída, o primeiro valor ainda deve ser possível pelo fallback manual mínimo.
 
 ## Decisão
 
-Descrição manual é o caminho primário e canônico para criar um produto e gerar estratégia. Nome e descrição são suficientes para o fluxo inicial; categoria, preço, características, observações, imagem e URL enriquecem quando disponíveis.
+URL é o caminho principal para iniciar a entrada de Product. O Browser Service abre a URL em um profile isolado, e o Product Extraction Agent devolve um `ProductCandidate` factual com origem, lacunas e estado. O Candidate é sempre um rascunho não confiável; somente confirmação humana cria ou atualiza fatos confirmados do Product.
 
-URL é opcional e funciona como metadado e fonte best-effort, atrás de um adaptador isolado de enriquecimento. Falha, bloqueio ou conteúdo incompleto da URL não bloqueia o produto manual nem transforma o MVP em integração com TikTok Shop. Não haverá scraping complexo, crawler, autenticação de marketplace ou garantia de extração.
+O Candidate pode conter nome, descrição, preço/moeda, categoria, marca, características, imagens, seller, variantes relevantes e URL original. Valores ausentes permanecem ausentes. A aplicação não inventa fatos com IA e não pede contexto estratégico durante o cadastro.
 
-O locale persistido no contexto é `pt-BR` no MVP. Não criar catálogo de traduções, negociação de locale ou infraestrutura de i18n agora; a evolução futura poderá versionar taxonomias e textos por idioma.
+O creator pode revisar e corrigir fatos antes de confirmar. Correções confirmadas prevalecem sobre novas extrações automáticas, e a proveniência original permanece rastreável. Products ativos continuam escopados ao Tenant e sujeitos ao Entitlement server-side.
 
-## Rationale
+Quando a URL for inválida, a página exigir interação não resolvida, a extração falhar ou o creator preferir não usar o browser, `Adicionar manualmente` é o fallback explícito. Ele exige apenas nome e descrição; demais fatos são opcionais. O fallback não é o caminho principal e não inicia Strategy.
 
-1. Entrega valor mesmo quando uma página não pode ser acessada.
-2. Mantém o limite entre produto e fonte externa simples e substituível.
-3. Evita que a entrada por URL contradiga o não objetivo de scraping complexo.
+## Alternativas consideradas
 
-## Opções / Trade-offs
-
-| Opção | Benefícios | Custos / riscos |
+| Opção | Decisão | Trade-off |
 |---|---|---|
-| Manual-first + URL best-effort (escolhida) | Fluxo confiável, baixo acoplamento e falha controlada | Menos automação e exige dados do creator |
-| URL-first com scraping | Menos digitação quando funciona | Frágil, sujeito a bloqueio e escopo externo ao MVP |
-| Somente descrição manual | Menor implementação | Perde uma conveniência futura de baixo acoplamento |
+| URL-first + Browser Service + confirmação + fallback (escolhida) | Menos digitação, sessão reutilizável e recuperação manual | Depende da página e pode exigir intervenção humana |
+| Manual-first + URL opcional | Mais previsível | Faz o creator repetir fatos que a plataforma pode descobrir |
+| Product criado diretamente da página | Rejeitada | Dados externos não são autoridade e podem estar incompletos |
+| API/OAuth oficial como caminho principal | Rejeitada nesta decisão | Não corresponde ao novo PRD; histórico permanece no ADR-010 superseded |
 
-## Consequências
+## Consequências positivas
 
-- O onboarding não promete importar uma página; a descrição manual é o fallback e o caminho de sucesso.
-- O adaptador de URL pode ser removido ou trocado sem alterar a engine.
-- O primeiro lançamento é `pt-BR`; internacionalização fica preparada apenas pela presença do locale no contexto.
+- O caminho comum é `colar URL → analisar → confirmar`.
+- A interface não mistura fatos de Product com público, dores, desejos, objetivos ou outras decisões estratégicas.
+- Falha do browser não bloqueia o creator: o fallback manual mantém o fluxo utilizável.
+- Product Import pode mudar a técnica de extração sem alterar o contrato de Product ou Strategy.
 
-## Segurança / Operação
+## Consequências negativas e riscos
 
-- URL e conteúdo obtido são entrada não confiável: limitar tamanho, tempo, redirecionamentos e tipos aceitos.
-- O fetch ocorre fora do caminho transacional e não deve permitir acesso a rede interna ou segredos.
-- Não armazenar credenciais de marketplace nem reproduzir conteúdo externo sem política de retenção.
+- Candidate pode ser incompleto e exige revisão humana.
+- Mudanças de página, login e bloqueios externos podem causar falhas ou intervenção.
+- Profile persistente é material sensível e precisa ser protegido como credencial.
+- Fatos confirmados e correções precisam impedir sobrescrita silenciosa por reimportação.
 
-## Fora do MVP
+## Segurança e operação
 
-Scraping complexo, crawler, login TikTok/TikTok Shop, importação garantida de catálogo, múltiplos idiomas e infraestrutura de i18n.
+- Aceitar apenas URL `http`/`https` sem credenciais e respeitar limites de tamanho/processo/rede do Browser Service.
+- Não coletar, persistir ou logar senha, cookie, token, session ID ou conteúdo integral do profile do TikTok.
+- Toda operação resolve o Tenant pela sessão; IDs enviados pelo cliente não concedem autorização.
+- ProductCandidate, URL, página e saída do agente são entradas não confiáveis: validar schema, tamanhos, URLs de imagem, preço e cardinalidade antes de confirmar.
+- Chamadas ao browser ficam fora da transação curta de confirmação; somente o Candidate validado é recarregado para persistência.
+- Erros retornados ao creator são sanitizados e orientam retry, intervenção ou fallback sem revelar detalhes internos do browser.
 
-## Gatilhos de revisão
+## Relações
 
-- taxa medida de abandono por preenchimento manual;
-- provider oficial de catálogo disponível e autorizado;
-- necessidade de lançar outro idioma/mercado;
-- requisitos de importação em lote ou atualização automática de produto.
-
+- `docs/product/PRD-Importation-product.md` — fonte de produto vigente.
+- [ADR-003](./adr-003-postgresql-memoria-e-rastreabilidade.md) — Product, Candidate e proveniência.
+- [ADR-006](./adr-006-limites-de-plano-e-uso.md) — limite de Products ativos.
+- [ADR-009](./adr-009-identidade-autorizacao-e-tenant-inicial.md) — sessão e Tenant.
+- [ADR-011](./adr-011-importacao-browser-profile-e-harness.md) — Browser Service e profile.

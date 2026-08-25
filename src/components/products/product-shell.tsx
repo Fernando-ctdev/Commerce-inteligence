@@ -19,7 +19,7 @@ const destinations = [
   { label: "Vault", glyph: "05" },
 ];
 
-function Navigation({ active }: { active: "today" | "products" }) {
+function Navigation({ active, compact = false }: { active: "today" | "products"; compact?: boolean }) {
   return (
     <nav aria-label="Navegação principal" className={styles.nav}>
       {destinations.map((destination) => {
@@ -32,12 +32,13 @@ function Navigation({ active }: { active: "today" | "products" }) {
           </>
         );
 
+        const tooltipProps = compact ? { "aria-label": destination.label, "data-tooltip": destination.label, title: destination.label } : {};
         return destination.href ? (
-          <Link aria-current={isActive ? "page" : undefined} className={className} href={destination.href} key={destination.label}>
+          <Link aria-current={isActive ? "page" : undefined} className={className} href={destination.href} key={destination.label} {...tooltipProps}>
             {content}
           </Link>
         ) : (
-          <span aria-disabled="true" className={className} key={destination.label} title="Disponível em uma próxima etapa">
+          <span aria-disabled="true" className={className} key={destination.label} role={compact ? "link" : undefined} tabIndex={compact ? 0 : undefined} {...tooltipProps}>
             {content}
           </span>
         );
@@ -56,7 +57,7 @@ export function ProductShell({ active = "products", eyebrow = "Produtos", title,
 
       <aside aria-label="Navegação compacta" className={styles.rail}>
         <Link aria-label="Commerce Intelligence" className={styles.brand} href="/today">CI</Link>
-        <Navigation active={active} />
+        <Navigation active={active} compact />
       </aside>
 
       <div className={styles.content}>

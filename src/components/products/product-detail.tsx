@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getProduct, ProductApiError, ProductRecord } from "./product-api";
 import { ProductForm } from "./product-form";
+import { GenerationPanel } from "./generation-panel";
 import styles from "./product-detail.module.css";
 
 export function ProductDetail({ id }: { id: string }) {
@@ -46,5 +47,5 @@ export function ProductDetail({ id }: { id: string }) {
     );
   }
 
-  return <ProductForm mode="edit" onSaved={setProduct} product={product} />;
+  return <><ProductForm mode="edit" onSaved={setProduct} product={product} /><GenerationPanel key={product.id} productId={product.id} readyForStrategy={product.readyForStrategy} /></>;
 }

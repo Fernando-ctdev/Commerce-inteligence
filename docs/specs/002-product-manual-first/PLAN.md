@@ -1,189 +1,154 @@
-# PLAN — Slice 002: Product manual-first pronto para Strategy
+# PLAN — Slice 002: Importação de Product via Browser com confirmação
+
+**Spec:** `docs/specs/002-product-manual-first/SPEC.md`
 
 ## Objetivo
 
-Implementar integralmente a `SPEC.md` do Slice 002 no monólito Next.js/TypeScript/Prisma já criado pelo Slice 001: criar e abrir Products manuais, salvar contexto `pt-BR`, aplicar entitlement default e limite de Products ativos, oferecer enriquecimento de URL best-effort sem bloquear o manual e deixar o Product no estado informativo `Produto pronto para Strategy`.
+Substituir o fluxo manual-first/API-proposto atual por uma capacidade vertical browser-based: URL → Browser Profile isolado → Chromium → interação humana quando necessária → Browser Harness → ProductCandidate → confirmação → Product ativo. O fallback manual permanece disponível e nenhuma etapa estratégica entra no cadastro.
 
-Não implementar Strategy, Plan, Content, Generation, Production, upload de mídia, scraping complexo ou integrações externas de marketplace.
+A aceitação depende da POC real e dos gates de segurança do profile definidos na SPEC e no ADR-011. Sem Browser Harness validado, backup/restore protegido e retenção/revogação verificáveis, a implementação pode preparar estados e fallback, mas não declara importação pronta para produção.
+
+## Abordagem
+
+- Manter monólito modular TypeScript/Next.js/PostgreSQL/Prisma e reutilizar sessão server-side, Tenant, Origin/CSRF e Entitlements existentes.
+- Criar somente as fronteiras necessárias: `Browser Service` para profile/Chromium/Harness/Human-in-the-loop e `Product Import` para Agent, Candidate e estados.
+- Manter Product como dono dos fatos confirmados; Product Import nunca cria Strategy ou Product ativo sem confirmação.
+- Remover o caminho API/OAuth/Connection do Slice 002. Não criar tabela de tokens, callback OAuth, scopes, registry de provider, crawler ou scraper próprio.
+- Fazer chamadas ao browser fora da transação de confirmação. Recarregar Candidate server-side, validar versão/Tenant e confirmar Product em transação curta.
+- Preservar `ProductContext` histórico nullable se a migração exigir, mas remover sua presença como requisito de cadastro ou `readyForStrategy`.
+
+## Pré-condições e gates
+
+1. Instalar e versionar o Browser Harness no ambiente oficial responsável pela automação; registrar versão e procedimento reproduzível sem secrets.
+2. Disponibilizar Chromium, volume persistente por profile, permissões mínimas, isolamento de processos e caminho operacional para o Browser Service.
+3. Definir configuração server-side de allowlist de origens TikTok Shop, limites de redirects/egress, timeout, retenção de Candidate/Attempt/Profile, cleanup e exposição interativa.
+4. Definir proteção de backup/restore de profiles: cifragem/controle de acesso, Tenant binding, restauração apenas em cópia isolada, retenção/deleção e revogação no desprovisionamento.
+5. Executar a POC: criar profile → abrir URL real → login manual → fechar → reabrir autenticado → Harness inspeciona → Agent extrai Candidate.
+6. Não adicionar nenhum provider API/OAuth para contornar ausência do gate.
+
+## Arquivos e ownership
+
+| Área | Responsabilidade |
+|---|---|
+| `prisma/schema.prisma` + nova migration | `BrowserProfile`, `ProductCandidate`, `ProductImportAttempt`, fonte/proveniência de Product, fatos confirmados, versionamento, retenção, Tenant FKs e unicidades. |
+| `src/modules/browser/` | profile ID, lifecycle do Chromium, allowlist/redirect/egress, sessão interativa vinculada a Tenant + operação, cleanup, orphan detection e adapter para Browser Harness. |
+| `src/modules/product-import/` | iniciar/consultar/cancelar/retry, Product Extraction Agent, normalização factual, Candidate, estados, fingerprint e import attempt. |
+| `src/modules/product/` | Product factual, confirmação de Candidate, fallback manual, leitura autorizada, edição factual e prontidão sem ProductContext. |
+| `src/modules/entitlements/` | preflight obrigatório e fail-closed de configuração/capacidade antes de criar novo profile ou iniciar Chromium; rechecagem atômica do limite de Products ativos na confirmação, sem criar uso parcial. |
+| `src/app/api/product-imports/**` | start/status/cancel/retry e transição de interação; respostas sanitizadas e escopadas. |
+| `src/app/api/products/**` | confirmar Candidate, criar fallback manual, ler/editar Product factual e abrir Product existente. |
+| `src/components/products/` | URL-first, browser/interação, Candidate preview/edição, confirmação, fallback, estados e acessibilidade. |
+| `scripts/` | POC do Browser Harness/profile e smoke do fluxo real, sem credenciais versionadas. |
+| testes atuais de Product/HTTP/UI | migrar contratos manual/context/enrichment para importação browser, Candidate, fallback e Product facts. |
 
 ## Passos de implementação
 
-1. **Estender o domínio e a persistência de Product**
-   - Adicionar módulo Product separado de Identity/Tenant.
-   - Persistir Product com UUID v4 ou equivalente, `tenant_id`, fatos manuais, `price_cents` em BRL, `locale = pt-BR`, `active`, `version`, timestamps e estado de enriquecimento de URL.
-   - Persistir contexto estratégico associado ao Product, mantendo os campos de `pt-BR` separados dos fatos manuais e sem criar Strategy.
-   - Persistir referências de imagens como metadados limitados; não criar upload, armazenamento de mídia ou processamento de arquivos.
-   - Adicionar FKs, índices por Tenant/Product e unicidade apenas onde protege a relação real; não adicionar unicidade artificial por nome ou URL.
-   - Adicionar registro de idempotência escopado por Tenant e chave, com hash do payload normalizado e Product resolvido.
-   - Adicionar migration reversível sem apagar Users, Tenants ou dados existentes silenciosamente.
+### Passo 1 — Remover o contrato antigo antes de adicionar o novo
 
-2. **Fechar entitlement default no provisionamento existente**
-   - Fazer o caso de uso de provisionamento de Tenant orquestrar Identity/Tenant e Entitlements na mesma transação; Identity não acessa diretamente tabelas de Entitlements.
-   - Adicionar o entitlement inicial server-side ao fluxo transacional de criação do Tenant do Slice 001, de forma idempotente, usando o port/caso de uso do módulo Entitlements.
-   - Resolver o limite `active_products` exclusivamente de configuração server-side validada; configuração ausente/inválida falha fechada.
-   - Não criar preços, cobrança, upgrade, downgrade ou plano editável pelo cliente.
-   - Garantir que Tenant já existente possa receber o entitlement default por backfill idempotente sem duplicação durante rollout/migration.
+- [ ] Retirar `enrichmentStatus`, handlers e textos que tratam URL como enriquecimento pós-criação. O Product não deve ser criado primeiro para depois buscar uma fonte.
+- [ ] Retirar do fluxo de criação os campos de `ProductContext` estratégico (`goal`, `audience`, `style`, `creatorPresence`, `experience`, `constraints`, `market`, `notes`). Campos não pertencem ao cadastro.
+- [ ] Manter qualquer `ProductContext` histórico nullable somente como compatibilidade de dados; nenhum caso de uso, view ou readiness pode depender de sua existência.
+- [ ] Remover do contrato executável qualquer Marketplace Connection, OAuth, token, refresh, endpoint de API, external Product ID obrigatório ou enriquecimento automático.
+- [ ] Atualizar `src/modules/product/service.ts`, `src/modules/product/http.ts`, `src/modules/product/validation.ts`, `src/app/api/products/**` e componentes de Product para que Product só seja criado por confirmação de Candidate ou fallback manual.
 
-3. **Implementar validação e normalização de entrada**
-   - Validar nome 1–200, descrição 1–5.000, categoria 120, características até 20×300, observações/contexto até 5.000 e referências de imagens até 10×2.048.
-   - Normalizar textos com trim, quebras de linha canônicas e Unicode NFC, preservando caixa; normalizar campos opcionais ausentes como `null`.
-   - Converter preço BRL finito de até duas casas para centavos inteiros sem arredondamento silencioso; rejeitar negativos, `NaN`, infinito e fora do limite.
-   - Gerar a chave de idempotência na UI com 16 bytes aleatórios usando Web Crypto, codificados em base64url (22 caracteres); no servidor validar somente presença, charset seguro e tamanho de 22–128 caracteres, mantendo a autorização exclusivamente no Tenant da sessão.
-   - Validar `http`/`https`, tamanho, ausência de credenciais e limites do comportamento de enriquecimento de URL.
-   - Retornar erros associados aos campos antes de qualquer mutação.
+### Passo 2 — Criar persistência factual e de sessão do browser
 
-4. **Implementar casos de uso e autorização**
-   - Criar casos de uso explícitos para criar Product, abrir Product, atualizar Product/contexto e resolver o estado de prontidão.
-   - Receber o contexto de Tenant resolvido pela sessão; nunca aceitar `tenant_id`, plano, limite, contador ou autorização do cliente.
-   - Criar Product + contexto + registro de idempotência + consumo/ativação do entitlement na fronteira transacional necessária.
-   - Para a mesma chave e payload normalizado, retornar o mesmo Product; para a mesma chave e payload diferente, retornar conflito sem mutação.
-   - Usar isolamento transacional/lock ou mecanismo equivalente para que concorrência no limite não ultrapasse `active_products`.
-   - Usar controle otimista de versão na atualização; versão obsoleta retorna conflito e preserva a edição mais recente.
-   - Consultas por Product inexistente ou de outro Tenant retornam resposta uniforme não enumerável sem consultar escopo externo.
+- [ ] Adicionar `BrowserProfile` escopado a Tenant/usuário com ID opaco, status operacional, timestamps, versão e associação única ao Tenant. Não persistir path sensível, cookie, token, senha, conteúdo do profile ou CDP secret na aplicação principal.
+- [ ] Adicionar `ProductCandidate` escopado a Tenant e `BrowserProfile`, com status, versão, `sourceUrl`, payload factual normalizado, lacunas, proveniência por fato, fingerprint da intenção, `importAttemptId`, timestamps e expiração configurável.
+- [ ] Adicionar `ProductImportAttempt` com Tenant, profile, status, tipo de entrada, chave de idempotência, fingerprint/hash canônico, duração, erro sanitizado e timestamps. A chave é única por `(tenant, idempotency_key)`; sua retenção/TTL server-side é maior que o tempo máximo de uma tentativa ativa. Após expiração, manter tombstone/fingerprint terminal suficiente para replay/conflict sem nova mutação; payload divergente sempre conflita.
+- [ ] Estender Product com `sourceKind` (`browser`/`manual`), `sourceUrl` quando houver, `factsVersion`, `confirmedAt`, `factProvenance`, marca, seller, variantes, moeda e preço sem assumir BRL quando a fonte não informar. Preservar imagens como referências externas.
+- [ ] Definir identidade de duplicação server-side como `tenant + canonicalSourceUrl` quando Browser Service comprovar uma origem canônica, independentemente de `sourceKind`; URL manual opcional só participa quando for normalizada/provada. Não deduplicar por nome ou URL não normalizada; variantes sem identidade comprovada seguem confirmação normal.
+- [ ] Manter FKs e índices por Tenant/status/expiração; proteger concorrência de confirmação com unicidade e transação. Migration deve ser reversível em cópia e não apagar Users, Tenants, Products ou histórico válido.
 
-5. **Implementar enriquecimento de URL best-effort**
-   - Criar somente o port/adaptador necessário para fonte opcional de Product, usando `fetch` nativo.
-   - Confirmar a transação manual de Product antes de qualquer tentativa de URL; a criação nunca aguarda nem depende do fetch.
-   - Persistir `pending` quando houver URL e disparar uma ação separada de enriquecimento após o Product existir; a resposta de criação permanece sucesso manual mesmo se a ação não iniciar.
-   - Executar a ação fora da transação de Product, com timeout total de 5s, no máximo 3 redirecionamentos, limite de 1 MiB, tipos textuais suportados e estado explícito `pending`, `completed` ou `unavailable`.
-   - Validar o destino final em cada redirecionamento e rejeitar loopback, redes privadas, link-local, multicast e faixas reservadas, incluindo a resolução efetiva usada no request.
-   - Nunca enviar credenciais ao destino e nunca substituir fatos manuais por conteúdo externo.
-   - Falha, bloqueio, MIME não suportado ou conteúdo incompleto preserva o Product manual e permite retry opcional.
-   - Não adicionar crawler, fila, scraping complexo ou dependência externa.
+### Passo 3 — Implementar Browser Service e o gate operacional
 
-6. **Implementar rotas e superfície web**
-   - Criar `/products` para listar Products do Tenant atual, `/products/new` como formulário real do Slice 002 e `/products/[id]` para abrir/editar um Product existente.
-   - Criar `POST /api/products/[id]/enrichment` como ação opcional pós-criação; ela nunca é necessária para salvar Product manual.
-   - Manter `/today` e `Adicionar produto` apontando para a criação real, sem criar item `Home` paralelo.
-   - Criar handlers protegidos para criação, leitura, atualização de Product/contexto e enriquecimento, reutilizando a política Origin/CSRF do Slice 001.
-   - Garantir respostas uniformes para sessão inválida, Product fora do Tenant, limite atingido, conflito de versão, chave de idempotência conflitante e falha opcional de URL.
-   - Exibir formulário completo em mobile; tablet usa rail de `72px`; desktop usa sidebar de `240px` e toolbar conforme `DESIGN.md`.
-   - Implementar no mobile navegação inferior fixa, `--safe-bottom`, `padding-block-end`/`scroll-padding-block-end`, header contextual e ação de salvar alcançável; no tablet manter rail e grid de oito colunas; no desktop manter toolbar de `56px`, conteúdo limitado e sidebar fixa.
-   - Implementar labels persistentes, hierarquia de headings, foco-visible, ordem de teclado, `prefers-reduced-motion`, `aria-invalid`, `aria-describedby`, `role=alert/status`, foco no primeiro erro, `aria-busy`, bloqueio de duplo envio e alvos mínimos de `44×44px`.
-   - Mapear no componente os estados de lista vazia/carregando/erro, criação, edição, salvando, salvo, conflito com `Recarregar`/`Continuar`, enriquecimento `pending`/`completed`/`unavailable`, limite e retry.
-   - Exibir `Completar contexto` quando o registro `pt-BR` ainda não foi salvo; depois mostrar somente o estado informativo `Produto pronto para Strategy`, sem botão/rota executável de Strategy.
-   - Enriquecimento pendente/indisponível nunca desabilita o salvamento manual.
+- [ ] Executar preflight obrigatório de Entitlement/configuração server-side antes de criar novo profile ou iniciar Chromium; configuração ausente/inválida e quota atingida falham fechado. Profile já existente pode ser reutilizado, e confirmação repete Entitlement atomicamente; uma corrida perdedora não cria Product/uso parcial. Profile existente nunca é apagado automaticamente por quota/falha.
+- [ ] Implementar início/encerramento de Chromium e cleanup em sucesso, erro, cancelamento, timeout e crash. Persistir ownership/lease por attempt, revogar handoff antes do cleanup, executar sweeper no startup e periodicamente, usar retries limitados/alerta e matar somente processo owned; detectar órfãos e verificar que endpoint não continua acessível sem afetar outro Tenant. Em erro/corrupção, marcar o profile `PROFILE_UNAVAILABLE` e preservar o único profile para recuperação operacional explícita; cleanup remove somente processos/handles, nunca apaga automaticamente profile.
+- [ ] Validar URL com allowlist configurada de origens TikTok Shop, egress deny-by-default, sem userinfo/portas não permitidas; limitar hops por configuração finita, detectar loops, rejeitar downgrade HTTPS→HTTP, revalidar cada redirect e origem final e resolver/validar IPv4/IPv6 imediatamente antes de cada conexão para impedir DNS rebinding. Bloquear loopback, rede privada, link-local, multicast, metadata e DNS para faixas reservadas; limitar popups, navegação e subresources às origens aprovadas; permitir somente tracking conhecido que não altere identidade e nunca registrar query/fragment com credencial.
+- [ ] Expor interação por transporte mediado pelo servidor: handle opaco de uso único vinculado a Tenant resolvido + `importAttemptId`, TTL e autorização em toda ação; revogar em cancelamento, conclusão, logout, desprovisionamento ou perda de autorização. Não abrir porta/CDP bruto ao frontend e nunca aceitar profile ID/path do cliente como autoridade.
+- [ ] Instalar o Browser Harness conforme o procedimento oficial do ambiente e validar que Browser Service é o único dono de profile, filesystem, lifecycle e CDP bruto.
+- [ ] Implementar desprovisionamento de Tenant/usuário: revogar handles e CDP, parar somente Chromium owned, negar restore/backup para Tenant revogado, aplicar deleção/destruição criptográfica conforme retenção e impedir ressurreição. Restore cria handles novos e invalida todos os handles anteriores.
+- [ ] Registrar no smoke da POC somente versão, estados, duração e razões sanitizadas; não salvar profile, screenshot de credencial, token, cookie ou payload externo integral.
 
-7. **Cobrir testes comportamentais**
-   - Testar normalização, limites de campos, BRL/centavos, URLs inválidas, MIME, SSRF e chave de idempotência.
-   - Testar criação válida, criação com opcionais ausentes, completar contexto, reabertura, atualização e conflito de versão.
-   - Testar retry com mesma chave/payload dentro de 24h, conflito com payload diferente, expiração e Products iguais com chaves distintas.
-   - Testar entitlement default idempotente, configuração ausente/inválida, limite zero/atingido e concorrência no limite.
-   - Testar isolamento entre dois Tenants em leitura, atualização e tentativa de consumir entitlement alheio.
-   - Testar Origin ausente/nula/divergente, sessão expirada/revogada e respostas sem enumeração ou secrets.
-   - Testar URL best-effort com estados `pending`, `completed` e `unavailable`, timeout, redirecionamento proibido, destino privado, MIME não suportado, conteúdo parcial e preservação dos fatos manuais.
-   - Testar estados de UX em mobile/tablet/desktop, foco, teclado, mensagens associadas, loading, sucesso, erro, conflito, retry e estado informativo final.
-   - Criar um runner reproduzível `npm run smoke:product` que execute o smoke autenticado descrito abaixo e falhe quando qualquer oráculo não for satisfeito.
+### Passo 4 — Implementar Product Import e Human-in-the-loop
 
-## Áreas e componentes afetados
+- [ ] Implementar `startImport`, `getImport`, `cancelImport` e retry idempotente. Gerar/persistir `importAttemptId` e chave server-side antes de abrir o browser; retry igual retorna o estado original e payload divergente conflita.
+- [ ] Modelar estados `IDLE`, `OPENING`, `LOGIN_REQUIRED`, `CAPTCHA_REQUIRED`, `2FA_REQUIRED`, `USER_INTERACTION_REQUIRED`, `PAUSED`, `CANCELLED`, `EXTRACTING`, `READY` e `ERROR`. QR Code é detalhe de `LOGIN_REQUIRED`, não novo enum.
+- [ ] Classificar os estados persistidos da tentativa (`opening`, `paused`, `extracting`, `ready`, `error`, `cancelled`, terminal) e os estados derivados da UI (`IDLE`, `CONFIRMING`, `CONFIRMED`, `DUPLICATE`, `PROFILE_UNAVAILABLE`, `LIMIT`), incluindo `LOGIN_REQUIRED`, `CAPTCHA_REQUIRED`, `2FA_REQUIRED` e `USER_INTERACTION_REQUIRED` como bloqueios derivados de `paused` com entrada após detecção e saída por verificação/cancelamento. Documentar transições/guards: URL inválida → ERROR; cancelamento em qualquer operação → CANCELLED; retry só de ERROR/CANCELLED/PROFILE_UNAVAILABLE/LIMIT; READY incompleto só edita; READY válido confirma; duplicação canônica → DUPLICATE; quota/config → LIMIT; confirmação → CONFIRMED.
+- [ ] Ao detectar bloqueio, pausar automação, entregar browser interativo com nome acessível/foco/retorno/cancelamento e não automatizar senha, QR Code, CAPTCHA, 2FA ou confirmação humana. `Cancelar análise` preserva URL, tentativa, chave e profile.
+- [ ] Retomar somente após Browser Service verificar a conclusão da interação. Se a superfície não puder ser fechada imediatamente, cancelar server-side e comunicar cleanup pendente sem prender o creator.
+- [ ] Implementar Product Extraction Agent como consumidor do contrato de observação/ação do Browser Service. O Agent não toca CDP, filesystem ou cookies diretamente.
+- [ ] Restringir o Agent à página/áreas do produto atual. Tratar DOM, Accessibility Tree, Structured Data, Network e textos da página como dados não confiáveis; permitir somente ações necessárias à extração e ignorar instruções/prompt injection da página.
+- [ ] Extrair fatos na ordem Accessibility Tree → DOM/CDP → Structured Data → Network, normalizar sem inventar e produzir Candidate conforme o contrato do PRD.
+- [ ] Definir no Candidate preview o contrato de edição factual: name, description, category, brand, seller, price+currency, features, variants e images; adicionar/editar/remover variants respeita limite de 20 itens/300 caracteres, ausência é `undefined`/lacuna e lista vazia explícita não vira fato inventado. Cada alteração usa versão otimista, `creator-confirmed` por campo e não é sobrescrita por extração sem nova confirmação.
+- [ ] Separar Candidate válido incompleto (`READY`, lacunas visíveis, edição factual) de Candidate inválido/expirado/inconsistente (`ERROR`, sem confirmar, retry/fallback apenas).
 
-- `prisma/schema.prisma` e nova migration de Product, contexto, idempotência e entitlement.
-- `src/modules/identity/application/` e `src/modules/entitlements/`: caso de uso de provisionamento orquestra o entitlement default; Identity não acessa diretamente a persistência de Entitlements.
-- Novo módulo `src/modules/product/` para domínio, validação, casos de uso, ports e adapters necessários.
-- Novo módulo `src/modules/entitlements/` somente para resolução e consumo de `active_products` neste slice.
-- Handlers em `src/app/api/products/**` e páginas/componentes em `src/app/products/**`.
-- Componentes compartilhados de shell/formulário somente quando a reutilização for real; manter o Slice 001 compatível.
-- Testes em `src/modules/product/*.test.ts`, `src/modules/entitlements/*.test.ts` e testes de integração/E2E existentes.
+### Passo 5 — Confirmar Product ou executar fallback manual
 
-Não alterar PRD, DESIGN, PRINCIPLES ou SLICES além da atualização deliberada já registrada para fechar o ciclo de entitlement no ADR-006 e no risco correspondente do mapa. Não criar áreas de Strategy, Plan, Content, Production ou Generation.
+- [ ] Recarregar Candidate por Tenant + attempt/version no servidor; nunca aceitar snapshot factual confiável enviado pelo cliente.
+- [ ] Validar nome, descrição, categoria, preço/moeda, features, imagens, seller, variantes, URL e proveniência. Rejeitar valores inválidos sem mutação parcial.
+- [ ] Aplicar correções confirmadas pelo creator e gravar `sourceKind`, `sourceUrl`, `factsVersion`, `confirmedAt` e proveniência por fato. Nova extração não sobrescreve correção sem uma confirmação nova explícita.
+- [ ] Verificar duplicação somente pela identidade canônica definida no Passo 2; retornar `Abrir produto` sem duplicar quando comprovada.
+- [ ] Aplicar limite de Products ativos na mesma transação. Falha de quota não invalida profile existente e não cria Product/uso; o fallback manual só confirma quando a capacidade estiver disponível.
+- [ ] Criar Product manual com nome/descrição e opcionais válidos, `sourceKind=manual`, sem iniciar Strategy ou context.
+- [ ] Encerrar Chromium preservando profile e retornar Product/fallback com próxima ação condicional do Slice 003.
 
-## Persistência e migrations
+### Passo 6 — Expor HTTP e a superfície responsiva
 
-- Product, contexto, idempotência e entitlement devem ter IDs não previsíveis, FKs para Tenant/Product e índices por Tenant.
-- O registro de idempotência deve garantir unicidade `(tenant_id, idempotency_key)` enquanto a linha estiver vigente, guardar hash do payload normalizado, Product resolvido, `created_at` e `expires_at`.
-- Em cada criação, a transação deve bloquear a chave `(tenant_id, idempotency_key)`; se encontrar linha expirada, deve removê-la/expirá-la atomicamente antes de inserir o novo resultado. Assim, retry dentro de 24h reutiliza o Product original e, após expiração, a mesma chave cria obrigatoriamente novo Product sem alterar o anterior.
-- Product deve garantir `version` monotônica para atualização otimista e impedir escrita de versão obsoleta.
-- Entitlement deve garantir um registro default por Tenant e um limite server-side validado; a criação deve convergir sob retry/concorrência.
-- Ativação e consumo de capacidade devem ser atômicos com a criação do Product, sem contador parcial em erro.
-- A migration deve ser reversível em cópia e não pode remover dados de Identity/Tenant.
+- [ ] Criar handlers protegidos para start/status/cancel/retry de Product Import e confirm/manual Product. Reutilizar sessão, Origin/CSRF, `json`, `readCookie` e respostas uniformes existentes.
+- [ ] Retornar apenas estado, Candidate factual necessário, lacunas e ações; nunca profile path, CDP endpoint, cookie, token, senha, prompt, payload bruto ou erro cru.
+- [ ] Renderizar URL-first e fallback manual; preservar URL, idempotency key, attempt e Candidate em falha/reload. Candidate inválido não exibe `Confirmar`.
+- [ ] Implementar `aria-busy`, `role=status`, `role=alert`, labels persistentes, `name`, `aria-invalid`, `aria-describedby`, foco no primeiro erro, modal/sheet com trapping/Escape/retorno, `Escape` sem mutação e browser interativo com nome/foco/cancelamento/retorno equivalentes.
+- [ ] Implementar a matriz de estados observáveis: `IDLE` mostra URL + `Analisar produto` + fallback; `OPENING`/`EXTRACTING` preservam URL, bloqueiam duplicação e mantêm `Cancelar análise` no app; bloqueios `LOGIN_REQUIRED`/`CAPTCHA_REQUIRED`/`2FA_REQUIRED`/`USER_INTERACTION_REQUIRED` mostram browser somente quando intervenção é necessária; `PAUSED` aguarda verificação; `CANCELLED` preserva URL/attempt/key/profile e oferece retry/manual; `READY` mostra facts/origin/gaps/warning + `Editar candidate` e só mostra `Confirmar` quando válido; `ERROR` usa mensagem inline sanitizada, foco e retry/fallback; `CONFIRMING` desabilita duplicação e retorna foco; `CONFIRMED` anuncia sucesso + `Abrir produto`/Products e CTA condicional do Slice 003; `DUPLICATE` mostra `Você já adicionou este produto` + `Abrir produto`; `PROFILE_UNAVAILABLE` oferece retry/manual; `LIMIT` preserva Candidate e oferece revisar Products/retry sem upgrade fictício.
+- [ ] Fazer o handoff interativo ter accessible name/instrução, foco inicial no contexto, controle de cancelar operável por teclado, retorno ao gatilho e sessão não reutilizável. Se a superfície não fechar, o cancelamento app-level continua disponível e informa cleanup pendente; `Retomar análise` só após verificação do Browser Service.
+- [ ] Renderizar URL-first e fallback manual antes/depois de qualquer erro, interação abandonada ou preferência do creator; preservar URL, idempotency key, attempt e Candidate em reload/crash; Candidate inválido/expirado não exibe `Confirmar`.
+- [ ] Seguir `DESIGN.md`: `<768px` uma coluna com 4 colunas, gutter/padding 16px, header contextual 56px, navegação inferior fixa de `64px + --safe-bottom`, `--safe-bottom: env(safe-area-inset-bottom, 0px)`, safe-area/padding/scroll end `calc(64px + var(--safe-bottom) + 16px)` sem cobrir CTA; `768–1199px` rail 72px, grid 8 colunas/gutter 24px/padding 24px, nomes acessíveis/tooltips ao foco; `≥1200px` sidebar fixa 240px + main `minmax(0,1fr)` + toolbar 56px + grid 12 colunas/gutter 24px/padding 32px; `≥1440px` limita somente conteúdo a `min(100%, 1440px)`, sem terceira coluna/overflow.
+- [ ] Manter todas as capacidades em mobile/tablet/desktop e validar tokens canônicos `color.brand.accent`, `color.action.filled`, `color.intelligence`, `color.canvas`, `color.surface.default/secondary`, `color.border.default`, `color.text.primary/secondary/muted`, `color.content.on-surface/on-action`, `color.focus.ring` e todos os tokens de feedback. Aplicar a matriz completa do DESIGN: qualquer par abaixo de 4.5:1 (incluindo muted/intelligence/warning no Light e success/danger quando aplicável) nunca é texto normal isolado; foco tem offset, nenhum estado depende só de cor, Light/Dark preservam tokens sem cores ad hoc/gradientes; Instrument Sans/type scale, unidade 4px, radii/elevation, uma ação primária por região, conteúdo Product/Candidate sólido, glass somente nav/sheets e sem toast como único erro.
+- [ ] Garantir `prefers-reduced-motion: reduce` sem animações essenciais, manter feedback/status por texto e testar cada estado/ação no mobile: sheet/modal full-screen acessível, edição de variants, HITL, confirmação, retry e fallback sem hover, teclado desktop ou controle exclusivo de desktop; todos os alvos têm `44×44px`.
 
-## Segurança e autorização
+### Passo 7 — Migrar testes e POC
 
-- Reutilizar a resolução server-side de sessão e Tenant do Slice 001.
-- Rejeitar Origin ausente, nula ou divergente antes de toda mutação baseada em cookie.
-- Nunca aceitar `tenant_id`, Product ID externo, plano, limite, período, contador ou versão enviados pelo cliente como autoridade de autorização.
-- Usar escopo de Tenant em todas as consultas, updates, idempotência e entitlement.
-- Manter erros e logs sem cookies, tokens, segredos, IDs de sessão ou dados cross-tenant.
-- Aplicar defesa SSRF no adaptador de URL em cada redirect e resolução efetiva; não permitir credenciais, rede interna ou acesso a metadata/segredos.
-- Não armazenar conteúdo externo além do necessário para o enriquecimento observável e não substituir fatos manuais.
+- [ ] Substituir fixtures manual-first/enrichment por Candidate browser/manual com fonte, versão, lacunas, confirmação e Tenant.
+- [ ] Adicionar testes de URL/redirect/SSRF: deny-by-default, máximo de hops, loop, downgrade HTTPS→HTTP, validação IPv4/IPv6 no momento da conexão, DNS rebinding, popups/subresources e query/fragment com credencial.
+- [ ] Adicionar testes de profile/session binding: handle opaco de uso único, TTL, autorização por ação, revogação em cancel/logout/desprovisionamento/restore, sweeper startup/periódico, retries/alerta e cleanup apenas de processos owned; profile corrompido permanece `PROFILE_UNAVAILABLE` sem auto-delete.
+- [ ] Adicionar teste de backup/restore em cópia isolada: Tenant binding, proteção, retenção/deleção, revogação no desprovisionamento, negação de restore para Tenant revogado e invalidação de handles antigos; não executar contra produção.
+- [ ] Adicionar testes HTTP/UI para mensagens, focus, keyboard, Escape, modal/sheet sem mutação, Candidate/estado matrix, mobile/tablet/desktop, contraste/tokens e ausência de secrets.
+- [ ] Atualizar `scripts/smoke-product.mts` para manual fallback e criar o smoke POC separado para Browser Harness; nenhum smoke usa credencial versionada.
 
-## Tratamento de erros
+## Segurança e tratamento de erros
 
-- Erros de validação: retorno associado aos campos, sem persistência parcial.
-- Sessão ausente/inválida: redirecionamento ao acesso conforme Slice 001.
-- Product inexistente/cross-tenant: `404` uniforme, sem enumeração.
-- Chave de idempotência com payload diferente: conflito recuperável, sem nova mutação.
-- Versão obsoleta: conflito recuperável, dados atuais preservados e ação de recarregar.
-- Limite atingido/configuração ausente: erro recuperável de capacidade, sem Product/uso parcial.
-- URL indisponível, bloqueada, timeout, MIME não suportado ou conteúdo parcial: Product manual salvo, estado de enriquecimento não bloqueante e retry opcional.
-- Falha inesperada de persistência: resposta sanitizada, transação revertida e chave de idempotência sem resultado parcial.
+- Toda rota/caso de uso resolve sessão e Tenant; campos de Tenant, profile, quota, Product, state e identidade enviados pelo cliente não concedem autoridade.
+- Browser profile é material de sessão sensível: permissões, volume, backup, restore, retenção e revogação devem ser configurados e verificados antes de produção. Restore é cópia isolada, Tenant-bound e invalida handles/processos anteriores; desprovisionamento nega acesso e impede ressurreição.
+- URL e página são não confiáveis; allowlist/redirect/DNS/egress deny-by-default, limites finitos, validação por conexão e ação do Agent são restritos. O Browser Service nunca entrega CDP bruto.
+- Falhas de login/desafio pausam; falhas de profile/Harness/browser produzem erro sanitizado e fallback; falhas de Candidate não confirmam Product; falhas de quota/configuração não criam estado parcial.
+- Cleanup é obrigatório em todos os terminais, tem ownership/lease, sweeper e retries limitados, e verifica ausência de processo/endpoint órfão sem matar recurso de outro Tenant; profile corrompido fica preservado para recuperação explícita.
+- Logs estruturados usam allowlist de `importAttemptId`, estado, duração, classe de erro, resultado de quota/idempotência, handoff/revoke/cleanup, backup/restore e autorização negada; não registram URL/página/query, profile path, payload, cookies, tokens ou credenciais. Retenção e acesso seguem configuração operacional e são testados negativamente.
 
 ## Estratégia de testes
 
-Testar contratos observáveis e invariantes, não nomes internos:
-
-- fluxo E2E `Hoje → Adicionar produto → criar → abrir → contexto → Produto pronto para Strategy`;
-- persistência BRL/centavos, locale `pt-BR`, referências opcionais e Product UUID;
-- idempotência por chave, normalização, retry e conflito de payload;
-- optimistic concurrency e preservação da versão mais recente;
-- entitlement default, limite configurado, limite zero/atingido, configuração inválida e corrida concorrente;
-- isolamento entre dois Tenants em Product, contexto e entitlement;
-- Origin/CSRF, sessão inválida, cross-tenant `404`, ausência de vazamento e ausência de autoridade em `tenant_id`;
-- URL SSRF, redirects, DNS/rebinding, timeout, limite de bytes, MIME e preservação manual;
-- acessibilidade e responsividade em 375px, tablet e desktop, com estados de formulário verificáveis;
-- ausência de Strategy/Plan/Content/Generation/Production criada ou exposta.
-
-### Matriz de rastreabilidade dos critérios
-
-Cada critério da SPEC terá ao menos o seguinte caso e oráculo:
-
-| Critério | Camada | Caso executável | Oráculo |
-|---:|---|---|---|
-| 1 | E2E | `Hoje → Adicionar produto` | `/products/new` autenticado renderiza criação |
-| 2 | Integração + E2E | Criar Product com nome, descrição e chave base64url de 16 bytes | `201`, Product ativo no Tenant da sessão, ID UUID v4 |
-| 3 | E2E | Criar sem opcionais; reabrir e completar | dados opcionais vazios são aceitos e depois persistidos |
-| 4 | Integração | Salvar categoria, BRL, características, imagens, observações e URL válidos | valores normalizados aparecem no mesmo Product; preço em centavos |
-| 5 | Integração + E2E | Salvar contexto com locale `pt-BR` | contexto ligado ao Product correto e locale preservado |
-| 6 | Integração + E2E | Duas edições com a mesma versão | primeira salva; segunda retorna `409`, versão mais recente intacta |
-| 7 | Integração | Criar Products distintos até a capacidade configurada | Products distintos coexistem no mesmo Tenant |
-| 8 | Integração + E2E | Tenant B tenta ler/alterar Product de Tenant A | `404` uniforme, sem efeito e sem enumeração; IDs UUID v4 |
-| 9 | Integração concorrente | Fixture `active_products = 2`, estado inicial 1, duas criações concorrentes | exatamente uma vence com `201`, outra recebe erro de capacidade, contagem final 2, zero Product/uso parcial perdedor |
-| 10 | Integração | Provisionar/repetir Tenant e testar config ausente/inválida | um entitlement default; config inválida bloqueia sem fallback |
-| 11 | Integração + E2E | Tenant A envia `tenant_id`, Product ID e contador de B | erro uniforme, capacidade e Products de B inalterados |
-| 12 | Integração + E2E | Repetir mesma chave/payload dentro de 24h; repetir chave com payload diferente; repetir após expiração; mesmo nome com chave nova | dentro da retenção mesmo Product; conflito não muta; após expiração novo Product; chave nova cria Product distinto |
-| 13 | Unit + integração | Adapter fake para URL `pending`, URL inválida, timeout, redirect privado, MIME não suportado, conteúdo parcial e conteúdo válido | criação salva `pending` sem aguardar fetch; falhas terminam `unavailable`, sucesso `completed`; Product manual byte-a-byte preservado |
-| 14 | Integração + E2E | Inspecionar rotas/mutações expostas e banco após fluxo | nenhuma Strategy, Plan, Content, Generation ou Production criada/exposta |
-| 15 | E2E | Sessão ausente, revogada e expirada em create/read/update | redirect ao acesso, nenhum dado Product revelado |
-| 16 | Integração + E2E | Origin válido, ausente, nulo e divergente em cada mutação | somente válido altera estado; demais retornam `403` antes da transação |
-| 17 | Unit + E2E | Campos inválidos, foco e retry | erros associados, foco no primeiro inválido, zero persistência parcial |
-| 18 | E2E | Duplo clique, falha de rede, conflito e retry de save | `aria-busy`/disabled, valores preservados e recuperação sem duplicação |
-| 19 | E2E visual | Browser em 375px, tablet e desktop com Tab/teclado | sem overflow; shell/breakpoints corretos; foco e alvos ≥44px |
-| 20 | E2E | Salvar nome/descrição + contexto `pt-BR` vazio | texto informativo `Produto pronto para Strategy`, sem botão/rota/efeito de Strategy |
-
-Fixtures obrigatórias:
-
-- `active_products = 2` para concorrência: começar com 1 Product ativo, disparar duas requisições com chaves diferentes e verificar um sucesso, uma rejeição e contagem final 2.
-- Adapter de URL determinístico para retornar timeout, redirect para rede privada, MIME inválido, conteúdo parcial e conteúdo válido; cada cenário deve terminar em `unavailable` ou `completed` sem alterar fatos manuais.
-- Retenção de idempotência de 24 horas: repetir dentro da janela retorna o Product; após expiração a transação remove a linha expirada sob lock, a mesma chave cria novo Product e o Product anterior permanece inalterado.
-- Dois Tenants com um Product e entitlement cada para provar isolamento de leitura, escrita e capacidade.
-
-Smoke final mínimo:
-
-1. Criar conta com Slice 001, abrir `/products/new`, criar Product e capturar `201`/ID UUID.
-2. Reabrir `/products/[id]`, salvar contexto `pt-BR`, observar o estado informativo final.
-3. Repetir a criação com a mesma chave e confirmar o mesmo ID; repetir com payload diferente e confirmar `409`.
-4. Criar segundo usuário, tentar IDs/tenant_id/contador cruzados e confirmar `404`/nenhum efeito.
-5. Executar duas criações concorrentes no fixture de limite e confirmar um vencedor, um erro e contagem final.
-6. Exercitar URL inválida/falha e confirmar Product manual intacto.
-7. Executar mutations com Origin válido, ausente, nulo e divergente e confirmar somente o válido muta.
-8. Verificar `localStorage`, foco, teclado, mobile/tablet/desktop e ausência de rotas/efeitos de Strategy.
+| Cenário | Ação | Oráculo |
+|---|---|---|
+| POC completa | Abrir URL real, login manual, fechar/reabrir, extrair | Profile reutiliza sessão; Candidate real; nenhum secret persistido |
+| Profile isolado | Tenant A/B executam imports | IDs/profiles/browser/CDP não atravessam Tenant |
+| Redirect inseguro | URL TikTok redireciona a rede privada/metadata | Cada hop/final é rejeitado; nenhum conteúdo interno lido |
+| Handoff humano | Login/CAPTCHA/QR/2FA/interação | Pausa, browser acessível, cancelamento/retomada manual, sem bypass |
+| Retry | Repetir mesma chave e alterar payload | Mesmo attempt no replay; conflito sem nova mutação |
+| Candidate incompleto | Extração sem descrição/característica suficiente | READY com lacunas e edição factual; não confirmar enquanto inválido |
+| Candidate inválido | Payload inconsistente/expirado | ERROR sem Confirmar; retry/fallback somente |
+| Confirmação | Confirmar/editar Candidate | Product ativo, factsVersion/proveniência/correção preservados |
+| Duplicação | Repetir URL canônica no mesmo Tenant | Abrir Product existente; nome não cria falsa deduplicação |
+| Quota concorrente | Confirmar Products no limite | Capacidade server-side; no máximo limite; nenhum Product/uso parcial |
+| Profile recovery | Cancelar, crashar e restaurar cópia | Cleanup/orphan; restore Tenant-bound; retenção/revogação corretas |
+| Fallback | Falhar importação e criar manual | Nome/descrição criam Product; sem contexto/Strategy |
+| UX | Exercitar estados em 375px, tablet e desktop | Próxima ação, foco, teclado, aria, safe area e alvos 44px |
 
 ## Validações finais
 
-- Executar migration em banco limpo e em banco com Slice 001 existente; verificar reversão em cópia sem apagar Identity/Tenant.
-- Executar `npm test`, `npm run typecheck`, `npm run lint`, `npm run build`, `npx prisma migrate status` e `npm run smoke:product`.
-- Iniciar a aplicação e executar smoke autenticado com dois usuários, dois Tenants, Products distintos, retry, conflito de edição, limite e URL falha.
-- Verificar Origin válido, ausente, nulo e divergente em toda mutação de Product/contexto.
-- Verificar cookie/session scoping herdado, ausência de localStorage de tokens e ausência de exposição cross-tenant.
-- Verificar mobile, tablet e desktop contra `DESIGN.md`, incluindo foco, teclado, safe area, rail/sidebar e ação de salvar.
-- Confirmar que o estado final é apenas `Produto pronto para Strategy` e que nenhuma capacidade de Slice 003 ou posterior foi implementada.
+- [ ] Verificar POC Browser Harness/profile/login/reabertura/extração com evidência sanitizada.
+- [ ] Verificar backup/restore de profile em cópia isolada, Tenant binding, cifragem/controle, retenção/deleção e revogação no desprovisionamento.
+- [ ] Aplicar migration em banco limpo e estado atual; verificar FKs, índices, unicidades, rollback em cópia e ausência de perda de dados.
+- [ ] Executar testes do Slice 002 e regressão do Slice 001/003.
+- [ ] Executar `npm run test`, `npm run typecheck`, `npm run lint` e `npm run build`.
+- [ ] Executar smoke manual fallback e, somente com ambiente/gate aprovado, smoke browser real.
+- [ ] Confirmar que nenhuma rota/tabela/fixture implementa OAuth, TikTok Shop API, Connection, token próprio, scraping universal, publicação ou contexto estratégico no cadastro.
+- [ ] Confirmar que Product confirmado só encaminha para Slice 003 e que Generation não exige ProductContext.

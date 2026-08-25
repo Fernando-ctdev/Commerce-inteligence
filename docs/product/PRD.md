@@ -710,6 +710,46 @@ Essa memória é fundamental para diferenciar o produto de uma interface genéri
 
 ---
 
+# Briefing do Conteúdo
+
+Cada conteúdo criado dentro de um plano deve possuir uma representação operacional chamada **Briefing do Conteúdo**.
+
+O Briefing reúne tudo que o creator precisa para entender, revisar e produzir aquele conteúdo:
+
+* objetivo;
+* público;
+* dor, desejo ou objeção trabalhada;
+* benefício;
+* ângulo;
+* hook;
+* roteiro;
+* cenas;
+* CTA;
+* duração ou orientações relevantes.
+
+Um plano com 20 conteúdos gera 20 briefings independentes.
+
+Cada briefing pode ser:
+
+* revisado;
+* editado;
+* regenerado parcialmente;
+* descartado;
+* aprovado.
+
+Somente conteúdos aprovados seguem para produção.
+
+Após aprovação, o conteúdo poderá ser executado:
+
+```text
+pelo próprio creator
+ou
+pela AI Content Production Engine, quando disponível no plano
+```
+
+O Briefing do Conteúdo é o contrato entre a estratégia criada pela plataforma e sua execução.
+
+
 # 26. Production Queue
 
 Depois da estratégia, conteúdos devem entrar em uma fila de produção.

@@ -2,6 +2,7 @@
 // Criação: transação única com verificação de capacidade (FOR UPDATE no entitlement),
 // registro de idempotência (24h) e Product ativo. Atualização: versão otimista.
 // Escopo: Tenant sempre derivado da sessão no chamador; tenant_id do cliente nunca entra aqui.
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../db";
 import { IDEMPOTENCY_TTL_MS, assertProductCapacity } from "../entitlements/service";
 import { payloadHash, type NormalizedProductInput } from "./validation";
@@ -178,6 +179,16 @@ export async function createProduct(
 /** Leitura escopada ao Tenant; Product inexistente ou de outro Tenant → null (uniforme, não enumerável). */
 export async function getProduct(tenantId: string, productId: string): Promise<ProductView | null> {
   const p = await prisma.product.findFirst({ where: { id: productId, tenantId }, include: includeContext });
+  return p ? toView(p) : null;
+}
+
+/** Leitura autorizada reutilizável por Generation, inclusive dentro da sua transação. */
+export async function getProductForGeneration(
+  tenantId: string,
+  productId: string,
+  db: Pick<PrismaClient, "product"> | Prisma.TransactionClient = prisma
+): Promise<ProductView | null> {
+  const p = await db.product.findFirst({ where: { id: productId, tenantId }, include: includeContext });
   return p ? toView(p) : null;
 }
 

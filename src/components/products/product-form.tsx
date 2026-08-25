@@ -238,7 +238,7 @@ export function ProductForm({ mode, product, onSaved, onCreated }: ProductFormPr
 
       {conflict && (
         <div aria-live="assertive" className={styles.conflict} ref={conflictRef} role="alert" tabIndex={-1}>
-          <strong>Este Product mudou em outra edição.</strong>
+          <strong>Este produto mudou em outra edição.</strong>
           <p>Recarregue a versão mais recente ou continue revisando seus dados sem sobrescrever nada.</p>
           <div className={styles.inlineActions}>
             <button className={styles.secondaryButton} disabled={saving} onClick={reloadLatest} type="button">Recarregar</button>
@@ -269,7 +269,7 @@ export function ProductForm({ mode, product, onSaved, onCreated }: ProductFormPr
         <div className={styles.sectionHeading}>
           <p className={styles.eyebrow}>Contexto estratégico · pt-BR</p>
           <h2 id="product-context-title">Dê direção ao próximo passo</h2>
-          <p>Essas informações ficam ligadas ao Product. Nenhuma Strategy é iniciada aqui.</p>
+          <p>Essas informações ficam ligadas ao produto. Nenhuma estratégia é iniciada aqui.</p>
         </div>
         <div className={styles.grid}>
           <Field error={combinedErrors.objective} label="Objetivo" name="objective" onChange={(value) => updateField("objective", value)} value={draft.objective} />
@@ -291,7 +291,7 @@ export function ProductForm({ mode, product, onSaved, onCreated }: ProductFormPr
             <p>
               {enrichmentStatus === "pending" && "A tentativa está em andamento. Você pode salvar manualmente."}
               {enrichmentStatus === "completed" && "A tentativa foi concluída. Revise qualquer informação antes de usar."}
-              {enrichmentStatus === "unavailable" && "Não foi possível enriquecer agora. O Product manual continua completo."}
+              {enrichmentStatus === "unavailable" && "Não foi possível enriquecer agora. O produto manual continua completo."}
             </p>
           </div>
           {enrichmentStatus === "unavailable" && <button className={styles.secondaryButton} disabled={saving || enrichmentRetrying} onClick={retryEnrichment} type="button">{enrichmentRetrying ? "Tentando…" : "Tentar novamente"}</button>}
@@ -301,8 +301,8 @@ export function ProductForm({ mode, product, onSaved, onCreated }: ProductFormPr
       {isEdit && readyForStrategy && (
         <section aria-labelledby="ready-title" className={styles.ready} role="status">
           <p className={styles.eyebrow}>Próxima etapa</p>
-          <h2 id="ready-title">Produto pronto para Strategy</h2>
-          <p>Os fatos e o contexto pt-BR estão salvos. A Strategy entra no próximo slice.</p>
+          <h2 id="ready-title">Produto pronto para gerar estratégia</h2>
+          <p>Os fatos e o contexto pt-BR estão salvos. A próxima etapa é gerar estratégia e plano.</p>
         </section>
       )}
 
