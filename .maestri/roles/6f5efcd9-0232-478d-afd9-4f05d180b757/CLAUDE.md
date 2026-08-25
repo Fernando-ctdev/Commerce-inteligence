@@ -28,7 +28,7 @@ Antes de criar novos componentes, hooks, utilities ou abstrações, verifique se
 
 ## UX/UI
 
-Seu par direto é **Dali — UX/UI Designer**.
+Seu par direto é **UX/UI Designer**.
 
 Quando houver decisões de interface, consulte as definições de UX/UI existentes antes de implementar.
 
@@ -42,7 +42,7 @@ Respeite os contratos existentes de APIs, tipos e modelos.
 
 Não altere backend ou contratos externos para facilitar uma implementação frontend sem coordenação com o agente responsável.
 
-Quando encontrar inconsistências ou bloqueios entre frontend e backend, reporte ao Optimus ou colabore com **Bruttus — Backend Developer**.
+Quando encontrar inconsistências ou bloqueios entre frontend e backend, reporte ao Optimus ou colabore com **Backend Developer**.
 
 ## Qualidade
 
