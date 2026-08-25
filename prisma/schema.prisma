@@ -1,0 +1,122 @@
+// Slice 001 — Identity/Tenant/sessão server-side (ADR-009).
+// 1 usuário = 1 tenant/workspace pessoal. Sessão guarda apenas hash da referência opaca.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  tenant       Tenant?
+  sessions     Session[]
+
+  @@map("users")
+}
+
+model Tenant {
+  id          String       @id @default(uuid())
+  userId      String       @unique
+  createdAt   DateTime     @default(now())
+  user        User         @relation(fields: [userId], references: [id])
+  sessions    Session[]
+  products    Product[]
+  entitlement Entitlement?
+  idempotencyRecords IdempotencyRecord[]
+
+  @@map("tenants")
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  userId    String
+  tenantId  String
+  tokenHash String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  user      User      @relation(fields: [userId], references: [id])
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// Slice 002 — Product manual-first (ADR-008), entitlement default (ADR-006), idempotência de criação.
+
+model Product {
+  id               String    @id @default(uuid())
+  tenantId         String
+  name             String
+  description      String
+  category         String?
+  priceCents       BigInt?
+  features         Json?
+  imageRefs        Json?
+  notes            String?
+  url              String?
+  locale           String    @default("pt-BR")
+  active           Boolean   @default(true)
+  version          Int       @default(1)
+  enrichmentStatus String    @default("none") // none | pending | completed | unavailable
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  tenant           Tenant    @relation(fields: [tenantId], references: [id])
+  context          ProductContext?
+  idempotencyRecords IdempotencyRecord[]
+
+  @@index([tenantId])
+  @@map("products")
+}
+
+model ProductContext {
+  id              String   @id @default(uuid())
+  productId       String   @unique
+  goal            String? // objetivo
+  audience        String? // público
+  style           String? // estilo
+  creatorPresence String? // presença do creator
+  experience      String? // experiência
+  constraints     String? // restrições
+  market          String? // mercado
+  notes           String? // observações
+  locale          String   @default("pt-BR")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  product         Product  @relation(fields: [productId], references: [id])
+
+  @@map("product_contexts")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid())
+  tenantId       String
+  idempotencyKey String
+  payloadHash    String
+  productId      String
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  product        Product  @relation(fields: [productId], references: [id])
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+model Entitlement {
+  id        String   @id @default(uuid())
+  tenantId  String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@map("entitlements")
+}

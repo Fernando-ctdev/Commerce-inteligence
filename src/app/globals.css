@@ -1,0 +1,33 @@
+:root {
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --color-canvas: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-surface-secondary: #f1f3f5;
+  --color-border: #e4e6e8;
+  --color-text: #17191c;
+  --color-text-secondary: #666b73;
+  --color-action: #3d4cc6;
+  --color-focus: #5b6cff;
+  --color-brand: #5b6cff;
+  --color-success: #2e9b66;
+  --color-warning: #c9892b;
+  --color-danger: #c94b50;
+}
+
+* { box-sizing: border-box; }
+
+html, body { min-height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-instrument-sans), system-ui, sans-serif;
+}
+
+button, input, textarea { font: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}

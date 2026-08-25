@@ -1,0 +1,155 @@
+.list {
+  display: grid;
+  gap: 24px;
+  margin: 0 auto;
+  max-width: 1080px;
+}
+
+.listIntro {
+  align-items: end;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+}
+
+.listIntro h2,
+.state h2 {
+  font-size: 24px;
+  line-height: 30px;
+  margin: 4px 0 0;
+}
+
+.eyebrow,
+.cardMeta {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  margin: 0;
+}
+
+.cards {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  padding: 20px;
+}
+
+.cardBody {
+  display: grid;
+  gap: 8px;
+}
+
+.card h3 {
+  font-size: 20px;
+  line-height: 26px;
+  margin: 0;
+}
+
+.cardBody > p:not(.cardMeta) {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0;
+}
+
+.status {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  margin-top: 4px;
+}
+
+.cardAction {
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text);
+  display: flex;
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: auto;
+  min-height: 44px;
+  padding-top: 12px;
+  text-decoration: none;
+}
+
+.cardAction:hover {
+  color: var(--color-focus);
+}
+
+.state {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  margin: 0 auto;
+  max-width: 560px;
+  padding: 32px;
+}
+
+.state h2 {
+  margin: 0;
+}
+
+.state > p:not(.eyebrow) {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+}
+
+.primaryButton {
+  align-items: center;
+  background: var(--color-action);
+  border: 1px solid var(--color-action);
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 15px;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  text-decoration: none;
+  width: fit-content;
+}
+
+.primaryButton:hover {
+  filter: brightness(0.96);
+}
+
+@media (max-width: 767px) {
+  .listIntro {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .listIntro .primaryButton {
+    width: 100%;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+  }
+
+  .state {
+    border-inline: 0;
+    border-radius: 0;
+    margin-inline: -16px;
+    padding: 24px 16px;
+  }
+}
