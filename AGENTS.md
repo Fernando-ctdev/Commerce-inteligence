@@ -73,3 +73,11 @@ sinalize a inconsistência antes de introduzir uma nova decisão.
 - Antes de declarar uma implementação concluída, execute as validações
   relevantes disponíveis no projeto, incluindo testes, typecheck, lint e build.
   Informe explicitamente qualquer validação que não tenha sido executada.
+
+  ## Framework operacional
+
+Os prompts e templates do framework ficam em `framework/`.
+
+Quando uma etapa do processo exigir um prompt específico, leia e siga o arquivo correspondente em `framework/prompts/`.
+
+Não duplique esses prompts em arquivos paralelos.
