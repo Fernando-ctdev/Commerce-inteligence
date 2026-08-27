@@ -10,5 +10,5 @@ type ProductPageProps = {
 export default async function ProductPage({ params }: ProductPageProps) {
   await requireSession();
   const { id } = await params;
-  return <ProductShell eyebrow="Product" title="Completar contexto"><ProductDetail id={id} /></ProductShell>;
+  return <ProductShell eyebrow="Produto" title="Revisar fatos"><ProductDetail id={id} /></ProductShell>;
 }

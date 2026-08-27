@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import { listProducts, ProductApiError, ProductRecord } from "./product-api";
 import styles from "./product-list.module.css";
-import { productProgressLabel } from "./product-ui-model";
 
 export function ProductList() {
   const [products, setProducts] = useState<ProductRecord[]>([]);
@@ -55,7 +54,7 @@ export function ProductList() {
       <div className={styles.state}>
         <p className={styles.eyebrow}>Primeiro passo</p>
         <h2>Adicione o produto que você quer vender.</h2>
-        <p>Nome e descrição bastam para começar. Você pode completar o contexto depois.</p>
+        <p>Nome e descrição bastam para criar seu primeiro Product. Você pode completar os fatos depois.</p>
         <Link className={styles.primaryButton} href="/products/new">Adicionar produto</Link>
       </div>
     );
@@ -70,17 +69,16 @@ export function ProductList() {
         </div>
         <Link className={styles.primaryButton} href="/products/new">Adicionar produto</Link>
       </div>
-      <ul aria-label="Products ativos" className={styles.cards}>
+      <ul aria-label="Produtos ativos" className={styles.cards}>
         {products.map((product) => (
           <li className={styles.card} key={product.id}>
             <div className={styles.cardBody}>
-              <p className={styles.cardMeta}>{product.category || "Product"}</p>
+              <p className={styles.cardMeta}>{product.category || "Produto"}</p>
               <h3>{product.name}</h3>
               <p>{product.description}</p>
-              <span className={styles.status}>{productProgressLabel(product.readyForStrategy)}</span>
             </div>
             <Link className={styles.cardAction} href={`/products/${encodeURIComponent(product.id)}`}>
-              Abrir Product
+              Abrir produto
             </Link>
           </li>
         ))}

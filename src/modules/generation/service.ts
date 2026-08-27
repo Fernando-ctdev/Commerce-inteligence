@@ -7,7 +7,7 @@ import {
   reserveGeneratedContents,
 } from "../entitlements/generation";
 import { IDEMPOTENCY_TTL_MS } from "../entitlements/service";
-import { getProductForGeneration } from "../product/service";
+import { getProductForGeneration, type ProductView } from "../product/service";
 import { loadContents, loadPlanPayload } from "../content/service";
 import { loadStrategySnapshot } from "../strategy/service";
 import {
@@ -127,10 +127,11 @@ function ensureKey(value: unknown): string {
   return value;
 }
 
-function productToInput(product: NonNullable<Awaited<ReturnType<typeof getProductForGeneration>>>, request: GenerationRequest): GenerationInputV1 {
-  if (!product.context || product.locale !== "pt-BR" || product.context.locale !== "pt-BR" || !product.active || !product.name || !product.description) {
+function productToInput(product: ProductView, request: GenerationRequest): GenerationInputV1 {
+  if (product.locale !== "pt-BR" || !product.active || !product.name || !product.description) {
     throw new GenerationProductNotReadyError();
   }
+  const context = product.context;
   return {
     contract_version: GENERATION_CONTRACT_VERSION,
     operation: FIRST_GENERATION_OPERATION,
@@ -149,14 +150,14 @@ function productToInput(product: NonNullable<Awaited<ReturnType<typeof getProduc
     },
     strategy_context: {
       locale: "pt-BR",
-      goal: product.context.goal,
-      audience: product.context.audience,
-      style: product.context.style,
-      creator_presence: product.context.creatorPresence,
-      experience: product.context.experience,
-      constraints: product.context.constraints,
-      market: product.context.market,
-      notes: product.context.notes,
+      goal: context?.goal ?? null,
+      audience: context?.audience ?? null,
+      style: context?.style ?? null,
+      creator_presence: context?.creatorPresence ?? null,
+      experience: context?.experience ?? null,
+      constraints: context?.constraints ?? null,
+      market: context?.market ?? null,
+      notes: context?.notes ?? null,
     },
     history_snapshot: [],
     request,
@@ -198,7 +199,7 @@ async function startTransaction(tenantId: string, productId: string, request: Ge
 
     const product = await getProductForGeneration(tenantId, productId, tx);
     if (!product) throw new GenerationProductNotFoundError();
-    if (!product.active || !product.context || product.locale !== "pt-BR" || product.context.locale !== "pt-BR") throw new GenerationProductNotReadyError();
+    if (!product.active || product.locale !== "pt-BR") throw new GenerationProductNotReadyError();
     const [succeeded, active, anyRun] = await Promise.all([
       tx.generationRun.findFirst({ where: { tenantId, productId, operation: FIRST_GENERATION_OPERATION, status: "succeeded" } }),
       tx.generationRun.findFirst({ where: { tenantId, productId, operation: FIRST_GENERATION_OPERATION, status: { in: ["queued", "running"] } } }),

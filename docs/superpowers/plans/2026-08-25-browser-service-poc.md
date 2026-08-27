@@ -32,6 +32,7 @@
 - Create: `browser-service/entrypoint.sh` — Xvfb, x11vnc, websockify e servidor.
 - Create: `docker-compose.browser.yml` — serviço local, volume persistente e somente HTTP publicado em loopback.
 - Create: `scripts/smoke-browser-service.mts` — smoke HTTP reproduzível com pausa explícita para login manual.
+- Modify: `package.json` — script `smoke:browser` para executar a prova manual.
 - Modify: `.gitignore` — ignorar apenas artefatos locais de build/log do Browser Service, nunca profiles versionados.
 
 ## Contrato fixado antes da implementação
@@ -155,7 +156,7 @@ O `Dockerfile` deve usar `python:3.12-slim-bookworm`, instalar `chromium`, `xvfb
 uv tool install --python 3.12 --upgrade --force browser-harness
 mkdir -p /root/.codex/skills/browser-harness
 browser-harness skill > /root/.codex/skills/browser-harness/SKILL.md
-browser-harness --version > /opt/browser-harness.version
+uv tool list > /opt/browser-harness.version
 ```
 
 O `entrypoint.sh` inicia `Xvfb :99`, `x11vnc -localhost` e `websockify 127.0.0.1:6080 127.0.0.1:5900`, instala traps para encerrar somente esses PIDs e então executa `python -m browser_service`.
@@ -190,7 +191,7 @@ Expected: PASS no teste de defaults.
 
 - [ ] **Step 5: Buildar o container e verificar instalação do Harness**
 
-Run: `docker compose -f docker-compose.browser.yml build browser-service && docker compose -f docker-compose.browser.yml run --rm browser-service browser-harness --version`
+Run: `docker compose -f docker-compose.browser.yml build browser-service && docker compose -f docker-compose.browser.yml run --rm browser-service sh -c "cat /opt/browser-harness.version"`
 
 Expected: a versão instalada é exibida; o build também cria `/root/.codex/skills/browser-harness/SKILL.md` e `/opt/browser-harness.version`.
 
@@ -626,6 +627,7 @@ git commit -m "feat(browser): expose sanitized session API"
 **Files:**
 - Create: `scripts/smoke-browser-service.mts`
 - Modify: `docker-compose.browser.yml`
+- Modify: `package.json`
 - Modify: `.gitignore`
 
 - [ ] **Step 1: Implementar smoke HTTP sem credenciais**
@@ -655,8 +657,7 @@ Expected: container healthy/respondendo em `http://127.0.0.1:8081/health`; `dock
 
 - [ ] **Step 3: Executar smoke com URL real**
 
-Run: `BROWSER_SERVICE_TOKEN=local-poc-token BROWSER_PROFILE_ID=profile-fernando-01 TIKTOK_PRODUCT_URL=https://shop.tiktok.com/product/123 node --import tsx scripts/smoke-browser-service.mts`
-Run no PowerShell: `$env:BROWSER_SERVICE_TOKEN="local-poc-token"; $env:BROWSER_PROFILE_ID="profile-fernando-01"; $env:TIKTOK_PRODUCT_URL="https://shop.tiktok.com/product/123"; npx tsx scripts/smoke-browser-service.mts`
+Run no PowerShell: `$env:BROWSER_SERVICE_TOKEN="local-poc-token"; $env:BROWSER_PROFILE_ID="profile-fernando-01"; $env:TIKTOK_PRODUCT_URL="https://shop.tiktok.com/product/123"; npm run smoke:browser`
 
 Expected: a primeira execução pode parar em `LOGIN_REQUIRED`; o usuário abre a URL mediada, resolve login manualmente, pressiona ENTER e recebe Candidate factual. Após `close`, a segunda execução reutiliza o volume `browser-profiles` e não pede login enquanto a sessão continuar válida.
 

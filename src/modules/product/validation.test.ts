@@ -85,8 +85,8 @@ test("PATCH parcial: campos ausentes ok, mas name/description presentes vazios s
   const emptyDesc = validateProductInput({ name: "n", description: "" }, true);
   assert.ok("errors" in emptyDesc && emptyDesc.errors.description);
 
-  const ctxOnly = validateProductInput({ context: { goal: "Vender" } }, true); // PATCH só de contexto continua ok
-  assert.ok("input" in ctxOnly && ctxOnly.input.context?.goal === "Vender");
+  const factual = validateProductInput({ brand: "Marca", seller: "Vendedor", variants: ["Azul"], priceCurrency: "usd" }, true);
+  assert.ok("input" in factual && factual.input.brand === "Marca" && factual.input.priceCurrency === "USD");
 });
 
 test("hash de payload: estável, sensível a conteúdo e cego a formato de preço", () => {

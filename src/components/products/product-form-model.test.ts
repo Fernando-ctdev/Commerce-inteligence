@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { buildProductPayload, emptyProductDraft, validateProductDraft, visibleProductFieldErrors } from "./product-form-model";
 import { productPathForCreatedProduct } from "./product-create-model";
-import { firstProductErrorField, productProgressLabel, shouldMonitorEnrichment } from "./product-ui-model";
+import { firstProductErrorField } from "./product-ui-model";
 
 test("valida nome e descrição obrigatórios", () => {
   assert.deepEqual(validateProductDraft({ name: " ", description: "" }), {
@@ -28,7 +28,7 @@ test("mantém validação neutra até submit e preserva erro server-side", () =>
   });
 });
 
-test("monta payload com listas e contexto pt-BR normalizados", () => {
+test("monta payload manual com fatos normalizados", () => {
   assert.deepEqual(
     buildProductPayload(
       {
@@ -40,14 +40,6 @@ test("monta payload com listas e contexto pt-BR normalizados", () => {
         imageReferences: "https://example.com/image.jpg",
         observations: " Uso diário ",
         url: " https://example.com/product ",
-        objective: "Vender mais",
-        audience: "Pessoas ocupadas",
-        style: "Demonstração",
-        presence: "Sim",
-        experience: "Já usei",
-        restrictions: "Sem promessas médicas",
-        market: "Brasil",
-        contextObservations: "Gravar em casa",
       },
       "idempotency-key",
     ),
@@ -61,36 +53,14 @@ test("monta payload com listas e contexto pt-BR normalizados", () => {
       notes: "Uso diário",
       url: "https://example.com/product",
       idempotency_key: "idempotency-key",
-      context: {
-        locale: "pt-BR",
-        goal: "Vender mais",
-        audience: "Pessoas ocupadas",
-        style: "Demonstração",
-        creatorPresence: "Sim",
-        experience: "Já usei",
-        constraints: "Sem promessas médicas",
-        market: "Brasil",
-        notes: "Gravar em casa",
-      },
     },
   );
 });
 
-test("lista só exibe pronto para Strategy depois do contexto salvo", () => {
-  assert.equal(productProgressLabel(false), "Completar contexto");
-  assert.equal(productProgressLabel(true), "Produto pronto para Strategy");
-});
-
 test("foco de erro escolhe o primeiro campo na ordem do formulário", () => {
   assert.equal(firstProductErrorField({ description: "Obrigatória", name: "Obrigatório" }), "name");
-  assert.equal(firstProductErrorField({ contextObservations: "Inválida", market: "Inválido" }), "market");
+  assert.equal(firstProductErrorField({ url: "Inválida", category: "Inválida" }), "category");
   assert.equal(firstProductErrorField({}), undefined);
-});
-
-test("enrichment só é monitorado quando há URL pendente", () => {
-  assert.equal(shouldMonitorEnrichment({ url: "https://example.com/product", enrichmentStatus: "pending" }), true);
-  assert.equal(shouldMonitorEnrichment({ url: "", enrichmentStatus: "pending" }), false);
-  assert.equal(shouldMonitorEnrichment({ url: "https://example.com/product", enrichmentStatus: "completed" }), false);
 });
 
 test("navegação após criação aponta para o Product criado", () => {

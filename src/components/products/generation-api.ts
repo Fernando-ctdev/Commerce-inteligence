@@ -31,6 +31,19 @@ function sanitizeGenerationError(value: unknown): string | null {
   return sanitized || null;
 }
 
+function isGenerationStatus(value: unknown): value is GenerationStatus {
+  switch (value) {
+    case "queued":
+    case "running":
+    case "succeeded":
+    case "failed":
+    case "cancelled":
+      return true;
+    default:
+      return false;
+  }
+}
+
 export function isCompleteGenerationResult(value: Pick<GenerationRecord, "status" | "quantity" | "strategy" | "plan" | "contents">): boolean {
   return value.status !== "succeeded" || (value.strategy !== null && value.plan !== null && value.contents.length === value.quantity);
 }
@@ -82,7 +95,7 @@ export function normalizeGeneration(value: unknown): GenerationRecord {
   if (typeof value !== "object" || value === null) throw new GenerationApiError(0, "Resposta de Generation inválida.");
   const record = value as Record<string, unknown>;
   const status = record.status;
-  if (status !== "queued" && status !== "running" && status !== "succeeded" && status !== "failed" && status !== "cancelled") throw new GenerationApiError(0, "Resposta de Generation inválida.");
+  if (!isGenerationStatus(status)) throw new GenerationApiError(0, "Resposta de Generation inválida.");
   const normalized = {
     id: String(record.id ?? ""),
     productId: String(record.productId ?? ""),

@@ -1,6 +1,7 @@
 // Entitlements — Slice 002: entitlement default por Tenant (ADR-006) e capacidade `active_products`.
 // O limite vem exclusivamente de configuração server-side validada (fail-closed); o registro por Tenant
 // é o marcador do default provisionado — não armazena limite editável nem é autoridade do cliente.
+import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 
@@ -33,13 +34,28 @@ export function resolveActiveProductsLimit(): number {
  * duas no limite deixam no máximo a capacidade configurada, sem Product/uso parcial.
  */
 export async function assertProductCapacity(tx: Prisma.TransactionClient, tenantId: string): Promise<number> {
-  const rows = await tx.$queryRaw<{ tenantId: string }[]>`
+  // ON CONFLICT avoids aborting the transaction while serializing first-use creation.
+  await tx.$executeRaw`
+    INSERT INTO "entitlements" ("id", "tenantId", "createdAt", "updatedAt")
+    VALUES (${randomUUID()}, ${tenantId}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT ("tenantId") DO NOTHING`;
+  await tx.$queryRaw<{ tenantId: string }[]>`
     SELECT "tenantId" FROM "entitlements" WHERE "tenantId" = ${tenantId} FOR UPDATE`;
-  if (rows.length === 0) await provisionDefaultEntitlement(tx, tenantId); // convergência de backfill/rollout
   const limit = resolveActiveProductsLimit();
   const active = await tx.product.count({ where: { tenantId, active: true } });
   if (active >= limit) throw new ProductLimitReachedError();
   return limit;
+}
+
+/**
+ * Preflight não-travado de capacidade antes de iniciar Chromium/novo profile (PLAN Passo 3):
+ * falha fechado com config ausente e sinaliza limite cedo (estado LIMIT). A verificação
+ * definitiva continua atômica na confirmação (assertProductCapacity dentro da transação).
+ */
+export async function preflightImportCapacity(tenantId: string): Promise<void> {
+  const limit = resolveActiveProductsLimit();
+  const active = await prisma.product.count({ where: { tenantId, active: true } });
+  if (active >= limit) throw new ProductLimitReachedError();
 }
 
 /** Limpeza operacional: remove registros de idempotência expirados (retenção 24h). */

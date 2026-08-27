@@ -34,7 +34,7 @@ async function requireSession(req: Request): Promise<AuthContext | Response> {
 function mapError(error: unknown): Response {
   if (error instanceof GenerationValidationError) return body(400, { error: "Dados inválidos.", fieldErrors: error.fieldErrors });
   if (error instanceof GenerationProductNotFoundError || error instanceof GenerationNotFoundError) return json(404, { error: "Não encontrado." });
-  if (error instanceof GenerationProductNotReadyError) return body(422, { error: "Complete o contexto do Product antes de gerar.", code: "product_not_ready" });
+  if (error instanceof GenerationProductNotReadyError) return body(422, { error: "Complete nome e descrição do Product antes de gerar.", code: "product_not_ready" });
   if (error instanceof GeneratedContentsLimitReachedError) return body(422, { error: "A quantidade não cabe na capacidade mensal deste Workspace.", code: "generation_capacity" });
   if (error instanceof CapacityUnavailableError) return body(503, { error: "A capacidade está indisponível com segurança. Tente novamente.", code: "capacity_unavailable" });
   if (error instanceof GenerationIntentConflictError) return body(409, { error: "Chave de idempotência já usada com dados diferentes.", code: "idempotency_conflict" });

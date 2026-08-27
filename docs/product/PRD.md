@@ -12,7 +12,7 @@ A plataforma deve responder, de forma prática e operacional, à principal pergu
 
 **“O que eu devo gravar para vender este produto?”**
 
-A partir de um produto, contexto de campanha e preferências do creator, o sistema gera e organiza:
+A partir de um produto, contexto e preferências do creator, o sistema gera e organiza:
 
 * análise comercial do produto;
 * identificação de público;
@@ -28,9 +28,12 @@ A partir de um produto, contexto de campanha e preferências do creator, o siste
 * scripts;
 * CTAs;
 * variações;
-* plano de produção;
-* distribuição dos conteúdos;
-* organização da fila de gravação.
+* planos de conteúdo;
+* Briefings do Conteúdo;
+* lotes de gravação;
+* agenda interna de gravação;
+* execução e progresso no Estúdio;
+* histórico e memória de cada Produto.
 
 A engine estratégica é a mesma para todos os planos.
 
@@ -152,7 +155,7 @@ A principal necessidade é transformar estratégia em uma operação repetível 
 
 # 5. Objetivos do MVP
 
-O MVP deve provar que creators estão dispostos a utilizar e pagar por uma plataforma que resolve o planejamento e organização de conteúdo antes da gravação.
+O MVP deve provar que creators estão dispostos a utilizar e pagar por uma plataforma que resolve planejamento, organização e execução operacional de conteúdo antes e durante a gravação.
 
 Os principais objetivos são:
 
@@ -162,8 +165,11 @@ Os principais objetivos são:
 4. transformar ideias em conteúdos realmente executáveis;
 5. organizar grandes volumes de conteúdo;
 6. ajudar o creator a trabalhar vários produtos simultaneamente;
-7. criar recorrência de uso;
-8. validar disposição de pagamento pela inteligência estratégica sem depender de geração de vídeo por IA.
+7. permitir agrupar conteúdos aprovados em lotes de gravação;
+8. permitir planejar quando cada lote será gravado;
+9. acompanhar a execução real no Estúdio sem gestão manual de status;
+10. criar recorrência de uso;
+11. validar disposição de pagamento pela inteligência estratégica sem depender de geração de vídeo por IA.
 
 ---
 
@@ -177,9 +183,10 @@ Ficam fora do escopo inicial:
 * geração automática de imagens;
 * edição de vídeo;
 * publicação automática;
-* agendamento de posts;
-* conexão direta com TikTok;
-* conexão com TikTok Shop;
+* agendamento de publicação;
+* sincronização com Google Calendar ou outros calendários externos;
+* lembretes externos de calendário;
+* conexão direta com TikTok para publicação ou analytics;
 * integração com Instagram;
 * integração com marketplaces adicionais;
 * analytics avançado;
@@ -192,9 +199,11 @@ Ficam fora do escopo inicial:
 * CRM;
 * gestão de creators;
 * gestão de influenciadores;
-* scraping complexo;
+* scraping universal;
 * análise competitiva avançada;
 * pesquisa automática baseada em dados pagos externos.
+
+A **Agenda interna de gravação** faz parte do MVP. Ela serve apenas para organizar quando o creator pretende gravar seus lotes e não deve ser confundida com agendamento de publicação ou integração externa de calendário.
 
 O produto precisa permanecer extremamente focado.
 
@@ -225,46 +234,98 @@ O principal ciclo de uso deve ser:
 ```text
 Adicionar produto
       ↓
-Informar contexto
+Product Import extrai os fatos
       ↓
-Engine analisa produto
+ProductCandidate
       ↓
-Engine cria estratégia comercial
+Usuário confirma ou edita os fatos
       ↓
-Usuário define quantidade de conteúdos
+Quantidade inicial é resolvida
+na confirmação, por preferência ou por default
       ↓
-Engine monta plano de conteúdo
+Product é persistido
       ↓
-Conteúdos são gerados
+CommerceIntelligenceJob é criado
       ↓
-Usuário organiza produção
+Commerce Intelligence trabalha em segundo plano
       ↓
-Creator grava
+ProductStrategy é persistida
       ↓
-Conteúdo é marcado como produzido
+ContentPlan é criado
+      ↓
+Content Opportunities são planejadas
+      ↓
+Content + Briefing em DRAFT ficam disponíveis
+      ↓
+Usuário revisa, edita, regenera, descarta ou aprova
+      ↓
+Aprovados formam um lote de gravação
+      ↓
+Usuário escolhe quando pretende gravar
+      ↓
+Lote aparece na Agenda e no Estúdio
+      ↓
+Creator grava externamente e conclui conteúdos no Estúdio
+      ↓
+Progresso do lote é atualizado automaticamente
+      ↓
+Lote é concluído
+      ↓
+Histórico e Product Memory são preservados
       ↓
 Usuário solicita novos conteúdos
+      ↓
+Engine reutiliza Strategy, consulta Memory
+e aplica restrições da nova geração quando existirem
 ```
 
+Na primeira geração, `targetContentCount` precisa estar resolvido antes da criação do `CommerceIntelligenceJob`. Isso não deve criar uma etapa de navegação separada.
+
+Depois de `Confirmar produto`, não existe uma segunda confirmação obrigatória da estratégia nem um botão obrigatório `Gerar estratégia`: o processamento segue de forma assíncrona até existirem conteúdos úteis para revisão.
+
 Esse ciclo deve poder ser repetido continuamente.
+
+A plataforma precisa fechar o espaço entre **“tenho ideias aprovadas”** e **“sei o que vou gravar e consigo executar”**.
 
 ---
 
 # 9. Estrutura Conceitual do Sistema
 
-O produto possui cinco grandes entidades conceituais:
+O produto possui os seguintes objetos e camadas conceituais principais:
 
 ```text
-Produto
+ProductCandidate
    ↓
-Estratégia
+Product
    ↓
-Plano
+CommerceIntelligenceJob
    ↓
-Conteúdo
+ProductStrategy
    ↓
-Produção
+ContentPlan
+   ↓
+ContentOpportunity
+   ↓
+Content
+   ↓
+ContentBriefVersion
+   ↓
+RecordingBatch
+   ↓
+Execução
 ```
+
+`Content` é a identidade estável de um conteúdo ao longo do workflow. O **Briefing do Conteúdo** é a representação que o creator revisa e executa; alterações e regenerações geram versões rastreáveis (`ContentBriefVersion`).
+
+A **Agenda** é uma visão temporal dos `RecordingBatch`.
+
+O **Estúdio** é a superfície operacional onde esses lotes são executados.
+
+O **Histórico** preserva a memória intelectual e operacional vinculada ao Produto e alimenta a Product Memory.
+
+Agenda, Estúdio e Histórico não precisam existir como entidades independentes quando uma projeção ou representação derivada for suficiente.
+
+Nos contratos de domínio e código, usar identificadores canônicos em inglês (`Product`, `ProductStrategy`, `ContentPlan`, `Content`, `ContentBriefVersion`, `RecordingBatch`). Na interface do MVP, manter nomenclatura humana em `pt-BR` conforme o Design System.
 
 ---
 
@@ -291,32 +352,54 @@ Nem todas devem ser obrigatórias.
 
 O sistema deve permitir começar rapidamente.
 
-O ideal é que o usuário consiga fornecer apenas um link ou descrição e posteriormente complementar informações.
+No fluxo principal, o usuário fornece preferencialmente uma URL e o Product Import tenta descobrir os fatos automaticamente. Entrada manual continua disponível como fallback quando não houver URL, quando a extração falhar ou quando o creator preferir corrigir/complementar os fatos antes da confirmação.
+
+Informações estratégicas não pertencem ao cadastro factual do Produto.
 
 ---
 
 # 11. Contexto da Estratégia
 
-Antes da geração, o sistema pode solicitar informações adicionais.
+O cadastro do Produto deve solicitar somente fatos que não possam ser descobertos ou confirmados automaticamente.
 
-O objetivo não é criar um formulário enorme.
+Informações estratégicas como públicos, dores, desejos, objeções, benefícios, posicionamento e ângulos são responsabilidade da Commerce Intelligence Engine.
 
-Somente informações que alterem significativamente a estratégia.
+O sistema pode considerar dois contextos adicionais, sem misturá-los com Product Facts:
 
-Exemplos:
+### CreatorPreferences
 
-* objetivo;
-* quantidade desejada de conteúdos;
-* estilo de conteúdo;
-* presença ou ausência do creator em vídeo;
-* experiência com o produto;
-* público desejado;
-* observações;
+Preferências persistentes do creator que podem influenciar a execução dos conteúdos, por exemplo:
+
+* idioma;
+* mercado;
+* presença ou ausência do creator em câmera;
+* preferência por voice-over;
+* duração preferida;
+* tom;
+* estilo de execução;
 * restrições;
-* língua;
-* mercado.
+* observações recorrentes.
 
-Grande parte dessas informações pode possuir valores automáticos sugeridos pelo sistema.
+Na Engine, essas preferências podem ser carregadas como um `CreatorContext` adequado à capability em execução.
+
+### GenerationConstraints
+
+Parâmetros válidos para uma geração específica.
+
+Na primeira geração, `targetContentCount` precisa estar resolvido antes do `CommerceIntelligenceJob`.
+
+Em gerações posteriores, o usuário pode opcionalmente direcionar o novo plano, por exemplo:
+
+* objetivo específico;
+* foco em determinado público;
+* foco em objeções;
+* preferência por determinados ângulos;
+* duração específica para aquela geração;
+* observações pontuais.
+
+Essas restrições influenciam o `ContentPlan` daquela geração. Elas não reescrevem automaticamente a `ProductStrategy` persistente.
+
+Mudanças estruturais, como fatos relevantes do Produto, mercado ou outra alteração que afete materialmente a Strategy, devem seguir as regras de versionamento e `STALE` definidas pela Commerce Intelligence Engine.
 
 ---
 
@@ -701,18 +784,24 @@ Ela deve saber:
 * quais conteúdos foram gerados;
 * quais foram aprovados;
 * quais foram descartados;
-* quais foram gravados;
+* quais foram concluídos;
 * quais ângulos já foram utilizados;
 * quais hooks já foram utilizados;
-* quais estratégias já foram exploradas.
+* quais estratégias já foram exploradas;
+* quais Briefings aprovados foram executados;
+* quais lotes de gravação já foram concluídos.
 
 Essa memória é fundamental para diferenciar o produto de uma interface genérica de IA.
+
+Datas e progresso de gravação pertencem à memória operacional. Eles podem ser preservados no histórico, mas não devem alterar a estratégia comercial sem uma regra explícita que justifique isso.
 
 ---
 
 # Briefing do Conteúdo
 
-Cada conteúdo criado dentro de um plano deve possuir uma representação operacional chamada **Briefing do Conteúdo**.
+Cada `Content` deve possuir um Briefing do Conteúdo revisável pelo creator.
+
+O `Content` representa a identidade estável do conteúdo dentro do Produto e do Plano. O material concreto do Briefing é preservado em versões rastreáveis (`ContentBriefVersion`).
 
 O Briefing reúne tudo que o creator precisa para entender, revisar e produzir aquele conteúdo:
 
@@ -727,9 +816,9 @@ O Briefing reúne tudo que o creator precisa para entender, revisar e produzir a
 * CTA;
 * duração ou orientações relevantes.
 
-Um plano com 20 conteúdos gera 20 briefings independentes.
+Um plano com 20 conteúdos gera 20 `Content`, cada um com ao menos uma versão inicial de Briefing.
 
-Cada briefing pode ser:
+Cada conteúdo pode ser:
 
 * revisado;
 * editado;
@@ -737,56 +826,92 @@ Cada briefing pode ser:
 * descartado;
 * aprovado.
 
-Somente conteúdos aprovados seguem para produção.
+Editar ou regenerar algo que altere o Briefing cria uma nova `ContentBriefVersion`. Ao aprovar, a versão exata aprovada deve ser preservada.
 
-Após aprovação, o conteúdo poderá ser executado:
+Somente conteúdos em `APPROVED` podem ser selecionados para um lote de gravação.
 
-```text
-pelo próprio creator
-ou
-pela AI Content Production Engine, quando disponível no plano
-```
+Um `RecordingBatchItem` deve preservar a referência ao `Content` e à versão aprovada usada naquela execução. Edições posteriores não podem alterar silenciosamente a versão já vinculada a um lote.
+
+No MVP, o creator utiliza o Estúdio para organizar e acompanhar a execução do Briefing durante sua sessão de gravação.
+
+A captura do vídeo acontece fora da plataforma, utilizando a câmera, celular ou equipamento que o creator já utiliza.
+
+Futuramente, a mesma versão aprovada poderá ser executada pela AI Content Production Engine.
 
 O Briefing do Conteúdo é o contrato entre a estratégia criada pela plataforma e sua execução.
 
+---
 
-# 26. Production Queue
+# 26. Estúdio e Lotes de Gravação
 
-Depois da estratégia, conteúdos devem entrar em uma fila de produção.
+Depois da aprovação, o creator seleciona conteúdos aprovados para formar um **lote de gravação**.
 
-Status mínimos:
+O lote é a unidade operacional do Estúdio.
+
+No MVP:
+
+* um lote pertence a um único Produto;
+* contém um ou mais conteúdos aprovados;
+* possui uma data planejada de gravação;
+* possui progresso calculado pela quantidade de conteúdos concluídos;
+* seu estado visível é derivado automaticamente.
+
+Estados visíveis do lote:
 
 ```text
-Ideia
-Pronto para gravar
-Gravado
-Publicado
-Arquivado
+Aguardando
+Gravando
+Concluído
 ```
 
-Não é necessário rastrear publicação automaticamente no MVP.
+Regra:
 
-O próprio usuário poderá atualizar o status.
+```text
+0 concluídos de N       → Aguardando
+1 até N-1 concluídos    → Gravando
+N concluídos de N       → Concluído
+```
+
+`Gravando` significa apenas que a execução daquele lote já foi iniciada. Não significa que a plataforma esteja capturando vídeo ou áudio.
+
+O usuário não deve administrar esse status manualmente.
+
+O Estúdio pode organizar os lotes por esses três estados, utilizando colunas, listas ou outra composição simples conforme definido pelo Design System.
+
+O Estúdio é um centro operacional de pré-produção e acompanhamento dos lotes. Ele organiza o que será gravado, apresenta o material necessário para cada conteúdo e acompanha o progresso informado pelo creator. Não realiza a gravação propriamente dita.
+
+Não transformar o Estúdio em uma ferramenta genérica de gestão de projetos.
 
 ---
 
-# 27. Modo de Gravação
+# 27. Guia de Gravação
 
-Conteúdos prontos podem possuir uma experiência simplificada para execução.
-
-A tela deve mostrar apenas o necessário.
+Ao abrir um lote no Estúdio, o creator vê quais conteúdos pertencem à sessão e quais já foram concluídos.
 
 Exemplo:
 
 ```text
-VÍDEO 12 DE 30
+Mini Aspirador
+3 de 8 concluídos
 
-Ângulo
-Problema → solução
+✓ Conteúdo #01
+✓ Conteúdo #02
+✓ Conteúdo #03
+○ Conteúdo #04
+○ Conteúdo #05
+○ Conteúdo #06
+○ Conteúdo #07
+○ Conteúdo #08
+```
+
+Ao abrir um conteúdo, o **Guia de Gravação** deve mostrar apenas o necessário para orientar sua execução:
+
+```text
+VÍDEO 4 DE 8
 
 HOOK
 
-SCRIPT
+ROTEIRO
 
 CENAS
 
@@ -794,96 +919,155 @@ CTA
 
 [Anterior]
 
-[Marcar como gravado]
+[Concluir conteúdo]
 
 [Próximo]
 ```
 
-O objetivo é permitir que o creator utilize o produto durante sessões reais de gravação.
+O Guia de Gravação não é uma interface de captura de vídeo.
+
+No MVP, o Estúdio não deve:
+
+* acessar ou controlar a câmera do dispositivo;
+* possuir botão de REC, obturador ou preview de câmera;
+* capturar áudio ou vídeo;
+* editar mídia;
+* substituir o aplicativo ou equipamento utilizado pelo creator para gravar.
+
+A gravação acontece externamente. A plataforma permanece aberta apenas como guia operacional e mecanismo de acompanhamento do lote.
+
+Regras:
+
+* concluir um conteúdo atualiza imediatamente o progresso do lote;
+* `Próximo` não conclui implicitamente;
+* o creator decide quando avançar;
+* não existe necessidade de alterar o estado do lote manualmente;
+* ao concluir todos os conteúdos, o lote passa automaticamente para `Concluído`.
+
+O objetivo é orientar o creator durante sessões reais de gravação, deixando claro o que falar, mostrar e concluir, sem realizar a captura do conteúdo.
 
 ---
 
-# 28. Batch de Produção
+# 28. Agenda de Gravação
 
-A plataforma deve permitir selecionar múltiplos conteúdos para formar lotes de gravação.
+Ao criar um lote, o creator define quando pretende gravá-lo.
+
+Fluxo mínimo:
+
+```text
+Conteúdos aprovados
+↓
+Criar lote
+↓
+Quando pretende gravar?
+
+[Hoje]
+[Amanhã]
+[Escolher data]
+↓
+Agenda
+```
+
+A Agenda é uma visão temporal dos lotes e deve permitir visualizar:
+
+```text
+Dia
+Semana
+Mês
+```
+
+Cada item deve mostrar apenas informação operacional suficiente:
+
+* Produto;
+* quantidade de conteúdos;
+* progresso, quando já iniciado;
+* data planejada.
+
+Ações principais:
+
+```text
+[Abrir no Estúdio]
+[Reagendar]
+```
+
+No MVP, a data é suficiente. Horário, duração, recorrência e lembretes customizados não são obrigatórios.
+
+A Agenda é interna à plataforma. Sincronização com Google Calendar, criação de lembretes externos e agendamento de publicação ficam para evoluções futuras.
+
+---
+
+# 29. Histórico e Memória Operacional
+
+O histórico representa a memória intelectual e operacional do usuário.
+
+Deve preservar, conforme aplicável:
+
+* Produto;
+* plano;
+* conteúdo;
+* Briefing aprovado e suas versões;
+* hook;
+* ângulo;
+* estratégia utilizada;
+* lote de gravação;
+* data planejada;
+* data de conclusão;
+* status;
+* campanha;
+* mídia final, quando existir futuramente.
+
+No MVP, essa memória deve aparecer principalmente no contexto do próprio Produto, através da área `Histórico`.
+
+`Content Vault` pode permanecer como conceito de domínio ou nome técnico interno, mas não precisa existir como destino global da navegação.
+
+O histórico não é simplesmente armazenamento de mídia. Ele sustenta continuidade operacional e controle de variedade.
+
+---
+
+# 30. Home
+
+A Home é a entrada operacional da aplicação.
+
+Ela não deve parecer um dashboard de analytics.
+
+A prioridade é mostrar a próxima ação útil.
+
+Pode conter:
+
+* campo para adicionar/analisar um novo Produto;
+* gravações planejadas para hoje;
+* lote iniciado que precisa ser continuado;
+* próximas gravações já planejadas.
 
 Exemplo:
 
 ```text
-Lote de hoje
+Home
 
-Produto: Escova XYZ
-Quantidade: 12 vídeos
+[ Cole a URL de um produto... ] [Analisar produto]
+
+Gravações de hoje
+
+Mini Aspirador
+3 de 8 concluídos
+[Continuar lote]
+
+Próximas gravações
+
+Amanhã · Escova Modeladora · 5 conteúdos
+Sexta · Mini Projetor · 10 conteúdos
 ```
 
-A plataforma poderá organizar os conteúdos por fatores como:
+A Home não deve possuir:
 
-* produto;
-* cenário;
-* tipo de gravação;
-* objeto necessário;
-* estilo;
-* estrutura semelhante.
+* bloco `Ainda sem data`;
+* KPI cards;
+* gráficos;
+* scorecards;
+* analytics;
+* números soltos sem vínculo com Produto ou lote.
 
-No MVP, essa organização pode começar simples.
-
----
-
-# 29. Content Vault
-
-O Content Vault representa o histórico e biblioteca de conteúdo do usuário.
-
-Deve permitir visualizar:
-
-* produto;
-* conteúdo;
-* hook;
-* ângulo;
-* data;
-* status;
-* campanha;
-* tags.
-
-O Vault não é simplesmente armazenamento de mídia.
-
-No MVP, ele funciona principalmente como memória intelectual e operacional.
-
----
-
-# 30. Dashboard
-
-O dashboard deve ser minimalista.
-
-Não deve parecer uma ferramenta de analytics.
-
-Informações prioritárias:
-
-```text
-Hoje
-
-12 conteúdos para gravar
-8 gravados
-3 produtos ativos
-```
-
-Produtos:
-
-```text
-Escova XYZ
-18 / 30 produzidos
-
-Mini projetor
-12 / 20 produzidos
-
-Air fryer
-7 / 25 produzidos
-```
-
-Ações principais:
-
-* novo produto;
-* gerar plano;
-* continuar produção.
+Percentual ou contagem podem aparecer quando representarem progresso real de um lote.
 
 ---
 
@@ -896,22 +1080,29 @@ Fluxo desejado:
 ```text
 Criar conta
 ↓
-Adicionar primeiro produto
+Colar URL do primeiro Produto
 ↓
-Informar objetivo
+Product Import extrai os fatos
 ↓
-Selecionar quantidade
+ProductCandidate
 ↓
-Gerar estratégia
+Confirmar ou corrigir fatos
++ resolver quantidade inicial
 ↓
-Receber primeiros conteúdos
+CommerceIntelligenceJob inicia automaticamente
+↓
+Usuário pode continuar navegando
+↓
+Briefings ficam disponíveis
+↓
+Revisar conteúdos
 ```
 
-A meta deve ser fazer o usuário chegar ao primeiro plano de conteúdo rapidamente.
+O onboarding não deve exigir que o creator opere a Strategy passo a passo nem preencher público, dores, objeções ou outros elementos estratégicos que a plataforma consegue inferir.
 
-O onboarding não deve ensinar toda a plataforma.
+A meta deve ser fazer o usuário chegar aos primeiros conteúdos úteis para revisão rapidamente.
 
-O próprio produto deve ensinar através do uso.
+O onboarding não deve ensinar toda a plataforma. O próprio produto deve ensinar através do uso.
 
 ---
 
@@ -920,42 +1111,55 @@ O próprio produto deve ensinar através do uso.
 ```text
 Novo Produto
 ↓
-Colar URL ou inserir manualmente
+Colar URL ou usar fallback manual
 ↓
-Confirmar informações
+Extrair ou informar fatos
 ↓
-Definir contexto
+ProductCandidate
 ↓
-Gerar estratégia
+Confirmar Produto + quantidade inicial
 ↓
-Visualizar estratégia
+Product é persistido
 ↓
-Gerar plano
+CommerceIntelligenceJob inicia automaticamente
+↓
+Strategy + ContentPlan + Briefings em DRAFT
+↓
+Briefings prontos para revisão
 ```
+
+Não existe uma etapa obrigatória separada de `Definir contexto`, `Gerar estratégia`, `Visualizar estratégia` ou `Gerar plano` no fluxo inicial. A Strategy permanece consultável posteriormente dentro do Produto.
 
 ---
 
 # 33. Fluxo de Nova Geração
 
-Após um produto já possuir contexto estratégico:
+Após um Produto já possuir uma `ProductStrategy` ativa:
 
 ```text
 Produto
 ↓
-Novo lote
+Gerar novos conteúdos
 ↓
-Quantidade
+GenerationConstraints
+(targetContentCount obrigatório;
+outros direcionamentos opcionais)
 ↓
-Objetivo opcional
+Engine reutiliza Strategy ativa
 ↓
-Gerar
+Engine consulta Product Memory
 ↓
-Engine consulta histórico
+Content Portfolio Planner planeja o conjunto
 ↓
-Engine evita repetição
+Engine evita repetição e preserva relevância
 ↓
-Novos conteúdos adicionados
+Novos Content + Briefings em DRAFT
+são adicionados ao Produto
 ```
+
+Uma restrição local da geração não deve reescrever automaticamente a Strategy principal.
+
+`Lote de gravação` é um conceito operacional posterior à aprovação. Não utilizar `lote` como sinônimo de uma nova geração de conteúdos para evitar ambiguidade.
 
 ---
 
@@ -967,12 +1171,13 @@ A diferença comercial será baseada principalmente em capacidade de uso.
 
 Possíveis limitadores:
 
-* quantidade de produtos ativos;
+* quantidade de Produtos ativos;
 * conteúdos gerados por mês;
 * campanhas;
-* número de lotes;
+* quantidade de gerações;
+* quantidade de lotes de gravação ativos, se fizer sentido comercialmente;
 * armazenamento/histórico;
-* membros;
+* membros, futuramente;
 * funcionalidades operacionais adicionais.
 
 Não deve existir:
@@ -1003,18 +1208,19 @@ O usuário não deve precisar explicar novamente todo o produto.
 
 # 36. Feedback sobre Conteúdo
 
-Cada conteúdo pode possuir ações simples:
+No MVP, os sinais principais devem estar ligados ao workflow real do conteúdo:
 
-* gostei;
-* não gostei;
-* excluir;
+* aprovar;
+* descartar;
 * regenerar;
 * editar;
 * duplicar.
 
-No futuro, esses sinais podem ajudar personalização.
+`Descartar` é uma decisão de negócio e preserva o conteúdo como sinal de memória para futuras gerações. Não deve ser tratado como exclusão destrutiva.
 
-No MVP, o principal objetivo é melhorar a experiência operacional.
+`Gostei` e `não gostei` podem ser avaliados futuramente como sinais adicionais de personalização, mas não são necessários enquanto não houver comportamento de produto claramente associado a eles.
+
+Hard delete, soft delete e política de retenção são decisões técnicas/administrativas separadas do estado `DISCARDED` e permanecem fora deste PRD.
 
 ---
 
@@ -1049,7 +1255,7 @@ Escova
 Projetor
 ```
 
-Entretanto, o MVP não deve transformar campanhas em uma estrutura obrigatória.
+Entretanto, o MVP não deve transformar campanhas em uma estrutura obrigatória nem exigir um aggregate próprio para validar o core loop. Quando existir, campanha funciona apenas como agrupamento opcional.
 
 Produto deve continuar sendo o principal objeto da experiência.
 
@@ -1057,19 +1263,26 @@ Produto deve continuar sendo o principal objeto da experiência.
 
 # 39. Busca e Filtros
 
-Filtros mínimos:
+Busca e filtros devem aparecer no contexto em que ajudam uma ação real.
 
-* produto;
-* status;
-* ângulo;
+Em **Produtos**:
+
+* busca por nome;
+* filtro por ativos;
+* filtro por pendentes, quando a criação ainda não foi finalizada;
+* filtro por arquivados.
+
+Dentro de um **Produto**, a busca pode localizar hooks, scripts e conteúdos daquele contexto.
+
+No **Estúdio**, filtros opcionais podem incluir:
+
+* Produto;
+* status do lote;
 * data.
 
-Busca textual poderá localizar:
+Na **Agenda**, a dimensão temporal já é a organização principal e não deve ser duplicada por uma barra pesada de filtros.
 
-* hooks;
-* scripts;
-* produtos;
-* tags.
+Filtros não devem adicionar complexidade apenas porque os dados permitem.
 
 ---
 
@@ -1083,62 +1296,101 @@ A engine pode ser altamente sofisticada.
 
 A interface não deve expor essa complexidade desnecessariamente.
 
-Evitar dashboards cheios de:
+Evitar:
 
+* dashboards analíticos;
 * gráficos;
-* indicadores;
-* porcentagens;
+* indicadores sem ação associada;
+* porcentagens decorativas;
 * scores;
-* métricas técnicas.
+* métricas técnicas;
+* excesso de estados e controles.
+
+Percentuais são permitidos quando representam progresso concreto de um lote de gravação.
 
 A pergunta visual deve sempre ser:
 
 > “Qual é a próxima coisa útil que o creator precisa fazer?”
 
+As superfícies principais devem representar tarefas naturais do creator e não necessariamente os nomes internos dos domínios técnicos.
+
 ---
 
 # 41. Navegação Principal
 
-Uma estrutura inicial possível:
+A navegação principal do MVP é:
 
 ```text
 Home
 
 Produtos
 
-Conteúdo
+Estúdio
 
-Produção
+Agenda
 
-Vault
+Configurações
 ```
 
-Configurações e conta podem permanecer em navegação secundária.
+Responsabilidades:
+
+* **Home** — entrada operacional, novo Produto, gravações de hoje e próximas gravações;
+* **Produtos** — produtos promovidos, estratégia, planos, conteúdos e histórico;
+* **Estúdio** — lotes aguardando, em gravação ou concluídos e modo de execução;
+* **Agenda** — calendário interno de gravações planejadas;
+* **Configurações** — conta, plano e preferências da plataforma.
+
+`Conteúdos`, `Produção` e `Vault` podem continuar existindo como conceitos de domínio, mas não são destinos globais de primeiro nível no MVP.
 
 ---
 
 # 42. Tela de Produto
 
-A página de produto deve funcionar como centro operacional.
+A página de Produto deve funcionar como centro de inteligência e histórico daquele objeto.
 
-Exemplo:
+Lista global de Produtos pode utilizar cards com:
+
+* imagem;
+* nome;
+* estado operacional relevante;
+* próxima ação.
+
+Filtros principais:
 
 ```text
-Mini Projetor XYZ
+Ativos
+Pendentes
+Arquivados
+```
 
-30 conteúdos planejados
-18 gravados
-12 pendentes
+`Pendentes` representa Produtos cujo processo de importação, estratégia ou criação inicial de conteúdo ainda não foi concluído. É uma projeção operacional de readiness e não deve ser confundida com o lifecycle persistente do Produto, como `Ativo` ou `Arquivado`.
 
+Ao abrir um Produto, a organização principal deve ser:
+
+```text
+[Visão geral]
 [Estratégia]
 [Conteúdos]
-[Produção]
 [Histórico]
 ```
 
-A estratégia não precisa ocupar permanentemente a tela.
+### Visão geral
 
-Ela deve servir como base para tudo.
+Fatos principais do Produto e próxima ação.
+
+### Estratégia
+
+Públicos, dores, desejos, objeções, benefícios, argumentos e ângulos utilizados pela engine.
+
+### Conteúdos
+
+Planos, Briefings, revisão, edição, regeneração, aprovação e criação de lotes.
+
+### Histórico
+
+Lotes e conteúdos já concluídos, além da memória necessária para continuidade e controle de variedade.
+
+A estratégia não precisa ocupar permanentemente a tela. Ela deve servir como base para tudo.
 
 ---
 
@@ -1178,13 +1430,13 @@ Objeções
 ...
 ```
 
-O usuário pode editar ou regenerar elementos.
+O usuário pode editar ou regenerar elementos quando essa capacidade estiver disponível. Alterações estratégicas materiais devem produzir uma nova versão de `ProductStrategy` ou seguir a regra de `STALE`; conteúdos históricos continuam vinculados à versão utilizada. A matriz exata de campos editáveis pertence à Spec da Strategy.
 
 ---
 
 # 44. Página do Plano
 
-Deve mostrar uma visão organizada do lote.
+A página do Plano deve mostrar uma visão organizada dos conteúdos planejados para aquele Produto.
 
 Exemplo:
 
@@ -1207,62 +1459,103 @@ Abaixo:
 “Se sua TV ocupa metade do quarto…”
 
 Problema → solução
-Pronto para gravar
+Aprovado
 
 #02
 “Eu achei que isso seria muito pior que uma TV…”
 
 Objeção
-Pronto para gravar
+Rascunho
+```
+
+Os estados de revisão do Briefing não devem ser confundidos com os estados do lote no Estúdio.
+
+No contexto de revisão, estados mínimos podem ser:
+
+```text
+Rascunho
+Aprovado
+Descartado
+```
+
+No Estúdio, o lote usa exclusivamente:
+
+```text
+Aguardando
+Gravando
+Concluído
 ```
 
 ---
 
 # 45. Objeto Content
 
-Cada conteúdo deve possuir conceitualmente:
+`Content` é a identidade estável de um conteúdo ao longo de revisão, versionamento e execução.
 
-```text
-Content
+Estrutura conceitual mínima:
 
-id
+```ts
+interface Content {
+  id: string;
+  productId: string;
+  planId: string;
+  opportunityId?: string;
 
-product
+  status: ContentStatus;
 
-strategy context
+  currentBriefVersionId: string;
+  approvedBriefVersionId?: string;
 
-target audience
+  createdAt: Date;
+  updatedAt: Date;
+}
 
-pain
-
-desire
-
-objection
-
-benefit
-
-angle
-
-hook
-
-structure
-
-script
-
-scenes
-
-cta
-
-status
-
-createdAt
-
-updatedAt
+type ContentStatus =
+  | 'DRAFT'
+  | 'APPROVED'
+  | 'DISCARDED';
 ```
 
-Nem todos precisam aparecer para o usuário.
+O material revisável e executável pertence às versões do Briefing:
 
-Esses elementos permitem manter inteligência e rastreabilidade.
+```ts
+interface ContentBriefVersion {
+  id: string;
+  contentId: string;
+  version: number;
+
+  objective?: string;
+  targetAudience?: string;
+  pain?: string;
+  desire?: string;
+  objection?: string;
+  benefit?: string;
+
+  angle: string;
+  hook: string;
+  structure?: string;
+  script: string;
+  scenes: Scene[];
+  cta: string;
+  notes?: string;
+
+  createdAt: Date;
+}
+```
+
+A interface humana pode continuar chamando a versão atual de **Briefing do Conteúdo**; não é necessário expor a estrutura de versionamento permanentemente.
+
+Regras:
+
+* a Commerce Intelligence cria o `Content` em `DRAFT` e sua versão inicial;
+* editar ou regenerar o Briefing cria uma nova `ContentBriefVersion`;
+* aprovar define a versão exata em `approvedBriefVersionId`;
+* editar um conteúdo aprovado cria nova versão que precisa ser aprovada antes de substituir a versão aprovada para futuras execuções;
+* lotes já criados continuam referenciando a versão aprovada usada quando foram montados;
+* `DISCARDED` preserva a memória e não equivale a apagar o registro;
+* conclusão de gravação pertence ao `RecordingBatchItem`, não ao `ContentStatus`.
+
+Essa separação mantém inteligência, rastreabilidade e uma interface simples.
 
 ---
 
@@ -1317,27 +1610,33 @@ Textos e terminologias podem ser adaptados por idioma e mercado.
 
 # 49. Métricas de Produto
 
-As métricas principais do MVP devem medir comportamento dentro da plataforma.
+As métricas do MVP devem medir comportamento dentro da plataforma. Elas são métricas de produto para validação do negócio e não justificam dashboards analíticos na interface do creator.
 
 ## Ativação
 
-* usuário adicionou primeiro produto;
+* usuário adicionou primeiro Produto;
 * estratégia foi gerada;
 * primeiro plano foi criado;
-* primeiro conteúdo foi marcado como gravado.
+* primeiro Briefing foi aprovado;
+* primeiro lote de gravação foi criado e recebeu uma data;
+* primeiro conteúdo foi concluído no Estúdio.
 
 ## Engajamento
 
 * conteúdos gerados por usuário;
-* produtos ativos;
+* Produtos ativos;
 * sessões por semana;
 * conteúdos revisados;
-* conteúdos movidos para produção.
+* Briefings aprovados;
+* lotes criados;
+* lotes iniciados;
+* conteúdos concluídos no Estúdio.
 
 ## Retenção
 
 * usuários que retornam para gerar novos lotes;
-* usuários que continuam usando o mesmo produto;
+* usuários que continuam usando o mesmo Produto;
+* usuários que retornam para executar gravações planejadas;
 * usuários ativos semanalmente.
 
 ## Conversão
@@ -1352,13 +1651,15 @@ As métricas principais do MVP devem medir comportamento dentro da plataforma.
 
 Uma candidata forte para métrica principal é:
 
-**Quantidade de conteúdos planejados que avançam para “Gravado”.**
+**Quantidade de conteúdos planejados que são efetivamente concluídos no Estúdio.**
 
-Isso conecta inteligência à execução.
+Isso conecta inteligência à execução real.
 
-Outra métrica complementar:
+Métrica complementar:
 
-**Creators que produzem conteúdo através da plataforma semanalmente.**
+**Creators que concluem pelo menos um conteúdo através da plataforma por semana.**
+
+Outra medida operacional útil é a proporção de lotes criados que chegam a `Concluído`, sem transformar essa métrica em elemento obrigatório da interface.
 
 ---
 
@@ -1366,16 +1667,20 @@ Outra métrica complementar:
 
 O MVP estará validado se houver evidência consistente de que:
 
-1. usuários adicionam produtos;
+1. usuários adicionam Produtos;
 2. geram estratégias;
-3. utilizam os conteúdos produzidos pela plataforma;
-4. retornam semanalmente;
-5. criam novos lotes;
-6. mantêm múltiplos produtos;
-7. utilizam a fila de produção;
-8. marcam conteúdos como gravados;
-9. atingem limites de uso;
-10. demonstram disposição de pagamento.
+3. revisam e aprovam Briefings;
+4. utilizam os conteúdos produzidos pela plataforma;
+5. criam lotes de gravação;
+6. planejam uma data para esses lotes;
+7. retornam à Home e à Agenda para saber o que gravar;
+8. utilizam o Estúdio durante a execução;
+9. concluem conteúdos dentro dos lotes;
+10. concluem lotes completos;
+11. retornam semanalmente para gerar novos conteúdos ou executar gravações;
+12. mantêm múltiplos Produtos;
+13. atingem limites de uso;
+14. demonstram disposição de pagamento.
 
 A métrica mais importante não será número de textos gerados.
 
@@ -1409,7 +1714,7 @@ Variedade estratégica aumenta valor percebido.
 
 ### Hipótese D
 
-Organização da fila de gravação aumenta retenção.
+Organização por lotes, Agenda e Estúdio aumenta retenção porque aproxima planejamento da execução real.
 
 ### Hipótese E
 
@@ -1468,18 +1773,24 @@ Estratégia de conteúdo
 +
 Contexto permanente
 +
-Memória de produto
+Memória de Produto
 +
 Controle de variedade
 +
-Planejamento
+Briefings executáveis
 +
-Workflow de produção
+Lotes de gravação
 +
-Organização
+Agenda interna
++
+Estúdio operacional
++
+Histórico operacional
 ```
 
 É essa composição que precisa tornar o sistema mais útil que simplesmente conversar com um modelo de linguagem.
+
+O diferencial não é apenas responder **o que gravar**, mas transformar essa decisão em uma operação organizada até a conclusão.
 
 ---
 
@@ -1490,7 +1801,7 @@ Organização
 No futuro:
 
 ```text
-Content
+Approved Content Brief
 ↓
 Production Specification
 ↓
@@ -1506,9 +1817,11 @@ A diferença é o executor.
 ### Creator
 
 ```text
-Estratégia
+Briefing aprovado
 ↓
-Plano
+Lote de gravação
+↓
+Estúdio
 ↓
 Creator grava
 ```
@@ -1516,14 +1829,16 @@ Creator grava
 ### IA
 
 ```text
-Estratégia
+Briefing aprovado
 ↓
-Plano
+AI Production
 ↓
 IA produz
 ```
 
-Essa expansão não deve exigir reconstrução do core estratégico.
+A execução por IA não deve redefinir público, dor, ângulo, hook, roteiro ou CTA.
+
+Essa expansão não deve exigir reconstrução do core estratégico ou do Briefing.
 
 ---
 
@@ -1533,7 +1848,9 @@ Após validar o MVP:
 
 ### Fase 2
 
-* melhorias avançadas de Content Vault;
+* melhorias avançadas de histórico e memória operacional;
+* integração opcional com Google Calendar;
+* eventos e lembretes externos para sessões de gravação;
 * aprendizado de preferências;
 * análise manual de performance;
 * sugestões baseadas em conteúdos vencedores;
@@ -1543,7 +1860,7 @@ Após validar o MVP:
 ### Fase 3
 
 * integração TikTok;
-* importação de dados;
+* importação de dados de performance;
 * performance por conteúdo;
 * aprendizado baseado em vendas;
 * otimização automática de estratégia.
@@ -1572,21 +1889,25 @@ Expansão para:
 
 O MVP deve permitir que um creator:
 
-1. cadastre um produto;
-2. forneça contexto básico;
-3. receba uma análise comercial;
-4. receba uma estratégia de conteúdo;
-5. escolha quantos conteúdos deseja produzir;
-6. receba um plano estratégico diversificado;
-7. visualize hooks, scripts, cenas e CTAs;
-8. edite e regenere partes;
-9. organize conteúdos em fila;
-10. utilize um modo de gravação;
-11. marque conteúdos como gravados;
-12. consulte o histórico;
-13. gere novos lotes sem repetir excessivamente o que já foi explorado.
+1. adicione um Produto, preferencialmente por URL;
+2. receba um `ProductCandidate` com fatos extraídos e possa corrigi-los;
+3. confirme os fatos e resolva a quantidade inicial antes do processamento;
+4. tenha o `Product` persistido e o `CommerceIntelligenceJob` iniciado automaticamente;
+5. continue usando a aplicação enquanto a Commerce Intelligence trabalha em segundo plano;
+6. receba uma `ProductStrategy` persistente, um `ContentPlan` diversificado e conteúdos em `DRAFT`;
+7. visualize Briefings com hooks, roteiros, cenas e CTAs;
+8. edite, regenere, descarte e aprove conteúdos com versionamento rastreável;
+9. selecione conteúdos aprovados para formar um lote de gravação preservando a versão aprovada;
+10. escolha quando pretende gravar o lote;
+11. consulte seus lotes pela Agenda em visão de dia, semana ou mês;
+12. acompanhe no Estúdio lotes `Aguardando`, `Gravando` e `Concluído`;
+13. utilize um Guia de Gravação simplificado, sem captura de mídia;
+14. conclua conteúdos individualmente e veja o progresso do lote subir automaticamente;
+15. conclua o lote sem alterar status manualmente;
+16. consulte o histórico no contexto do Produto e preserve sinais para Product Memory;
+17. gere novos conteúdos reutilizando Strategy e Memory, sem repetir excessivamente o que já foi explorado.
 
-Se essas treze etapas funcionarem muito bem, temos o produto.
+Se essas dezessete etapas funcionarem muito bem, temos o produto.
 
 Todo o resto pode esperar.
 
@@ -1594,7 +1915,7 @@ Todo o resto pode esperar.
 
 # 59. Definição de Produto em Uma Frase
 
-> **Uma plataforma de inteligência comercial para creators de TikTok Shop que transforma produtos em estratégias e planos completos de conteúdo de vendas prontos para gravação.**
+> **Uma plataforma de inteligência comercial para creators de TikTok Shop que transforma produtos em estratégias e conteúdos de venda, organiza sessões de gravação e acompanha a execução até a conclusão.**
 
 ---
 
@@ -1606,7 +1927,9 @@ Sempre que surgir uma nova funcionalidade durante o desenvolvimento do MVP, ela 
 
 > Isso ajuda o creator a saber **como gravar**?
 
-> Isso ajuda o creator a **organizar o que precisa gravar**?
+> Isso ajuda o creator a **organizar quando e o que precisa gravar**?
+
+> Isso ajuda o creator a **executar e concluir uma sessão de gravação**?
 
 > Isso ajuda a plataforma a evitar **repetição e estratégia ruim**?
 

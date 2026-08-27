@@ -130,6 +130,8 @@ A aplicação principal não deve manipular diretamente cookies, tokens ou dados
 
 ## 5. Browser Service
 
+> **Nota de boundary documental:** os requisitos de sessão persistente, isolamento por usuário, human-in-the-loop e extração via browser pertencem a este PRD. A topologia concreta `Browser Service + Chromium + Browser Harness/CDP`, lifecycle, deployment e segurança operacional devem ser formalizados em ADR/Spec antes da implementação, sem alterar o comportamento de produto descrito aqui.
+
 Criar uma camada isolada responsável pelos browsers.
 
 ```text
@@ -301,6 +303,8 @@ interface ProductCandidate {
 
   features: string[];
 
+  variants?: ProductVariantCandidate[];
+
   images: string[];
 
   seller?: string;
@@ -310,6 +314,10 @@ interface ProductCandidate {
 ```
 
 O `ProductCandidate` representa os fatos encontrados antes da confirmação final do usuário.
+
+`variants` faz parte do contrato factual quando existirem variantes relevantes. A estrutura exata de `ProductVariantCandidate` permanece para a Spec; este PRD não define atributos universais que todos os produtos precisariam possuir.
+
+A política de persistência de `ProductCandidate` antes da confirmação não é requisito deste PRD. A implementação pode tratá-lo como estado transitório ou persistência temporária, desde que a confirmação humana continue sendo a fronteira para criação do `Product` ativo.
 
 ---
 

@@ -8,12 +8,14 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/components/products/product-form-model.test.ts src/modules/entitlements/service.test.ts src/modules/entitlements/generation.test.ts src/modules/identity/http.test.ts src/modules/identity/password.test.ts src/modules/identity/service.test.ts src/modules/product/http.test.ts src/modules/product/service.test.ts src/modules/product/url-guard.test.ts src/modules/product/validation.test.ts src/modules/generation/contract.test.ts src/modules/generation/runtime.test.ts src/modules/generation/service.test.ts src/modules/generation/worker.test.ts src/modules/generation/http.test.ts src/modules/generation/health.test.ts",
+    "test": "tsx --test src/components/products/product-form-model.test.ts src/components/products/product-import-model.test.ts src/components/products/product-import-api.test.ts src/modules/entitlements/service.test.ts src/modules/entitlements/generation.test.ts src/modules/identity/http.test.ts src/modules/identity/password.test.ts src/modules/identity/service.test.ts src/modules/product/http.test.ts src/modules/product/service.test.ts src/modules/product/validation.test.ts src/modules/product-import/normalize.test.ts src/modules/product-import/service.test.ts src/modules/browser/client.test.ts src/modules/browser/url.test.ts src/modules/generation/contract.test.ts src/modules/generation/runtime.test.ts src/modules/generation/service.test.ts src/modules/generation/worker.test.ts src/modules/generation/http.test.ts src/modules/generation/health.test.ts",
     "smoke:product": "tsx scripts/smoke-product.mts",
+    "smoke:browser": "tsx scripts/smoke-browser-service.mts",
     "worker:generation": "tsx scripts/worker.mts"
   },
   "dependencies": {
     "@prisma/client": "6.12.0",
+    "lucide-react": "^1.34.0",
     "next": "16.3.2",
     "react": "19.2.8",
     "react-dom": "19.2.8"

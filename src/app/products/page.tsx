@@ -6,7 +6,7 @@ import { ProductShell } from "@/components/products/product-shell";
 export default async function ProductsPage() {
   await requireSession();
   return (
-    <ProductShell title="Seus Products" action={null}>
+      <ProductShell title="Seus produtos" action={null}>
       <ProductList />
     </ProductShell>
   );

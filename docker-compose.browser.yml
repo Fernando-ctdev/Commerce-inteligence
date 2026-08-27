@@ -1,0 +1,23 @@
+services:
+  browser-service:
+    build:
+      context: ./browser-service
+    environment:
+      BROWSER_SERVICE_TOKEN: ${BROWSER_SERVICE_TOKEN:?set BROWSER_SERVICE_TOKEN}
+      BROWSER_SERVICE_PUBLIC_ORIGIN: ${BROWSER_SERVICE_PUBLIC_ORIGIN:-http://127.0.0.1:8081}
+      DISPLAY: :99
+      PROFILE_ROOT: /browser-profiles
+    cap_add:
+      - SYS_ADMIN
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - browser-profiles:/browser-profiles
+    networks:
+      - commerce
+
+volumes:
+  browser-profiles:
+networks:
+  commerce:
+    name: commerce-intelligence

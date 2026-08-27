@@ -1,7 +1,5 @@
 import type { ProductFieldErrors, ProductPayload } from "./product-form-model";
 
-export type EnrichmentStatus = "none" | "pending" | "completed" | "unavailable";
-
 export type ProductRecord = {
   id: string;
   version: number;
@@ -13,27 +11,13 @@ export type ProductRecord = {
   imageReferences: string[];
   observations: string;
   url: string;
-  context: {
-    locale: "pt-BR";
-    objective: string;
-    audience: string;
-    style: string;
-    presence: string;
-    experience: string;
-    restrictions: string;
-    market: string;
-    observations: string;
-  };
-  readyForStrategy: boolean;
   active: boolean;
-  enrichmentStatus: EnrichmentStatus;
 };
 
 export type ProductMutation = {
   id: string;
   version: number;
   replay?: boolean;
-  readyForStrategy?: boolean;
 };
 
 export type ProductApiErrorOptions = {
@@ -73,10 +57,6 @@ function listValue(value: unknown) {
     .filter(Boolean);
 }
 
-function contextValue(value: Record<string, unknown>, key: string) {
-  return nullableString(value[key]);
-}
-
 const serverFieldNames: Record<string, keyof ProductFieldErrors> = {
   name: "name",
   description: "description",
@@ -86,14 +66,6 @@ const serverFieldNames: Record<string, keyof ProductFieldErrors> = {
   imageRefs: "imageReferences",
   notes: "observations",
   url: "url",
-  "context.goal": "objective",
-  "context.audience": "audience",
-  "context.style": "style",
-  "context.creatorPresence": "presence",
-  "context.experience": "experience",
-  "context.constraints": "restrictions",
-  "context.market": "market",
-  "context.notes": "contextObservations",
 };
 
 function mapFieldErrors(value: unknown): ProductFieldErrors {
@@ -108,18 +80,11 @@ function mapFieldErrors(value: unknown): ProductFieldErrors {
 export function normalizeProduct(value: unknown): ProductRecord {
   if (typeof value !== "object" || value === null) throw new Error("Resposta de Product inválida.");
   const record = value as Record<string, unknown>;
-  const context = (record.context ?? record.strategy_context ?? {}) as Record<string, unknown>;
   const url = nullableString(record.url);
-  const rawEnrichment = record.enrichmentStatus ?? record.enrichment_status ?? record.url_enrichment_status;
-  const enrichmentStatus: EnrichmentStatus = rawEnrichment === "pending" || rawEnrichment === "completed" || rawEnrichment === "none"
-    ? rawEnrichment
-    : url ? "unavailable" : "none";
   const rawCents = record.priceCents ?? record.price_cents;
   const cents = typeof rawCents === "number" ? rawCents : typeof rawCents === "string" && /^\d+$/.test(rawCents) ? Number(rawCents) : null;
   const rawPrice = record.price ?? record.price_brl;
   const price = cents !== null ? (cents / 100).toFixed(2).replace(".", ",") : nullableString(rawPrice);
-  const readyForStrategy = typeof record.readyForStrategy === "boolean" ? record.readyForStrategy : Boolean(record.context ?? record.strategy_context);
-
   return {
     id: nullableString(record.id ?? record.product_id),
     version: typeof record.version === "number" ? record.version : 0,
@@ -131,20 +96,7 @@ export function normalizeProduct(value: unknown): ProductRecord {
     imageReferences: listValue(record.imageRefs ?? record.imageReferences ?? record.image_references),
     observations: nullableString(record.notes ?? record.observations),
     url,
-    context: {
-      locale: "pt-BR",
-      objective: contextValue(context, "goal") || contextValue(context, "objective"),
-      audience: contextValue(context, "audience"),
-      style: contextValue(context, "style"),
-      presence: contextValue(context, "creatorPresence") || contextValue(context, "presence"),
-      experience: contextValue(context, "experience"),
-      restrictions: contextValue(context, "constraints") || contextValue(context, "restrictions"),
-      market: contextValue(context, "market"),
-      observations: contextValue(context, "notes") || contextValue(context, "observations"),
-    },
-    readyForStrategy,
     active: record.active !== false,
-    enrichmentStatus,
   };
 }
 
@@ -199,7 +151,6 @@ function mutationFromResponse(value: unknown): ProductMutation {
     id,
     version,
     replay: record.replay === true,
-    readyForStrategy: typeof record.readyForStrategy === "boolean" ? record.readyForStrategy : undefined,
   };
 }
 
@@ -214,13 +165,4 @@ export async function createProduct(payload: ProductPayload) {
 
 export async function updateProduct(id: string, payload: ProductPayload) {
   return mutationFromResponse(await request<unknown>(`/api/products/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) }));
-}
-
-export async function requestEnrichment(id: string) {
-  const data = await request<unknown>(`/api/products/${encodeURIComponent(id)}/enrichment`, { method: "POST", body: JSON.stringify({}) });
-  if (typeof data === "object" && data !== null) {
-    const status = (data as Record<string, unknown>).enrichmentStatus;
-    if (status === "pending" || status === "completed" || status === "unavailable") return status;
-  }
-  return "unavailable" as const;
 }

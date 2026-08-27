@@ -65,13 +65,6 @@
   margin: 0;
 }
 
-.status {
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  line-height: 18px;
-  margin-top: 4px;
-}
-
 .cardAction {
   align-items: center;
   border-top: 1px solid var(--color-border);

@@ -1,17 +1,17 @@
 # Design System — Commerce Intelligence
 
 **Status:** fonte de verdade visual do produto  
-**Versão:** 1.2
+**Versão:** 1.3
 **Locale do MVP:** `pt-BR`  
 **Escopo:** decisões de produto visual, tokens, comportamento responsivo, estados e contratos de componentes. Este documento **não implementa telas, componentes ou dependências**.
 
-> **Memória desejada:** ao abrir a plataforma, o creator entende imediatamente o que precisa produzir agora.
+> **Memória desejada:** ao abrir a Home, o creator entende imediatamente o que precisa fazer e o que tem para gravar.
 
 ## 1. Contexto do produto
 
 ### O que é
 
-Plataforma de inteligência comercial para creators e afiliados de TikTok Shop. Um Produto passa por estratégia, plano, Conteúdo e Produção até virar uma fila de gravação executável.
+Plataforma de inteligência comercial para creators e afiliados de TikTok Shop. Um Produto passa por estratégia, plano e Conteúdos até formar lotes executáveis no Estúdio e na Agenda de gravação.
 
 A interface deve tornar simples na superfície uma engine complexa de análise, memória, variedade e geração. O produto não é um dashboard de métricas, uma rede social nem um wrapper de chat.
 
@@ -52,8 +52,8 @@ macOS/iPadOS, Things e Linear são referências de sensação, clareza e discipl
 3. **Next action first.** Cada tela, estado vazio e bloco deve deixar óbvia uma próxima ação útil.
 4. **Complexidade por trás, simplicidade na frente.** Mostrar o mínimo necessário para a decisão atual.
 5. **Progressive disclosure.** Estratégia profunda, proveniência e explicabilidade aparecem sob demanda, sem esconder status, erro ou ação necessária.
-6. **Hoje é operacional.** A pergunta principal é “o que preciso produzir agora?”.
-7. **Produção contínua.** O fluxo de gravação deve favorecer `gravar → marcar → próximo`.
+6. **Home é operacional.** A entrada da aplicação deve responder “o que tenho para fazer agora?” e oferecer o caminho mais curto para adicionar um novo Produto ou continuar uma gravação.
+7. **Estúdio contínuo.** O fluxo de gravação deve favorecer `abrir lote → concluir conteúdo → próximo`, com progresso do lote derivado automaticamente.
 8. **Cards representam objetos reais.** Product, Content e, quando existir, lote de produção podem usar card. Métrica solta, agrupamento decorativo ou seção genérica não usa card.
 9. **Glass é periférico.** Transparência e blur só em navegação, toolbars e elementos flutuantes. O conteúdo permanece sólido.
 10. **Cor tem semântica.** `color.action.filled` sinaliza ações preenchidas; `color.brand.accent` sinaliza marca, seleção e acentos secundários. `color.intelligence` sinaliza inteligência ou geração. Tags, ângulos e categorias são neutros.
@@ -70,15 +70,43 @@ macOS/iPadOS, Things e Linear são referências de sensação, clareza e discipl
 
 ### Navegação principal
 
-A ordem e a nomenclatura são fixas:
+A ordem e a nomenclatura são fixas no MVP:
 
-1. **Hoje** — fila operacional e próxima ação;
-2. **Produtos** — objetos vendidos e seus contextos;
-3. **Conteúdos** — biblioteca de ideias e conteúdos estruturados;
-4. **Produção** — fila, lotes e execução;
-5. **Vault** — memória intelectual e operacional.
+1. **Home** — entrada operacional, novo Produto, gravações de hoje e próximas gravações;
+2. **Produtos** — catálogo operacional dos Produtos, estratégia, Conteúdos e histórico de cada Produto;
+3. **Estúdio** — esteira dos lotes de gravação e execução dos Conteúdos;
+4. **Agenda** — calendário interno das gravações planejadas;
+5. **Configurações** — conta, plano e preferências da plataforma.
 
-Configurações, conta e limites ficam na navegação secundária. Não criar um item `Home` paralelo a `Hoje`.
+`Conteúdos`, `Produção` e `Vault` continuam existindo como conceitos de domínio quando necessários, mas não são destinos de primeiro nível da interface. Conteúdos pertencem ao contexto de um Produto e ao lote em execução; histórico e memória intelectual aparecem dentro do Produto e dos fluxos que precisam deles.
+
+Não criar itens paralelos como `Hoje`, `Produção`, `Conteúdos` ou `Vault` na navegação principal do MVP.
+
+### Modelo mental da navegação
+
+A sidebar deve refletir tarefas naturais do creator, não a arquitetura interna:
+
+```text
+Home
+↓
+O que faço agora?
+
+Produtos
+↓
+O que estou promovendo e quais conteúdos existem para isso?
+
+Estúdio
+↓
+O que está esperando, sendo gravado ou já foi concluído?
+
+Agenda
+↓
+Quando vou gravar cada lote?
+
+Configurações
+↓
+Como minha conta e a plataforma estão configuradas?
+```
 
 ### Shell por superfície
 
@@ -91,34 +119,34 @@ Configurações, conta e limites ficam na navegação secundária. Não criar um
 
 **Resumo:** Mobile = experiência completa + execução prioritária; Desktop = experiência expandida + planejamento em escala.
 
-A mudança de breakpoint altera composição, densidade e prioridade, não o modelo mental nem o conjunto de capacidades. Desktop amplia planejamento, organização e operações de alta densidade; não monopoliza nenhuma capacidade do produto.
+A mudança de breakpoint altera composição, densidade e prioridade, não o modelo mental nem o conjunto de capacidades.
 
 ### Contrato do shell desktop
 
 - o shell externo usa duas regiões: `240px` para a sidebar e `minmax(0, 1fr)` para a região principal;
-- a sidebar ocupa somente a primeira região, permanece fixa durante a rolagem e não participa do cálculo de `max-width` do conteúdo;
-- a região principal tem `min-width: 0`, ocupa todo o espaço restante e contém a toolbar contextual;
+- a sidebar contém os cinco destinos principais e permanece fixa durante a rolagem;
+- a região principal tem `min-width: 0`, ocupa todo o espaço restante e contém a toolbar contextual quando a tela precisar dela;
 - a toolbar tem `56px` de altura de referência e percorre a largura disponível da região principal;
 - dentro da região principal, a coluna de conteúdo usa `width: min(100%, 1440px)`, fica centralizada quando houver espaço e recebe padding lateral de `32px` no desktop;
 - entre `1200px` e `1439px`, a coluna usa toda a largura disponível após a sidebar e o padding, sem overflow horizontal e sem tentar atingir `1440px`;
-- em `1440px` ou mais, o limite de `1440px` aplica-se somente à coluna de conteúdo; o fundo e a toolbar continuam ocupando a região principal;
-- nenhum breakpoint Wide cria uma terceira coluna, uma segunda sidebar ou um painel decorativo.
+- em `1440px` ou mais, o limite de `1440px` aplica-se somente à coluna de conteúdo; fundo e toolbar continuam ocupando a região principal;
+- nenhum breakpoint Wide cria terceira coluna, segunda sidebar ou painel decorativo.
 
 ### Regras mobile
 
-- mobile é a superfície principal completa; execução tem prioridade de ordem, foco e ação;
-- mobile permite cadastrar Produto, gerar estratégia, revisar e editar Content, montar lote e gravar;
+- mobile é uma superfície completa; execução continua tendo prioridade de ordem, foco e ação;
+- mobile permite adicionar Produto, acompanhar criação, revisar Conteúdos, executar lotes e consultar/reagendar a Agenda;
 - conteúdo útil começa com a ação ou o objeto mais urgente;
 - uma mão deve alcançar ações primárias e navegação;
 - definir `--safe-bottom` como `env(safe-area-inset-bottom, 0px)`;
 - a navegação inferior é fixa, tem `64px + --safe-bottom` de área ocupada e mantém controles internos com alvo mínimo de `44×44px`;
 - a região rolável recebe `padding-block-end: calc(64px + var(--safe-bottom) + 16px)` e o mesmo valor em `scroll-padding-block-end`;
 - o header contextual tem `56px` de altura de referência e não cobre o primeiro bloco de conteúdo;
-- a barra de ação da Produção fica sticky acima da navegação inferior, com `inset-block-end: calc(64px + var(--safe-bottom))`, e nunca cobre o CTA;
-- filtros complexos entram em sheet/bottom sheet, sem transformar cada filtro em uma linha permanente;
+- a barra de ação do modo de gravação fica sticky acima da navegação inferior, com `inset-block-end: calc(64px + var(--safe-bottom))`, e nunca cobre o CTA;
+- filtros complexos entram em sheet/bottom sheet;
 - listas usam leitura vertical e ação direta; tabelas e colunas densas não são comprimidas;
-- modo de gravação mostra apenas hook, roteiro/cenas, CTA, status e anterior/próximo;
-- o avanço para o próximo Content permanece visível após marcar como Gravado, mas não acontece sozinho.
+- modo de gravação mostra somente o necessário para executar: hook, roteiro/cenas, CTA, estado e navegação anterior/próximo;
+- concluir um Conteúdo não avança sozinho para o próximo.
 
 ### Regras tablet
 
@@ -131,33 +159,176 @@ A mudança de breakpoint altera composição, densidade e prioridade, não o mod
 
 ### Regras desktop
 
-- desktop expande planejamento, organização e operações de alta densidade;
-- sidebar fixa de referência; o conteúdo não deve esconder a navegação ao rolar;
-- toolbar contextual para busca, filtros, seleção, ordenação e ações do contexto atual;
-- áreas de estratégia e Vault podem revelar mais colunas e proveniência, sem criar capacidades exclusivas;
-- tabelas são permitidas quando melhoram comparação real entre objetos;
-- nenhuma operação essencial de Produto, Estratégia, Conteúdo ou Produção fica bloqueada no mobile;
+- desktop usa sidebar persistente como estrutura principal de orientação;
+- toolbar contextual é usada para busca, filtros, seleção, ordenação e ações do contexto atual, sem duplicar a sidebar;
+- Produtos pode usar grade/lista de cards e filtros por estado;
+- Estúdio pode usar esteira/colunas ou listas agrupadas por status de lote;
+- Agenda pode usar calendário de dia, semana ou mês;
+- nenhuma operação essencial fica bloqueada no mobile;
 - nenhum painel deve ocupar espaço somente para equilibrar a composição.
 
-### Comportamento por seção
+### Home
 
-| Destino | Mobile | Desktop |
-|---|---|---|
-| Hoje | próxima gravação, lote atual e ação de continuar | fila priorizada, produtos ativos e organização do dia; nunca KPI |
-| Produtos | cadastrar, completar contexto e iniciar a próxima ação | lista densa, filtros, progresso operacional e organização de vários Produtos |
-| Conteúdos | revisar, editar, regenerar partes e avançar | comparação, filtros, seleção e detalhes progressivos |
-| Produção | montar lote, modo de gravação, marcação rápida e avanço | fila densa, lotes, agrupamento por produto/cenário e seleção para ações previstas |
-| Vault | busca e histórico em leitura vertical | memória consultável com filtros, datas, dimensões e proveniência |
+A Home é a entrada operacional e não um dashboard de analytics.
+
+Ordem de prioridade:
+
+1. **próxima ação urgente**, quando existir lote de gravação para hoje ou em andamento;
+2. **Adicionar produto**, com URL e `Analisar produto`;
+3. **Gravações de hoje**, mostrando lotes reais e seu progresso;
+4. **Próximas gravações**, mostrando os próximos lotes já agendados.
+
+Para um usuário novo ou sem trabalho operacional ativo, `Adicionar produto` pode assumir a maior prioridade visual. Para um usuário recorrente com lote em andamento, `Continuar gravação` deve aparecer antes.
+
+A Home não possui bloco `Ainda sem data`, lista de pendências genéricas, gráfico, KPI card ou overview analítico.
+
+### Produtos
+
+Produtos é o centro operacional de cada objeto vendido.
+
+A listagem principal pode possuir:
+
+- busca;
+- filtro `Ativos`;
+- filtro `Pendentes`, para Produtos cujo fluxo de análise/estratégia/conteúdo ainda não foi finalizado;
+- filtro `Arquivados`;
+
+`Pendente` é uma projeção operacional da readiness da inteligência, derivada do processamento/resultado disponível. Não deve ser confundida com o lifecycle persistente do Produto, como `Ativo` ou `Arquivado`.
+- ação `Adicionar produto`.
+
+Cada Product card mostra somente informações úteis para decidir a próxima ação, como:
+
+- imagem;
+- nome;
+- categoria ou contexto curto quando relevante;
+- estado atual;
+- quantidade operacional de Conteúdos quando útil;
+- próxima ação, como `Abrir produto` ou `Continuar`.
+
+Ao abrir um Produto, a página usa as regiões:
+
+```text
+Visão geral
+Estratégia
+Conteúdos
+Histórico
+```
+
+- **Visão geral:** fatos do Produto, origem, preço, descrição e características relevantes;
+- **Estratégia:** públicos, dores, desejos, objeções, benefícios, posicionamento e ângulos;
+- **Conteúdos:** Briefings do Conteúdo pertencentes ao Produto, com revisão, edição, regeneração e aprovação;
+- **Histórico:** lotes e Conteúdos já concluídos, mantendo a memória operacional sem expor `Vault` como destino global.
+
+O termo `Briefing do Conteúdo` permanece reservado ao briefing de um Conteúdo individual. Não chamar a página inteira do Produto de briefing.
+
+### Estúdio
+
+Estúdio é a superfície de produção e gravação.
+
+A unidade principal é o **lote de gravação**, formado por vários Conteúdos aprovados. Os estados visíveis do lote são:
+
+```text
+Aguardando
+Gravando
+Concluído
+```
+
+Esses estados são derivados automaticamente do progresso dos Conteúdos do lote:
+
+```text
+0 concluídos de N       → Aguardando
+1 até N-1 concluídos    → Gravando
+N concluídos de N       → Concluído
+```
+
+O usuário não escolhe o status do lote manualmente.
+
+Cada lote pode mostrar:
+
+- Produto;
+- data planejada de gravação;
+- quantidade total de Conteúdos;
+- quantidade concluída;
+- progresso textual `3 de 8 concluídos`;
+- percentual/barra de progresso operacional quando útil;
+- ação `Começar gravação` ou `Continuar gravação`.
+
+Percentual é permitido aqui porque representa o progresso real de um lote, não uma métrica de negócio.
+
+Ao abrir um lote, o usuário vê a lista dos Conteúdos e marca os que já concluiu. O lote deve atualizar imediatamente seu progresso. Ao atingir 100%, muda automaticamente para `Concluído`.
+
+No modo de gravação, priorizar:
+
+```text
+Vídeo X de N
+Hook
+Roteiro
+Cenas
+CTA
+Anterior
+Concluir conteúdo
+Próximo
+```
+
+### Agenda
+
+Agenda é o calendário interno de gravação da plataforma.
+
+Ela responde apenas:
+
+> **Quando pretendo gravar estes Conteúdos?**
+
+A Agenda pode oferecer as visões:
+
+```text
+Dia
+Semana
+Mês
+```
+
+Os eventos representam lotes de gravação e mostram, de forma compacta:
+
+- Produto;
+- quantidade de Conteúdos;
+- progresso quando a gravação já começou;
+- horário somente se o produto futuramente decidir torná-lo necessário.
+
+Ao selecionar um lote na Agenda, o usuário pode:
+
+- abrir o lote no Estúdio;
+- começar ou continuar a gravação;
+- reagendar a data.
+
+No MVP, a Agenda é **100% interna à aplicação**. Não sincroniza Google Calendar, não cria lembretes externos e não agenda publicação em TikTok, Instagram ou qualquer outra plataforma.
+
+A integração futura com calendários externos pode usar os lotes e suas datas como fonte, sem alterar o modelo mental do MVP.
+
+### Configurações
+
+Configurações concentra assuntos não pertencentes ao fluxo operacional diário:
+
+- conta;
+- plano atual e uso;
+- assinatura/billing quando disponível;
+- idioma;
+- mercado;
+- preferências de conteúdo e criação;
+- aparência;
+- integrações futuras.
+
+Configurações não deve receber funcionalidades de Produto, Conteúdo, Estúdio ou Agenda apenas para evitar criar uma tela contextual adequada.
 
 ### Limites de overview e métricas
 
-Hoje é uma fila priorizada, não um overview analítico. São proibidos no MVP:
+A Home e as demais telas operacionais não são dashboards analíticos. São proibidos no MVP:
 
-- KPI cards, cards de métricas soltas, gráficos, scorecards, porcentagens decorativas e painéis de overview;
-- contagens ou números sem vínculo direto com Produto, Content, lote ou fila de Produção;
+- KPI cards, cards de métricas soltas, gráficos, scorecards e painéis de overview;
+- contagens ou números sem vínculo direto com Produto, Content ou lote;
 - composição que use números para preencher espaço ou simular progresso de negócio.
 
-Números podem aparecer somente como atributo de um objeto real ou estado operacional, por exemplo `18/30 conteúdos produzidos` dentro de um Produto ou `vídeo 12 de 30` dentro da fila. A métrica de produto pode existir no domínio, mas não vira elemento visual da aplicação sem uma ação operacional associada.
+Números podem aparecer somente como atributo de um objeto real ou estado operacional, por exemplo `3 de 8 concluídos` em um lote, `18 conteúdos` dentro de um Produto ou `vídeo 4 de 8` no modo de gravação.
+
+Barra e percentual de progresso são permitidos exclusivamente quando representam conclusão real de um lote ou outro objeto operacional, nunca performance comercial.
 
 ## 4. Tokens semânticos de cor
 
@@ -347,35 +518,37 @@ Não arredondar todas as superfícies. Cards sem objeto real não existem; logo,
 - deslocamento/reordenação: `ease-in-out`;
 - não usar bounce, spring chamativo, parallax, auto-scroll decorativo ou contagem animada;
 - geração assíncrona pode indicar atividade, mas nunca deve inventar percentual de progresso;
-- marcar `Gravado` deve dar feedback imediato e manter o próximo passo visível;
+- progresso de lote pode animar discretamente quando um Conteúdo é concluído, porque representa um valor real;
+- concluir um Conteúdo deve dar feedback imediato e manter o próximo passo visível;
 - erro não treme o campo; a mensagem e o foco resolvem a orientação;
 - com `prefers-reduced-motion`, remover deslocamento e reduzir transições a mudança de estado instantânea ou microfeedback essencial.
-### Máquina de estados mobile de Produção
 
-A máquina abaixo descreve estados de interface e status visíveis do Content. O estado inicial é `Pronto para gravar`; o autoavanço é **desligado por padrão**.
+### Máquina de estados do modo de gravação
+
+A máquina abaixo descreve estados visíveis de um Conteúdo dentro de um lote do Estúdio. O autoavanço é **desligado por padrão**.
 
 | Estado de interface | Entrada | Ações permitidas | Saída e foco |
 |---|---|---|---|
-| `ready` / Pronto para gravar | abrir Content não gravado | `Marcar como gravado`, `Próximo`, `Anterior` | `Marcar` inicia `marking`; `Próximo` não marca implicitamente |
-| `next-confirmation` | tocar `Próximo` antes de marcar | `Continuar sem marcar`, `Ficar nesta gravação` | continuar não altera status e move para o próximo Content; ficar retorna foco ao CTA |
-| `marking` | tocar `Marcar como gravado` | nenhuma ação duplicada; `Cancelar` não é oferecido para esta ação curta | botão fica loading e bloqueado; não há duplo toque |
-| `recorded` / Gravado | confirmação do estado Gravado | `Próximo`, `Anterior`, editar | mantém o Content visível, anuncia sucesso e move foco para `Próximo`; não avança sozinho |
-| `mark-error` | falha ao marcar | `Tentar novamente`, `Ficar nesta gravação` | preserva hook, roteiro/cenas e CTA; foco vai para o erro inline e depois para Retry |
-| `already-recorded` | abrir Content já Gravado | `Próximo`, `Anterior`, editar | não oferece segunda marcação; foco começa no estado e segue para `Próximo` |
+| `ready` / Aguardando conclusão | abrir Conteúdo ainda não concluído | `Concluir conteúdo`, `Próximo`, `Anterior` | `Concluir conteúdo` inicia `marking`; `Próximo` não conclui implicitamente |
+| `next-confirmation` | tocar `Próximo` antes de concluir | `Continuar sem concluir`, `Ficar neste conteúdo` | continuar mantém o item pendente e move para o próximo; ficar retorna foco ao CTA |
+| `marking` | tocar `Concluir conteúdo` | nenhuma ação duplicada | botão fica loading e bloqueado; não há duplo toque |
+| `completed` / Concluído | confirmação da conclusão | `Próximo`, `Anterior`, editar quando permitido | mantém o Conteúdo visível, atualiza o lote e move foco para `Próximo`; não avança sozinho |
+| `mark-error` | falha ao concluir | `Tentar novamente`, `Ficar neste conteúdo` | preserva hook, roteiro/cenas e CTA; foco vai para o erro inline e depois para Retry |
+| `already-completed` | abrir Conteúdo já concluído | `Próximo`, `Anterior`, editar quando permitido | não oferece segunda conclusão; foco começa no estado e segue para `Próximo` |
 
 Regras de transição:
 
-- `Próximo` permanece visível em todos os estados e nunca grava, cancela ou regenera implicitamente;
-- `Tentar novamente` repete a ação após uma falha e mantém o conteúdo visível;
-- a ação de marcar não expõe cancelamento porque é curta; cancelamento aparece somente nos estados assíncronos que o oferecem;
-- ao sucesso, anunciar `Gravado` sem mover a tela automaticamente; o creator decide quando tocar `Próximo`;
-- ao erro, manter o item e os dados editados, não limpar o formulário e não perder o foco do contexto;
-- se o Content já estiver Gravado, a interface não permite repetir a transição;
+- `Próximo` permanece visível e nunca conclui, cancela ou regenera implicitamente;
+- `Tentar novamente` repete a ação após falha e mantém o Conteúdo visível;
+- ao sucesso, atualizar imediatamente `concluídos / total` e o progresso do lote;
+- o lote passa para `Gravando` quando o primeiro Conteúdo é concluído e para `Concluído` quando todos forem concluídos;
+- ao erro, manter o item e os dados editados, não limpar o formulário e não perder o contexto;
+- se o Conteúdo já estiver concluído, a interface não permite repetir a transição;
 - `prefers-reduced-motion` remove qualquer deslocamento; foco e texto continuam obrigatórios.
 
 ## 8. Contratos de componentes
 
-A lista abaixo define linguagem e comportamento, não implementação. Componentes devem servir o core loop Produto → Estratégia → Plano → Conteúdo → Produção.
+A lista abaixo define linguagem e comportamento, não implementação. Componentes devem servir o core loop Produto → Estratégia → Plano → Conteúdos → Lote → Estúdio → Conclusão.
 
 ### App shell
 
@@ -386,7 +559,7 @@ A lista abaixo define linguagem e comportamento, não implementação. Component
 
 ### Navegação principal
 
-- cinco destinos: Hoje, Produtos, Conteúdos, Produção, Vault;
+- cinco destinos: Home, Produtos, Estúdio, Agenda e Configurações;
 - item ativo usa `color.brand.accent`/`color.focus.ring` e indicador estrutural adicional, como peso, fundo Surface Secondary ou linha;
 - ícone de traço simples, 16–20px; o label pode ficar visualmente oculto no tablet, mas o nome acessível permanece sempre presente;
 - não usar bolhas coloridas, ícones decorativos em círculos ou badges para criar urgência falsa;
@@ -399,9 +572,38 @@ A lista abaixo define linguagem e comportamento, não implementação. Component
 - prioriza uma ação primária, agrupa o restante em progressive disclosure;
 - no mobile, transforma filtros em sheet e mantém o contexto visível.
 
+### Indicador global de atividade
+
+O `Global Activity Indicator` pertence ao App Shell e representa `CommerceIntelligenceJob` ativo, concluído com ação pendente ou falha recuperável.
+
+Posicionamento:
+
+- desktop: linha compacta imediatamente abaixo da toolbar contextual;
+- tablet: mesma região, com texto resumido quando necessário;
+- mobile: imediatamente abaixo do header contextual, sem interferir na navegação inferior;
+- o indicador acompanha a navegação e não pertence à página que iniciou o job.
+
+Conteúdo mínimo:
+
+- Produto processado;
+- etapa real atual em linguagem humana;
+- estado de sucesso ou falha;
+- ação `Revisar conteúdos` quando o resultado estiver pronto fora do contexto original;
+- ação `Tentar novamente` quando a falha for recuperável.
+
+Regras:
+
+- `queued` e `running` mostram atividade sem percentual inventado;
+- `succeeded` pode permanecer temporariamente acionável até o usuário abrir o resultado;
+- `failed` preserva contexto e mostra recuperação;
+- nunca mostrar ETA falso, logs, tokens, prompt, provider, modelo, `LOW/MID/HIGH` ou detalhes internos da engine;
+- tocar no indicador no mobile pode abrir uma sheet de contexto, sem criar uma página permanente de Análise;
+- o indicador não bloqueia o restante da aplicação;
+- enquanto existir um único job ativo permitido pelo MVP, `Analisar produto` permanece visível porém desabilitado com explicação do motivo.
+
 ### Action button
 
-- rótulo é verbo + resultado: `Continuar produção`, `Adicionar produto`, `Marcar como gravado`;
+- rótulo é verbo + resultado: `Analisar produto`, `Começar gravação`, `Continuar gravação`, `Concluir conteúdo`, `Reagendar`;
 - um único primary action por região; ações secundárias são neutras ou textuais; ações preenchidas usam `color.action.filled`;
 - não usar gradiente;
 - estados: default, hover, pressed, focus-visible, disabled, loading, success e error;
@@ -412,13 +614,28 @@ A lista abaixo define linguagem e comportamento, não implementação. Component
 
 Card permitido porque representa o objeto Product. Exibe apenas o necessário para agir:
 
-- nome do produto;
+- imagem quando disponível;
+- nome do Produto;
 - contexto curto ou categoria neutra;
-- estado/progresso operacional real, como conteúdos pendentes ou próximo passo;
-- ação primária contextual;
+- estado real do fluxo, como `Ativo`, `Pendente` ou `Arquivado` quando essa informação for necessária;
+- quantidade de Conteúdos somente quando ajudar na decisão;
+- ação primária contextual, como `Abrir produto` ou `Continuar`;
 - metadados secundários sob demanda.
 
 Não transformar Product card em painel de analytics, não adicionar mini-gráficos e não pintar cada categoria.
+
+### Página de Produto
+
+A página do Produto usa tabs ou navegação interna para:
+
+- `Visão geral`;
+- `Estratégia`;
+- `Conteúdos`;
+- `Histórico`.
+
+A página não se chama `Briefing`. `Briefing do Conteúdo` pertence a um Conteúdo individual.
+
+Conteúdos aprovados podem ser selecionados para formar um lote de gravação. Ao preparar o lote, o usuário define a data pretendida de gravação antes de enviá-lo ao Estúdio/Agenda.
 
 ### Content card
 
@@ -430,24 +647,50 @@ Card permitido porque representa o objeto Content. Ordem recomendada:
 4. próxima ação;
 5. estratégia, cenas, CTA e proveniência em disclosure.
 
-No mobile, mostrar hook, roteiro/cenas, CTA e ação de avanço. Desktop pode revelar dimensões de variedade e explicabilidade. Seleção múltipla só pode alimentar ações operacionais explicitamente previstas; edição em massa não faz parte do MVP.
+No mobile, mostrar hook, roteiro/cenas, CTA e ação de avanço. Desktop pode revelar dimensões de variedade e explicabilidade. Seleção múltipla só pode alimentar ações operacionais previstas, como aprovação e montagem de lote; edição em massa não faz parte do MVP.
 
-### Production row e lote
+### Lote do Estúdio
 
-Fila e lote são objetos operacionais reais. Usar row/lista por padrão; usar card somente quando o lote precisar ser tratado como unidade. Status mínimos do PRD:
+Lote é um objeto operacional real e pode usar card. Deve mostrar somente:
 
-- Ideia;
-- Pronto para gravar;
-- Gravado;
-- Publicado;
-- Arquivado.
+- Produto;
+- data planejada;
+- status derivado `Aguardando`, `Gravando` ou `Concluído`;
+- total de Conteúdos;
+- total concluído;
+- progresso textual e, quando útil, barra/percentual operacional;
+- ação `Começar gravação`, `Continuar gravação` ou `Abrir lote`.
 
-Status são labels + texto/ícone e, quando útil, semântica `color.feedback.success`. Não usar uma cor exclusiva por status.
+O status nunca é editado manualmente por select/dropdown.
+
+### Linha de Conteúdo no lote
+
+A lista de um lote deve permitir identificar e concluir rapidamente cada Conteúdo:
+
+- checkbox/controle de conclusão com alvo de toque adequado;
+- posição no lote;
+- início do hook ou título interno;
+- estado concluído/não concluído;
+- ação de abrir o briefing ou modo de gravação quando necessário.
+
+Concluir/desconcluir deve obedecer às regras de integridade do domínio. Se a reversão de conclusão não for suportada pelo MVP, não mostrar checkbox que sugira toggle irrestrito; usar controle de conclusão de uma via com ação explícita de correção.
+
+### Calendário da Agenda
+
+O calendário representa lotes reais e suporta três escalas:
+
+- Dia;
+- Semana;
+- Mês.
+
+Um evento de Agenda mostra Produto e quantidade de Conteúdos. Quando o lote já começou, pode mostrar progresso compacto. Não usar cores próprias por Produto ou categoria; seleção e foco usam tokens semânticos existentes.
+
+Ao abrir um evento, oferecer `Abrir no Estúdio` e `Reagendar`. A Agenda do MVP não contém controles de publicação, social scheduling ou sincronização externa.
 
 ### Tabs e segmented control
 
-- tabs representam regiões do mesmo objeto, como Estratégia, Conteúdos, Produção e Histórico;
-- segmented control representa uma escolha curta e mutuamente exclusiva;
+- tabs representam regiões do mesmo objeto, como `Visão geral`, `Estratégia`, `Conteúdos` e `Histórico`;
+- segmented control representa escolha curta e mutuamente exclusiva, como `Dia`, `Semana`, `Mês`;
 - estado ativo tem indicador estrutural e `color.brand.accent`; não depender apenas de cor;
 - no mobile, tabs podem rolar horizontalmente, mas não devem virar carrossel sem indicação de continuidade.
 
@@ -476,12 +719,13 @@ Status são labels + texto/ícone e, quando útil, semântica `color.feedback.su
 
 ### Busca e filtros
 
-- busca textual deve encontrar produtos, hooks, scripts e tags;
-- filtros do MVP: produto, status, ângulo e data;
+- Produtos deve permitir busca e filtros por `Ativos`, `Pendentes` e `Arquivados`;
+- Conteúdos dentro de Produto podem usar filtros por status, ângulo e data quando isso ajudar revisão e seleção;
+- Estúdio pode filtrar por Produto, status do lote e data;
+- Agenda já representa a dimensão temporal e não deve duplicar uma barra pesada de filtros sem necessidade;
 - filtros são neutros por padrão; seleção usa `color.brand.accent`;
-- filtros ativos são resumidos em uma linha removível, sem cores arbitrárias;
-- desktop permite combinar filtros e seleção múltipla para ações operacionais previstas; edição em massa de campos não faz parte do MVP;
-- mobile usa sheet e aplicação explícita.
+- filtros ativos são resumidos de forma removível, sem cores arbitrárias;
+- mobile usa sheet e aplicação explícita quando houver mais de poucos filtros.
 
 ### Status, alertas e feedback
 
@@ -495,9 +739,12 @@ Status são labels + texto/ícone e, quando útil, semântica `color.feedback.su
 
 ### Empty, loading e error
 
-- **Empty:** explica o que falta e oferece a próxima ação; não usar ilustração decorativa como conteúdo principal;
+- **Empty Home:** prioriza `Adicionar produto` quando o usuário ainda não possui trabalho ativo;
+- **Empty Produtos:** explica que ainda não há Produto e oferece URL + `Analisar produto`;
+- **Empty Estúdio:** informa que não existem lotes de gravação e aponta para os Conteúdos aprovados dentro de Produtos;
+- **Empty Agenda:** informa que ainda não existem gravações planejadas; não cria bloco `Ainda sem data`;
 - **Loading:** preserva estrutura esperada e informa o estado; não simular conteúdo estratégico ainda inexistente;
-- **Access/limit:** explica por que a ação não está disponível e aponta o próximo caminho possível, sem ocultar o conteúdo já existente;
+- **Access/limit:** explica por que a ação não está disponível e aponta o próximo caminho possível, sem ocultar o conteúdo já existente.
 
 ### Estados de geração assíncrona
 
@@ -560,11 +807,15 @@ Estado desabilitado reduz ação sem apagar a razão. Estado de erro não limpa 
 
 - idioma do MVP: `pt-BR`;
 - usar verbos curtos, concretos e orientados a resultado;
-- `Hoje`, `Produtos`, `Conteúdos`, `Produção` e `Vault` são nomes oficiais;
-- `Content` é o conceito de domínio; a interface pode usar `conteúdo` para leitura humana;
-- estados usam a nomenclatura do PRD: Ideia, Pronto para gravar, Gravado, Publicado, Arquivado;
+- `Home`, `Produtos`, `Estúdio`, `Agenda` e `Configurações` são os nomes oficiais da navegação principal;
+- `Content` é o conceito de domínio; a interface usa `conteúdo` para leitura humana;
+- `Briefing do Conteúdo` significa o briefing de um Conteúdo individual, não a página inteira do Produto;
+- estados visíveis de lote no Estúdio são `Aguardando`, `Gravando` e `Concluído`;
+- `Concluído` em lote significa que todos os Conteúdos daquele lote foram concluídos;
+- `Vault` pode permanecer como conceito técnico/memória de domínio, mas não é nomenclatura de navegação do MVP;
 - explicar estratégia em uma frase quando necessário, por exemplo: “Este vídeo trabalha a objeção de que o produto é fraco.”;
-- evitar “gerar mais conteúdo” como ação genérica quando o resultado puder ser nomeado: “Gerar novo lote”, “Gerar novo hook”, “Trocar CTA”.
+- evitar “gerar mais conteúdo” como ação genérica quando o resultado puder ser nomeado: `Gerar novo lote`, `Gerar novo hook`, `Trocar CTA`;
+- usar `Começar gravação`, `Continuar gravação`, `Concluir conteúdo` e `Reagendar` em vez de ações genéricas como `Abrir` quando a intenção for conhecida.
 
 ## 12. Fora do sistema visual do MVP
 
@@ -574,38 +825,61 @@ Este documento não autoriza nem antecipa:
 - geração automática de vídeo, imagem, voice-over ou publicação;
 - analytics avançado, ROAS, CTR ou gráficos de performance externa;
 - KPI cards, gráficos, scorecards, porcentagens decorativas ou overview analítico no MVP;
-- integração obrigatória com TikTok/TikTok Shop;
+- agendamento ou publicação automática em TikTok, Instagram ou outras plataformas;
+- sincronização com Google Calendar, Apple Calendar, Outlook ou lembretes externos no MVP;
+- conexão obrigatória com TikTok/TikTok Shop além do fluxo de importação de Produto definido em sua frente específica;
 - banco vetorial, embeddings ou deduplicação semântica;
 - colaboração, RBAC, múltiplos membros ou billing por equipe;
 - edição em massa de campos ou bulk edit; seleção múltipla só existe para ações operacionais previstas;
-- cores próprias para categorias, ângulos, planos ou tipos de conteúdo;
+- cores próprias para categorias, ângulos, Produtos, planos ou tipos de conteúdo;
 - framework de temas diferente dos tokens semânticos definidos aqui.
+
+A **Agenda interna de gravação** faz parte do MVP e não deve ser confundida com agendamento de publicação ou integração externa de calendário.
 
 ## 13. Checklist de coerência antes de implementar
 
 - [ ] A tela responde visualmente “o que faço agora?”
 - [ ] Existe uma ação primária clara e nomeada com verbo.
-- [ ] Mobile oferece a experiência completa: cadastrar Produto, gerar estratégia, revisar/editar Content, montar lote e gravar.
-- [ ] Mobile dá prioridade de ordem, foco e ação à execução.
-- [ ] Desktop amplia planejamento, organização e operações de alta densidade sem monopolizar capacidades.
-- [ ] Os cinco destinos oficiais permanecem reconhecíveis.
+- [ ] A navegação principal usa somente Home, Produtos, Estúdio, Agenda e Configurações.
+- [ ] Home prioriza ação, gravações de hoje, novo Produto e próximas gravações sem virar dashboard.
+- [ ] Home não possui bloco `Ainda sem data`.
+- [ ] Produtos usa cards de objetos reais e permite distinguir Ativos, Pendentes e Arquivados.
+- [ ] A página de Produto separa Visão geral, Estratégia, Conteúdos e Histórico.
+- [ ] `Briefing do Conteúdo` é usado somente para Conteúdo individual.
+- [ ] Estúdio trabalha com lote e deriva automaticamente Aguardando, Gravando e Concluído.
+- [ ] O progresso do lote vem da quantidade real de Conteúdos concluídos.
+- [ ] Agenda possui visão de Dia, Semana e Mês e agenda gravação interna, não publicação.
+- [ ] Mobile oferece a experiência completa: adicionar Produto, revisar Conteúdos, operar Estúdio e consultar Agenda.
+- [ ] Desktop amplia planejamento e organização sem criar capacidades exclusivas.
 - [ ] Todo card representa um objeto real.
 - [ ] Conteúdo principal é sólido; glass só aparece em camada periférica.
 - [ ] Tokens canônicos, matriz de contraste e semânticas estão sendo usados no papel correto.
 - [ ] Light é a referência; Dark reutiliza os mesmos tokens semânticos.
 - [ ] Estados de foco, erro, loading, empty, geração e reduced motion foram definidos.
-- [ ] Nenhuma métrica ou decoração foi adicionada sem melhorar uma decisão.
+- [ ] CommerceIntelligenceJob ativo/concluído/falho possui Global Activity Indicator coerente no App Shell.
+- [ ] Nenhuma métrica ou decoração foi adicionada sem melhorar uma decisão operacional.
 
 ## 14. Registro de decisões
 
 | Data | Decisão | Rationale |
 |---|---|---|
 | 2026-08-24 | Light mode é o tema de referência e padrão | A interface precisa ser legível e familiar como ferramenta de produtividade; Dark é uma variação dos mesmos tokens, não um redesign. |
-| 2026-08-24 | Mobile é a superfície principal completa, com execução prioritária | O creator precisa cadastrar Produto, gerar estratégia, revisar/editar Content, montar lote e gravar sem depender do desktop. |
+| 2026-08-24 | Mobile é a superfície principal completa, com execução prioritária | O creator precisa adicionar Produto, revisar/editar Content, montar lote e gravar sem depender do desktop. |
 | 2026-08-24 | Desktop é experiência expandida para planejamento em escala | Mais espaço suporta organização, comparação e operações densas, mas não cria capacidades exclusivas. |
-| 2026-08-24 | Hoje substitui Home como entrada operacional | A primeira pergunta do produto é o que produzir agora, não um resumo analítico. |
 | 2026-08-24 | Instrument Sans é a família principal; Geist Mono é técnico | Uma família única mantém coerência entre headings, body, UI e números; a mono fica restrita à proveniência técnica. |
 | 2026-08-24 | `#5B6CFF` é brand/accent e `#3D4CC6` é ação preenchida Light | O azul original permanece na identidade; a variação mais escura garante texto normal acessível em ações preenchidas. |
 | 2026-08-24 | Grid de 4px, layout híbrido e raios hierárquicos | Mantém disciplina e densidade confortável sem arredondar ou decorar tudo. |
 | 2026-08-24 | Cards restritos a objetos reais e glass restrito à periferia | Protege a diferença entre interface operacional e dashboard SaaS decorativo. |
 | 2026-08-24 | Motion minimal-functional | Movimento deve explicar seleção, disclosure, fila e feedback, respeitando redução de movimento. |
+| 2026-08-26 | Home volta a ser a entrada principal | O creator entende `Home` imediatamente; a tela permanece operacional e minimalista, sem virar dashboard analítico. |
+| 2026-08-26 | Navegação principal passa a ser Home, Produtos, Estúdio, Agenda e Configurações | Os destinos passam a representar tarefas naturais do creator em vez de conceitos internos de domínio. |
+| 2026-08-26 | Conteúdos e Vault deixam de ser destinos globais | Conteúdos pertencem ao Produto e aos lotes; histórico/memória aparece no contexto do Produto, reduzindo duplicação de navegação. |
+| 2026-08-26 | Produção passa a ser apresentada como Estúdio | `Estúdio` comunica execução e gravação de forma mais natural para creators sem alterar o domínio interno de produção. |
+| 2026-08-26 | Estúdio usa lotes com estados Aguardando, Gravando e Concluído | O status é consequência do número real de Conteúdos concluídos e não exige gerenciamento manual. |
+| 2026-08-26 | Progresso percentual de lote é permitido | Percentual representa conclusão operacional real do lote, não analytics ou performance comercial. |
+| 2026-08-26 | Agenda interna de gravação entra no MVP | O creator escolhe quando pretende gravar um lote; isso fecha o intervalo entre aprovação e execução sem introduzir social scheduling. |
+| 2026-08-26 | Integrações de calendário permanecem futuras | Google Calendar e outros calendários poderão receber eventos/lembretes depois, mas não fazem parte do MVP. |
+| 2026-08-26 | Home não mostra `Ainda sem data` | A entrada deve mostrar somente ação útil, gravações de hoje e próximas gravações já planejadas. |
+| 2026-08-26 | Job assíncrono usa indicador global no App Shell | A análise continua durante a navegação; o usuário precisa ver Produto, etapa, sucesso/falha e próxima ação sem entrar numa página técnica de análise. |
+| 2026-08-26 | `Pendente` é readiness operacional, não lifecycle do Produto | Evita misturar análise em andamento com estados persistentes como Ativo/Arquivado. |
+

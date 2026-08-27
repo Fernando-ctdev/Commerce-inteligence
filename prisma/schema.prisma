@@ -28,6 +28,9 @@ model Tenant {
   user        User         @relation(fields: [userId], references: [id])
   sessions    Session[]
   products    Product[]
+  browserProfiles       BrowserProfile[]
+  productImportAttempts ProductImportAttempt[]
+  productCandidates     ProductCandidate[]
   entitlement Entitlement?
   idempotencyRecords IdempotencyRecord[]
   generationIntents GenerationIntent[]
@@ -64,14 +67,22 @@ model Product {
   description      String
   category         String?
   priceCents       BigInt?
+  priceCurrency    String?
+  brand            String?
+  seller           String?
+  variants         Json?
   features         Json?
   imageRefs        Json?
   notes            String?
   url              String?
   locale           String    @default("pt-BR")
+  canonicalUrl     String? // origem canônica comprovada pelo Browser Service — identidade de duplicação
+  sourceKind       String    @default("manual") // manual | browser
+  factsVersion     Int       @default(1)
+  confirmedAt      DateTime?
+  factProvenance   Json? // proveniência por fato confirmado (browser-extraction | creator-confirmed)
   active           Boolean   @default(true)
   version          Int       @default(1)
-  enrichmentStatus String    @default("none") // none | pending | completed | unavailable
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   tenant           Tenant    @relation(fields: [tenantId], references: [id])
@@ -81,8 +92,11 @@ model Product {
   strategies       Strategy[]
   plans            Plan[]
   contents         Content[]
+  confirmedCandidates ProductCandidate[]
 
   @@index([tenantId])
+  // Duplicação server-side: Tenant + origem canônica comprovada (PLAN Passo 2); NULLs não colidem.
+  @@unique([tenantId, canonicalUrl])
   @@map("products")
 }
 
@@ -119,6 +133,80 @@ model IdempotencyRecord {
   @@unique([tenantId, idempotencyKey])
   @@index([expiresAt])
   @@map("idempotency_records")
+}
+
+// Slice 002 — Importação via Browser (ADR-011): associação server-side Tenant → profile.
+// Sem path, cookie, token ou conteúdo do profile — somente ID opaco e estado operacional.
+
+model BrowserProfile {
+  id                    String                @id @default(uuid())
+  tenantId              String                @unique // 1 profile por Tenant/usuário; nunca compartilhado entre Tenants
+  status                String                @default("available") // available | unavailable
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  tenant                Tenant                @relation(fields: [tenantId], references: [id])
+  productImportAttempts ProductImportAttempt[]
+
+  @@map("browser_profiles")
+}
+
+// Tentativa de importação: idempotência por (tenant, chave), hash canônico da intenção e estados
+// persistidos (opening | paused | extracting | ready | error | cancelled | confirmed).
+// Após expiração o registro permanece como tombstone para replay/conflicto sem nova mutação.
+
+model ProductImportAttempt {
+  id               String    @id @default(uuid())
+  tenantId         String
+  browserProfileId String?
+  status           String
+  sourceUrl        String
+  canonicalUrl     String?
+  idempotencyKey   String
+  payloadHash      String
+  sessionId        String? // sessão do Browser Service; nunca CDP/endpoint bruto
+  pauseReason      String? // LOGIN_REQUIRED | USER_INTERACTION_REQUIRED (QR/CAPTCHA/2FA quando detectados)
+  interactiveUrl   String? // handoff noVNC vigente (uso único + TTL do Browser Service)
+  errorCode        String?
+  candidateId      String?  @unique
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  expiresAt        DateTime // janela ativa da tentativa (maior que a sessão do Browser Service)
+  finishedAt       DateTime?
+  tenant           Tenant          @relation(fields: [tenantId], references: [id])
+  browserProfile   BrowserProfile? @relation(fields: [browserProfileId], references: [id])
+  candidate        ProductCandidate?
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status])
+  @@index([browserProfileId])
+  @@index([expiresAt])
+  @@map("product_import_attempts")
+}
+
+// Candidate factual: rascunho não confiável, versionado e retido conforme configuração.
+// Nunca vira Product sem confirmação humana; lacunas e proveniência acompanham o payload.
+
+model ProductCandidate {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  attemptId          String   @unique
+  version            Int      @default(1)
+  status             String   @default("ready") // ready | error
+  payload            Json // contrato factual normalizado
+  gaps               Json // campos ausentes — lacuna não é fato inventado
+  provenance         Json // origem por fato: browser-extraction | creator-confirmed
+  sourceUrl          String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  expiresAt          DateTime
+  confirmedProductId String?  @unique
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  attempt            ProductImportAttempt @relation(fields: [attemptId], references: [id])
+  confirmedProduct   Product? @relation(fields: [confirmedProductId], references: [id])
+
+  @@index([tenantId])
+  @@index([expiresAt])
+  @@map("product_candidates")
 }
 
 model Entitlement {

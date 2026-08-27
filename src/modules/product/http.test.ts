@@ -43,14 +43,16 @@ async function createProductViaHttp(cookie: string, name: string): Promise<strin
   return ((await res.json()) as { id: string }).id;
 }
 
-test("PATCH parcial: somente contexto é aceito e torna o Product pronto para Strategy", async (t) => {
+test("PATCH parcial factual: campos estendidos são persistidos e Product fica pronto para Strategy", async (t) => {
   if (!dbUp) return t.skip();
   const { cookie } = await newUser();
   const id = await createProductViaHttp(cookie, "Sérum HTTP");
 
   const patched = await handleUpdateProduct(req(cookie, `/api/products/${id}`, "PATCH", {
     expectedVersion: 1,
-    context: { goal: "Vender no TikTok", audience: "Público skincare PT-BR" },
+    brand: "Marca HTTP",
+    seller: "Vendedor HTTP",
+    variants: ["30ml"],
   }), { params: Promise.resolve({ id }) });
   const patchedBody = (await patched.json()) as { version: number; readyForStrategy: boolean };
   assert.equal(patched.status, 200, `esperado 200, veio ${patched.status}: ${JSON.stringify(patchedBody)}`);
@@ -58,10 +60,12 @@ test("PATCH parcial: somente contexto é aceito e torna o Product pronto para St
   assert.equal(patchedBody.readyForStrategy, true);
 
   const view = await handleGetProduct(req(cookie, `/api/products/${id}`, "GET"), { params: Promise.resolve({ id }) });
-  const product = (await view.json()) as { name: string; description: string; context: { goal: string } | null };
+  const product = (await view.json()) as { name: string; description: string; brand: string; seller: string; variants: string[] };
   assert.equal(product.name, "Sérum HTTP"); // campos não enviados preservados
   assert.equal(product.description, "Descrição de teste");
-  assert.equal(product.context?.goal, "Vender no TikTok");
+  assert.equal(product.brand, "Marca HTTP");
+  assert.equal(product.seller, "Vendedor HTTP");
+  assert.deepEqual(product.variants, ["30ml"]);
 });
 
 test("PATCH parcial: versão obsoleta retorna 409 mesmo com payload parcial", async (t) => {

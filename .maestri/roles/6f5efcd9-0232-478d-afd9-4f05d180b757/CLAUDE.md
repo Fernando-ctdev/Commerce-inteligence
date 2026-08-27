@@ -68,7 +68,7 @@ Prefira **simplicidade, reutilização, consistência, legibilidade e aderência
 
 Evite overengineering, abstrações prematuras e mudanças fora do escopo.
 
-Sempre após concluir sua implementação, envie para o agente @Sentinel - Code Reviewer para revisão de código
+Sempre após concluir sua implementação, envie para o agente Code Reviewer para revisão de código
 </your_assigned_role>
 
 <working_directory>

@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getProduct, ProductApiError, ProductRecord } from "./product-api";
 import { ProductForm } from "./product-form";
-import { GenerationPanel } from "./generation-panel";
 import styles from "./product-detail.module.css";
 
 export function ProductDetail({ id }: { id: string }) {
@@ -31,14 +30,14 @@ export function ProductDetail({ id }: { id: string }) {
   }, [load]);
 
   if (loading) {
-    return <div aria-busy="true" className={styles.state} role="status"><h2>Carregando Product…</h2><p>O formulário será mantido no mesmo lugar quando os dados chegarem.</p></div>;
+      return <div aria-busy="true" className={styles.state} role="status"><h2>Carregando produto…</h2><p>O formulário será mantido no mesmo lugar quando os dados chegarem.</p></div>;
   }
 
   if (error || !product) {
     return (
       <div className={styles.state} role="alert">
-        <h2>Não foi possível abrir este Product.</h2>
-        <p>{error ?? "O Product não está disponível para este Workspace."}</p>
+        <h2>Não foi possível abrir este produto.</h2>
+        <p>{error ?? "O produto não está disponível para este Workspace."}</p>
         <div className={styles.actions}>
           <button className={styles.primaryButton} onClick={() => void load()} type="button">Tentar novamente</button>
           <Link className={styles.secondaryLink} href="/products">Voltar para Produtos</Link>
@@ -47,5 +46,5 @@ export function ProductDetail({ id }: { id: string }) {
     );
   }
 
-  return <><ProductForm mode="edit" onSaved={setProduct} product={product} /><GenerationPanel key={product.id} productId={product.id} readyForStrategy={product.readyForStrategy} /></>;
+  return <ProductForm mode="edit" onSaved={setProduct} product={product} />;
 }

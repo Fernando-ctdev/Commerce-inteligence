@@ -5,7 +5,8 @@ import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { registerUser } from "../identity/service.js";
 import { ProductLimitReachedError } from "../entitlements/service.js";
-import { createProduct, getProduct, IdempotencyConflictError, StaleVersionError, updateProduct } from "./service.js";
+import { createProduct, getProduct, IdempotencyConflictError, StaleVersionError, updateProduct, confirmCandidate } from "./service.js";
+import type { BrowserClient } from "../browser/client.js";
 import { validateProductInput } from "./validation.js";
 
 const prisma = new PrismaClient();
@@ -34,7 +35,7 @@ function input(overrides: Record<string, unknown> = {}) {
   return v.input;
 }
 
-test("criação persiste fatos normalizados, BRL em centavos, locale e URL pending", async (t) => {
+test("criação persiste fatos normalizados, BRL em centavos, locale e sourceKind manual", async (t) => {
   if (!dbUp) return t.skip();
   const tenantId = await newTenant();
   const { product, replay } = await createProduct(
@@ -47,9 +48,9 @@ test("criação persiste fatos normalizados, BRL em centavos, locale e URL pendi
   assert.equal(product.priceCents, 123456);
   assert.deepEqual(product.features, ["Vitamina C 15%"]);
   assert.equal(product.locale, "pt-BR");
-  assert.equal(product.enrichmentStatus, "pending");
+  assert.equal(product.sourceKind, "manual");
+  assert.equal(product.readyForStrategy, true);
   assert.equal(product.version, 1);
-  assert.equal(product.readyForStrategy, false); // sem contexto salvo ainda
 });
 
 test("idempotência: mesma chave+payload → mesmo Product; payload diferente → conflito; chaves distintas → Products distintos", async (t) => {
@@ -107,27 +108,26 @@ test("isolamento: Product de outro Tenant não é lido nem atualizado (uniforme)
   assert.equal(intact?.name, "Sérum Vitamina C");
 });
 
-test("contexto: upsert no PATCH, prontidão para Strategy e versão otimista", async (t) => {
+test("PATCH factual estendido e versão otimista", async (t) => {
   if (!dbUp) return t.skip();
   const tenantId = await newTenant();
   const { product } = await createProduct(tenantId, input(), key());
 
-  const v2 = await updateProduct(tenantId, product.id, 1, { context: { goal: "Vender no TikTok", audience: null, style: null, creatorPresence: null, experience: null, constraints: null, market: null, notes: null } as never });
+  const v2 = await updateProduct(tenantId, product.id, 1, {
+    brand: "Marca",
+    seller: "Vendedor",
+    variants: ["Azul", "Grande"],
+  });
   assert.equal(v2.version, 2);
+  assert.equal(v2.brand, "Marca");
+  assert.equal(v2.seller, "Vendedor");
+  assert.deepEqual(v2.variants, ["Azul", "Grande"]);
   assert.equal(v2.readyForStrategy, true);
-  assert.equal(v2.context?.goal, "Vender no TikTok");
-  assert.equal(v2.context?.locale, "pt-BR");
 
   await assert.rejects(updateProduct(tenantId, product.id, 1, { name: "edit obsoleta" }), StaleVersionError);
   const latest = await getProduct(tenantId, product.id);
-  assert.equal(latest?.version, 2); // edição mais recente preservada
+  assert.equal(latest?.version, 2);
   assert.equal(latest?.name, "Sérum Vitamina C");
-
-  const v3 = await updateProduct(tenantId, product.id, 2, { name: "Sérum VC 20%", context: { goal: "Nova meta", audience: "Creator PT-BR", style: null, creatorPresence: null, experience: null, constraints: null, market: null, notes: null } as never });
-  assert.equal(v3.version, 3);
-  assert.equal(v3.context?.goal, "Nova meta"); // upsert atualiza sem criar cópia
-  const contextCount = await prisma.productContext.count({ where: { productId: product.id } });
-  assert.equal(contextCount, 1);
 });
 
 test("PATCH parcial preserva campos não enviados", async (t) => {
@@ -156,4 +156,66 @@ test("limite de Products ativos rejeita criação sem estado parcial (via create
   } finally {
     if (saved !== undefined) process.env.ENTITLEMENT_ACTIVE_PRODUCTS = saved;
   }
+});
+
+
+test("confirma Candidate factual, registra proveniência e replay sem duplicar", async (t) => {
+  if (!dbUp) return t.skip();
+  const tenantId = await newTenant();
+  const attempt = await prisma.productImportAttempt.create({
+    data: {
+      tenantId,
+      status: "ready",
+      sourceUrl: "https://shop.tiktok.com/item/confirm",
+      canonicalUrl: "https://shop.tiktok.com/item/confirm",
+      idempotencyKey: key(),
+      payloadHash: "hash",
+      sessionId: "session-confirm",
+      expiresAt: new Date(Date.now() + 60_000),
+    },
+  });
+  await prisma.productCandidate.create({
+    data: {
+      tenantId,
+      attemptId: attempt.id,
+      payload: {
+        name: "Produto Candidate",
+        description: "Descrição Candidate",
+        category: null,
+        brand: null,
+        seller: "Loja",
+        priceCents: 1000,
+        priceCurrency: "BRL",
+        features: ["Fato"],
+        imageRefs: [],
+        variants: null,
+        sourceUrl: attempt.sourceUrl,
+      },
+      gaps: ["category", "brand", "variants"],
+      provenance: { name: "browser-extraction", seller: "browser-extraction" },
+      sourceUrl: attempt.sourceUrl,
+      expiresAt: new Date(Date.now() + 60_000),
+    },
+  });
+  const browser: BrowserClient = {
+    start: async () => { throw new Error("unused"); },
+    get: async () => { throw new Error("unused"); },
+    resume: async () => { throw new Error("unused"); },
+    extract: async () => { throw new Error("unused"); },
+    close: async () => ({
+      sessionId: "session-confirm",
+      profileId: "profile",
+      sourceUrl: attempt.sourceUrl,
+      state: "CLOSED",
+    }),
+  };
+  const confirmed = await confirmCandidate(tenantId, attempt.id, 1, { brand: "Marca confirmada" }, browser);
+  assert.ok("product" in confirmed);
+  assert.equal(confirmed.product.sourceKind, "browser");
+  assert.equal(confirmed.product.brand, "Marca confirmada");
+  assert.equal(confirmed.product.factProvenance?.brand, "creator-confirmed");
+
+  const replay = await confirmCandidate(tenantId, attempt.id, 1, {}, browser);
+  assert.ok("product" in replay && replay.replay);
+  assert.equal(replay.product.id, confirmed.product.id);
 });

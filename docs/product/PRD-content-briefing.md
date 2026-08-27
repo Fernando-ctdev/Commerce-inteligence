@@ -2,7 +2,7 @@
 
 ## 1. Objetivo
 
-Transformar os conteúdos gerados pela estratégia em unidades claras, editáveis, aprováveis e prontas para produção.
+Transformar os conteúdos gerados pela estratégia em unidades claras, editáveis, aprováveis e prontas para uma sessão real de gravação.
 
 Fluxo principal:
 
@@ -17,18 +17,22 @@ Revisão
 ↓
 Aprovação
 ↓
-Production Queue
+Lote de gravação
+↓
+Data planejada
+↓
+Estúdio + Agenda
 ↓
 Execução
 ↓
 Concluído
 ↓
-Vault
+Histórico
 ```
 
 A regra é:
 
-> **A inteligência decide o que produzir. O Briefing transforma essa decisão em algo que o creator consegue revisar e executar.**
+> **A inteligência decide o que produzir. O Briefing transforma essa decisão em algo que o creator consegue revisar e executar. O lote organiza essa execução no tempo.**
 
 ---
 
@@ -67,17 +71,39 @@ O objetivo não é produzir 20 variações superficiais da mesma ideia.
 
 ---
 
-## 3. Briefing do Conteúdo
+## 3. Content e Briefing do Conteúdo
 
-Cada conteúdo deve possuir um `ContentBrief`.
+`Content` é a identidade estável da unidade de conteúdo que segue pelo workflow de revisão, aprovação e execução.
+
+O **Briefing do Conteúdo** é a representação revisável desse `Content`. Seu material concreto é preservado em versões imutáveis e rastreáveis (`ContentBriefVersion`).
 
 Estrutura conceitual:
 
 ```ts
-interface ContentBrief {
+interface Content {
   id: string;
   productId: string;
   planId: string;
+  opportunityId?: string;
+
+  status: ContentStatus;
+
+  currentBriefVersionId: string;
+  approvedBriefVersionId?: string;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+type ContentStatus =
+  | 'DRAFT'
+  | 'APPROVED'
+  | 'DISCARDED';
+
+interface ContentBriefVersion {
+  id: string;
+  contentId: string;
+  version: number;
 
   objective?: string;
 
@@ -97,9 +123,13 @@ interface ContentBrief {
 
   notes?: string;
 
-  status: ContentStatus;
+  createdAt: string;
 }
 ```
+
+A Commerce Intelligence cria o `Content` inicialmente em `DRAFT` e sua primeira `ContentBriefVersion` válida.
+
+O estado de revisão do `Content` deve permanecer separado do estado do lote.
 
 Nem todos os elementos estratégicos precisam aparecer permanentemente na interface.
 
@@ -111,7 +141,7 @@ A interface deve priorizar aquilo que ajuda o creator a decidir:
 
 ## 4. Experiência de revisão
 
-A tela deve permitir navegar rapidamente entre vários briefings do mesmo plano.
+A tela deve permitir navegar rapidamente entre vários briefings do mesmo plano dentro do contexto do Produto.
 
 Exemplo:
 
@@ -152,11 +182,13 @@ Preferir:
 * seletor de conteúdos;
 * ou tabs apenas quando a quantidade for pequena.
 
+`Conteúdos` não precisa existir como destino global de navegação no MVP. A revisão acontece no contexto do Produto e de seus planos.
+
 ---
 
 ## 5. Ações sobre o Briefing
 
-Cada Briefing pode possuir:
+Cada Content/Briefing pode possuir:
 
 ```text
 Editar
@@ -165,6 +197,8 @@ Descartar
 Duplicar
 Regenerar
 ```
+
+`Descartar` altera o workflow para `DISCARDED` e preserva a memória; não representa hard delete.
 
 Regenerações específicas:
 
@@ -180,48 +214,65 @@ Regenerar uma parte não deve obrigar o usuário a explicar novamente o produto 
 
 ---
 
-## 6. Aprovação
+## 6. Aprovação e versionamento
 
-Um Briefing não entra automaticamente em produção.
+Um `Content` não entra automaticamente em gravação.
 
-Fluxo:
+Fluxo inicial:
 
 ```text
-DRAFT
+Content DRAFT
+↓
+ContentBriefVersion v1
 ↓
 usuário revisa
 ↓
-APPROVED
+edita ou regenera, se necessário
+↓
+ContentBriefVersion v2 / v3 / ...
+↓
+usuário aprova uma versão
+↓
+Content APPROVED
++ approvedBriefVersionId
 ```
 
 Ao aprovar, deve ser preservada a versão exata que foi aprovada.
 
-Exemplo conceitual:
+A execução utiliza o snapshot indicado por `approvedBriefVersionId`.
+
+Se o usuário editar ou regenerar novamente depois da aprovação:
 
 ```text
-ContentBrief v1
+v3 APPROVED
 ↓
-edição
+edição/regeneração
 ↓
-ContentBrief v2
+v4 criada
 ↓
-edição
-↓
-ContentBrief v3
-↓
-APROVADO
+Content volta a exigir aprovação
 ```
 
-A produção utiliza a versão `v3`.
+A nova versão precisa ser aprovada antes de substituir a versão aprovada para **novas** execuções.
 
-Se o usuário editar novamente depois da aprovação, uma nova versão deve ser criada e aprovada novamente.
+Lotes já existentes continuam apontando para a versão aprovada que foi selecionada quando o lote foi criado; uma edição posterior não altera silenciosamente um `RecordingBatchItem` já montado.
+
+`DISCARDED` preserva o Content e suas versões como memória. Não equivale a exclusão destrutiva.
+
+A política geral de retenção de versões pertence à Spec. Entretanto, nenhuma versão pode ser removida enquanto estiver referenciada como versão aprovada ou por um `RecordingBatchItem`/histórico que dependa dela.
 
 Isso garante rastreabilidade entre:
 
 ```text
+Content
+↓
 Briefing aprovado
 ↓
-produção executada
+versão aprovada
+↓
+lote de gravação
+↓
+execução
 ↓
 resultado produzido
 ```
@@ -230,121 +281,228 @@ resultado produzido
 
 ## 7. Aprovação em lote
 
-O usuário pode aprovar vários conteúdos individualmente e depois enviar os aprovados para produção.
+O usuário pode aprovar vários conteúdos individualmente e depois selecionar quais aprovados farão parte de um lote de gravação.
 
 Pode existir ação em lote:
 
 ```text
 [ Aprovar selecionados ]
 
-[ Enviar aprovados para produção ]
+[ Criar lote com aprovados ]
 ```
 
 Edição em massa dos campos dos briefings não é necessária.
 
----
-
-## 8. Production Queue
-
-Depois da aprovação:
-
-```text
-APPROVED
-↓
-Production Queue
-```
-
-A fila deve mostrar somente trabalho ativo.
-
-Estados internos:
-
-```text
-DRAFT
-APPROVED
-IN_PRODUCTION
-COMPLETED
-ARCHIVED
-```
-
-Na interface, simplificar para:
-
-```text
-Rascunhos
-Prontos
-Em produção
-```
-
-Conteúdos concluídos devem sair da fila principal.
+Um conteúdo aprovado não precisa ser automaticamente incluído em um lote. A seleção do lote é uma decisão operacional separada.
 
 ---
 
-## 9. Kanban
+## 8. Lote de gravação
 
-A Production Queue pode utilizar uma visão Kanban simples:
+O `RecordingBatch` é a unidade operacional do Estúdio.
 
-```text
-┌────────────────┬────────────────┬────────────────┐
-│ Rascunhos      │ Prontos        │ Em produção    │
-│                │                │                │
-│ Aspirador #12  │ Aspirador #08  │ Projetor #03   │
-│ Escova #05     │ Escova #02     │                │
-│ Projetor #09   │ Aspirador #09  │                │
-└────────────────┴────────────────┴────────────────┘
-```
+Ele reúne conteúdos aprovados que o creator pretende produzir na mesma sessão ou contexto de gravação.
 
-Não transformar a produção em uma ferramenta complexa de gestão de projetos.
-
-O Kanban existe apenas para responder:
-
-> **O que ainda precisa ser produzido?**
-
----
-
-## 10. Execução
-
-Ao enviar um conteúdo aprovado para produção, o usuário escolhe o executor.
+Exemplo:
 
 ```text
-Briefing aprovado
-        ↓
-Como deseja produzir?
+Mini Aspirador
 
-[ Gravar eu mesmo ]
-
-[ Gerar com IA ]
+8 conteúdos aprovados
+Gravação: 26 de agosto
 ```
 
-Conceitualmente:
+Estrutura conceitual:
 
 ```ts
-type ExecutionMode =
-  | 'CREATOR'
-  | 'AI';
+interface RecordingBatchItem {
+  contentId: string;
+  approvedVersionId: string; // referencia ContentBriefVersion.id
+  completedAt?: string;
+}
+
+interface RecordingBatch {
+  id: string;
+  productId: string;
+
+  items: RecordingBatchItem[];
+
+  scheduledDate: string; // data planejada; horário não é requisito do MVP
+
+  createdAt: string;
+  completedAt?: string;
+}
 ```
 
-Ambos utilizam o mesmo Briefing aprovado.
+No MVP, um lote pertence a um único Produto.
+
+A data planejada é definida ao preparar o lote para gravação.
+
+A Agenda não é uma entidade paralela: ela é uma visão temporal dos `RecordingBatch`.
 
 ---
 
-## 11. Creator Production
+## 9. Planejamento da gravação
 
-No MVP:
+Depois de montar o lote, o usuário define quando pretende gravá-lo.
+
+Fluxo:
 
 ```text
-Briefing
+8 conteúdos selecionados
 ↓
-Pronto
+Criar lote
 ↓
-Creator começa gravação
+Quando pretende gravar?
+
+[ Hoje ]
+[ Amanhã ]
+[ Escolher data ]
 ↓
-IN_PRODUCTION
-↓
-Creator conclui
-↓
-COMPLETED
+Confirmar
 ```
 
-O modo de gravação deve mostrar apenas as informações necessárias:
+No MVP, é suficiente armazenar a data planejada da sessão.
+
+Não é necessário exigir:
+
+* horário;
+* duração;
+* recorrência;
+* lembretes customizados;
+* participantes;
+* sala;
+* calendário externo.
+
+A data pode ser alterada posteriormente através da ação `Reagendar`.
+
+---
+
+## 10. Agenda de gravação
+
+A Agenda é o calendário interno das sessões planejadas.
+
+Deve permitir visualizar lotes por:
+
+```text
+Dia
+Semana
+Mês
+```
+
+Exemplo:
+
+```text
+26 de agosto
+
+Mini Aspirador
+8 conteúdos
+
+Escova Modeladora
+5 conteúdos
+```
+
+Um item da Agenda deve mostrar somente informação operacional suficiente para reconhecer e abrir o lote:
+
+* Produto;
+* quantidade de conteúdos;
+* progresso, quando o lote já tiver começado;
+* data planejada.
+
+Ações principais:
+
+```text
+[Abrir no Estúdio]
+[Reagendar]
+```
+
+A Agenda do MVP é interna ao Commerce Intelligence.
+
+Ela não agenda publicação em TikTok, Instagram ou qualquer outra plataforma.
+
+Ela também não sincroniza Google Calendar nem cria lembretes externos no MVP.
+
+Essas integrações podem ser adicionadas futuramente sem alterar o modelo central de `RecordingBatch`.
+
+---
+
+## 11. Estúdio
+
+O Estúdio é o centro operacional de pré-produção e acompanhamento dos lotes de gravação.
+
+Ele organiza os lotes, apresenta os materiais necessários para cada conteúdo e acompanha o progresso informado pelo creator. A captura do vídeo acontece fora da plataforma.
+
+A esteira possui somente três estados visíveis:
+
+```text
+Aguardando
+Gravando
+Concluído
+```
+
+Esses estados pertencem ao lote e são derivados automaticamente da quantidade de conteúdos concluídos.
+
+Regra:
+
+```text
+0 concluídos de N       → Aguardando
+1 até N-1 concluídos    → Gravando
+N concluídos de N       → Concluído
+```
+
+`Gravando` significa apenas que a execução daquele lote já foi iniciada. Não significa que a plataforma esteja capturando vídeo ou áudio.
+
+O usuário não altera o status do lote manualmente.
+
+Exemplo:
+
+```text
+Mini Aspirador
+
+3 de 8 concluídos
+38%
+
+Gravando
+
+[Continuar lote]
+```
+
+O percentual é permitido porque representa progresso real de um objeto operacional. Ele não é analytics ou KPI.
+
+O Estúdio não deve se transformar em uma ferramenta genérica de gestão de projetos.
+
+Não incluir:
+
+* sprints;
+* responsáveis;
+* prioridades complexas;
+* dependências;
+* dezenas de estados;
+* gestão de tarefas genéricas.
+
+---
+
+## 12. Execução pelo creator
+
+Ao abrir um lote, o usuário vê os conteúdos que o compõem e quais já foram concluídos.
+
+Exemplo:
+
+```text
+Mini Aspirador
+3 de 8 concluídos
+
+✓ Conteúdo #01
+✓ Conteúdo #02
+✓ Conteúdo #03
+○ Conteúdo #04
+○ Conteúdo #05
+○ Conteúdo #06
+○ Conteúdo #07
+○ Conteúdo #08
+```
+
+O **Guia de Gravação** de um conteúdo deve mostrar apenas as informações necessárias para orientar a execução:
 
 ```text
 Hook
@@ -357,16 +515,102 @@ CTA
 
 [Anterior]
 
-[Concluir gravação]
+[Concluir conteúdo]
 
 [Próximo]
 ```
 
+O Guia de Gravação não captura mídia.
+
+No MVP, o Estúdio não deve:
+
+* acessar ou controlar a câmera do dispositivo;
+* possuir REC, obturador ou preview de câmera;
+* capturar áudio ou vídeo;
+* editar mídia;
+* substituir o aplicativo ou equipamento utilizado pelo creator para gravar.
+
+O creator grava externamente e utiliza o Estúdio apenas como guia operacional e acompanhamento do lote.
+
+Regras:
+
+* concluir um conteúdo atualiza imediatamente o progresso do lote;
+* `Próximo` não conclui implicitamente o conteúdo atual;
+* não existe autoavanço obrigatório após concluir;
+* um conteúdo já concluído não pode ser concluído novamente por engano;
+* falha ao salvar não deve perder o contexto ou os dados exibidos.
+
 ---
 
-## 12. AI Content Production — Premium
+## 13. Conclusão do lote e histórico
 
-A execução por IA utiliza exatamente a mesma estratégia e o mesmo Briefing.
+Quando todos os conteúdos do lote forem concluídos:
+
+```text
+N de N concluídos
+↓
+100%
+↓
+Lote Concluído
+```
+
+O lote passa automaticamente para `Concluído`.
+
+O histórico deve preservar:
+
+* produto;
+* plano;
+* lote;
+* data planejada;
+* data de conclusão;
+* Briefing aprovado utilizado em cada conteúdo;
+* versões;
+* público;
+* dor;
+* benefício;
+* objeção;
+* ângulo;
+* hook;
+* roteiro;
+* CTA;
+* status de conclusão;
+* modo de execução;
+* mídia final, quando existir futuramente.
+
+O histórico permanece acessível no contexto do Produto.
+
+`Vault` pode continuar existindo como conceito técnico de memória intelectual e operacional, mas não é um destino obrigatório da navegação do MVP.
+
+Essa memória alimenta o controle de variedade das próximas gerações.
+
+---
+
+## 14. Home e continuidade operacional
+
+A Home deve usar os dados dos lotes para responder rapidamente o que o creator precisa fazer.
+
+Pode mostrar:
+
+* campo para adicionar/analisar um Produto;
+* lotes planejados para hoje;
+* gravações iniciadas que precisam ser continuadas;
+* próximas gravações já agendadas.
+
+Não deve mostrar:
+
+* bloco `Ainda sem data`;
+* KPIs soltos;
+* gráficos;
+* analytics;
+* números sem vínculo com Produto ou lote.
+
+A Home é uma entrada operacional, não um dashboard analítico.
+
+---
+
+## 15. AI Content Production — futuro Premium
+
+A execução por IA utiliza exatamente a mesma estratégia e o mesmo Briefing aprovado.
 
 ```text
 Approved Content Brief
@@ -413,81 +657,49 @@ A diferença entre creator e IA é somente o executor:
            mídia                mídia
 ```
 
-A geração automática permanece Premium e pode continuar fora do primeiro MVP.
+A geração automática permanece fora do primeiro MVP.
+
+A introdução futura de IA como executor não deve exigir reconstrução do Briefing ou da inteligência estratégica.
 
 ---
 
-## 13. Conclusão e Vault
-
-Quando o conteúdo for concluído:
+## 16. Separação de responsabilidades
 
 ```text
-IN_PRODUCTION
-↓
-COMPLETED
-↓
-sai da fila ativa
-↓
-Vault
-```
-
-O Vault mantém a memória intelectual e operacional.
-
-Deve preservar:
-
-* produto;
-* plano;
-* Briefing aprovado;
-* versões;
-* público;
-* dor;
-* benefício;
-* objeção;
-* ângulo;
-* hook;
-* roteiro;
-* CTA;
-* modo de execução;
-* data;
-* status;
-* mídia final, quando existir.
-
-Essa memória também alimenta o controle de variedade das próximas gerações.
-
----
-
-## 14. Separação de responsabilidades
-
-```text
-Commerce Intelligence
+Commerce Intelligence Engine
 = decide como vender
-```
-
-```text
-Sales Content Engine
-= cria o conjunto estratégico de conteúdos
++ constrói ProductStrategy
++ planeja o conjunto em ContentPlan / ContentOpportunity
++ cria Content + Briefing inicial em DRAFT
 ```
 
 ```text
 Content Operations
-= revisão, briefing, aprovação, produção e histórico
+= revisão, edição, regeneração, versionamento, aprovação,
+descarte, lotes, agenda interna, estúdio, execução e histórico
 ```
 
 ```text
 AI Content Production
-= executa a mídia quando solicitado
+= executa a mídia quando solicitado futuramente
 ```
+
+`ContentPortfolioPlanner` e `BriefGenerator` são capabilities internas da Commerce Intelligence Engine. Não existe um `Sales Content Engine` peer entre Strategy e Content Operations.
 
 Nenhum desses domínios deve assumir a responsabilidade do outro.
 
+A Agenda organiza **quando gravar**. Ela não decide estratégia nem agenda publicação.
+
 ---
 
-## 15. Fora do escopo
+## 17. Fora do escopo
 
-Não incluir nesta frente:
+Não incluir nesta frente do MVP:
 
 * publicação automática;
-* agendamento;
+* agendamento de publicação;
+* sincronização com Google Calendar;
+* lembretes externos de calendário;
 * analytics externo;
 * ROAS;
 * CTR;
@@ -495,11 +707,14 @@ Não incluir nesta frente:
 * gestão complexa de projetos;
 * dezenas de estados de workflow;
 * aprovação com múltiplos níveis;
-* colaboração avançada.
+* colaboração avançada;
+* geração automática de mídia.
+
+A **Agenda interna de gravação** faz parte do MVP e não deve ser confundida com esses itens.
 
 ---
 
-## 16. Critérios de aceite
+## 18. Critérios de aceite
 
 A frente está pronta quando:
 
@@ -509,17 +724,24 @@ A frente está pronta quando:
 4. usuário pode editar cada Briefing;
 5. usuário pode regenerar partes específicas;
 6. usuário pode descartar conteúdos;
-7. usuário pode aprovar individualmente;
-8. versão aprovada fica preservada;
-9. aprovados podem entrar na Production Queue;
-10. fila mostra somente conteúdos vivos;
-11. creator pode iniciar e concluir uma gravação;
-12. concluídos saem da fila e permanecem no Vault;
-13. arquitetura permite futuramente usar IA como executor.
+7. usuário pode aprovar individualmente ou selecionar aprovados;
+8. Content possui identidade estável e a versão aprovada fica preservada;
+9. usuário pode criar um lote com conteúdos aprovados;
+10. lote pertence a um Produto e possui data planejada de gravação;
+11. Agenda consegue exibir os lotes por dia, semana e mês;
+12. lote pode ser reagendado;
+13. Estúdio apresenta `Aguardando`, `Gravando` e `Concluído`;
+14. status do lote é derivado automaticamente pelo número de conteúdos concluídos;
+15. creator pode abrir o lote e concluir conteúdos individualmente;
+16. progresso do lote é atualizado imediatamente;
+17. ao concluir todos os conteúdos, o lote passa automaticamente para `Concluído`;
+18. Home pode mostrar gravações de hoje e próximas gravações sem criar um bloco `Ainda sem data`;
+19. histórico permanece acessível no contexto do Produto;
+20. arquitetura permite futuramente usar IA como executor sem redefinir o Briefing.
 
 ---
 
-## 17. Regra final
+## 19. Regra final
 
 O fluxo deve permanecer:
 
@@ -532,11 +754,17 @@ Editar se necessário
 ↓
 Aprovar
 ↓
-Produzir
+Organizar em lote
 ↓
-Arquivar
+Definir quando gravar
+↓
+Acompanhar no Estúdio
+↓
+Concluir
+↓
+Preservar histórico
 ```
 
-O usuário nunca deve precisar compreender a complexidade interna da engine para decidir o que gravar.
+O usuário nunca deve precisar compreender a complexidade interna da engine para decidir ou organizar o que gravar.
 
-> **O Briefing do Conteúdo é a ponte entre inteligência e execução.**
+> **O Briefing do Conteúdo é a ponte entre inteligência e execução. O lote de gravação transforma essa execução em uma sessão organizada.**

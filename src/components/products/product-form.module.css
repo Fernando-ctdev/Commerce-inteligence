@@ -5,9 +5,7 @@
   max-width: 860px;
 }
 
-.section,
-.enrichment,
-.ready {
+.section {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -21,15 +19,13 @@
   gap: 6px;
 }
 
-.sectionHeading h2,
-.enrichment h2 {
+.sectionHeading h2 {
   font-size: 20px;
   line-height: 26px;
   margin: 0;
 }
 
-.sectionHeading p,
-.enrichment p {
+.sectionHeading p {
   color: var(--color-text-secondary);
   font-size: 14px;
   line-height: 20px;
@@ -90,12 +86,6 @@
 .fieldError,
 .alert {
   color: var(--color-danger);
-}
-
-.grid {
-  display: grid;
-  gap: 20px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .alert,
@@ -200,48 +190,11 @@
   opacity: 0.65;
 }
 
-.enrichment {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-}
-
-.ready {
-  border-inline-start: 4px solid var(--color-success);
-}
-
-.ready h2,
-.ready p {
-  margin: 0;
-}
-
-.ready h2 {
-  font-size: 20px;
-  line-height: 26px;
-}
-
-.ready p:not(.eyebrow) {
-  color: var(--color-text-secondary);
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.enrichment > div {
-  display: grid;
-  gap: 6px;
-}
-
 @media (max-width: 767px) {
-  .section,
-  .enrichment,
-  .ready {
+  .section {
     border-inline: 0;
     border-radius: 0;
     padding: 20px 0;
-  }
-
-  .grid {
-    grid-template-columns: 1fr;
   }
 
   .submitBar {
@@ -257,10 +210,6 @@
     flex: 1;
   }
 
-  .enrichment {
-    align-items: stretch;
-    flex-direction: column;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

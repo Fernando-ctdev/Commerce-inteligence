@@ -65,6 +65,13 @@ test("rejects succeeded responses without a complete result and sanitizes termin
   assert.equal(normalizeGeneration({ ...responseBody, status: "failed", error: "provider\nfalhou\u0000" }).error, "provider falhou");
 });
 
+test("rejects an unknown generation status at the response boundary", () => {
+  assert.throws(
+    () => normalizeGeneration({ ...responseBody, status: "unknown" }),
+    (error: unknown) => error instanceof GenerationApiError && error.message === "Resposta de Generation inválida.",
+  );
+});
+
 test("restores the persisted Product run through the real run endpoint", async () => {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;

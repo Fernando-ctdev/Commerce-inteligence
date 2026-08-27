@@ -1,34 +1,38 @@
-// Validação e normalização de entrada de Product/contexto — SPEC/PLAN 002.
+// Validação e normalização de entrada de Product — SPEC/PLAN 002 (fallback manual + fatos confirmados).
 // Normalização: trim, NFC, quebras canônicas, null para ausentes, preço em centavos,
 // caixa e ordem das listas preservadas (o hash de idempotência usa exatamente esta forma).
+// Campos estratégicos (goal/audience/style/...) não pertencem ao cadastro — ProductContext
+// permanece somente como compatibilidade histórica nullable.
 import { createHash } from "node:crypto";
 
 export const MAX_PRICE_CENTS = 9_999_999_999; // 99.999.999,99 BRL
+
+/** Preço numérico (unidade) em centavos: finito, ≥0, ≤2 casas — sem arredondamento silencioso. */
+export function amountToCents(amount: unknown): number | null {
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) return null;
+  const cents = amount * 100;
+  if (Math.abs(cents - Math.round(cents)) > 1e-6) return null;
+  return Math.round(cents);
+}
+
 export const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9_-]{22,128}$/; // base64url (16 bytes aleatórios = 22 chars)
 
 export type FieldErrors = Record<string, string>;
 
-export type NormalizedContext = {
-  goal: string | null;
-  audience: string | null;
-  style: string | null;
-  creatorPresence: string | null;
-  experience: string | null;
-  constraints: string | null;
-  market: string | null;
-  notes: string | null;
-};
 
 export type NormalizedProductInput = {
   name: string;
   description: string;
   category: string | null;
+  brand: string | null; // edição factual de Product confirmado; não faz parte do fallback manual
+  seller: string | null;
+  variants: string[] | null; // null = ausente; lista vazia explícita não vira fato
   priceCents: number | null;
+  priceCurrency: string | null; // moeda informada quando existente; nunca assumida
   features: string[] | null;
   imageRefs: string[] | null;
   notes: string | null;
   url: string | null;
-  context: NormalizedContext | null;
 };
 
 const len = (s: string) => Array.from(s).length; // caracteres (code points), não code units
@@ -109,6 +113,16 @@ export function parseBrlToCents(v: unknown): number | null {
   return cents;
 }
 
+/** Moeda ISO-4217 informada (3 letras) ou null — ausência permanece lacuna, nunca é assumida. */
+function currencyText(v: unknown, field: string, errors: FieldErrors): string | null {
+  if (v === undefined || v === null || v === "") return null;
+  if (typeof v !== "string" || !/^[A-Za-z]{3}$/.test(v)) {
+    errors[field] = "Moeda inválida: use 3 letras (ex.: BRL, USD).";
+    return null;
+  }
+  return v.toUpperCase();
+}
+
 function stringList(
   v: unknown,
   field: string,
@@ -146,26 +160,6 @@ function stringList(
   return out;
 }
 
-function normalizeContext(v: unknown, errors: FieldErrors): NormalizedContext | null {
-  if (v === undefined || v === null) return null;
-  if (typeof v !== "object") {
-    errors["context"] = "Valor inválido.";
-    return null;
-  }
-  const c = v as Record<string, unknown>;
-  const ctx: NormalizedContext = {
-    goal: text(c.goal, "context.goal", 5000, errors),
-    audience: text(c.audience, "context.audience", 5000, errors),
-    style: text(c.style, "context.style", 5000, errors),
-    creatorPresence: text(c.creatorPresence, "context.creatorPresence", 5000, errors),
-    experience: text(c.experience, "context.experience", 5000, errors),
-    constraints: text(c.constraints, "context.constraints", 5000, errors),
-    market: text(c.market, "context.market", 5000, errors),
-    notes: text(c.notes, "context.notes", 5000, errors),
-  };
-  if (Object.values(ctx).every((x) => x === null)) return null;
-  return ctx;
-}
 
 /**
  * Valida e normaliza a entrada de criação. Retorna erros por campo ou a forma normalizada.
@@ -182,6 +176,10 @@ export function validateProductInput(v: unknown, partial = false): { errors: Fie
   const name = text(b.name, "name", 200, errors, !partial || b.name !== undefined) ?? "";
   const description = text(b.description, "description", 5000, errors, !partial || b.description !== undefined) ?? "";
   const category = text(b.category, "category", 120, errors);
+  const brand = text(b.brand, "brand", 120, errors); // edição factual; fallback manual não envia
+  const seller = text(b.seller, "seller", 200, errors);
+  const variants = stringList(b.variants, "variants", 20, 300, errors);
+  const priceCurrency = currencyText(b.priceCurrency, "priceCurrency", errors);
   const notes = text(b.notes, "notes", 5000, errors);
 
   let priceCents: number | null = null;
@@ -199,29 +197,89 @@ export function validateProductInput(v: unknown, partial = false): { errors: Fie
 
   const features = stringList(b.features, "features", 20, 300, errors);
   const imageRefs = stringList(b.imageRefs, "imageRefs", 10, 2048, errors, (s) => s.length <= 2048 && isValidPublicHttpUrlString(s));
-  const context = normalizeContext(b.context, errors);
+  const priceless = b.price === undefined || b.price === null || b.price === ""; // moeda sem preço é ignorada
+  if (!priceless && priceCurrency !== null && priceCents === null) errors["priceCurrency"] = "Informe também o preço.";
 
   if (Object.keys(errors).length > 0) return { errors };
   return {
-    input: { name, description, category, priceCents, features, imageRefs, notes, url, context },
+    input: { name, description, category, brand, seller, variants, priceCents, priceCurrency, features, imageRefs, notes, url },
   };
 }
 
 /** Hash canônico do payload normalizado (ordem de chaves fixa; listas preservam ordem). */
 export function payloadHash(input: NormalizedProductInput): string {
-  const c = input.context;
   const canonical = JSON.stringify([
     input.name,
     input.description,
     input.category,
+    input.brand,
+    input.seller,
+    input.variants,
     input.priceCents,
+    input.priceCurrency,
     input.features,
     input.imageRefs,
     input.notes,
     input.url,
-    c ? [c.goal, c.audience, c.style, c.creatorPresence, c.experience, c.constraints, c.market, c.notes] : null,
   ]);
   return createHash("sha256").update(canonical).digest("hex");
+}
+
+export type CandidateEdits = {
+  name?: string;
+  description?: string;
+  category?: string | null;
+  brand?: string | null;
+  seller?: string | null;
+  priceCents?: number | null;
+  priceCurrency?: string | null;
+  features?: string[] | null;
+  variants?: string[] | null;
+  imageRefs?: string[] | null;
+};
+
+/**
+ * Campos que o creator pode corrigir no Candidate antes de confirmar (SPEC: revisão é o
+ * mecanismo de completar campos mínimos e corrigir a extração). Preço chega como
+ * {amount, currency}; campos ausentes permanecem os fatos extraídos.
+ */
+export function validateCandidateEdits(v: unknown): { errors: FieldErrors } | { edits: CandidateEdits } {
+  const errors: FieldErrors = {};
+  if (typeof v !== "object" || v === null) return { errors: { facts: "Requisição inválida." } };
+  const b = v as Record<string, unknown>;
+  const edits: CandidateEdits = {};
+
+  if (b.name !== undefined) {
+    const t = text(b.name, "name", 200, errors, true);
+    if (t !== null) edits.name = t;
+  }
+  if (b.description !== undefined) {
+    const t = text(b.description, "description", 5000, errors, true);
+    if (t !== null) edits.description = t;
+  }
+  if (b.category !== undefined) edits.category = text(b.category, "category", 120, errors);
+  if (b.brand !== undefined) edits.brand = text(b.brand, "brand", 120, errors);
+  if (b.seller !== undefined) edits.seller = text(b.seller, "seller", 200, errors);
+  if (b.features !== undefined) edits.features = stringList(b.features, "features", 20, 300, errors);
+  if (b.variants !== undefined) edits.variants = stringList(b.variants, "variants", 20, 300, errors);
+  if (b.images !== undefined) edits.imageRefs = stringList(b.images, "images", 10, 2048, errors, (s) => s.length <= 2048 && isValidPublicHttpUrlString(s));
+
+  if (b.price !== undefined) {
+    if (b.price === null || b.price === "") {
+      edits.priceCents = null;
+      edits.priceCurrency = null;
+    } else if (typeof b.price === "object" && "amount" in b.price && "currency" in b.price) {
+      const cents = amountToCents(b.price.amount);
+      if (cents === null) errors["price"] = "Preço inválido: número finito, não negativo, com até duas casas decimais.";
+      else edits.priceCents = cents;
+      edits.priceCurrency = currencyText(b.price.currency, "price.currency", errors);
+    } else {
+      errors["price"] = "Preço inválido: informe {amount, currency}.";
+    }
+  }
+
+  if (Object.keys(errors).length > 0) return { errors };
+  return { edits };
 }
 
 /** Validação da chave de idempotência: presença, charset seguro e 22–128 caracteres. */

@@ -57,16 +57,18 @@ check("2b. mesma chave com payload diferente → 409", conflict.status === 409, 
 const badKey = await api(cookieA, "/api/products", "POST", creds, { "idempotency-key": "curta" });
 check("3. chave inválida → 400", badKey.status === 400, badKey.status);
 
-// 4. leitura + contexto (prontidão) + conflito de versão
+// 4. leitura + fatos estendidos + conflito de versão
 const before = await api(cookieA, `/api/products/${createdBody.id}`, "GET");
 const beforeBody = (await before.json()) as { readyForStrategy: boolean; version: number; priceCents: number };
 check("4. GET retorna produto do Tenant com BRL em centavos", before.status === 200 && beforeBody.priceCents === 123456, beforeBody);
 const patched = await api(cookieA, `/api/products/${createdBody.id}`, "PATCH", {
-  expectedVersion: beforeBody.version,
-  context: { goal: "Vender no TikTok", audience: "Público skincare PT-BR" },
+  expectedVersion: 1,
+  brand: "Marca smoke",
+  seller: "Vendedor smoke",
+  variants: ["30ml"],
 });
 const patchedBody = (await patched.json()) as { version: number; readyForStrategy: boolean };
-check("4b. PATCH contexto → pronto para Strategy", patched.status === 200 && patchedBody.readyForStrategy === true, patchedBody);
+check("4b. PATCH fatos estendidos → Product pronto para Strategy", patched.status === 200 && patchedBody.readyForStrategy === true, patchedBody);
 const stale = await api(cookieA, `/api/products/${createdBody.id}`, "PATCH", { expectedVersion: 1, name: "Obsoleta" });
 check("4c. versão obsoleta → 409", stale.status === 409, stale.status);
 
@@ -77,15 +79,12 @@ check("5. cross-tenant GET → 404 uniforme", crossRead.status === 404, crossRea
 const crossPatch = await api(cookieB, `/api/products/${createdBody.id}`, "PATCH", { expectedVersion: 2, name: "hack" });
 check("5b. cross-tenant PATCH → 404 uniforme", crossPatch.status === 404, crossPatch.status);
 
-// 6. URL falha não bloqueia manual; enriquecimento indisponível é não-bloqueante
+// 6. fallback manual preserva URL sem iniciar enrichment
 const withUrl = await api(cookieA, "/api/products", "POST", { ...creds, name: "Produto com URL", url: "https://invalido.inexistente.example/produto" }, { "idempotency-key": key() });
-check("6. criar com URL → 201 (manual nunca espera o fetch)", withUrl.status === 201, withUrl.status);
+check("6. criar com URL → 201 (fallback manual não espera Browser Service)", withUrl.status === 201, withUrl.status);
 const withUrlBody = (await withUrl.json()) as { id: string };
-const enrich = await api(cookieA, `/api/products/${withUrlBody.id}/enrichment`, "POST");
-const enrichBody = (await enrich.json()) as { enrichmentStatus: string };
-check("6b. enriquecimento de host inexistente → unavailable", enrich.status === 200 && enrichBody.enrichmentStatus === "unavailable", enrichBody);
 const manual = await api(cookieA, `/api/products/${withUrlBody.id}`, "GET");
-check("6c. fatos manuais preservados após falha de URL", manual.status === 200);
+check("6b. fatos manuais preservados", manual.status === 200);
 
 // 7. Origin ausente/divergente rejeitada antes de mutar
 const noOrigin = await fetch(`${BASE}/api/products`, {
