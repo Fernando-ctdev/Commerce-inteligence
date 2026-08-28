@@ -107,7 +107,7 @@ const emptyManualCandidate: ProductCandidateDraft = {
   brand: "",
   seller: "",
   price: "",
-  currency: "",
+  currency: "BRL",
   features: "",
   variants: "",
   images: "",

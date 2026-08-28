@@ -8,7 +8,11 @@ type ProductPageProps = {
 };
 
 export default async function ProductPage({ params }: ProductPageProps) {
-  await requireSession();
+  const session = await requireSession();
   const { id } = await params;
-  return <ProductShell eyebrow="Produto" title="Revisar fatos"><ProductDetail id={id} /></ProductShell>;
+  return (
+    <ProductShell eyebrow="Produto" title="Revisar fatos" user={{ email: session.email }}>
+      <ProductDetail id={id} />
+    </ProductShell>
+  );
 }

@@ -4,10 +4,15 @@ import { ProductCreate } from "@/components/products/product-create";
 import { ProductShell } from "@/components/products/product-shell";
 
 export default async function NewProductPage() {
-  await requireSession();
+  const session = await requireSession();
 
   return (
-    <ProductShell active="products" eyebrow="Produtos" title="Adicionar produto">
+    <ProductShell
+      active="products"
+      eyebrow="Produtos"
+      title="Adicionar produto"
+      user={{ email: session.email }}
+    >
       <ProductCreate />
     </ProductShell>
   );

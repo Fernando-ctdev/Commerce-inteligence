@@ -4,10 +4,10 @@ import { TodayEmpty } from "@/components/today/today-empty";
 import { ProductShell } from "@/components/products/product-shell";
 
 export default async function TodayPage() {
-  await requireSession();
+  const session = await requireSession();
 
   return (
-    <ProductShell active="home" eyebrow="Home" title="Home">
+    <ProductShell active="home" eyebrow="Home" title="Home" user={{ email: session.email }}>
       <TodayEmpty />
     </ProductShell>
   );

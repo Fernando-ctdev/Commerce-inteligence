@@ -5,9 +5,16 @@ import {
   useEffect,
   type ChangeEvent,
   type FormEvent,
-  type KeyboardEvent,
+  type ReactNode,
   type RefObject,
 } from "react";
+import { XIcon } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 
 import type {
   ContentPreparationPreferences,
@@ -22,6 +29,30 @@ export function candidateFieldId(name: keyof ProductCandidateDraft) {
   return `candidate-${name}`;
 }
 
+/* Máscara do Preço: o input exibe pt-BR (10,50) e o draft guarda o
+   formato aceito pelo gate (10.50). Digitação estilo caixa: cada dígito
+   entra como centavo. */
+function digitsToPrice(raw: string) {
+  /* 10 dígitos = 99.999.999,99 — teto exato aceito pelo gate. */
+  /* Zeros à esquerda colapsam: sem eles, apagar ficava travado em 0,00. */
+  const digits = raw
+    .replace(/\D/g, "")
+    .replace(/^0+/, "")
+    .slice(0, 10);
+  if (!digits) return "";
+  return (Number(digits) / 100).toFixed(2);
+}
+
+function formatPriceDisplay(price: string) {
+  if (!price) return "";
+  const amount = Number(price.replace(",", "."));
+  if (!Number.isFinite(amount)) return price;
+  return amount.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function CandidateField({
   name,
   label,
@@ -33,6 +64,9 @@ function CandidateField({
   inputMode,
   maxLength,
   readOnly = false,
+  formatFinancial = false,
+  labelAddon,
+  helperError,
 }: {
   name: keyof ProductCandidateDraft;
   label: string;
@@ -44,31 +78,52 @@ function CandidateField({
   inputMode?: "decimal";
   maxLength?: number;
   readOnly?: boolean;
+  formatFinancial?: boolean;
+  labelAddon?: ReactNode;
+  helperError?: { id: string; message: string };
 }) {
   const id = candidateFieldId(name);
-  const errorId = `${id}-error`;
+  /* Display pt-BR (10,50) sobre um draft no formato que o gate aceita (10.50). */
+  const displayedValue = formatFinancial
+    ? formatPriceDisplay(value)
+    : value;
   const Control = multiline ? "textarea" : "input";
+  const errorId = `${id}-error`;
+  const helperErrorId = helperError?.id;
+  const describedBy =
+    [error ? errorId : undefined, helperErrorId].filter(Boolean).join(" ") ||
+    undefined;
   return (
     <div className={styles.field}>
-      <label htmlFor={id}>
-        {label}
-        {required && <span aria-hidden="true"> *</span>}
-      </label>
+      <div className={styles.fieldHead}>
+        <label htmlFor={id}>
+          {label}
+          {required && <span aria-hidden="true"> *</span>}
+        </label>
+        {labelAddon}
+      </div>
       <Control
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={describedBy}
         aria-invalid={Boolean(error)}
         id={id}
         inputMode={inputMode}
         name={name}
-        onChange={(
-          event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-        ) => onChange(event.target.value)}
+        onChange={(event) =>
+          onChange(
+            formatFinancial
+              ? digitsToPrice(event.target.value)
+              : event.target.value,
+          )
+        }
         readOnly={readOnly}
         required={required}
-        rows={multiline ? 4 : undefined}
-        maxLength={maxLength}
-        value={value}
+        value={displayedValue}
       />
+      {helperError && (
+        <p className={styles.error} id={helperError.id} role="alert">
+          {helperError.message}
+        </p>
+      )}
       {error && (
         <p className={styles.error} id={errorId} role="alert">
           {error}
@@ -166,6 +221,55 @@ function TagField({
   );
 }
 
+const currencyOptions = [
+  { value: "BRL", label: "R$ Reais" },
+  { value: "USD", label: "$ Dólar" },
+  { value: "EUR", label: "€ Euro" },
+];
+
+/* Mapeia o código ISO gravado no draft para o cifrão exibido no trigger. */
+const currencySymbols: Record<string, string> = {
+  BRL: "R$",
+  USD: "$",
+  EUR: "€",
+};
+
+function CurrencySelect({
+  value,
+  onChange,
+  error,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+}) {
+  const errorId = `${candidateFieldId("currency")}-error`;
+  return (
+    <Select
+      items={currencySymbols}
+      onValueChange={(next) => onChange(next ?? "")}
+      value={value || null}
+    >
+      <SelectTrigger
+        aria-describedby={error ? errorId : undefined}
+        aria-invalid={Boolean(error)}
+        aria-label="Moeda"
+        className={styles.currencyTrigger}
+        id={candidateFieldId("currency")}
+      >
+        <SelectValue placeholder="—" />
+      </SelectTrigger>
+      <SelectContent className={styles.currencyContent}>
+        {currencyOptions.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 type ProductCandidateModalProps = {
   candidate: ProductCandidateDraft;
   candidateErrors: ProductCandidateFieldErrors;
@@ -195,19 +299,14 @@ export function ProductCandidateModal({
 }: ProductCandidateModalProps) {
   const hasCandidateErrors = Object.keys(candidateErrors).length > 0;
   const isManual = mode === "manual";
-  const [quantity, setQuantity] = useState("20");
+  const [quantity, setQuantity] = useState(20);
   const [creatorFormat, setCreatorFormat] = useState("either");
   const [contentNotes, setContentNotes] = useState("");
-  const isCustomQuantity = !["10", "20", "30"].includes(quantity);
   const contentPreferences: ContentPreparationPreferences = {
-    targetContentCount: Number(quantity),
+    targetContentCount: quantity,
     creatorPresence: creatorFormat as ContentPreparationPreferences["creatorPresence"],
     ...(contentNotes.trim() ? { constraints: contentNotes.trim() } : {}),
   };
-  const customQuantityError = isCustomQuantity &&
-    (!Number.isInteger(Number(quantity)) || Number(quantity) < 1 || Number(quantity) > 50)
-    ? "Informe uma quantidade inteira entre 1 e 50."
-    : undefined;
   const canConfirm = !busy && !hasCandidateErrors &&
     (isManual || contentPreparationPreferencesAreValid(contentPreferences));
 
@@ -220,503 +319,382 @@ export function ProductCandidateModal({
     return () => window.cancelAnimationFrame(frame);
   }, [candidateDialogRef]);
 
-  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onCancel();
-      return;
-    }
-    if (event.key !== "Tab" || !candidateDialogRef.current) return;
-    const focusable = Array.from(
-      candidateDialogRef.current.querySelectorAll<HTMLElement>(
-        "button:not(:disabled), input:not(:disabled), textarea:not(:disabled), a[href], select:not(:disabled), [tabindex]:not([tabindex='-1'])",
-      ),
-    );
-    if (focusable.length === 0) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
   return (
-    <div className={styles.backdrop} role="presentation">
-      <div
-        aria-describedby="candidate-description"
+    <Dialog
+      disablePointerDismissal
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+      open
+    >
+      <DialogContent
+        aria-describedby="candidate-modal-description"
         aria-labelledby="candidate-title"
-        aria-modal="true"
-        className={styles.dialog}
-        onKeyDown={handleKeyDown}
+        className={`${styles.dialog} w-[min(100%,65vw)] sm:max-w-[80vw]`}
         ref={candidateDialogRef}
-        role="dialog"
+        showCloseButton={false}
       >
-        <div className={styles.header}>
-          <div>
-            <h2 data-candidate-focus id="candidate-title" tabIndex={-1}>
-              {isManual ? "Adicionar produto" : "Produto encontrado"}
-            </h2>
-          </div>
-          <button
-            aria-label="Fechar revisão"
-            className={styles.closeButton}
-            disabled={busy}
-            onClick={onCancel}
-            style={{ fontSize: 28, fontWeight: 400, lineHeight: 1, padding: 8 }}
-            type="button"
-          >
-            <span aria-hidden="true">×</span>
-          </button>
-        </div>
-        <p className={styles.disclaimer} id="candidate-description">
-          {isManual
-            ? "Informe e revise antes de confirmar. Campos sem evidência permanecem vazios até você preenchê-los."
-            : "Revise e complete as informações antes de continuar."}
-        </p>
-        {record?.gaps && record.gaps.length > 0 && (
-          <div className={styles.gaps} role="status">
-            <strong>Lacunas para revisar</strong>
-            <ul>
-              {record.gaps.map((gap) => (
-                <li key={gap}>{gap}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <div className={styles.body}>
-          <div className={styles.previewColumn}>
-            {previewImage ? (
-              <div
-                aria-label="Imagem de identificação do produto"
-                className={styles.preview}
+        <ScrollArea className={styles.scrollArea}>
+          <div className={styles.dialogInner}>
+            <div className={styles.header}>
+              <DialogTitle
+                className={styles.dialogTitle}
+                data-candidate-focus
+                id="candidate-title"
+                tabIndex={-1}
               >
-                {/* External image references are intentionally rendered as-is; next/image would require an unbounded remote host allowlist. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  alt={
-                    candidate.name
-                      ? `Imagem de ${candidate.name}`
-                      : "Imagem do produto encontrado"
-                  }
-                  loading="lazy"
-                  src={previewImage}
-                />
-              </div>
-            ) : (
-              <div
-                aria-label="Imagem de identificação do produto"
-                className={styles.previewEmpty}
+                {isManual ? "Adicionar produto" : "Produto encontrado"}
+              </DialogTitle>
+              <Button
+                aria-label="Fechar revisão"
+                className={styles.closeButton}
+                disabled={busy}
+                onClick={onCancel}
+                size="icon"
+                type="button"
+                variant="ghost"
               >
-                Sem imagem disponível
-              </div>
-            )}
-            <p className={styles.previewHint}>
-              Imagem usada somente para confirmar se o produto foi compreendido
-              corretamente.
-            </p>
-          </div>
-          <form
-            aria-busy={busy}
-            className={styles.form}
-            id="candidate-form"
-            noValidate
-            onSubmit={(event: FormEvent<HTMLFormElement>) => {
-              event.preventDefault();
-              onConfirm(isManual ? undefined : contentPreferences);
-            }}
-          >
-            {isManual ? (
-              <>
-                <CandidateField
-                  error={candidateErrors.name}
-                  label="Nome do produto"
-                  name="name"
-                  onChange={(value) => onChange("name", value)}
-                  required
-                  value={candidate.name}
-                />
-                <CandidateField
-                  error={candidateErrors.description}
-                  label="Descrição"
-                  multiline
-                  name="description"
-                  onChange={(value) => onChange("description", value)}
-                  required
-                  value={candidate.description}
-                />
-                <div className={styles.grid}>
-                  <CandidateField
-                    error={candidateErrors.category}
-                    label="Categoria"
-                    maxLength={120}
-                    name="category"
-                    onChange={(value) => onChange("category", value)}
-                    value={candidate.category}
-                  />
-                  <CandidateField
-                    error={candidateErrors.price}
-                    inputMode="decimal"
-                    label="Preço"
-                    name="price"
-                    onChange={(value) => onChange("price", value)}
-                    value={candidate.price}
-                  />
-                  <CandidateField
-                    error={candidateErrors.currency}
-                    label="Moeda"
-                    name="currency"
-                    onChange={(value) => onChange("currency", value)}
-                    value={candidate.currency}
-                  />
-                  <CandidateField
-                    error={candidateErrors.seller}
-                    label="Seller"
-                    maxLength={200}
-                    name="seller"
-                    onChange={(value) => onChange("seller", value)}
-                    value={candidate.seller}
-                  />
-                </div>
-                <CandidateField
-                  error={candidateErrors.features}
-                  label="Características — uma por linha"
-                  multiline
-                  name="features"
-                  onChange={(value) => onChange("features", value)}
-                  value={candidate.features}
-                />
-                <CandidateField
-                  error={candidateErrors.variants}
-                  label="Variantes — uma por linha"
-                  multiline
-                  name="variants"
-                  onChange={(value) => onChange("variants", value)}
-                  value={candidate.variants}
-                />
-                <CandidateField
-                  error={candidateErrors.images}
-                  label="Imagens — uma URL por linha"
-                  multiline
-                  name="images"
-                  onChange={(value) => onChange("images", value)}
-                  value={candidate.images}
-                />
-                <CandidateField
-                  error={candidateErrors.sourceUrl}
-                  label="URL do produto"
-                  maxLength={2048}
-                  name="sourceUrl"
-                  onChange={(value) => onChange("sourceUrl", value)}
-                  value={candidate.sourceUrl}
-                />
-              </>
-            ) : (
-              <>
-                <div className={styles.grid}>
-                  <CandidateField
-                    error={candidateErrors.name}
-                    label="Nome do produto"
-                    name="name"
-                    onChange={(value) => onChange("name", value)}
-                    required
-                    value={candidate.name}
-                  />
-                  <CandidateField
-                    error={candidateErrors.brand}
-                    label="Marca"
-                    name="brand"
-                    onChange={(value) => onChange("brand", value)}
-                    value={candidate.brand}
-                  />
-                  <CandidateField
-                    error={candidateErrors.category}
-                    label="Categoria"
-                    maxLength={120}
-                    name="category"
-                    onChange={(value) => onChange("category", value)}
-                    value={candidate.category}
-                  />
-                  <CandidateField
-                    error={candidateErrors.price}
-                    inputMode="decimal"
-                    label="Preço"
-                    name="price"
-                    onChange={(value) => onChange("price", value)}
-                    value={candidate.price}
-                  />
-                  <CandidateField
-                    error={candidateErrors.currency}
-                    label="Moeda"
-                    name="currency"
-                    onChange={(value) => onChange("currency", value)}
-                    value={candidate.currency}
-                  />
-                  <CandidateField
-                    error={candidateErrors.seller}
-                    label="Seller"
-                    maxLength={200}
-                    name="seller"
-                    onChange={(value) => onChange("seller", value)}
-                    value={candidate.seller}
-                  />
-                </div>
-                <CandidateField
-                  error={candidateErrors.description}
-                  label="Descrição"
-                  multiline
-                  name="description"
-                  onChange={(value) => onChange("description", value)}
-                  required
-                  value={candidate.description}
-                />
-                <TagField
-                  error={candidateErrors.features}
-                  label="Características"
-                  name="features"
-                  onChange={(value) => onChange("features", value)}
-                  value={candidate.features}
-                />
-                <CandidateField
-                  error={candidateErrors.variants}
-                  label="Variantes — uma por linha"
-                  multiline
-                  name="variants"
-                  onChange={(value) => onChange("variants", value)}
-                  value={candidate.variants}
-                />
-                <CandidateField
-                  error={candidateErrors.images}
-                  label="Imagens — uma URL por linha"
-                  multiline
-                  name="images"
-                  onChange={(value) => onChange("images", value)}
-                  value={candidate.images}
-                />
-              </>
-            )}
-            {error && (
-              <p className={styles.error} role="alert">
-                {error}
-              </p>
-            )}
-            {hasCandidateErrors && (
-              <p
-                className={styles.help}
-                id="candidate-validation-help"
-                role="alert"
-              >
-                Corrija os fatos destacados antes de continuar.
-              </p>
-            )}
-          </form>
-        </div>
-        {!isManual && (
-          <section
-            aria-labelledby="content-preparation-title"
-            style={{
-              borderTop: "1px solid var(--color-border)",
-              paddingTop: 20,
-            }}
-          >
-            <h3
-              id="content-preparation-title"
-              style={{
-                color: "var(--color-text)",
-                fontSize: 16,
-                lineHeight: "22px",
-                margin: 0,
-              }}
-            >
-              Preparação dos conteúdos
-            </h3>
-            <p
-              style={{
-                color: "var(--color-text-secondary)",
-                fontSize: 13,
-                lineHeight: "18px",
-                margin: "4px 0 16px",
-              }}
-            >
-              Defina as preferências para geração inicial dos briefings.
-            </p>
-            <div
-              className={styles.preparationGrid}
-            >
-              <fieldset
-                style={{ border: 0, margin: 0, minWidth: 0, padding: 0 }}
-              >
-                <legend
-                  style={{
-                    color: "var(--color-text)",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    lineHeight: "18px",
-                    marginBottom: 8,
-                  }}
-                >
-                  Quantidade inicial
-                </legend>
-                <div
-                  aria-label="Quantidade inicial"
-                  className={`${styles.preparationOptionGroup} ${styles.preparationQuantityOptions}`}
-                  role="group"
-                >
-                  {["10", "20", "30", "other"].map((option) => (
-                    <button
-                      aria-pressed={
-                        option === "other"
-                          ? isCustomQuantity
-                          : quantity === option
-                      }
-                      className={
-                        (
-                          option === "other"
-                            ? isCustomQuantity
-                            : quantity === option
-                        )
-                          ? styles.primaryButton
-                          : styles.secondaryButton
-                      }
-                      key={option}
-                      onClick={() =>
-                        setQuantity(option === "other" ? "" : option)
-                      }
-                      type="button"
-                    >
-                      {option === "other" ? "Outro" : option}
-                    </button>
+                <XIcon aria-hidden="true" />
+              </Button>
+            </div>
+            {record?.gaps && record.gaps.length > 0 && (
+              <div className={styles.gaps} role="status">
+                <strong>Lacunas para revisar</strong>
+                <ul>
+                  {record.gaps.map((gap) => (
+                    <li key={gap}>{gap}</li>
                   ))}
-                </div>
-                {isCustomQuantity && (
-                  <input
-                    aria-label="Quantidade personalizada"
-                    aria-describedby={customQuantityError ? "target-content-count-error" : undefined}
-                    aria-invalid={Boolean(customQuantityError)}
-                    max={50}
-                    min={1}
-                    name="targetContentCount"
-                    onChange={(event) => setQuantity(event.target.value)}
-                    style={{
-                      background: "var(--color-surface)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: 8,
-                      color: "var(--color-text)",
-                      font: "inherit",
-                      marginTop: 8,
-                      minHeight: 44,
-                      padding: "10px 12px",
-                      width: "100%",
-                    }}
-                    required
-                    type="number"
-                    value={quantity}
-                  />
+                </ul>
+              </div>
+            )}
+            <div className={styles.body}>
+              <div className={styles.previewColumn}>
+                {previewImage ? (
+                  <div
+                    aria-label="Imagem de identificação do produto"
+                    className={styles.preview}
+                  >
+                    {/* External image references are intentionally rendered as-is; next/image would require an unbounded remote host allowlist. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      alt={
+                        candidate.name
+                          ? `Imagem de ${candidate.name}`
+                          : "Imagem do produto encontrado"
+                      }
+                      loading="lazy"
+                      src={previewImage}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    aria-label="Imagem de identificação do produto"
+                    className={styles.previewEmpty}
+                  >
+                    Sem imagem disponível
+                  </div>
                 )}
-                {customQuantityError && (
-                  <p className={styles.error} id="target-content-count-error" role="alert">
-                    {customQuantityError}
+                {/* <p className={styles.previewHint}>
+                  Imagem usada somente para confirmar se o produto foi compreendido
+                  corretamente.
+                </p> */}
+              </div>
+              <form
+                aria-busy={busy}
+                className={styles.form}
+                id="candidate-form"
+                noValidate
+                onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                  event.preventDefault();
+                  onConfirm(isManual ? undefined : contentPreferences);
+                }}
+              >
+                {isManual ? (
+                  <>
+                    <CandidateField
+                      error={candidateErrors.name}
+                      label="Nome do produto"
+                      name="name"
+                      onChange={(value) => onChange("name", value)}
+                      required
+                      value={candidate.name}
+                    />
+                    <CandidateField
+                      error={candidateErrors.description}
+                      label="Descrição"
+                      multiline
+                      name="description"
+                      onChange={(value) => onChange("description", value)}
+                      required
+                      value={candidate.description}
+                    />
+                    <div className={styles.grid}>
+                      <CandidateField
+                        error={candidateErrors.category}
+                        label="Categoria"
+                        maxLength={120}
+                        name="category"
+                        onChange={(value) => onChange("category", value)}
+                        value={candidate.category}
+                      />
+                      <CandidateField
+                        error={candidateErrors.price}
+                        helperError={
+                          candidateErrors.currency
+                            ? {
+                                id: `${candidateFieldId("currency")}-error`,
+                                message: candidateErrors.currency,
+                              }
+                            : undefined
+                        }
+                        formatFinancial
+                        inputMode="decimal"
+                        label="Preço"
+                        labelAddon={
+                          <CurrencySelect
+                            error={candidateErrors.currency}
+                            onChange={(value) => onChange("currency", value)}
+                            value={candidate.currency}
+                          />
+                        }
+                        name="price"
+                        onChange={(value) => onChange("price", value)}
+                        value={candidate.price}
+                      />
+                    </div>
+                    <CandidateField
+                      error={candidateErrors.features}
+                      label="Características — uma por linha"
+                      multiline
+                      name="features"
+                      onChange={(value) => onChange("features", value)}
+                      value={candidate.features}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <CandidateField
+                      error={candidateErrors.name}
+                      label="Nome do produto"
+                      name="name"
+                      onChange={(value) => onChange("name", value)}
+                      required
+                      value={candidate.name}
+                    />
+                    <CandidateField
+                      error={candidateErrors.description}
+                      label="Descrição"
+                      multiline
+                      name="description"
+                      onChange={(value) => onChange("description", value)}
+                      required
+                      value={candidate.description}
+                    />
+                    <div className={styles.grid}>
+                      <CandidateField
+                        error={candidateErrors.category}
+                        label="Categoria"
+                        maxLength={120}
+                        name="category"
+                        onChange={(value) => onChange("category", value)}
+                        value={candidate.category}
+                      />
+                      <CandidateField
+                        error={candidateErrors.price}
+                        helperError={
+                          candidateErrors.currency
+                            ? {
+                                id: `${candidateFieldId("currency")}-error`,
+                                message: candidateErrors.currency,
+                              }
+                            : undefined
+                        }
+                        formatFinancial
+                        inputMode="decimal"
+                        label="Preço"
+                        labelAddon={
+                          <CurrencySelect
+                            error={candidateErrors.currency}
+                            onChange={(value) => onChange("currency", value)}
+                            value={candidate.currency}
+                          />
+                        }
+                        name="price"
+                        onChange={(value) => onChange("price", value)}
+                        value={candidate.price}
+                      />
+                    </div>
+                    <CandidateField
+                      error={candidateErrors.features}
+                      label="Características — uma por linha"
+                      multiline
+                      name="features"
+                      onChange={(value) => onChange("features", value)}
+                      value={candidate.features}
+                    />
+                  </>
+                )}
+                {error && (
+                  <p className={styles.error} role="alert">
+                    {error}
                   </p>
                 )}
-              </fieldset>
-              <fieldset
-                style={{ border: 0, margin: 0, minWidth: 0, padding: 0 }}
+              </form>
+            </div>
+            {(
+              <section
+                aria-labelledby="content-preparation-title"
+                style={{
+                  borderTop: "1px solid var(--color-border)",
+                  paddingTop: 20,
+                }}
               >
-                <legend
+                <h3
+                  id="content-preparation-title"
                   style={{
                     color: "var(--color-text)",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    lineHeight: "18px",
-                    marginBottom: 8,
+                    fontSize: 16,
+                    lineHeight: "22px",
+                    margin: 0,
                   }}
                 >
-                  Formato do creator
-                </legend>
-                <div
-                  aria-label="Formato do creator"
-                  className={`${styles.preparationOptionGroup} ${styles.preparationCreatorOptions}`}
-                  role="group"
-                >
-                  {["on_camera", "hands_only_product", "either"].map(
-                    (option) => (
-                      <button
-                        aria-pressed={creatorFormat === option}
-                        className={
-                          creatorFormat === option
-                            ? styles.primaryButton
-                            : styles.secondaryButton
-                        }
-                        key={option}
-                        onClick={() => setCreatorFormat(option)}
-                        type="button"
-                      >
-                        {option === "on_camera"
-                          ? "Em câmera"
-                          : option === "hands_only_product"
-                            ? "mão e produto"
-                            : "Tanto faz"}
-                      </button>
-                    ),
-                  )}
-                </div>
-              </fieldset>
-            </div>
-            <div className={styles.field} style={{ marginTop: 16 }}>
-              <label htmlFor="content-preparation-notes">
-                Observações ou restrições{" "}
-                <span
+                  Preparação dos conteúdos
+                </h3>
+                <p
                   style={{
                     color: "var(--color-text-secondary)",
-                    fontWeight: 400,
+                    fontSize: 13,
+                    lineHeight: "18px",
+                    margin: "4px 0 16px",
                   }}
                 >
-                  (opcional)
-                </span>
-              </label>
-              <textarea
-                id="content-preparation-notes"
-                maxLength={300}
-                name="constraints"
-                onChange={(event) => setContentNotes(event.target.value)}
-                placeholder="Ex.: evitar gírias, não mencionar concorrentes, focar em benefícios..."
-                rows={3}
-                value={contentNotes}
-              />
+                  Defina as preferências para geração inicial dos briefings.
+                </p>
+                <div
+                  className={styles.preparationGrid}
+                >
+                  <fieldset
+                    style={{ border: 0, margin: 0, minWidth: 0, padding: 0 }}
+                  >
+                    <legend
+                      style={{
+                        color: "var(--color-text)",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        lineHeight: "18px",
+                        marginBottom: 8,
+                      }}
+                    >
+                      Quantidade inicial de conteúdos
+                    </legend>
+                    <div className={styles.preparationQuantityOptions}>
+                      <span aria-hidden="true" className={styles.quantityValue}>
+                        {quantity}
+                      </span>
+                      <Slider
+                        aria-label="Quantidade inicial de conteúdos"
+                        max={30}
+                        min={1}
+                        onValueChange={(value) =>
+                          setQuantity(
+                            Array.isArray(value) ? value[0] ?? quantity : quantity,
+                          )
+                        }
+                        step={1}
+                        value={[quantity]}
+                      />
+                      <div aria-hidden="true" className={styles.quantityBounds}>
+                        <span>1</span>
+                        <span>30</span>
+                      </div>
+                    </div>
+                  </fieldset>
+                  <fieldset
+                    style={{ border: 0, margin: 0, minWidth: 0, padding: 0 }}
+                  >
+                    <legend
+                      style={{
+                        color: "var(--color-text)",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        lineHeight: "18px",
+                        marginBottom: 8,
+                      }}
+                    >
+                      Formato do creator
+                    </legend>
+                    <div
+                      aria-label="Formato do creator"
+                      className={`${styles.preparationOptionGroup} ${styles.preparationCreatorOptions}`}
+                      role="group"
+                    >
+                      {["on_camera", "hands_only_product", "either"].map(
+                        (option) => (
+                          <Button
+                            aria-pressed={creatorFormat === option}
+                            key={option}
+                            onClick={() => setCreatorFormat(option)}
+                            type="button"
+                            variant={creatorFormat === option ? "default" : "outline"}
+                          >
+                            {option === "on_camera"
+                              ? "Em câmera"
+                              : option === "hands_only_product"
+                                ? "mão e produto"
+                                : "Tanto faz"}
+                          </Button>
+                        ),
+                      )}
+                    </div>
+                  </fieldset>
+                </div>
+                <div className={styles.field} style={{ marginTop: 16 }}>
+                  <label htmlFor="content-preparation-notes">
+                    Observações ou restrições{" "}
+                    <span
+                      style={{
+                        color: "var(--color-text-secondary)",
+                        fontWeight: 400,
+                      }}
+                    >
+                      (opcional)
+                    </span>
+                  </label>
+                  <textarea
+                    id="content-preparation-notes"
+                    maxLength={300}
+                    name="constraints"
+                    onChange={(event) => setContentNotes(event.target.value)}
+                    placeholder="Ex.: evitar gírias, não mencionar concorrentes, focar em benefícios..."
+                    rows={3}
+                    value={contentNotes}
+                  />
+                </div>
+              </section>
+            )}
+            <div className={styles.actions}>
+              <Button
+                disabled={busy}
+                onClick={onCancel}
+                type="button"
+                variant="outline"
+              >
+                Cancelar
+              </Button>
+              <Button
+                aria-describedby={
+                  hasCandidateErrors ? "candidate-validation-help" : undefined
+                }
+                disabled={!canConfirm}
+                form="candidate-form"
+                type="submit"
+              >
+                {busy ? "Continuar — confirmando" : "Continuar"}
+              </Button>
             </div>
-          </section>
-        )}
-        <div className={styles.actions}>
-          <button
-            className={styles.secondaryButton}
-            disabled={busy}
-            onClick={onCancel}
-            type="button"
-          >
-            Cancelar
-          </button>
-          <button
-            aria-describedby={
-              hasCandidateErrors ? "candidate-validation-help" : undefined
-            }
-            className={styles.primaryButton}
-            disabled={!canConfirm}
-            form="candidate-form"
-            type="submit"
-          >
-            {busy ? "Continuar — confirmando" : "Continuar"}
-          </button>
-        </div>
-        {isManual && (
-          <p className={styles.source}>
-            <strong>Origem</strong>{" "}
-            <span>{candidate.sourceUrl || "Não informada"}</span>
-          </p>
-        )}
-      </div>
-    </div>
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
   );
 }

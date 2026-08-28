@@ -1,0 +1,49 @@
+.region {
+  display: grid;
+  gap: 24px;
+}
+
+.srOnly {
+  block-size: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.line,
+.card {
+  background: var(--color-surface-secondary);
+}
+
+.line {
+  block-size: 40px;
+  inline-size: min(100%, 280px);
+}
+
+.card {
+  block-size: 180px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 767px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card {
+    block-size: 140px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
