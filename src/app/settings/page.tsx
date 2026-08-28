@@ -7,7 +7,12 @@ export default async function SettingsPage() {
   const session = await requireSession();
 
   return (
-    <ProductShell active="settings" eyebrow="Configurações" title="Sua conta">
+    <ProductShell
+      active="settings"
+      eyebrow="Configurações"
+      title="Sua conta"
+      user={{ email: session.email }}
+    >
       <SettingsView email={session.email} />
     </ProductShell>
   );

@@ -1,27 +1,31 @@
-.backdrop {
-  align-items: center;
-  background: color-mix(in srgb, var(--color-text) 28%, transparent);
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  padding: 16px;
-  position: fixed;
-  z-index: 10;
-}
+/* Modal de candidato: Dialog + ScrollArea shadcn. Tokens em globals.css. */
 
 .dialog {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
   border-radius: 16px;
-  box-shadow: 0 18px 48px color-mix(in srgb, var(--color-text) 18%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* Altura definida (não max-height): % do viewport do ScrollArea exige
+     cadeia de altura definida; ambos os modos do formulário são longos. */
+  height: calc(90dvh - 32px);
+  padding: 32px;
+}
+
+.scrollArea {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.scrollArea > [data-slot="scroll-area-viewport"] {
+  overscroll-behavior: contain;
+}
+
+/* Faixa própria para a scrollbar não cobrir o botão Fechar. */
+.dialogInner {
   display: grid;
   gap: 20px;
-  margin: 0;
-  max-height: calc(90dvh - 32px);
-  max-width: 80vw;
-  overflow-y: auto;
-  padding: 32px;
-  width: min(100%, 65vw);
+  padding-inline-end: 18px;
+  padding-inline-start: 6px;
 }
 
 .header {
@@ -31,15 +35,7 @@
   justify-content: space-between;
 }
 
-.eyebrow {
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 16px;
-  margin: 0;
-}
-
-.header h2 {
+.dialogTitle {
   color: var(--color-text);
   font-size: 24px;
   font-weight: 600;
@@ -48,22 +44,7 @@
 }
 
 .closeButton {
-  background: transparent;
-  border: 0;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  min-height: 44px;
-  padding: 10px 0 10px 12px;
-}
-
-.closeButton:hover,
-.closeButton:focus-visible {
-  color: var(--color-text);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  margin-inline-start: auto;
 }
 
 .disclaimer,
@@ -159,6 +140,15 @@
   line-height: 18px;
 }
 
+.fieldHead {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  /* Uniformiza a altura do header em todos os campos: os inputs das
+     colunas da grade ficam alinhados mesmo quando um tem addon. */
+  min-height: 32px;
+}
+
 .field input,
 .field textarea {
   background: var(--color-surface);
@@ -174,6 +164,19 @@
 .field textarea {
   min-height: 104px;
   resize: vertical;
+}
+
+/* Item destacado (foco/hover) com texto branco padrão sobre o brand. */
+.currencyContent [data-slot="select-item"]:focus,
+.currencyContent [data-slot="select-item"][data-highlighted] {
+  color: var(--color-on-action);
+}
+
+.currencyTrigger {
+  block-size: 32px;
+  inline-size: auto;
+  min-inline-size: 56px;
+  padding-block: 4px;
 }
 
 .tagEditor {
@@ -262,7 +265,23 @@
 }
 
 .preparationQuantityOptions {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: grid;
+  gap: 6px;
+}
+
+.quantityValue {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.quantityBounds {
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  line-height: 16px;
 }
 
 .preparationCreatorOptions {
@@ -278,56 +297,6 @@
   padding-top: 20px;
 }
 
-.primaryButton,
-.secondaryButton {
-  align-items: center;
-  border-radius: 8px;
-  cursor: pointer;
-  display: inline-flex;
-  font: inherit;
-  font-weight: 600;
-  justify-content: center;
-  min-height: 44px;
-  padding: 10px 16px;
-  text-decoration: none;
-}
-
-.primaryButton {
-  background: var(--color-action);
-  border: 1px solid var(--color-action);
-  color: #fff;
-}
-
-.secondaryButton {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
-}
-
-.primaryButton:hover,
-.primaryButton:focus-visible {
-  background: color-mix(in srgb, var(--color-action) 88%, #000);
-}
-
-.secondaryButton:hover,
-.secondaryButton:focus-visible {
-  border-color: var(--color-brand);
-}
-
-.primaryButton:disabled,
-.secondaryButton:disabled,
-.closeButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.65;
-}
-
-input:focus-visible,
-textarea:focus-visible,
-button:focus-visible {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 3px;
-}
-
 .source {
   border-top: 1px solid var(--color-border);
   font-size: 13px;
@@ -340,17 +309,20 @@ button:focus-visible {
   color: var(--color-text);
 }
 
-@media (max-width: 767px) {
-  .backdrop {
-    align-items: flex-end;
-    padding: 8px 0 0;
-  }
+/* Mobile: dialog assume apresentação de sheet de base, confirmação
+   humana permanece modal. */
 
-  .dialog {
+@media (max-width: 767px) {
+  .dialog[data-slot="dialog-content"] {
+    align-items: stretch;
     border-radius: 16px 16px 0 0;
-    max-height: calc(100dvh - 8px);
+    height: calc(100dvh - 8px);
+    inset: 0;
     max-width: 100%;
     padding: 24px 16px calc(24px + var(--safe-bottom));
+    /* Não usar translate 0 0: identidade é removida pelo pipeline CSS,
+       reativando a centralização -50% das utilities. */
+    translate: 0 8px;
     width: 100%;
   }
 
@@ -380,9 +352,6 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .preparationQuantityOptions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
   .preparationCreatorOptions {
     grid-template-columns: 1fr;
@@ -392,15 +361,14 @@ button:focus-visible {
     align-items: stretch;
     flex-direction: column-reverse;
   }
-
-  .primaryButton,
-  .secondaryButton {
-    width: 100%;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dialog * {
+  .dialog,
+  .dialog *,
+  .dialogInner,
+  .dialogInner * {
+    animation-duration: 0.01ms;
     scroll-behavior: auto;
     transition-duration: 0.01ms;
   }
