@@ -1,7 +1,14 @@
 import { requireSession } from "@/modules/identity/application/require-session";
-import { redirect } from "next/navigation";
+
+import { ProductCreate } from "@/components/products/product-create";
+import { ProductShell } from "@/components/products/product-shell";
 
 export default async function NewProductPage() {
   await requireSession();
-  redirect("/today");
+
+  return (
+    <ProductShell active="products" eyebrow="Produtos" title="Adicionar produto">
+      <ProductCreate />
+    </ProductShell>
+  );
 }

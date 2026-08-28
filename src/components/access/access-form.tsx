@@ -107,7 +107,7 @@ export function AccessForm({ sessionExpired }: AccessFormProps) {
           </button>
         </div>
 
-        <form aria-busy={pending} className={styles.form} onSubmit={submit} noValidate>
+        <form aria-busy={pending} className={styles.form} method="post" onSubmit={submit} noValidate>
           {error && (
             <p className={styles.error} role="alert">
               {error}
