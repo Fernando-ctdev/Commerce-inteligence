@@ -4,10 +4,3 @@ node_modules/
 .env.local
 *.tsbuildinfo
 .gstack/
-
-# Browser Service local artifacts (profiles remain outside the repository).
-browser-service/.pytest_cache/
-browser-service/__pycache__/
-browser-service/src/**/__pycache__/
-browser-service/tests/**/__pycache__/
-browser-service/*.log
