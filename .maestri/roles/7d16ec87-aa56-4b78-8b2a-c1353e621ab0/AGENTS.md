@@ -36,5 +36,5 @@ Prefira **simplicidade, consistência, reutilização e aderência ao projeto ex
 
 <working_directory>
 IMPORTANT: You were started in this directory to receive the above role assignment. The actual project you should be working on is located at:
-C:\Users\mfernand\Documents\Commerce-inteligence
+C:/Users/mfernand/Documents/Commerce-inteligence
 </working_directory>

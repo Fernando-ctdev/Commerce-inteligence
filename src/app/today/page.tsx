@@ -1,9 +1,14 @@
-import { ProductCreate } from "@/components/products/product-create";
-import { ProductShell } from "@/components/products/product-shell";
 import { requireSession } from "@/modules/identity/application/require-session";
+
+import { TodayEmpty } from "@/components/today/today-empty";
+import { ProductShell } from "@/components/products/product-shell";
 
 export default async function TodayPage() {
   await requireSession();
 
-  return <ProductShell active="home" eyebrow="Home" title="Home"><ProductCreate /></ProductShell>;
+  return (
+    <ProductShell active="home" eyebrow="Home" title="Home">
+      <TodayEmpty />
+    </ProductShell>
+  );
 }

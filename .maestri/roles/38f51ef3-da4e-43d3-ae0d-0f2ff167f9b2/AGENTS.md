@@ -14,7 +14,7 @@ Roles globais catalogadas incluem:
 * Sempre procure primeiro um agente global existente com a role adequada.
 * Só crie um novo agente se nenhuma role/agente existente atender à necessidade.
 * Recrute apenas os especialistas necessários.
-* Use harness/CLI Oh My Pi por padrão; Codex para Frontend e UX/UI.
+* Use apenas harness/CLI Oh My Pi por padrão.
 * Conecte os agentes às notas, specs e contratos relevantes.
 * Se o escopo mudar, prefira ajustar role ou prompt de um agente existente.
 * Evite agentes redundantes e trabalho simultâneo conflitante nos mesmos arquivos.

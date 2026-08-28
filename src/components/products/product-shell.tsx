@@ -1,9 +1,6 @@
-"use client";
-
 import Link from "next/link";
-import { CalendarDays, Clapperboard, Home, Menu, Settings2, Tag, type LucideIcon, UserPen, Trophy, X } from "lucide-react";
+import { CalendarDays, Clapperboard, Home, Settings2, Tag, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
 
 import styles from "./product-shell.module.css";
 
@@ -12,7 +9,7 @@ type ProductShellProps = {
   title: string;
   action?: ReactNode;
   children: ReactNode;
-  active?: "home" | "products";
+  active?: "home" | "products" | "settings";
 };
 
 const destinations = [
@@ -20,12 +17,10 @@ const destinations = [
   { key: "products", label: "Produtos", href: "/products", icon: Tag },
   { key: "studio", label: "Estúdio", icon: Clapperboard },
   { key: "agenda", label: "Agenda", icon: CalendarDays },
-  { key: "top-conteudos", label: "Virais", icon: Trophy },
-  { key: "influencer", label: "IA Influencer", icon: UserPen },
-  { key: "settings", label: "Configurações", icon: Settings2 },
+  { key: "settings", label: "Configurações", href: "/settings", icon: Settings2 },
 ];
 
-function Navigation({ active, compact = false }: { active: "home" | "products"; compact?: boolean }) {
+function Navigation({ active, compact = false }: { active: "home" | "products" | "settings"; compact?: boolean }) {
   return (
     <nav aria-label="Navegação principal" className={styles.nav}>
       {destinations.map((destination) => {
@@ -39,13 +34,13 @@ function Navigation({ active, compact = false }: { active: "home" | "products"; 
           </>
         );
 
-        const tooltipProps = compact ? { "aria-label": destination.label, "data-tooltip": destination.label, title: destination.label } : {};
+        const tooltipProps = compact ? { "data-tooltip": destination.label, title: destination.label } : {};
         return destination.href ? (
-          <Link aria-current={isActive ? "page" : undefined} className={className} href={destination.href} key={destination.label} {...tooltipProps}>
+          <Link aria-current={isActive ? "page" : undefined} aria-label={compact ? destination.label : undefined} className={className} href={destination.href} key={destination.label} {...tooltipProps}>
             {content}
           </Link>
         ) : (
-          <span aria-disabled="true" className={className} key={destination.label} role={compact ? "link" : undefined} tabIndex={compact ? 0 : undefined} {...tooltipProps}>
+          <span aria-disabled="true" className={className} key={destination.label} {...tooltipProps}>
             {content}
           </span>
         );
@@ -55,31 +50,6 @@ function Navigation({ active, compact = false }: { active: "home" | "products"; 
 }
 
 export function ProductShell({ active = "products", eyebrow = "Produtos", title, action, children }: ProductShellProps) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const menuPanelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!mobileMenuOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const frame = window.requestAnimationFrame(() => menuPanelRef.current?.querySelector<HTMLElement>("a, [tabindex='0']")?.focus());
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeMobileMenu();
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      document.removeEventListener("keydown", closeOnEscape);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [mobileMenuOpen]);
-
-  function closeMobileMenu() {
-    setMobileMenuOpen(false);
-    requestAnimationFrame(() => menuButtonRef.current?.focus());
-  }
-
   return (
     <div className={styles.shell}>
       <aside aria-label="Navegação lateral" className={styles.sidebar}>
@@ -109,19 +79,32 @@ export function ProductShell({ active = "products", eyebrow = "Produtos", title,
             <p className={styles.eyebrow}>{eyebrow}</p>
             <h1 className={styles.title}>{title}</h1>
           </div>
-          <button aria-controls="mobile-navigation" aria-expanded={mobileMenuOpen} aria-label={mobileMenuOpen ? "Fechar menu" : "Abrir menu"} className={styles.mobileMenuButton} onClick={() => setMobileMenuOpen((current) => !current)} ref={menuButtonRef} title={mobileMenuOpen ? "Fechar menu" : "Abrir menu"} type="button">
-            {mobileMenuOpen ? <X aria-hidden="true" size={22} strokeWidth={1.8} /> : <Menu aria-hidden="true" size={22} strokeWidth={1.8} />}
-          </button>
         </header>
 
         <main className={styles.main}>{children}</main>
 
-        {mobileMenuOpen && <div className={styles.mobileMenuOverlay} onClick={closeMobileMenu} role="presentation">
-          <div aria-label="Navegação mobile" aria-modal="true" className={styles.mobileMenuPanel} id="mobile-navigation" onClick={(event) => event.stopPropagation()} ref={menuPanelRef} role="dialog">
-            <div className={styles.mobileMenuHeader}><strong>Menu</strong><button aria-label="Fechar menu" className={styles.mobileMenuClose} onClick={closeMobileMenu} type="button"><X aria-hidden="true" size={20} strokeWidth={1.8} /></button></div>
-            <Navigation active={active} />
-          </div>
-        </div>}
+        <nav aria-label="Navegação principal" className={styles.bottomNav}>
+          {destinations.map((destination) => {
+            const isActive = destination.key === active;
+            const Icon = destination.icon as LucideIcon;
+            const className = isActive ? `${styles.bottomNavLink} ${styles.bottomNavActive}` : destination.href ? styles.bottomNavLink : styles.bottomNavDisabled;
+            const item = (
+              <>
+                <Icon aria-hidden="true" size={20} strokeWidth={1.8} />
+                <span>{destination.label}</span>
+              </>
+            );
+            return destination.href ? (
+              <Link aria-current={isActive ? "page" : undefined} className={className} href={destination.href} key={destination.label}>
+                {item}
+              </Link>
+            ) : (
+              <span aria-disabled="true" className={className} key={destination.label}>
+                {item}
+              </span>
+            );
+          })}
+        </nav>
       </div>
     </div>
   );

@@ -223,6 +223,26 @@ test("respostas de erro não vazam cookie, token ou id de sessão", async (t) =>
   }
 });
 
+test("sessão apontando para tenant de outro usuário é rejeitada (isolamento)", async (t) => {
+  if (!dbUp) return t.skip();
+  const emailA = email();
+  const emailB = email();
+  const tokenA = await registerUser(emailA, "senha-segura-123");
+  const tokenB = await registerUser(emailB, "senha-segura-123");
+  const userA = await prisma.user.findUnique({ where: { email: emailA }, include: { tenant: true } });
+  const tenantB = await prisma.tenant.findFirst({ where: { user: { email: emailB } } });
+  assert.ok(userA && tenantB);
+
+  // nenhuma rota de escrita produz esta associação cruzada; simula dado corrompido/legado
+  await prisma.session.updateMany({
+    where: { userId: userA.id },
+    data: { tenantId: tenantB.id },
+  });
+
+  assert.equal(await resolveSession(tokenA), null); // tenant da sessão não pertence ao usuário
+  assert.ok(await resolveSession(tokenB)); // controle: mesma função aceita associação sã
+});
+
 test("teardown: limpeza de sessões não remove sessões válidas", async (t) => {
   if (!dbUp) return t.skip();
   const e = email();

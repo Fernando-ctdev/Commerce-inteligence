@@ -103,7 +103,8 @@ export async function loginUser(
 }
 
 /**
- * Resolve sessão → usuário + tenant. Inválida/expirada/revogada → null.
+ * Resolve sessão → usuário + tenant. Inválida/expirada/revogada ou tenant não
+ * pertencente ao usuário da sessão (associação cruzada) → null.
  * Somente leitura: resolução nunca rotaciona nem revoga (diretriz de integração —
  * rotação/revogação acontecem só nos handlers que emitem Set-Cookie).
  */
@@ -113,7 +114,7 @@ export async function resolveSession(token: string): Promise<AuthContext | null>
     include: { user: { include: { tenant: true } } },
   });
   if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now()) return null;
-  if (!session.user.tenant) return null;
+  if (!session.user.tenant || session.user.tenant.id !== session.tenantId) return null;
   return {
     userId: session.userId,
     tenantId: session.tenantId,

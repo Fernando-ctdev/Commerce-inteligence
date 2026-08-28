@@ -1,0 +1,104 @@
+.surface {
+  display: grid;
+}
+
+.section {
+  display: grid;
+  gap: 12px;
+  padding-block: 24px;
+}
+
+.section + .section {
+  border-block-start: 1px solid var(--color-border);
+}
+
+.eyebrow {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  margin: 0;
+}
+
+.section h2 {
+  color: var(--color-text);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+  margin: 0;
+}
+
+.section > p:not(.eyebrow) {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+}
+
+.facts {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.fact {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: 4px;
+  padding-block: 12px;
+}
+
+.fact:first-child {
+  border-top: 0;
+  padding-block-start: 0;
+}
+
+.fact dt {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.fact dd {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  margin: 0;
+}
+
+.error {
+  border-inline-start: 3px solid var(--color-danger);
+  color: var(--color-danger);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+  padding-inline-start: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field label {
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+
+.fieldHelp {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  margin: 0;
+}
+
+.identity {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
