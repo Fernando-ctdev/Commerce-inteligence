@@ -115,6 +115,8 @@ TESTES + VALIDAÇÃO + SEGURANÇA
   ↓
 REVIEW
   ↓
+CONVERGÊNCIA
+  ↓
 MERGE
   ↺ próximo Slice
 ```
@@ -143,9 +145,43 @@ Primeiro confira conformidade com a SPEC.
 
 Depois confira qualidade de código, arquitetura, Principles, Design e segurança aplicáveis.
 
+Review não é autorização automática para Merge. Quando houver desvio, identifique primeiro em qual nível ele nasceu.
+
+### Convergência
+
+Convergência é o ciclo de correção disparado pelo Review para fazer implementação e fontes canônicas voltarem a concordar.
+
+Roteie cada desvio para a fonte correta:
+
+```text
+desvio de implementação
+→ IMPLEMENTAÇÃO
+
+desvio do plano técnico
+→ PLAN
+
+desvio de comportamento do slice
+→ SPEC
+
+descoberta arquitetural real
+→ SYSTEM DESIGN / ADR aplicável
+
+descoberta de UX/UI real
+→ DESIGN
+
+descoberta funcional ou de produto real
+→ PRD principal ou PRD especializado aplicável
+```
+
+Não altere uma fonte superior apenas para justificar código já escrito. Se o código contrariar uma decisão aprovada e nenhuma nova decisão tiver surgido, corrija o nível inferior.
+
+Quando uma fonte superior realmente mudar, revise os artefatos derivados afetados antes de continuar. Depois da correção, execute novamente os gates impactados e faça novo Review.
+
+Repita até não existir divergência relevante entre intenção, especificação, plano, implementação e evidência de verificação.
+
 ### Merge
 
-Só ocorre quando o slice está realmente concluído.
+Só ocorre depois da convergência, quando o slice está realmente concluído e todos os gates aplicáveis permanecem aprovados.
 
 ## 11. Deploy
 

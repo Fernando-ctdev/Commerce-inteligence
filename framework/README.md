@@ -2,7 +2,7 @@
 
 Um framework enxuto para estruturar, desenvolver e evoluir software com agentes de IA usando contexto, arquitetura e critérios claros.
 
-A ideia central é simples: **não pedir para a IA "criar o projeto completo" nem improvisar a próxima etapa**. O produto mantém fontes canônicas versionadas, o escopo atual é decomposto em slices verticais e cada slice passa por especificação, plano, implementação e verificação.
+A ideia central é simples: **não pedir para a IA "criar o projeto completo" nem improvisar a próxima etapa**. O produto mantém fontes canônicas versionadas, o escopo atual é decomposto em slices verticais e cada slice passa por especificação, plano, implementação, verificação e convergência antes do merge.
 
 ## Fluxo
 
@@ -38,6 +38,8 @@ Implementação
 Testes + Validação + Segurança
  ↓
 Review
+ ↓
+Convergência
  ↓
 Merge
       ↺ próximo Slice
@@ -75,7 +77,9 @@ Nenhuma etapa deve assumir que existe apenas um PRD.
 6. Gere o Design System/UX quando aplicável.
 7. Crie o `AGENTS.md` apontando para as fontes canônicas.
 8. Defina os slices do escopo atual.
-9. Para cada slice: `SPEC → PLAN → IMPLEMENT → TEST/VALIDATE/SECURITY → REVIEW → MERGE`.
+9. Para cada slice: `SPEC → PLAN → IMPLEMENT → TEST/VALIDATE/SECURITY → REVIEW → CONVERGE → MERGE`.
+
+Durante `CONVERGE`, qualquer desvio volta ao nível correto: implementação, PLAN, SPEC ou fonte canônica superior quando a própria decisão realmente mudou. Nunca altere documentação superior apenas para acomodar código incorreto.
 
 ### Produto existente
 
@@ -107,6 +111,7 @@ prompts/    prompts prontos para executar cada etapa
 - fontes canônicas são descobertas pelo agente, não presumidas por nome único;
 - slices são verticais e orientados a comportamento observável;
 - especificar somente o slice atual;
+- review identifica divergências e convergence corrige o nível responsável antes do merge;
 - agentes só concluem quando os gates de conclusão passam;
 - decisões importantes ficam no repositório, não apenas no histórico do chat;
 - o framework deve funcionar tanto na criação quanto na evolução contínua do produto.
