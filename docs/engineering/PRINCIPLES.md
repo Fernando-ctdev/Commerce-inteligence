@@ -59,6 +59,10 @@ Toda operação server-side recebe o tenant resolvido pela sessão; nunca confie
 
 Quando a decisão não exigir interpretação criativa, use código: orquestração, estado de job, persistência, idempotência, versionamento, seleção de Strategy ativa, contagens, limites, schema validation, detecção de duplicata exata, agregação de memória, quota e retry. A LLM não decide regra de sistema. Use `LOW` quando `LOW` for suficiente; reserve `HIGH` para onde a qualidade estratégica depende dele.
 
+### 9. UI nasce de componente shadcn/ui
+
+Antes de criar qualquer componente de interface, busque um componente shadcn/ui que atenda ao comportamento e adapte-o — variantes, composição, tokens e CSS — ao `DESIGN.md`. Criar componente custom é exceção: só quando nenhum componente da biblioteca cobre o caso, com o motivo registrado. Componentes em `src/components/ui` vêm da CLI shadcn ou são adaptações diretas dos primitivos, sempre com call site real — sem biblioteca paralela e sem componente sem uso.
+
 ## Padrões proibidos no MVP
 
 - factories para uma única implementação;

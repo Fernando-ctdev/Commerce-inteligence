@@ -1,7 +1,7 @@
 # Design System — Commerce Intelligence
 
 **Status:** fonte de verdade visual do produto  
-**Versão:** 1.4
+**Versão:** 1.5
 **Locale do MVP:** `pt-BR`  
 **Escopo:** decisões de produto visual, tokens, comportamento responsivo, estados e contratos de componentes. Este documento **não implementa telas, componentes ou dependências**.
 
@@ -114,7 +114,7 @@ Como minha conta e a plataforma estão configuradas?
 
 | Superfície | Regra de layout | Prioridade de uso |
 |---|---|---|
-| Mobile, até `767px` | uma coluna; header contextual; navegação principal inferior fixa | experiência completa, com execução prioritária |
+| Mobile, até `767px` | uma coluna; header contextual; Sidebar shadcn/ui em modo drawer (off-canvas) | experiência completa, com execução prioritária |
 | Tablet, `768–1199px` | rail lateral compacta de `72px` + região principal | experiência completa, revisão e organização com mais contexto |
 | Desktop, a partir de `1200px` | sidebar fixa de `240px` + região principal com toolbar | experiência expandida, planejamento em escala e operações densas |
 | Wide, a partir de `1440px` | mesmo shell; somente a coluna de conteúdo é limitada | mais densidade e comparação, sem capacidade exclusiva |
@@ -141,10 +141,9 @@ A mudança de breakpoint altera composição, densidade e prioridade, não o mod
 - conteúdo útil começa com a ação ou o objeto mais urgente;
 - uma mão deve alcançar ações primárias e navegação;
 - definir `--safe-bottom` como `env(safe-area-inset-bottom, 0px)`;
-- a navegação inferior é fixa, tem `64px + --safe-bottom` de área ocupada e mantém controles internos com alvo mínimo de `44×44px`;
-- a região rolável recebe `padding-block-end: calc(64px + var(--safe-bottom) + 16px)` e o mesmo valor em `scroll-padding-block-end`;
+- a navegação principal no mobile usa a Sidebar shadcn/ui em modo drawer (off-canvas), aberta a partir do header contextual; o drawer respeita `--safe-bottom`, mantém controles com alvo mínimo de `44×44px` e fecha com Escape, scrim ou seleção de destino;
 - o header contextual tem `56px` de altura de referência e não cobre o primeiro bloco de conteúdo;
-- a barra de ação do modo de gravação fica sticky acima da navegação inferior, com `inset-block-end: calc(64px + var(--safe-bottom))`, e nunca cobre o CTA;
+- a barra de ação do modo de gravação fica sticky na base da tela, com `inset-block-end: var(--safe-bottom)`, e nunca cobre o CTA;
 - filtros complexos entram em sheet/bottom sheet;
 - listas usam leitura vertical e ação direta; tabelas e colunas densas não são comprimidas;
 - modo de gravação mostra somente o necessário para executar: hook, roteiro/cenas, CTA, estado e navegação anterior/próximo;
@@ -152,7 +151,7 @@ A mudança de breakpoint altera composição, densidade e prioridade, não o mod
 
 ### Regras tablet
 
-- o tablet não usa a navegação inferior do mobile nem a sidebar completa do desktop;
+- o tablet não usa o drawer do mobile nem a sidebar completa do desktop;
 - usa rail lateral fixa ou persistente de `72px`, com os cinco destinos em ícone;
 - cada ícone mantém nome acessível completo, tooltip ao foco/hover e alvo mínimo de `44×44px`;
 - a região principal usa `minmax(0, 1fr)`, grid de oito colunas, gutter de `24px` e padding lateral de `24px`;
@@ -557,7 +556,7 @@ A lista abaixo define linguagem e comportamento, não implementação. Component
 - mantém navegação principal persistente conforme a superfície;
 - fornece título de contexto e uma ação primária clara;
 - nunca esconde erro, estado de geração ou bloqueio de uso em uma área apenas visual;
-- desktop usa sidebar fixa e toolbar contextual; mobile usa header contextual e navegação inferior.
+- desktop usa sidebar fixa e toolbar contextual; mobile usa header contextual e a Sidebar shadcn/ui em modo drawer.
 
 ### Navegação principal
 
@@ -582,8 +581,7 @@ Posicionamento:
 
 - desktop: linha compacta imediatamente abaixo da toolbar contextual;
 - tablet: mesma região, com texto resumido quando necessário;
-- mobile: imediatamente abaixo do header contextual, sem interferir na navegação inferior;
-- o indicador acompanha a navegação e não pertence à página que iniciou o job.
+- mobile: imediatamente abaixo do header contextual, sem interferir na navegação (drawer);
 
 Conteúdo mínimo:
 
@@ -886,4 +884,5 @@ A **Agenda interna de gravação** faz parte do MVP e não deve ser confundida c
 | 2026-08-26 | Job assíncrono usa indicador global no App Shell | A análise continua durante a navegação; o usuário precisa ver Produto, etapa, sucesso/falha e próxima ação sem entrar numa página técnica de análise. |
 | 2026-08-26 | `Pendente` é readiness operacional, não lifecycle do Produto | Evita misturar análise em andamento com estados persistentes como Ativo/Arquivado. |
 | 2026-08-27 | Realinhamento aos PRDs vigentes (engine, job assíncrono, briefing/lotes, model router) | O design v1.3 já refletia o core loop e o indicador global; a revisão atualizou as fontes canônicas, incluiu a resolução da quantidade inicial na confirmação e manteu tokens, estética e navegação vigentes. |
-
+| 2026-08-28 | Navegação mobile substitui a bottom nav pela Sidebar shadcn/ui (drawer off-canvas) | Com cinco destinos, a barra inferior empilha botões e prejudica a navegação; a Sidebar uniformiza o shell nas três superfícies e aproveita componente de biblioteca em vez de navegação custom. |
+| 2026-08-28 | Componentes de UI nascem de shadcn/ui: buscar componente pronto e adaptá-lo antes de criar algo próprio | Reuso de biblioteca reduz código custom, mantém acessibilidade e consistência; componente custom é exceção com motivo registrado. |
