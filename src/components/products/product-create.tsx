@@ -2,10 +2,15 @@
 
 import { useRouter } from "next/navigation";
 
-import { ProductImport } from "./product-import";
 import { productPathForCreatedProduct } from "./product-create-model";
+import { ProductForm } from "./product-form";
 
 export function ProductCreate() {
   const router = useRouter();
-  return <ProductImport onCreated={(id) => router.push(productPathForCreatedProduct(id))} />;
+  return (
+    <ProductForm
+      mode="create"
+      onCreated={(id) => router.push(productPathForCreatedProduct(id))}
+    />
+  );
 }
