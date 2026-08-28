@@ -14,7 +14,7 @@ Não crie arquivos paralelos de instrução como `CLAUDE.md`.
 
 Antes de implementar, consulte nesta ordem:
 
-1. `docs/product/PRD.md` — objetivo, domínio, fluxo e escopo do MVP;
+1. `docs/product/PRD*.md` — `PRD.md` é a fonte de verdade do escopo funcional; os PRDs de frente (`PRD-Importation-product.md`, `PRD-commerce-intelligence-engine.md`, `PRD-product-intelligence-analysis.md`, `PRD-content-briefing.md`, `PRD-model-router-inteligence.md`) detalham o comportamento de cada frente dentro desse escopo;
 2. `docs/architecture/SYSTEM-DESIGN.md` — arquitetura vigente, módulos e dependências;
 3. `docs/architecture/adr-*.md` — decisões e trade-offs arquiteturais aceitos;
 4. `docs/engineering/PRINCIPLES.md` — regras permanentes de engenharia;
@@ -25,7 +25,7 @@ Antes de implementar, consulte nesta ordem:
 
 ### Autoridade dos documentos
 
-- PRD governa produto, domínio e escopo.
+- PRD governa produto, domínio e escopo; os PRDs de frente governam o comportamento detalhado da sua frente, sem ampliar o escopo do PRD principal.
 - SYSTEM-DESIGN representa a arquitetura vigente.
 - ADR aceito governa a decisão arquitetural específica que registra.
 - PRINCIPLES governa práticas permanentes de engenharia.

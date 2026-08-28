@@ -1,14 +1,16 @@
-# ADR-005: Gerações assíncronas e duráveis
+# ADR-005: Processamento assíncrono e durável (CommerceIntelligenceJob)
 
 ## Status
 
 Aceito — mecanismo do MVP preparado para operações longas.
 
+> **Revisão (PRDs vigentes):** o registro durável de execução é o `CommerceIntelligenceJob` (`QUEUED`/`RUNNING`/`SUCCEEDED`/`FAILED`/`CANCELLED`, com `stage` público e metadata interna em `IntelligenceRun` — ver [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md)). Onde este ADR lê `generation_run`, leia `CommerceIntelligenceJob`. Restrição de produto do MVP: **um job ativo por usuário** — enquanto existir job `QUEUED`/`RUNNING`, nova análise fica bloqueada com explicação; o App Shell exibe indicador global com a etapa real, sobrevive a navegação/fechamento de aba e é restaurado na reentrada. Falha preserva o Product e o retry reutiliza o contexto confirmado, idempotente.
+
 ## Contexto
 
 Gerar uma estratégia ou um lote pode envolver várias etapas, chamadas a um provedor e validações. O PRD exige regeneração, novos lotes e continuidade do histórico; futuras gerações de mídia serão ainda mais demoradas. Uma requisição HTTP síncrona não oferece retry, progresso, idempotência ou recuperação após timeout.
 
-**Relação com o PRD:** §§ 8, 23–25, 33–35, 49–51, 56–57 e 58.
+**Relação com o PRD:** `PRD-product-intelligence-analysis.md` (job assíncrono, indicador global, concorrência) e `PRD-commerce-intelligence-engine.md` (execução interna do job).
 
 ## Decisão
 

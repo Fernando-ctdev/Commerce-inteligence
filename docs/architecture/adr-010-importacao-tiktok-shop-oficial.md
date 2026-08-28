@@ -29,6 +29,6 @@ Essa decisão não governa mais o Slice 002 e não deve ser usada como base para
 
 ## Relações
 
-- [ADR-008](./adr-008-entrada-de-produto-manual-first.md) — URL-first, confirmação e fallback.
+- [ADR-008](./adr-008-entrada-de-produto-url-first.md) — URL-first, confirmação e fallback.
 - [ADR-011](./adr-011-importacao-browser-profile-e-harness.md) — decisão vigente.
 - `docs/product/PRD-Importation-product.md` — fonte de produto vigente.

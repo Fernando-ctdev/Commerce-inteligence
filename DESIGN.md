@@ -1,7 +1,7 @@
 # Design System — Commerce Intelligence
 
 **Status:** fonte de verdade visual do produto  
-**Versão:** 1.3
+**Versão:** 1.4
 **Locale do MVP:** `pt-BR`  
 **Escopo:** decisões de produto visual, tokens, comportamento responsivo, estados e contratos de componentes. Este documento **não implementa telas, componentes ou dependências**.
 
@@ -29,6 +29,8 @@ Aplicativo web de produtividade operacional, responsivo e orientado a workflow. 
 ### Fontes usadas
 
 - `docs/product/PRD.md` — domínio, core loop, entidades, estados e não objetivos;
+- `docs/product/PRD-Importation-product.md`, `PRD-commerce-intelligence-engine.md`, `PRD-product-intelligence-analysis.md`, `PRD-content-briefing.md` e `PRD-model-router-inteligence.md` — frentes funcionais vigentes;
+- `docs/architecture/SYSTEM-DESIGN.md`, ADRs e `docs/engineering/PRINCIPLES.md` — fronteiras técnicas que a interface respeita sem expor;
 - diretrizes visuais aprovadas do produto — estética, paleta e regras de uso.
 
 macOS/iPadOS, Things e Linear são referências de sensação, clareza e disciplina de interface, não fontes para copiar elementos proprietários.
@@ -714,6 +716,7 @@ Ao abrir um evento, oferecer `Abrir no Estúdio` e `Reagendar`. A Agenda do MVP 
 - `Analisar produto` mostra loading, preview, origem, lacunas e falha recuperável; extração nunca aparece como fato confirmado automaticamente;
 - `Adicionar manualmente` permanece visível como fallback quando não houver URL, a análise falhar ou o creator preferir informar os fatos;
 - a confirmação humana cria o Product ativo; antes dela, o preview pode ser corrigido campo a campo;
+- a confirmação resolve também a quantidade inicial de Conteúdos (`targetContentCount`) por preferência do creator, valor padrão ou seletor compacto na própria confirmação — sem criar etapa de navegação;
 - depois de confirmado, edição de fatos é uma ação excepcional e explícita, sem formulário de público, Strategy ou contexto estratégico no cadastro;
 - labels, erros, foco, `aria-busy`, teclado, alvos de `44×44px` e estados de confirmação seguem as regras deste documento.
 
@@ -882,4 +885,5 @@ A **Agenda interna de gravação** faz parte do MVP e não deve ser confundida c
 | 2026-08-26 | Home não mostra `Ainda sem data` | A entrada deve mostrar somente ação útil, gravações de hoje e próximas gravações já planejadas. |
 | 2026-08-26 | Job assíncrono usa indicador global no App Shell | A análise continua durante a navegação; o usuário precisa ver Produto, etapa, sucesso/falha e próxima ação sem entrar numa página técnica de análise. |
 | 2026-08-26 | `Pendente` é readiness operacional, não lifecycle do Produto | Evita misturar análise em andamento com estados persistentes como Ativo/Arquivado. |
+| 2026-08-27 | Realinhamento aos PRDs vigentes (engine, job assíncrono, briefing/lotes, model router) | O design v1.3 já refletia o core loop e o indicador global; a revisão atualizou as fontes canônicas, incluiu a resolução da quantidade inicial na confirmação e manteu tokens, estética e navegação vigentes. |
 

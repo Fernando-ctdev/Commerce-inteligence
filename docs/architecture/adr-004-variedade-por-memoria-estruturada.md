@@ -4,6 +4,8 @@
 
 Aceito — heurística inicial do MVP, com limite conhecido.
 
+> **Revisão (PRDs vigentes):** a memória opera como `ProductMemorySnapshot` consistente por geração, com pesos de sinal `gerado < aprovado < concluído` e **descarte como sinal** (evita insistência cega na mesma direção). Continua sem embeddings, banco vetorial ou LLM-as-judge no MVP. Detalhes de contrato no [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md).
+
 ## Contexto
 
 Evitar repetição é o principal mecanismo que diferencia a plataforma de uma conversa genérica com IA. O PRD pede que novas gerações consultem o histórico e priorizem lacunas de público, dor, benefício, objeção, ângulo, estrutura, hook e CTA.

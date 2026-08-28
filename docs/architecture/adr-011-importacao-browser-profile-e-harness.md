@@ -4,6 +4,8 @@
 
 Aceito — decisão vigente para a importação de produtos do TikTok Shop; substitui o caminho de API/OAuth descrito no ADR-010.
 
+> **Atualização (POC validada):** a topologia operacional do Browser Service ficou comprovada em container próprio — Chromium + Browser Harness pinado como dependência, Xvfb/x11vnc/noVNC para o browser interativo, CDP restrito à rede interna do serviço, autenticação da app por token de serviço, volume persistente por profile, lock de exclusão por profile (impede dois browsers no mesmo profile) e URL guard com allowlist HTTPS + bloqueio de file/chrome/loopback/redes privadas/metadata. A POC comprovou os fluxos de sessão e human-in-the-loop; a extração real de produto autenticado segue pendente de intervenção humana (CAPTCHA), sem bypass — a implementação de produto do Slice 002 parte daqui.
+
 ## Contexto
 
 O PRD `docs/product/PRD-Importation-product.md` mudou a experiência de entrada: o creator informa a URL, a aplicação abre o TikTok em um Chromium associado ao usuário, o creator resolve autenticação ou verificações humanas quando necessário e o sistema extrai os fatos do produto para confirmação.
@@ -63,7 +65,7 @@ O Browser Harness é uma dependência oficial desta frente. Reimplementar sua in
 - `docs/product/PRD-Importation-product.md` — fluxo e responsabilidades da importação.
 - [ADR-001](./adr-001-monolito-modular-e-stack-do-mvp.md) — monólito modular e fronteira de módulos.
 - [ADR-003](./adr-003-postgresql-memoria-e-rastreabilidade.md) — ProductCandidate, Product e proveniência no PostgreSQL.
-- [ADR-008](./adr-008-entrada-de-produto-manual-first.md) — URL-first, confirmação humana e fallback manual.
+- [ADR-008](./adr-008-entrada-de-produto-url-first.md) — URL-first, confirmação humana e fallback manual.
 - [ADR-009](./adr-009-identidade-autorizacao-e-tenant-inicial.md) — Tenant e autorização server-side.
 - [ADR-010](./adr-010-importacao-tiktok-shop-oficial.md) — decisão anterior, agora superseded.
 - `docs/delivery/SLICES.md` — Slice 002 e dependência do Slice 003.

@@ -4,6 +4,8 @@
 
 Aceito — escopo de limites do MVP.
 
+> **Revisão (PRDs vigentes):** a reserva é criada na mesma transação do `CommerceIntelligenceJob` e usa `job.id` como chave idempotente compartilhada (onde este ADR lê `generation_run.id`, leia `job.id`). O job só é criado se o Tenant tiver capacidade para a quantidade solicitada (`targetContentCount`); retry técnico não duplica consumo. Regenerações e novos lotes continuam consumindo a mesma unidade de conteúdo gerado. Ver [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md) e [ADR-015](./adr-015-content-operations-e-recording-batch.md).
+
 ## Contexto
 
 O PRD define que a inteligência estratégica é igual em todos os planos e que a diferenciação comercial deve ser capacidade de uso. O MVP precisa validar disposição de pagamento e impedir que geração assíncrona contorne limites por concorrência ou retry.

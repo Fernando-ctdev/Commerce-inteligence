@@ -4,6 +4,8 @@
 
 Aceito — baseline do domínio do MVP.
 
+> **Revisão:** a decisão de engine-como-core permanece vigente. A seção "Contrato mínimo versionado da engine" (`GenerationInput v1` / `GenerationOutput v1`) foi **superseded** pelo [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md), que registra os schemas canônicos derivados dos PRDs vigentes.
+
 ## Contexto
 
 O diferencial do produto não é produzir texto isolado, mas decidir como transformar um produto em uma estratégia comercial, distribuir um plano variado e organizar a execução. A engine precisa manter contexto e memória para não parecer um wrapper de chat genérico.
