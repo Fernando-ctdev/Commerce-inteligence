@@ -1,4 +1,4 @@
-import type { ProductCandidate, ProductImportRecord } from "./product-import-model";
+import { contentPreparationPreferencesAreValid, type ContentPreparationPreferences, type ProductCandidate, type ProductImportRecord } from "./product-import-model";
 
 export class ProductImportApiError extends Error {
   readonly status: number;
@@ -25,7 +25,9 @@ async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise
     throw new ProductImportApiError(
       response.status,
       typeof body.error === "string" ? body.error : "Não foi possível analisar este produto.",
-      typeof body.code === "string" ? body.code : undefined,
+      typeof body.errorCode === "string"
+        ? body.errorCode
+        : typeof body.code === "string" ? body.code : undefined,
     );
   }
   return data as T;
@@ -39,8 +41,8 @@ export async function startProductImport(url: string, idempotencyKey: string) {
   }));
 }
 
-export async function getProductImport(id: string) {
-  return normalizeImport(await request<unknown>(`/api/product-imports/${encodeURIComponent(id)}`));
+export async function getProductImport(id: string, signal?: AbortSignal) {
+  return normalizeImport(await request<unknown>(`/api/product-imports/${encodeURIComponent(id)}`, { signal }));
 }
 
 export async function cancelProductImport(id: string) {
@@ -59,12 +61,16 @@ export async function resumeProductImport(id: string) {
   return normalizeImport(await request<unknown>(`/api/product-imports/${encodeURIComponent(id)}/resume`, { method: "POST", body: "{}" }));
 }
 
-export async function confirmProductImport(id: string, version: number, candidate: ProductCandidate) {
+export async function confirmProductImport(id: string, version: number, candidate: ProductCandidate, preferences: ContentPreparationPreferences) {
+  if (!contentPreparationPreferencesAreValid(preferences)) {
+    throw new ProductImportApiError(400, "Preferências de conteúdo inválidas.");
+  }
   const response = await request<{ id?: string; productId?: string; duplicate?: boolean }>("/api/products/confirm", {
     method: "POST",
     body: JSON.stringify({
       attemptId: id,
       expectedCandidateVersion: version,
+      preferences,
       facts: {
         name: candidate.name,
         description: candidate.description,
@@ -141,9 +147,13 @@ function normalizeImport(value: unknown): ProductImportRecord {
       ? candidateRecord.gaps.filter((item): item is string => typeof item === "string")
       : Array.isArray(record.gaps) ? record.gaps.filter((item): item is string => typeof item === "string") : [],
     error: typeof record.error === "string" ? record.error : undefined,
+    errorCode: typeof record.errorCode === "string"
+      ? record.errorCode
+      : typeof record.code === "string" ? record.code : undefined,
     productId: typeof record.productId === "string" ? record.productId : undefined,
     interactiveUrl: mediatedInteractiveUrl(record.interactiveUrl),
-    canResume: record.canResume === true,
+    canResume: typeof record.canResume === "boolean" ? record.canResume : undefined,
+    handoffExpired: record.handoffExpired === true,
   };
 }
 

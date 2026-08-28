@@ -1,6 +1,4 @@
-// Client HTTP do Browser Service (ADR-011) — único dono do lifecycle do Chromium.
-// Config fail-closed: sem BROWSER_SERVICE_URL/TOKEN a importação não declara sucesso.
-// Erros são sempre sanitizados: nenhum corpo bruto, CDP, cookie ou profile vaza do adapter.
+// Client HTTP do Browser Service. Contrato mínimo: start/get/resume/extract/close.
 export type BrowserSessionState =
   | "OPENING"
   | "READY"
@@ -13,14 +11,28 @@ export type BrowserSessionState =
   | "ERROR"
   | "CLOSED";
 
+export type BrowserProductSnapshot = {
+  pageUrl: string;
+  title: string;
+  accessibilityNames: string[];
+  text: string[];
+  jsonLd: unknown[];
+  imageUrls: string[];
+  metaImageUrls: string[];
+};
+
 export type BrowserRawCandidate = {
   name?: string;
   description?: string;
+  category?: string;
+  brand?: string;
+  variants?: string[];
   price?: { amount: number; currency: string };
   features: string[];
   images: string[];
   seller?: string;
   sourceUrl: string;
+  snapshot?: BrowserProductSnapshot;
 };
 
 export type BrowserSessionView = {
@@ -33,13 +45,13 @@ export type BrowserSessionView = {
   error?: { code: string; message: string };
 };
 
-export class BrowserServiceUnavailableError extends Error {} // config ausente, rede ou 5xx
+export class BrowserServiceUnavailableError extends Error {}
 export class BrowserSessionNotFoundError extends Error {}
-export class BrowserBusyError extends Error {} // capacidade do serviço ocupada
-export class ProfileInUseError extends Error {} // profile com sessão ativa
-export class BrowserInvalidStateError extends Error {} // ação incompatível com o estado
-export class BrowserUrlRejectedError extends Error {} // allowlist/egress do serviço rejeitou
-export class BrowserHandoffExpiredError extends Error {} // handle interativo expirado/revogado
+export class BrowserBusyError extends Error {}
+export class ProfileInUseError extends Error {}
+export class BrowserInvalidStateError extends Error {}
+export class BrowserUrlRejectedError extends Error {}
+export class BrowserHandoffExpiredError extends Error {}
 export class BrowserHarnessFailedError extends Error {}
 export class BrowserInsufficientFactsError extends Error {}
 
@@ -53,7 +65,6 @@ export type BrowserClient = {
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.BROWSER_SERVICE_TIMEOUT_MS ?? 30000);
 
-/** Config validada server-side; ausente/inválida falha fechada (SPEC 002: nunca confiar em default aberto). */
 export function resolveBrowserServiceConfig(env: NodeJS.ProcessEnv = process.env): { baseUrl: string; token: string } {
   const baseUrl = (env.BROWSER_SERVICE_URL ?? "").trim().replace(/\/+$/, "");
   const token = (env.BROWSER_SERVICE_TOKEN ?? "").trim();
@@ -83,6 +94,7 @@ function errorFor(code: string | undefined): Error {
       return new BrowserServiceUnavailableError();
   }
 }
+
 function isBrowserState(value: unknown): value is BrowserSessionState {
   return typeof value === "string" && {
     OPENING: true,
@@ -98,23 +110,48 @@ function isBrowserState(value: unknown): value is BrowserSessionState {
   }[value] === true;
 }
 
+function strings(value: unknown, maxItems: number, maxLength: number): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.length <= maxLength).slice(0, maxItems)
+    : [];
+}
+
+function parseSnapshot(value: unknown): BrowserProductSnapshot | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record.pageUrl !== "string" || typeof record.title !== "string") return undefined;
+  return {
+    pageUrl: record.pageUrl,
+    title: record.title,
+    accessibilityNames: strings(record.accessibilityNames, 500, 2_000),
+    text: strings(record.text, 500, 2_000),
+    jsonLd: Array.isArray(record.jsonLd) ? record.jsonLd.slice(0, 50) : [],
+    imageUrls: strings(record.imageUrls, 200, 2_048),
+    metaImageUrls: strings(record.metaImageUrls, 50, 2_048),
+  };
+}
+
 function parseCandidate(value: unknown): BrowserRawCandidate | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const record = value as Record<string, unknown>;
-  if (typeof record.sourceUrl !== "string" || !Array.isArray(record.features) || !record.features.every((item) => typeof item === "string") || !Array.isArray(record.images) || !record.images.every((item) => typeof item === "string")) {
-    return undefined;
-  }
+  if (typeof record.sourceUrl !== "string") return undefined;
   const candidate: BrowserRawCandidate = {
     sourceUrl: record.sourceUrl,
-    features: record.features.filter((item): item is string => typeof item === "string"),
-    images: record.images.filter((item): item is string => typeof item === "string"),
+    features: strings(record.features, 20, 300),
+    images: strings(record.images, 10, 2_048),
   };
   if (typeof record.name === "string") candidate.name = record.name;
   if (typeof record.description === "string") candidate.description = record.description;
+  if (typeof record.category === "string") candidate.category = record.category;
+  if (typeof record.brand === "string") candidate.brand = record.brand;
   if (typeof record.seller === "string") candidate.seller = record.seller;
-  if (typeof record.price === "object" && record.price !== null && "amount" in record.price && "currency" in record.price && typeof record.price.amount === "number" && typeof record.price.currency === "string") {
-    candidate.price = { amount: record.price.amount, currency: record.price.currency };
+  if (Array.isArray(record.variants) && record.variants.every((item) => typeof item === "string")) candidate.variants = record.variants;
+  if (typeof record.price === "object" && record.price !== null) {
+    const price = record.price as Record<string, unknown>;
+    if (typeof price.amount === "number" && typeof price.currency === "string") candidate.price = { amount: price.amount, currency: price.currency };
   }
+  const snapshot = parseSnapshot(record.snapshot);
+  if (snapshot) candidate.snapshot = snapshot;
   return candidate;
 }
 
@@ -138,7 +175,6 @@ function parseSessionView(value: unknown): BrowserSessionView | null {
   return parsed;
 }
 
-/** Client real sobre fetch; testes injetam um BrowserClient falso — sem mudar o contrato. */
 export function createBrowserClient(config?: { baseUrl: string; token: string }): BrowserClient {
   const resolved = config ?? resolveBrowserServiceConfig();
   const timeoutMs = Number.isFinite(DEFAULT_TIMEOUT_MS) && DEFAULT_TIMEOUT_MS > 0 ? DEFAULT_TIMEOUT_MS : 30000;
@@ -157,15 +193,12 @@ export function createBrowserClient(config?: { baseUrl: string; token: string })
         cache: "no-store",
       });
     } catch {
-      throw new BrowserServiceUnavailableError(); // rede/timeout: nada do serviço vaza
+      throw new BrowserServiceUnavailableError();
     }
-    if (response.status === 401) throw new BrowserServiceUnavailableError(); // token inválido é falha de config
+    if (response.status === 401) throw new BrowserServiceUnavailableError();
     const payload: unknown = await response.json().catch(() => null);
-    let errorCode: string | undefined;
-    if (typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "object" && payload.error !== null && "code" in payload.error && typeof payload.error.code === "string") {
-      errorCode = payload.error.code;
-    }
-    if (!response.ok) throw errorFor(errorCode);
+    const error = typeof payload === "object" && payload !== null ? (payload as { error?: { code?: unknown } }).error : undefined;
+    if (!response.ok) throw errorFor(typeof error?.code === "string" ? error.code : undefined);
     const parsed = parseSessionView(payload);
     if (!parsed) throw new BrowserServiceUnavailableError();
     return parsed;

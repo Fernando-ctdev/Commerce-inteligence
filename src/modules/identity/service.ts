@@ -3,7 +3,6 @@
 // sessão opaca com apenas o hash persistido, expiração/revogação/rotação server-side.
 import { Prisma } from "@prisma/client";
 import { createHash, randomBytes } from "node:crypto";
-import { provisionDefaultEntitlement } from "../entitlements/service";
 import { prisma } from "../db";
 import { hashPassword, verifyPassword } from "./password";
 
@@ -44,8 +43,6 @@ export async function registerUser(email: string, password: string, previousToke
     await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({ data: { email, passwordHash } });
       const tenant = await tx.tenant.create({ data: { userId: user.id } });
-      // Slice 002: entitlement default orquestrado na mesma transação, via caso de uso do módulo Entitlements
-      await provisionDefaultEntitlement(tx, tenant.id);
       await tx.session.create({
         data: {
           userId: user.id,

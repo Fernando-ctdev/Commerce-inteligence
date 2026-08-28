@@ -24,26 +24,40 @@ class ProductExtractor:
         if not name:
             raise InsufficientProductFacts()
 
-        description = _string(structured.get("description")) or _description_from_text(observation.text)
+        page_values = [*observation.accessibility_names, *observation.text]
+        description = _usable_fact(structured.get("description")) or _description_from_text(page_values)
         price = _price_from(structured.get("offers"), structured.get("priceCurrency"))
         if price is None and "price" in structured:
             price = _price_from(
                 {"price": structured.get("price"), "priceCurrency": structured.get("priceCurrency")}
             )
-        price = price or _price_from_text(observation.text)
+        price = price or _price_from_text(page_values)
         seller = (
             _seller_from(structured.get("seller"))
             or _seller_from(structured.get("offers"))
-            or _seller_from_text(observation.text)
+            or _seller_from_text(page_values)
         )
+        category = (
+            _category_from(structured.get("category"))
+            or _labeled_fact(page_values, _CATEGORY_LABEL)
+            or _category_from_text(page_values)
+        )
+        brand = _seller_from(structured.get("brand")) or _labeled_fact(page_values, _BRAND_LABEL)
+        variants = _variants_from(structured.get("hasVariant")) or _variants_from_text(page_values)
         features = _features(
-            [*observation.accessibility_names, *_feature_section(observation.text)],
+            [
+                *_structured_features(structured.get("additionalProperty")),
+                *_feature_section(page_values),
+            ],
             name,
             description,
             price,
             seller,
+            category,
+            brand,
+            variants,
         )
-        images = _images(observation.image_urls, structured.get("image"))
+        images = _images([*observation.meta_image_urls, *observation.image_urls], structured.get("image"))
 
         return ProductCandidate(
             name=name,
@@ -53,12 +67,32 @@ class ProductExtractor:
             images=images,
             seller=seller,
             source_url=observation.page_url,
+            category=category,
+            brand=brand,
+            variants=variants,
+            snapshot=_snapshot(observation),
         )
 
 
 def _is_unavailable_page(title: str) -> bool:
     normalized = " ".join(title.split()).casefold()
     return any(marker in normalized for marker in ("404 not found", "403 forbidden", "access denied", "page not found"))
+
+
+def _snapshot(observation: PageObservation) -> dict[str, object]:
+    return {
+        "pageUrl": observation.page_url,
+        "title": observation.title[:500],
+        "accessibilityNames": [_clip(value, 2_000) for value in observation.accessibility_names[:500]],
+        "text": [_clip(value, 2_000) for value in observation.text[:500]],
+        "jsonLd": observation.json_ld[:50],
+        "imageUrls": observation.image_urls[:200],
+        "metaImageUrls": observation.meta_image_urls[:50],
+    }
+
+
+def _clip(value: str, limit: int) -> str:
+    return " ".join(str(value).split())[:limit]
 
 
 def _first_product_data(values: list[dict[str, object]]) -> Mapping[str, object]:
@@ -159,46 +193,86 @@ _UI_TEXT = {
 _SECTION_LABELS = {
     "description",
     "descrição",
+    "descrição do produto",
+    "product description",
     "detalhes",
     "detalhes do produto",
     "product details",
     "about this item",
+    "about this product",
     "sobre o produto",
     "features",
     "características",
     "specifications",
     "especificações",
+    "specification",
+    "especificação",
     "price",
     "preço",
     "valor",
     "seller",
     "seller information",
+    "sold by",
     "vendido por",
     "vendedor",
     "loja",
     "store",
+    "frete",
+    "frete grátis",
+    "frete gratis",
+    "shipping",
+    "shipping fee",
+    "delivery",
+    "entrega",
+    "desconto",
+    "discount",
     "category",
     "categoria",
     "brand",
     "marca",
     "variants",
     "variantes",
+    "currency",
+    "moeda",
+    "review",
+    "reviews",
+    "rating",
+    "ratings",
+    "avaliação",
+    "avaliações",
 }
 
 _PRICE_LABEL = re.compile(r"\b(?:price|preço|valor|from|por|sale|oferta)\b", re.IGNORECASE)
 _PRICE_PATTERN = re.compile(
     r"(?:(?P<before>R\$|US\$|[$€£]|[A-Z]{3})\s*)?"
-    r"(?P<amount>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d+(?:[.,]\d{1,2})?)"
+    r"(?P<amount>\d{1,3}(?:\s*[.,]\s*\d{3})*(?:\s*[.,]\s*\d{2})?|\d+(?:\s*[.,]\s*\d{1,2})?)"
     r"\s*(?P<after>[A-Z]{3})?",
     re.IGNORECASE,
 )
 _DESCRIPTION_LABEL = re.compile(
-    r"^(?:description|descrição|detalhes|detalhes do produto|product details|about this item|sobre o produto)"
+    r"^(?:description|descrição|descrição do produto|detalhes|detalhes do produto|product description|product details|about this item|about this product|sobre o produto)"
     r"\s*(?::|-)?\s*(.*)$",
+    re.IGNORECASE,
+)
+_CATEGORY_LABEL = re.compile(r"^(?:category|categoria)\s*(?::|-)?\s*(.*)$", re.IGNORECASE)
+_BRAND_LABEL = re.compile(r"^(?:brand|marca)\s*(?::|-)?\s*(.*)$", re.IGNORECASE)
+_VARIANT_LABEL = re.compile(
+    r"^(?:variants|variantes|specification|especificação)\s*(?::|-)?\s*(.*)$", re.IGNORECASE
+)
+_REVIEW_LABEL = re.compile(
+    r"^(?:(?:\d+(?:[.,]\d+)?)(?:\s*\([^)]*\))?\s*)?(?:reviews?|ratings?|avaliações?)\b",
     re.IGNORECASE,
 )
 _SELLER_LABEL = re.compile(
     r"^(?:seller|seller information|sold by|vendido por|vendedor|loja|store)\s*(?::|-)?\s*(.*)$",
+    re.IGNORECASE,
+)
+_FACT_LABEL = re.compile(
+    r"^(?:description|descrição|descrição do produto|detalhes|detalhes do produto|product description|product details|about this item|sobre o produto|category|categoria|brand|marca|seller|seller information|sold by|vendido por|vendedor|loja|store|features|características|specifications|especificações|variants|variantes|price|preço|valor|currency|moeda|frete|shipping|delivery|entrega|desconto|discount)\b",
+    re.IGNORECASE,
+)
+_COMMERCIAL_NOISE = re.compile(
+    r"^(?:-?\d+(?:[.,]\d+)?\s*%(?:\s+off)?|R\$|US\$|[$€£]|\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|(?:frete|shipping|delivery|entrega)\b.*|(?:desconto|discount)\b.*)$",
     re.IGNORECASE,
 )
 _INSTRUCTION_TEXT = re.compile(
@@ -212,33 +286,35 @@ def _is_ui_text(value: str) -> bool:
     normalized = _string(value)
     if not normalized:
         return True
+    return _INSTRUCTION_TEXT.search(normalized) is not None or _is_ui_chrome_text(normalized)
+
+
+def _is_ui_chrome_text(value: str) -> bool:
+    normalized = _string(value)
+    if not normalized:
+        return True
     folded = normalized.casefold()
-    return (
-        _INSTRUCTION_TEXT.search(normalized) is not None
-        or folded in _UI_TEXT
-        or any(
-            folded.startswith(prefix)
-            for prefix in (
-                "get the full app",
-                "enjoy more products",
-                "obtenha a experiência completa",
-                "aproveite mais produtos",
-                "abrir no tiktok",
-                "abrir no app",
-                "open tiktok",
-                "download the app",
-                "baixe o aplicativo",
-            )
-        )
-        or folded in {
-            "get the full app experience",
-            "enjoy more products and great features on the app.",
-            "obtenha a experiência completa no app",
-            "aproveite mais produtos e recursos no app.",
+    return folded in _UI_TEXT or any(
+        folded.startswith(prefix)
+        for prefix in (
+            "get the full app",
+            "enjoy more products",
+            "obtenha a experiência completa",
+            "aproveite mais produtos",
+            "abrir no tiktok",
+            "abrir no app",
+            "open tiktok",
+            "download the app",
             "baixe o aplicativo",
-            "use o aplicativo",
-        }
-    )
+        )
+    ) or folded in {
+        "get the full app experience",
+        "enjoy more products and great features on the app.",
+        "obtenha a experiência completa no app",
+        "aproveite mais produtos e recursos no app.",
+        "baixe o aplicativo",
+        "use o aplicativo",
+    }
 
 
 def _first_nonempty(values: Iterable[str]) -> str | None:
@@ -250,6 +326,11 @@ def _first_nonempty(values: Iterable[str]) -> str | None:
 
 
 def _usable_name(value: object) -> str | None:
+    normalized = _string(value)
+    return normalized if normalized and not _is_ui_text(normalized) else None
+
+
+def _usable_fact(value: object) -> str | None:
     normalized = _string(value)
     return normalized if normalized and not _is_ui_text(normalized) else None
 
@@ -289,7 +370,8 @@ def _amount(value: object) -> float | None:
         normalized = _string(value)
         if not normalized:
             return None
-        normalized = re.sub(r"[A-Za-z]{3}|R\$|US\$|[$€£]", "", normalized, flags=re.IGNORECASE).strip()
+        normalized = re.sub(r"[A-Za-z]{3}|R\$|US\$|[$€£]", "", normalized, flags=re.IGNORECASE)
+        normalized = re.sub(r"\s+", "", normalized)
         if not re.fullmatch(r"(?:\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|\d+(?:[.,]\d+)?)", normalized):
             return None
         if "," in normalized and "." in normalized:
@@ -308,22 +390,24 @@ def _price_from_text(values: list[str]) -> Price | None:
         current = _string(value)
         if not current or _is_ui_text(current):
             continue
-        window = " ".join(filter(None, (current, *(_string(item) for item in values[index + 1 : index + 3]))))
-        match = _PRICE_PATTERN.search(window)
-        if not match or (not match.group("before") and not match.group("after") and not _PRICE_LABEL.search(current)):
-            continue
-        currency = _text_currency(match.group("before") or match.group("after"))
-        amount = _amount(match.group("amount"))
-        if currency and amount is not None:
-            return Price(amount=amount, currency=currency)
+        window = " ".join(
+            filter(None, (_string(item) for item in values[max(0, index - 1) : index + 5]))
+        )
+        for match in _PRICE_PATTERN.finditer(window):
+            if not match.group("before") and not match.group("after") and not _PRICE_LABEL.search(window):
+                continue
+            currency = _text_currency(match.group("before") or match.group("after"))
+            amount = _amount(match.group("amount"))
+            if currency and amount is not None:
+                return Price(amount=amount, currency=currency)
     return None
 
 
 def _text_currency(value: str | None) -> str | None:
-    return {"R$": "BRL", "US$": "USD", "$": "USD", "€": "EUR", "£": "GBP"}.get(
-        value.upper() if value and value.isalpha() else value or "",
-        _currency(value),
-    )
+    if value and value.isalpha():
+        code = value.upper()
+        return code if code in {"AUD", "BRL", "CAD", "CNY", "EUR", "GBP", "JPY", "MXN", "USD"} else None
+    return {"R$": "BRL", "US$": "USD", "$": "USD", "€": "EUR", "£": "GBP"}.get(value or "")
 
 
 def _description_from_text(values: list[str]) -> str | None:
@@ -334,15 +418,40 @@ def _description_from_text(values: list[str]) -> str | None:
         match = _DESCRIPTION_LABEL.match(normalized)
         if not match:
             continue
-        parts = [_string(match.group(1))] if match.group(1) else []
+        inline = _string(match.group(1))
+        if inline:
+            return inline if not _is_ui_text(inline) and not _is_section_label(inline) else None
         for candidate in values[index + 1 :]:
             candidate = _string(candidate)
-            if not candidate or _is_ui_text(candidate) or _is_section_label(candidate):
+            if (
+                not candidate
+                or _is_ui_text(candidate)
+                or _is_section_label(candidate)
+                or _is_breadcrumb(candidate)
+                or _is_noise_value(candidate)
+            ):
                 break
-            parts.append(candidate)
-        description = _string(" ".join(part for part in parts if part))
-        if description:
-            return description
+            return candidate
+    return None
+
+
+def _labeled_fact(values: list[str], label_pattern: re.Pattern[str]) -> str | None:
+    for index, value in enumerate(values):
+        normalized = _string(value)
+        if not normalized or _is_ui_text(normalized):
+            continue
+        match = label_pattern.match(normalized)
+        if not match:
+            continue
+        inline = _string(match.group(1))
+        if inline and not _is_noise_value(inline):
+            return inline
+        for candidate in values[index + 1 :]:
+            candidate = _string(candidate)
+            if not candidate or _is_ui_text(candidate) or _is_section_label(candidate) or _FACT_LABEL.match(candidate):
+                break
+            if not _is_noise_value(candidate):
+                return candidate
     return None
 
 
@@ -361,10 +470,41 @@ def _seller_from_text(values: list[str]) -> str | None:
 
 
 def _is_section_label(value: str) -> bool:
-    folded = value.casefold()
-    return folded.rstrip(":-") in _SECTION_LABELS or any(
+    normalized = _string(value)
+    if not normalized:
+        return True
+    folded = normalized.casefold()
+    return _REVIEW_LABEL.match(normalized) is not None or folded.rstrip(":-") in _SECTION_LABELS or any(
         folded.startswith(f"{label}:") or folded.startswith(f"{label} -") for label in _SECTION_LABELS
     )
+
+
+def _breadcrumb_category(value: str) -> str | None:
+    normalized = _string(value)
+    if not normalized:
+        return None
+    parts = [part.strip() for part in re.split(r"\s*(?:/|›|»|>)\s*", normalized)]
+    if len(parts) < 3 or parts[0].casefold() != "tiktok shop":
+        return None
+    category = _string(parts[-1])
+    return category if category and not _is_ui_text(category) and not _is_section_label(category) else None
+
+
+def _is_breadcrumb(value: str) -> bool:
+    return _breadcrumb_category(value) is not None
+
+
+def _category_from_text(values: list[str]) -> str | None:
+    for value in values:
+        category = _breadcrumb_category(value)
+        if category:
+            return category
+    return None
+
+
+def _is_noise_value(value: str) -> bool:
+    normalized = _string(value)
+    return not normalized or _COMMERCIAL_NOISE.fullmatch(normalized) is not None or _SELLER_LABEL.match(normalized) is not None
 
 
 def _feature_section(values: list[str]) -> list[str]:
@@ -374,7 +514,7 @@ def _feature_section(values: list[str]) -> list[str]:
         if not normalized:
             continue
         match = re.match(
-            r"^(features|características|specifications|especificações)\s*(?::|-)?\s*(.*)$",
+            r"^(features|características)\s*(?::|-)?\s*(.*)$",
             normalized,
             re.IGNORECASE,
         )
@@ -385,28 +525,101 @@ def _feature_section(values: list[str]) -> list[str]:
             result.extend(re.split(r"[,;•|]", inline))
         for candidate in values[index + 1 :]:
             candidate = _string(candidate)
-            if not candidate or _is_section_label(candidate) or _is_ui_text(candidate):
+            if (
+                not candidate
+                or _is_section_label(candidate)
+                or _is_ui_text(candidate)
+                or _is_noise_value(candidate)
+                or _is_breadcrumb(candidate)
+            ):
                 break
             result.append(candidate)
     return result
 
 
+def _structured_features(value: object) -> list[str]:
+    properties = value if isinstance(value, list) else [value]
+    result: list[str] = []
+    for item in properties:
+        if isinstance(item, dict):
+            label = _usable_fact(item.get("name"))
+            feature = _usable_fact(item.get("value"))
+            if label and feature:
+                result.append(f"{label}: {feature}")
+            elif feature:
+                result.append(feature)
+        elif isinstance(item, str):
+            feature = _usable_fact(item)
+            if feature:
+                result.append(feature)
+    return result
+
+
 def _seller_from(value: object) -> str | None:
     if isinstance(value, dict):
-        return _string(value.get("name"))
-    return _string(value)
+        return _usable_fact(value.get("name"))
+    return _usable_fact(value)
+
+def _category_from(value: object) -> str | None:
+    if isinstance(value, dict):
+        return _usable_fact(value.get("name"))
+    return _usable_fact(value)
+
+
+def _variants_from(value: object) -> list[str] | None:
+    """Variantes estruturadas (JSON-LD `hasVariant`)."""
+    items = value if isinstance(value, list) else [value]
+    names = []
+    for item in items:
+        name = _usable_name(item.get("name") if isinstance(item, dict) else item)
+        if name:
+            names.append(name)
+    return names or None
+
+
+def _variants_from_text(values: list[str]) -> list[str] | None:
+    result: list[str] = []
+    for index, value in enumerate(values):
+        normalized = _string(value)
+        if not normalized:
+            continue
+        match = _VARIANT_LABEL.match(normalized)
+        if not match:
+            continue
+        candidates = ([match.group(1)] if match.group(1) else []) + values[index + 1 :]
+        for candidate in candidates:
+            candidate = _string(candidate)
+            if (
+                not candidate
+                or _is_section_label(candidate)
+                or _is_ui_text(candidate)
+                or _is_noise_value(candidate)
+                or _is_breadcrumb(candidate)
+            ):
+                break
+            if candidate not in result:
+                result.append(candidate)
+            if len(result) == 20:
+                return result
+    return result or None
 
 
 def _features(
-    values: list[str], name: str, description: str | None, price: Price | None, seller: str | None
+    values: list[str],
+    name: str,
+    description: str | None,
+    price: Price | None,
+    seller: str | None,
+    category: str | None,
+    brand: str | None,
+    variants: list[str] | None,
 ) -> list[str]:
     excluded = {name.casefold()}
-    if description:
-        excluded.add(description.casefold())
+    for field in (description, seller, category, brand, *(variants or [])):
+        if field:
+            excluded.add(field.casefold())
     if price:
-        excluded.add(str(price.amount).casefold())
-    if seller:
-        excluded.add(seller.casefold())
+        excluded.update({str(price.amount).casefold(), f"{price.amount:.2f}".casefold(), price.currency.casefold()})
     result: list[str] = []
     for value in values:
         normalized = _string(value)
@@ -416,6 +629,7 @@ def _features(
             or len(normalized) > 300
             or _is_ui_text(normalized)
             or _is_section_label(normalized)
+            or _is_noise_value(normalized)
             or _price_from_text([normalized]) is not None
         ):
             continue
@@ -435,7 +649,7 @@ def _images(values: list[str], structured: object) -> list[str]:
         if not _valid_image_url(value) or _is_ui_image_url(value) or value in result:
             continue
         result.append(value)
-        if len(result) == 10:
+        if len(result) == 10:  # SPEC 002/validation: até 10 imagens válidas/deduplicadas
             break
     return result
 

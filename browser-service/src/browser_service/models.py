@@ -36,6 +36,10 @@ class ProductCandidate:
     images: list[str]
     seller: str | None
     source_url: str
+    category: str | None = None
+    brand: str | None = None
+    variants: list[str] | None = None
+    snapshot: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -51,6 +55,14 @@ class ProductCandidate:
             payload["price"] = self.price.to_json()
         if self.seller is not None:
             payload["seller"] = self.seller
+        if self.category is not None:
+            payload["category"] = self.category
+        if self.brand is not None:
+            payload["brand"] = self.brand
+        if self.variants is not None:
+            payload["variants"] = list(self.variants)
+        if self.snapshot is not None:
+            payload["snapshot"] = self.snapshot
         return payload
 
 

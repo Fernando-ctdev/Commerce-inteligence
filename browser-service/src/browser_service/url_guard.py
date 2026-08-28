@@ -21,6 +21,8 @@ _SECRET_QUERY_KEYS = {
     "sid",
     "token",
 }
+MAX_URL_LENGTH = 2_048
+MAX_OBSERVED_URL_LENGTH = 8_192
 
 
 def _default_resolver(host: str) -> list[str]:
@@ -69,8 +71,9 @@ def validate_url(
     *,
     resolver: Resolver | None = None,
     allowed_hosts: tuple[str, ...] = ("shop.tiktok.com",),
+    max_length: int = MAX_URL_LENGTH,
 ) -> str:
-    if not isinstance(raw_url, str) or not raw_url or len(raw_url) > 2048:
+    if not isinstance(raw_url, str) or not raw_url or not isinstance(max_length, int) or max_length <= 0 or len(raw_url) > max_length:
         raise UrlRejected()
 
     try:
@@ -114,4 +117,4 @@ def validate_url(
     )
 
 
-__all__ = ["UrlRejected", "validate_url"]
+__all__ = ["MAX_OBSERVED_URL_LENGTH", "MAX_URL_LENGTH", "UrlRejected", "validate_url"]

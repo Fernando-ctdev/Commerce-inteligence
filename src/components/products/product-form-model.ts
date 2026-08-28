@@ -2,6 +2,8 @@ export type ProductDraft = {
   name: string;
   description: string;
   category: string;
+  seller?: string;
+  variants?: string;
   price: string;
   characteristics: string;
   imageReferences: string;
@@ -15,6 +17,8 @@ export type ProductPayload = {
   name: string;
   description: string;
   category: string | null;
+  seller?: string | null;
+  variants?: string[] | null;
   price: string | null;
   priceCurrency?: string | null;
   features: string[];
@@ -61,6 +65,8 @@ export function buildProductPayload(draft: ProductDraft, idempotencyKey?: string
     name: clean(draft.name),
     description: clean(draft.description),
     category: cleanNullable(draft.category),
+    ...(draft.seller === undefined ? {} : { seller: cleanNullable(draft.seller) }),
+    ...(draft.variants === undefined ? {} : { variants: lines(draft.variants) }),
     price: cleanNullable(draft.price),
     features: lines(draft.characteristics),
     imageRefs: lines(draft.imageReferences),

@@ -1,7 +1,6 @@
 // Validação de entrada e canonicalização de URL TikTok Shop — SPEC/PLAN 002.
 // Preflight barato no Node: URL inválida nunca inicia Chromium (o Browser Service
 // reaplica a allowlist/egress/DNS na conexão real — camada de defesa própria dele).
-import { isValidPublicHttpUrlString } from "../product/validation";
 
 export const MAX_IMPORT_URL_LENGTH = 2048;
 
@@ -19,11 +18,11 @@ export function allowedImportHosts(): string[] {
  * https, host na allowlist, sem userinfo, sem porta explícita e ≤2048 caracteres.
  * Retorna a URL aparada ou null (erro associado ao campo na UI).
  */
+
 export function validateImportUrl(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const t = raw.trim();
   if (t.length === 0 || t.length > MAX_IMPORT_URL_LENGTH) return null;
-  if (!isValidPublicHttpUrlString(t)) return null; // http/https, sem credenciais embutidas
   let parsed: URL;
   try {
     parsed = new URL(t);
@@ -31,7 +30,7 @@ export function validateImportUrl(raw: unknown): string | null {
     return null;
   }
   if (parsed.protocol !== "https:") return null; // serviço aceita somente HTTPS TikTok
-  if (parsed.username || parsed.password) return null;
+  if (parsed.username || parsed.password) return null; // sem credenciais embutidas
   if (parsed.port !== "") return null; // porta explícita não é suportada
   const host = parsed.hostname.toLowerCase();
   const allowed = allowedImportHosts();

@@ -49,6 +49,20 @@ class UrlGuardTests(unittest.TestCase):
                 resolver=self.public_resolver,
             )
 
+    def test_observation_redirect_may_be_longer_without_relaxing_default_input_limit(self):
+        value = "https://www.tiktok.com/login?redirect_url=" + ("a" * 2_100)
+        with self.assertRaises(UrlRejected):
+            validate_url(value, resolver=self.public_resolver)
+        self.assertEqual(
+            validate_url(
+                value,
+                resolver=self.public_resolver,
+                allowed_hosts=("shop.tiktok.com", "*.tiktok.com"),
+                max_length=8_192,
+            ),
+            value,
+        )
+
     def test_rejects_reserved_dns_result(self):
         with self.assertRaises(UrlRejected):
             validate_url(

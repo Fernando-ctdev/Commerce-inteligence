@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 import threading
 import uuid
@@ -19,13 +19,13 @@ from .models import (
 )
 from .profile_lock import ProfileLock
 from .url_guard import validate_url
-
-
 @dataclass
 class _ManagedSession:
     view: SessionView
     process: Any
     profile_lock: ProfileLock
+    opening_lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
+    opening_error: ServiceError | None = None
 
 
 class SessionManager:
@@ -36,6 +36,7 @@ class SessionManager:
         chromium_factory: Callable[[Path, str], Any],
         handoff_store: Any | None = None,
         url_validator: Callable[[str], str] = validate_url,
+        observation_url_validator: Callable[[str], str] | None = None,
         extractor: ProductExtractor | None = None,
     ) -> None:
         self.profile_root = Path(profile_root)
@@ -43,6 +44,7 @@ class SessionManager:
         self.chromium_factory = chromium_factory
         self.handoff_store = handoff_store
         self.url_validator = url_validator
+        self.observation_url_validator = observation_url_validator or url_validator
         self.extractor = extractor or ProductExtractor()
         self._capacity = threading.Lock()
         self._state_lock = threading.RLock()
@@ -94,7 +96,7 @@ class SessionManager:
             managed = self._managed(session_id)
             opening = managed.view.state == SessionState.OPENING
         if opening:
-            self._advance_opening(managed)
+            self._resolve_opening(managed)
         with self._state_lock:
             return self._copy_view(managed.view)
 
@@ -138,7 +140,7 @@ class SessionManager:
             managed = self._managed(session_id)
             opening = managed.view.state == SessionState.OPENING
         if opening:
-            self._advance_opening(managed)
+            self._resolve_opening(managed)
         with self._state_lock:
             if managed.view.state != SessionState.READY:
                 raise InvalidState()
@@ -163,6 +165,7 @@ class SessionManager:
             self._set_error(managed, "HARNESS_FAILED", "Browser inspection failed")
         with self._state_lock:
             return self._copy_view(managed.view)
+
     def close(self, session_id: str) -> SessionView:
         with self._state_lock:
             managed = self._managed(session_id)
@@ -216,10 +219,24 @@ class SessionManager:
             raise SessionNotFound()
         return managed
 
+    def _resolve_opening(self, managed: _ManagedSession) -> ServiceError | None:
+        """Serializa a abertura por sessão: apenas um caller executa _advance_opening
+        (uma única inspect/transição). Concorrentes esperam em opening_lock — nunca
+        no state lock, que o harness não pode bloquear — e recebem o mesmo erro
+        original; erro terminal nunca é sobrescrito nem reinspeciona processo morto."""
+        with managed.opening_lock:
+            with self._state_lock:
+                state = managed.view.state
+            if state is not SessionState.OPENING:
+                if state is SessionState.ERROR and managed.opening_error is not None:
+                    return managed.opening_error
+                return None
+            return self._advance_opening(managed)
+
     def _validate_observation_url(self, observation: Any) -> None:
         observed_url = getattr(observation, "page_url", "")
         if observed_url:
-            self.url_validator(observed_url)
+            self.observation_url_validator(observed_url)
 
     def _issue_handoff(self, managed: _ManagedSession) -> None:
         if self.handoff_store is None:
@@ -228,7 +245,8 @@ class SessionManager:
         managed.view.handoff_token = handoff.token
         managed.view.interactive_url = handoff.url
 
-    def _advance_opening(self, managed: _ManagedSession) -> None:
+    def _advance_opening(self, managed: _ManagedSession) -> ServiceError | None:
+        """Avança OPENING; em falha faz cleanup via _set_error e devolve o erro original."""
         try:
             open_url = getattr(self.harness, "open_url", None)
             if open_url is not None:
@@ -237,17 +255,25 @@ class SessionManager:
             self._validate_observation_url(observation)
             with self._state_lock:
                 if managed.view.state == SessionState.CLOSED:
-                    return
+                    return None
                 required_state = getattr(observation, "required_state", None)
                 if required_state is None:
                     managed.view.state = SessionState.READY
-                    return
+                    return None
                 managed.view.state = SessionState(required_state)
                 self._issue_handoff(managed)
+            return None
         except ServiceError as exc:
+            # publica o erro ANTES do estado ERROR: quem vir ERROR sob state lock
+            # já encontra opening_error (atomicidade da transição).
+            managed.opening_error = exc
             self._set_error(managed, exc.code, exc.public_message)
+            return exc
         except Exception:
+            error = ConfiguredServiceError()
+            managed.opening_error = error
             self._set_error(managed, "HARNESS_FAILED", "Browser inspection failed")
+            return error
 
     def _set_error(self, managed: _ManagedSession, code: str, message: str) -> None:
         with self._state_lock:

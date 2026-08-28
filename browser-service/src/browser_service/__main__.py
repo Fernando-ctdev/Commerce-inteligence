@@ -8,7 +8,7 @@ from .harness import HarnessClient
 from .interactive import HandoffStore, InteractiveProxy
 from .server import BrowserHttpServer, BrowserRequestHandler
 from .session_manager import SessionManager
-from .url_guard import validate_url
+from .url_guard import MAX_OBSERVED_URL_LENGTH, validate_url
 
 
 def main() -> None:
@@ -32,6 +32,9 @@ def main() -> None:
         chromium_factory=chromium_factory,
         handoff_store=handoffs,
         url_validator=lambda url: validate_url(url, allowed_hosts=config.allowed_tiktok_hosts),
+        observation_url_validator=lambda url: validate_url(
+            url, allowed_hosts=config.allowed_tiktok_hosts, max_length=MAX_OBSERVED_URL_LENGTH
+        ),
     )
     server = BrowserHttpServer(
         (config.bind_host, config.port),

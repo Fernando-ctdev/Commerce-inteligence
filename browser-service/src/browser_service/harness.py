@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import os
 import subprocess
@@ -20,6 +20,7 @@ class PageObservation:
     json_ld: list[dict[str, Any]]
     image_urls: list[str]
     required_state: SessionState | None = None
+    meta_image_urls: list[str] = field(default_factory=list)
 
 
 class HarnessClient:
@@ -36,7 +37,13 @@ class HarnessClient:
   jsonLd: Array.from(document.querySelectorAll('script[type="application/ld+json"]')).map((node) => {
     try { return JSON.parse(node.textContent || ''); } catch (_) { return null; }
   }).filter(Boolean),
-  images: Array.from(document.images).map((image) => image.currentSrc || image.src).filter(Boolean),
+  metaImages: Array.from(document.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"]'))
+    .map((node) => node.getAttribute('content') || '').filter(Boolean),
+  images: Array.from(document.images).flatMap((image) => [
+    image.currentSrc,
+    image.getAttribute('data-src'),
+    image.src,
+  ]).filter(Boolean),
   text: (document.body && document.body.innerText || '').slice(0, 20000)
 })"""
         script = f"""
@@ -64,6 +71,7 @@ result = {{
     "text": [line.strip() for line in str(structured.get("text", "")).splitlines() if line.strip()],
     "json_ld": structured.get("jsonLd", []),
     "image_urls": structured.get("images", []),
+    "meta_image_urls": structured.get("metaImages", []),
 }}
 print({_RESULT_MARKER!r} + json.dumps(result, ensure_ascii=False))
 """
@@ -82,6 +90,7 @@ print({_RESULT_MARKER!r} + json.dumps(result, ensure_ascii=False))
             json_ld=[value for value in result.get("json_ld", []) if isinstance(value, dict)],
             image_urls=[str(value) for value in result.get("image_urls", []) if isinstance(value, str)],
             required_state=required_state,
+            meta_image_urls=[str(value) for value in result.get("meta_image_urls", []) if isinstance(value, str)],
         )
 
     def _run(self, cdp_url: str, script: str) -> Any:
@@ -107,6 +116,62 @@ print({_RESULT_MARKER!r} + json.dumps(result, ensure_ascii=False))
                 except json.JSONDecodeError as exc:
                     raise HarnessFailed() from exc
         raise HarnessFailed()
+
+    # Ações semânticas allowlisted (ADR-013): scripts fixos, definidos server-side.
+    # Nenhum seletor, JS, coordenada ou URL vem do chamador; `label` é um trecho de
+    # evidência sanitizada usado apenas para casamento por conteúdo.
+    def scroll_product_surface(self, cdp_url: str) -> None:
+        self._run_action(
+            cdp_url,
+            r"""window.scrollBy({top: 900, left: 0, behavior: 'instant'}); true""",
+        )
+
+    def expand_description(self, cdp_url: str, label: str) -> None:
+        fragment = label.strip()[:60].replace("\\", "").replace("'", "").replace('"', "")
+        if not fragment:
+            raise HarnessFailed()
+        expression = f"""
+(function () {{
+  const fragment = {fragment!r}.toLowerCase();
+  const clickables = document.querySelectorAll('summary, button, a[role="button"], [role="button"], a');
+  for (const el of clickables) {{
+    const text = (el.innerText || el.textContent || '').trim().toLowerCase().slice(0, 120);
+    if (text && (text.includes(fragment) || /(ver mais|see more|description|descri|detalhes|details|leia mais)/.test(text))) {{
+      el.click();
+      return true;
+    }}
+  }}
+  return false;
+}})()
+"""
+        self._run_action(cdp_url, expression)
+
+    def open_variants(self, cdp_url: str) -> None:
+        self._run_action(
+            cdp_url,
+            r"""(function () {
+  const pattern = /(variant|varia|tamanho|size|cor|color|op|option|modelo|model|selecionar|select)/i;
+  const clickables = document.querySelectorAll('button, [role="button"], summary, a');
+  for (const el of clickables) {
+    const label = (el.getAttribute('aria-label') || el.innerText || '').trim().slice(0, 120);
+    if (label && pattern.test(label)) {
+      el.click();
+      return true;
+    }
+  }
+  return false;
+})()""",
+        )
+
+    def _run_action(self, cdp_url: str, expression: str) -> None:
+        script = (
+            f"result = cdp(\"Runtime.evaluate\", expression={expression!r}, returnByValue=True)\n"
+            f"value = result.get('result', {{}}).get('result', {{}}).get('value')\n"
+            f"print({_RESULT_MARKER!r} + json.dumps({{'ok': bool(value)}}))\n"
+        )
+        payload = self._run(cdp_url, script)
+        if not isinstance(payload, dict) or payload.get("ok") is not True:
+            raise HarnessFailed()
 
 
 def classify_interaction(values: list[str]) -> SessionState | None:

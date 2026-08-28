@@ -1,13 +1,13 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-import unittest
 import threading
+import unittest
 
 from browser_service.config import ConfigError, ServiceConfig
 from browser_service.harness import PageObservation
 from browser_service.interactive import HandoffStore
-from browser_service.models import InvalidHandoff, ProfileInUse, SessionState
+from browser_service.models import InvalidHandoff, ProfileInUse, ServiceError, SessionState, UrlRejected
 from browser_service.session_manager import SessionManager
 
 
@@ -57,12 +57,7 @@ class ConfigTests(unittest.TestCase):
 
     def test_rejects_non_loopback_cdp_binding(self):
         with self.assertRaises(ConfigError):
-            ServiceConfig.from_env(
-                {
-                    "BROWSER_SERVICE_TOKEN": "test-token",
-                    "CDP_BIND_HOST": "0.0.0.0",
-                }
-            )
+            ServiceConfig.from_env({"BROWSER_SERVICE_TOKEN": "test-token", "CDP_BIND_HOST": "0.0.0.0"})
 
 
 class SessionStateTests(unittest.TestCase):
@@ -76,6 +71,7 @@ class SessionStateTests(unittest.TestCase):
             chromium_factory=lambda _profile_path, _url: self.fake_chromium,
             url_validator=lambda url: url,
         )
+
     def tearDown(self):
         self.manager.close_all()
         self.tempdir.cleanup()
@@ -94,21 +90,51 @@ class SessionStateTests(unittest.TestCase):
         with self.assertRaises(ProfileInUse):
             self.manager.start("profile-fernando-01", "https://shop.tiktok.com/product/456")
         self.assertEqual(self.fake_chromium.start_count, 1)
-    def test_extract_returns_factual_candidate_and_extracted_state(self):
+
+    def test_extract_returns_candidate_with_snapshot(self):
         session = self.manager.start("profile-fernando-01", "https://shop.tiktok.com/product/123")
         self.manager.get(session.session_id)
         self.harness.observation = PageObservation(
             page_url="https://shop.tiktok.com/product/123",
             title="A product",
             accessibility_names=["A product"],
-            text=[],
+            text=["Descrição do produto", "Produto para teste"],
             json_ld=[],
-            image_urls=[],
+            image_urls=["https://p16.tiktokcdn.com/image.jpg"],
         )
         extracted = self.manager.extract(session.session_id)
         self.assertEqual(extracted.state, SessionState.EXTRACTED)
         self.assertEqual(extracted.candidate.name, "A product")
+        self.assertEqual(extracted.candidate.snapshot["text"][0], "Descrição do produto")
 
+    def test_extract_url_rejection_terminates_session_and_releases_resources(self):
+        manager = SessionManager(
+            profile_root=Path(self.tempdir.name),
+            harness=self.harness,
+            chromium_factory=lambda _profile_path, _url: self.fake_chromium,
+            url_validator=lambda url: url,
+            observation_url_validator=lambda _url: (_ for _ in ()).throw(UrlRejected()),
+        )
+        try:
+            session = manager.start("profile-fernando-01", "https://shop.tiktok.com/product/123")
+            manager.get(session.session_id)
+            self.harness.observation = PageObservation(
+                page_url="https://evil.example/product",
+                title="A product",
+                accessibility_names=["A product"],
+                text=[],
+                json_ld=[],
+                image_urls=[],
+            )
+            view = manager.extract(session.session_id)
+            self.assertEqual(view.state, SessionState.ERROR)
+            self.assertEqual(view.error_code, "URL_REJECTED")
+            self.assertEqual(self.fake_chromium.terminate_count, 1)
+            second = manager.start("profile-fernando-01", "https://shop.tiktok.com/product/456")
+            self.assertEqual(second.state, SessionState.OPENING)
+            manager.close(second.session_id)
+        finally:
+            manager.close_all()
 
     def test_close_kills_owned_chromium_and_preserves_profile(self):
         session = self.manager.start("profile-fernando-01", "https://shop.tiktok.com/product/123")
@@ -172,16 +198,14 @@ class HandoffTests(unittest.TestCase):
             profile_root=Path(self.tempdir.name),
             harness=self.harness,
             chromium_factory=lambda _profile_path, _url: self.fake_chromium,
-            handoff_store=HandoffStore(
-                base_url="http://127.0.0.1:8080",
-                clock=self.fake_clock.now,
-            ),
+            handoff_store=HandoffStore(base_url="http://127.0.0.1:8080", clock=self.fake_clock.now),
             url_validator=lambda url: url,
         )
 
     def tearDown(self):
         self.manager.close_all()
         self.tempdir.cleanup()
+
     def test_handoff_exists_only_while_blocked(self):
         started = self.manager.start("profile-fernando-01", "https://shop.tiktok.com/product/123")
         view = self.manager.get(started.session_id)

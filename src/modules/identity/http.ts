@@ -113,7 +113,7 @@ export async function handleRegister(req: Request): Promise<Response> {
       body.password as string,
       readCookie(req, SESSION_COOKIE),
     );
-    return ok("/home", sessionCookie(token));
+    return ok("/today", sessionCookie(token));
   } catch (e) {
     if (e instanceof AccountExistsError)
       return json(409, { error: "Esta conta já existe. Tente entrar." });
@@ -144,7 +144,7 @@ export async function handleLogin(req: Request): Promise<Response> {
       readCookie(req, SESSION_COOKIE),
     );
     if (!token) return json(401, { error: "E-mail ou senha inválidos." });
-    return ok("/home", sessionCookie(token));
+    return ok("/today", sessionCookie(token));
   } catch (e) {
     console.error(
       "login failed:",

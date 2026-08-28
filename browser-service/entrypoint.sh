@@ -4,10 +4,14 @@ set -eu
 export DISPLAY="${DISPLAY:-:99}"
 mkdir -p /browser-profiles
 
+mkdir -p /tmp/.X11-unix
+display_number="${DISPLAY#*:}"
+# Stale lock/socket de um restart impedem o Xvfb de subir: remove antes de iniciar.
+rm -f "/tmp/.X${display_number}-lock" "/tmp/.X11-unix/X${display_number}"
+
 Xvfb "$DISPLAY" -screen 0 1440x1000x24 -ac +extension RANDR >/tmp/browser-xvfb.log 2>&1 &
 XVFB_PID=$!
 
-display_number="${DISPLAY#*:}"
 for _attempt in 1 2 3 4 5 6 7 8 9 10; do
     if [ -S "/tmp/.X11-unix/X${display_number}" ]; then
         break

@@ -3,5 +3,5 @@ import { redirect } from "next/navigation";
 
 export default async function NewProductPage() {
   await requireSession();
-  redirect("/home");
+  redirect("/today");
 }

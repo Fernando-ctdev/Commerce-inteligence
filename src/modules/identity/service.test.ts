@@ -46,7 +46,7 @@ const tokenOf = (res: Response): string => {
   return m![1];
 };
 
-test("register cria conta+workspace+sessão e responde 200 {redirectTo:'/home'}", async (t) => {
+test("register cria conta+workspace+sessão e responde 200 {redirectTo:'/today'}", async (t) => {
   if (!dbUp) return t.skip();
   const res = await handleRegister(
     req("/api/access/register", {
@@ -55,7 +55,7 @@ test("register cria conta+workspace+sessão e responde 200 {redirectTo:'/home'}"
     }),
   );
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { redirectTo: "/home" });
+  assert.deepEqual(await res.json(), { redirectTo: "/today" });
   assert.ok(res.headers.get("set-cookie")?.includes("HttpOnly"));
   assert.ok(res.headers.get("set-cookie")?.includes("SameSite=Lax"));
 });
@@ -105,6 +105,7 @@ test("login resolve o mesmo workspace; erro é uniforme 401 sem enumerar", async
     req("/api/access/login", { email: e, password: "senha-segura-123" }),
   );
   assert.equal(first.status, 200);
+  assert.deepEqual(await first.json(), { redirectTo: "/today" });
   const ctx1 = await resolveSession(tokenOf(first));
   assert.ok(ctx1);
   const second = await handleLogin(
