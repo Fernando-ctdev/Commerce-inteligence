@@ -5,9 +5,11 @@ e a SPEC aprovada do slice atual.
 
 Crie:
 
-`docs/specs/<slice>/PLAN.md`
+`docs/plans/<slice>/PLAN.md`
 
 O PLAN deve definir como implementar integralmente a SPEC no estado real atual do repositório.
+
+Para a criação do plan utilize a skill:tlc-spec-driven  .
 
 Inclua somente o necessário para o slice:
 

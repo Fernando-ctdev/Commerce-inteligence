@@ -2,7 +2,9 @@
 
 Leia `AGENTS.md`, as fontes canônicas e `docs/delivery/SLICES.md`.
 
-Selecione somente o próximo slice aprovado ainda sem SPEC, respeitando suas dependências e o estado real do repositório.
+Selecione somente o próximo slice aprovado ainda sem SPEC, respeitando suas dependências e o estado real do repositório. 
+
+Para a criação da Spec utilize a skill:tlc-spec-driven.
 
 Crie:
 
