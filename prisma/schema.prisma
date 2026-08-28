@@ -27,6 +27,10 @@ model Tenant {
   createdAt   DateTime     @default(now())
   user        User         @relation(fields: [userId], references: [id])
   sessions    Session[]
+  attempts    ProductImportAttempt[]
+  products    Product[]
+  entitlement TenantEntitlement?
+  preference  TenantPreference?
 
   @@map("tenants")
 }
@@ -44,5 +48,76 @@ model Session {
 
   @@index([userId])
   @@map("sessions")
+}
+
+// Slice 002 — Importação de Product via Product Importer (SPEC/PLAN §2.5).
+// Attempt carrega candidate/gaps/redirectChain como Json (payload versionado, ADR-003);
+// chaves de tenant, status e timestamps permanecem estruturados.
+model ProductImportAttempt {
+  id                String    @id @default(uuid())
+  tenantId          String
+  status            String    @default("QUEUED")
+  submittedUrl      String
+  sourceUrl         String?
+  redirectChain     Json?
+  candidate         Json?
+  gaps              Json?
+  publicErrorCode   String?
+  internalCauseCode String?
+  candidateReadyAt  DateTime?
+  leaseOwnerId      String?
+  leaseDeadlineAt   DateTime?
+  runSteps          Int       @default(0)
+  runTokens         Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([status, leaseDeadlineAt])
+  @@index([updatedAt])
+  @@map("product_import_attempts")
+}
+
+model Product {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  name               String
+  description        String?
+  category           String?
+  brand              String?
+  priceAmount        Decimal?
+  priceCurrency      String?
+  features           Json
+  variants           Json?
+  images             Json
+  seller             String?
+  // Nullable: caminho manual (fallback) não tem URL de origem.
+  submittedUrl       String?
+  sourceUrl          String?
+  provenance         Json
+  targetContentCount Int
+  createdAt          DateTime @default(now())
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("products")
+}
+
+model TenantEntitlement {
+  tenantId            String @id
+  activeProductsLimit Int?
+  activeProductsUsed  Int    @default(0)
+  tenant              Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("tenant_entitlements")
+}
+
+model TenantPreference {
+  tenantId           String @id
+  targetContentCount Int
+  tenant             Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("tenant_preferences")
 }
 
