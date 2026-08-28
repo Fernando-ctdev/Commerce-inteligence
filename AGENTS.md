@@ -74,6 +74,16 @@ sinalize a inconsistência antes de introduzir uma nova decisão.
   relevantes disponíveis no projeto, incluindo testes, typecheck, lint e build.
   Informe explicitamente qualquer validação que não tenha sido executada.
 
+- Commits devem seguir `feat(identificador-da-tarefa): descrição`, com
+  descrição objetiva das mudanças e mensagem completa de no máximo 300
+  caracteres, salvo quando outro tipo Conventional Commit for claramente mais
+  correto (`fix`, `docs`, `chore`, etc.).
+
+- Use um Git Flow básico e leve: `develop` é integração, mudanças não triviais
+  devem sair de branch curta por tarefa (`feat/<identificador>`,
+  `fix/<identificador>`, `chore/<identificador>`). Não criar branch para ajuste
+  mínimo isolado, nem acumular trabalho de features diretamente em `develop`.
+
   ## Framework operacional
 
 Os prompts e templates do framework ficam em `framework/`.
