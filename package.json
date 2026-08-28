@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/components/products/product-form-model.test.ts src/modules/identity/http.test.ts src/modules/identity/password.test.ts src/modules/identity/service.test.ts"
+    "test": "tsx --test src/components/products/product-form-model.test.ts src/components/products/product-import-view-model.test.ts src/modules/identity/http.test.ts src/modules/identity/password.test.ts src/modules/identity/service.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
