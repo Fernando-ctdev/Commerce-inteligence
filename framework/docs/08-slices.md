@@ -1,8 +1,10 @@
 # Slices Definition
 
-Defina o mapa completo de slices do MVP antes da implementação.
+Defina o mapa de slices necessário para o escopo atual antes de iniciar sua implementação.
 
-Um slice é a menor capacidade vertical que entrega um resultado real ao usuário e pode ser verificada de ponta a ponta.
+O escopo pode representar uma primeira entrega, uma nova capacidade, uma evolução de domínio, uma release ou qualquer outro recorte coerente de trabalho.
+
+Um slice é a menor capacidade vertical que entrega comportamento observável e pode ser verificada de ponta a ponta.
 
 Exemplo bom:
 
@@ -15,4 +17,8 @@ Exemplos ruins:
 - Criar frontend;
 - Implementar repository layer.
 
-Defina todos os slices no nível macro, mas crie SPEC/PLAN apenas quando cada slice se tornar o próximo a ser implementado.
+Infraestrutura deve entrar no primeiro slice que realmente precisar dela.
+
+Defina os slices no nível macro do escopo atual, mas crie SPEC e PLAN somente quando cada slice se tornar o próximo a ser implementado.
+
+O mapa deve apontar de quais PRDs cada requisito veio para facilitar cobertura e rastreabilidade.

@@ -1,11 +1,32 @@
-# Prompt — Criar System Design
+# Prompt — Criar ou Atualizar System Design
 
-Leia `AGENTS.md` se existir e trate `docs/product/PRD.md` como principal fonte de verdade funcional.
+Leia `AGENTS.md` se existir.
 
-Crie `docs/architecture/SYSTEM-DESIGN.md` com a arquitetura técnica integrada necessária para trazer o produto à vida.
+Descubra e leia **todos os PRDs relevantes em `docs/product/`** para o escopo atual. Não assuma que `docs/product/PRD.md` é a única fonte funcional.
 
-Defina módulos/domínios e boundaries, fluxos principais, persistência, integrações, autenticação/autorização, processamento assíncrono, requisitos não funcionais, segurança, observabilidade necessária e evolução futura já conhecida.
+Leia também System Design e ADRs existentes, quando houver.
 
-Projete para o produto real e para o MVP. Antecipe fronteiras futuras importantes sem implementar infraestrutura especulativa.
+Crie ou atualize `docs/architecture/SYSTEM-DESIGN.md` com a arquitetura técnica integrada necessária para sustentar o produto e o escopo atual.
 
-Não crie ADRs ainda; ao final apenas liste decisões relevantes que merecem ADR separado.
+Defina, conforme aplicável:
+
+- módulos/domínios e boundaries;
+- fluxos principais;
+- persistência;
+- integrações;
+- autenticação e autorização;
+- processamento assíncrono;
+- requisitos não funcionais;
+- segurança;
+- observabilidade necessária;
+- evolução já conhecida que afete fronteiras arquiteturais atuais.
+
+Projete para o produto real e para as necessidades atuais.
+
+Antecipe apenas fronteiras futuras cuja existência já seja relevante para evitar acoplamento incorreto. Não implemente infraestrutura especulativa.
+
+Em projeto existente, preserve decisões válidas e altere somente o que a nova necessidade realmente exigir.
+
+Não crie ADRs ainda. Ao final, liste somente decisões relevantes com alternativas e trade-offs que mereçam ADR separado.
+
+Se PRDs relevantes entrarem em conflito material, não escolha uma interpretação silenciosamente: registre o conflito e pare para revisão.

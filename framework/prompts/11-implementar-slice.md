@@ -1,7 +1,7 @@
 # Prompt — Implementar Slice
 
 Leia `AGENTS.md`, as fontes canônicas, `docs/delivery/SLICES.md`,
-a `SPEC.md` aprovada e o `PLAN.md` aprovado do slice atual em `docs/specs/<slice>/SPEC.md` e `docs/plans/<slice>/SPEC.md`.
+a `SPEC.md` aprovada e o `PLAN.md` aprovado do slice atual.
 
 Implemente integralmente somente o slice atual seguindo o PLAN e respeitando
 a SPEC como contrato de comportamento.
@@ -20,4 +20,4 @@ o PLAN, corrija o artefato correspondente e passe novamente por revisão
 antes de continuar.
 
 Quando a implementação prevista no PLAN estiver concluída, execute
-`12-review-verificar-slice`
+`12-review-verificar-slice`.

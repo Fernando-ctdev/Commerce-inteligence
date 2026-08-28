@@ -1,18 +1,25 @@
 # System Design
 
-O System Design define **como o sistema funciona tecnicamente como um todo**.
+O System Design traduz as fontes funcionais relevantes em arquitetura técnica integrada.
 
-Derive-o do PRD. Documente apenas o suficiente para orientar implementação coerente:
+Ele deve considerar o conjunto de PRDs aplicáveis ao escopo atual, e não apenas um arquivo específico.
 
-- arquitetura geral;
-- módulos/domínios e boundaries;
+Define, em nível arquitetural:
+
+- módulos e domínios;
+- boundaries;
 - fluxos principais;
 - persistência;
-- integrações externas;
-- autenticação/autorização quando relevante;
-- processamento síncrono/assíncrono;
+- integrações;
+- autenticação/autorização;
+- processamento assíncrono;
 - requisitos não funcionais;
 - segurança;
-- evolução futura já conhecida sem implementá-la prematuramente.
+- observabilidade necessária;
+- evolução conhecida que afete decisões atuais.
 
-O System Design é a visão integrada; ADRs explicam decisões específicas.
+Em projeto existente, não reescreva a arquitetura por cerimônia.
+
+Atualize o System Design quando a arquitetura vigente realmente mudar.
+
+Decisões com alternativas e trade-offs relevantes devem ser registradas em ADRs.

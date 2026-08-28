@@ -1,9 +1,21 @@
-# Prompt — Criar Engineering Principles
+# Prompt — Criar ou Atualizar Engineering Principles
 
-Leia PRD, System Design e ADRs aceitos.
+Leia `AGENTS.md` quando existir, os PRDs relevantes em `docs/product/`, System Design e ADRs aceitos.
 
-Crie `docs/engineering/PRINCIPLES.md` com regras práticas e permanentes para implementação neste projeto.
+Crie ou atualize `docs/engineering/PRINCIPLES.md` com regras práticas e duráveis para implementação neste projeto.
 
-Defina linguagem de domínio, boundaries, uso pragmático de patterns, orientação contra overengineering, regras de validação/segurança, abordagem de testes e quando um novo ADR é obrigatório.
+Defina somente princípios que mereçam orientar múltiplos slices, como:
 
-Não copie a arquitetura inteira e não coloque detalhes de libraries que não representem um princípio durável.
+- linguagem de domínio;
+- boundaries;
+- uso pragmático de patterns;
+- orientação contra overengineering;
+- validação e segurança;
+- abordagem de testes;
+- critérios para criação de novos ADRs.
+
+Não copie a arquitetura inteira.
+
+Não inclua detalhes de libraries, arquivos ou implementações locais que não representem princípio durável.
+
+Em projeto existente, preserve princípios válidos e altere apenas o que a evolução real do projeto exigir.

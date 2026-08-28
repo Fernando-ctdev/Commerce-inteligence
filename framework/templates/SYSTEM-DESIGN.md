@@ -1,38 +1,45 @@
 # System Design — <Produto>
 
-## Contexto
-<Resumo derivado do PRD.>
+## 1. Contexto e objetivos
 
-## Arquitetura geral
-<Visão técnica integrada.>
+<Quais necessidades funcionais e restrições arquiteturais este design sustenta.>
 
-## Domínios / módulos
-| Módulo | Responsabilidade | Depende de |
-|---|---|---|
+## 2. Fontes funcionais
 
-## Fluxos principais
-### <Fluxo>
-```text
-...
-```
+<PRD principal e PRDs especializados relevantes.>
 
-## Persistência
-...
+## 3. Arquitetura geral
 
-## Integrações externas
-...
+<Visão dos módulos, domínios e boundaries.>
 
-## Segurança e autorização
-...
+## 4. Fluxos principais
 
-## Processamento assíncrono
-...
+<Fluxos técnicos relevantes de ponta a ponta.>
 
-## Requisitos não funcionais
-...
+## 5. Persistência e dados
 
-## Evolução futura já prevista
-<O que precisa ser respeitado hoje, sem implementar prematuramente.>
+<Entidades, ownership, consistência e armazenamento em nível arquitetural.>
 
-## ADRs relacionados
+## 6. Integrações
+
+<Dependências e sistemas externos.>
+
+## 7. Autenticação e autorização
+
+<Modelo de acesso quando aplicável.>
+
+## 8. Processamento assíncrono
+
+<Jobs, filas e workers quando necessários.>
+
+## 9. Requisitos não funcionais
+
+<Segurança, confiabilidade, performance, disponibilidade e observabilidade relevantes.>
+
+## 10. Evolução e boundaries futuras
+
+<Preparações justificadas por necessidades conhecidas, sem infraestrutura especulativa.>
+
+## 11. Decisões que exigem ADR
+
 - ...

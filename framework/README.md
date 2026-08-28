@@ -1,23 +1,23 @@
 # AI-Assisted Product Engineering Framework
 
-Um framework enxuto para transformar uma ideia de produto em software entregue por agentes de IA com contexto, arquitetura e critérios claros.
+Um framework enxuto para estruturar, desenvolver e evoluir software com agentes de IA usando contexto, arquitetura e critérios claros.
 
-A ideia central é simples: **não pedir para a IA "criar o projeto completo"**. Primeiro estruturamos o produto. Depois entregamos o software em slices verticais, um por vez, até concluir o MVP.
+A ideia central é simples: **não pedir para a IA "criar o projeto completo" nem improvisar a próxima etapa**. O produto mantém fontes canônicas versionadas, o escopo atual é decomposto em slices verticais e cada slice passa por especificação, plano, implementação e verificação.
 
 ## Fluxo
 
 ```text
-Ideia de Produto
+Ideia / Necessidade / Evolução
       ↓
-Pesquisa / Validação
+Pesquisa / Validação, quando necessária
       ↓
-PRD de Produto
+PRD principal e/ou PRDs especializados
       ↓
 System Design
       ↓
 ADRs
       ↓
-Engineering Principles (Patterns)
+Engineering Principles
       ↓
 Design System / UX/UI
       ↓
@@ -29,10 +29,9 @@ Slices Definition
  LOOP DE ENTREGA POR SLICE
 ────────────────────────────
       ↓
-SDD
-Spec
+SPEC
  ↓
-Plan
+PLAN
  ↓
 Implementação
  ↓
@@ -49,30 +48,47 @@ Deploy
 Observabilidade + Feedback
       ↓
 Evolução do Produto
+      ↺ novas necessidades atualizam as fontes adequadas
 ```
 
 ## Regra mais importante
 
-**Ideia + Pesquisa/Validação existem para produzir um bom PRD.**
+As conversas, brainstorming e pesquisas existem para amadurecer decisões. As decisões que precisam sobreviver ao histórico devem terminar em fontes versionadas no repositório.
 
-Depois que o `PRD.md` está aprovado, ele passa a ser a principal fonte de contexto funcional. O agente não precisa carregar eternamente toda a conversa, brainstorming ou pesquisa anterior para conseguir produzir System Design, ADRs, Design System ou slices.
+Em um produto novo, normalmente existe um PRD principal em `docs/product/PRD.md`.
 
-O restante do framework deriva de fontes versionadas no repositório.
+Conforme o produto evolui, `docs/product/` pode conter PRDs especializados para domínios, capacidades, funcionalidades ou frentes específicas.
+
+O PRD principal governa o contexto global. Os PRDs especializados refinam suas respectivas áreas.
+
+Nenhuma etapa deve assumir que existe apenas um PRD.
 
 ## Como usar
 
-1. Converse com um agente sobre sua ideia e pesquise/valide as hipóteses relevantes.
-2. Gere e aprove o `PRD.md`.
-3. Gere o System Design a partir do PRD.
-4. Registre ADRs apenas para decisões arquiteturais relevantes.
-5. Defina Engineering Principles do projeto.
-6. Gere o Design System/UX usando PRD + arquitetura como contexto.
-7. Crie o `AGENTS.md` apontando para as fontes canônicas.
-8. Derive o mapa completo de slices do MVP.
-9. Para cada slice: `SPEC → PLAN → IMPLEMENT → TEST/VALIDATE/SECURITY → REVIEW → MERGE`.
-10. Quando todos os slices do MVP terminarem: deploy, observe, receba feedback e evolua.
+### Produto novo
 
-Veja [QUICKSTART.md](QUICKSTART.md) para aplicar em um projeto novo e [FRAMEWORK.md](FRAMEWORK.md) para a definição completa.
+1. Entenda a ideia e pesquise/valide as hipóteses relevantes.
+2. Crie e aprove o PRD principal.
+3. Gere o System Design.
+4. Registre ADRs somente para decisões arquiteturais relevantes.
+5. Defina Engineering Principles.
+6. Gere o Design System/UX quando aplicável.
+7. Crie o `AGENTS.md` apontando para as fontes canônicas.
+8. Defina os slices do escopo atual.
+9. Para cada slice: `SPEC → PLAN → IMPLEMENT → TEST/VALIDATE/SECURITY → REVIEW → MERGE`.
+
+### Produto existente
+
+1. Leia `AGENTS.md` e as fontes canônicas.
+2. Identifique o escopo da mudança.
+3. Atualize ou crie PRD especializado somente quando a mudança funcional exigir.
+4. Atualize System Design/ADR/Design apenas quando suas respectivas decisões mudarem.
+5. Derive os slices necessários para o novo escopo.
+6. Execute o mesmo loop por slice.
+
+Não recrie documentos que continuam válidos apenas para reiniciar o processo.
+
+Veja [QUICKSTART.md](QUICKSTART.md) para os pontos de entrada e [FRAMEWORK.md](FRAMEWORK.md) para a definição completa.
 
 ## Estrutura deste repositório
 
@@ -80,20 +96,20 @@ Veja [QUICKSTART.md](QUICKSTART.md) para aplicar em um projeto novo e [FRAMEWORK
 docs/       explicação curta de cada etapa
 templates/  modelos dos artefatos canônicos
 prompts/    prompts prontos para executar cada etapa
-scripts/    bootstrap e checagem simples
-examples/   exemplo mínimo de organização de projeto
 ```
 
 ## Filosofia
 
 - simples por padrão;
-- rigor apenas onde reduz risco real;
+- rigor somente onde reduz risco real;
 - documentação serve ao desenvolvimento, não o contrário;
 - produto antes de código;
-- slices são verticais e orientados a resultado de usuário;
+- fontes canônicas são descobertas pelo agente, não presumidas por nome único;
+- slices são verticais e orientados a comportamento observável;
 - especificar somente o slice atual;
 - agentes só concluem quando os gates de conclusão passam;
-- decisões importantes ficam no repositório, não apenas no histórico do chat.
+- decisões importantes ficam no repositório, não apenas no histórico do chat;
+- o framework deve funcionar tanto na criação quanto na evolução contínua do produto.
 
 ## Status
 

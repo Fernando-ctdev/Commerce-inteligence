@@ -1,9 +1,28 @@
-# Prompt — Criar Design System / UX/UI
+# Prompt — Criar ou Atualizar Design System / UX/UI
 
-Leia PRD, System Design, ADRs e Principles relevantes.
+Leia `AGENTS.md` quando existir, os PRDs relevantes em `docs/product/`, System Design, ADRs e Principles relevantes.
 
-Crie `DESIGN.md` como fonte de verdade de UX/UI do produto: contexto de uso, princípios, direção visual, responsividade, navegação, tokens, tipografia, espaçamento, componentes conceituais, estados, acessibilidade e motion quando necessário.
+Crie ou atualize `DESIGN.md` como fonte de verdade de UX/UI do produto.
 
-Projete para o público e comportamento real descritos no PRD. Mantenha complexidade por trás e simplicidade na frente.
+Defina, conforme aplicável:
 
-Não duplique detalhes de backend ou decisões técnicas que pertencem ao System Design/ADRs.
+- contexto de uso;
+- princípios;
+- direção visual;
+- responsividade;
+- navegação;
+- tokens;
+- tipografia;
+- espaçamento;
+- componentes conceituais;
+- estados;
+- acessibilidade;
+- motion.
+
+Projete para o público e comportamento real descritos nas fontes funcionais relevantes.
+
+Mantenha complexidade por trás e simplicidade na frente.
+
+Em projeto existente, preserve decisões visuais válidas e altere somente o que o novo escopo exigir.
+
+Não duplique detalhes de backend ou decisões técnicas que pertencem ao System Design ou ADRs.

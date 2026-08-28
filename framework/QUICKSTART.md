@@ -1,6 +1,8 @@
 # Quickstart
 
-## Projeto ainda é uma ideia
+O framework possui pontos de entrada diferentes conforme o estado real do projeto.
+
+## Produto ainda é uma ideia
 
 Use os prompts em ordem:
 
@@ -24,24 +26,42 @@ Depois comece o loop por slice:
 12-review-verificar-slice.md
 ```
 
-## Projeto já possui PRD aprovado
+## Projeto já possui definição funcional aprovada
 
-Comece diretamente em `03-criar-system-design.md`.
+Não recrie o PRD apenas para seguir a sequência do framework.
 
-O histórico anterior ao PRD não precisa ser reconstruído se o PRD contém a definição necessária do produto.
+Leia os PRDs existentes em `docs/product/` e entre na primeira etapa que ainda precisa ser criada ou atualizada.
 
-## Inicializar estrutura de arquivos
+Exemplos:
 
-```bash
-./scripts/init-project.sh /caminho/do/projeto
+```text
+PRDs prontos, sem arquitetura
+→ 03-criar-system-design.md
+
+Arquitetura pronta, novo escopo funcional
+→ atualizar/criar PRD relevante
+→ atualizar arquitetura/ADR se necessário
+→ 08-definir-slices.md
+
+Fontes canônicas continuam válidas e há novo escopo já definido
+→ 08-definir-slices.md
+
+Slices já definidos
+→ 09-criar-spec.md
 ```
 
-O script copia somente os templates essenciais. Preencha-os através dos prompts conforme o projeto evolui.
+O histórico anterior aos documentos canônicos não precisa ser reconstruído quando eles já contêm contexto suficiente.
 
-## Conferir contexto mínimo
+## Regra de entrada
 
-```bash
-./scripts/check-project.sh /caminho/do/projeto
-```
+Não execute etapas anteriores apenas por cerimônia.
 
-O checker verifica presença dos artefatos principais; ele não substitui revisão humana ou validação técnica.
+Antes de começar:
+
+1. leia `AGENTS.md`, quando existir;
+2. descubra as fontes canônicas existentes;
+3. identifique o escopo atual;
+4. determine qual é a primeira decisão ou artefato realmente ausente/desatualizado;
+5. continue o fluxo a partir dali.
+
+O framework deve preservar contexto válido, não recriá-lo.

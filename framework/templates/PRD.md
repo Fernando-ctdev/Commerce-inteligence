@@ -1,33 +1,51 @@
-# PRD — <Produto>
+# PRD — <Produto / Capacidade>
 
-## 1. Visão
-<Definição curta do produto.>
+## 1. Papel deste PRD
 
-## 2. Problema
+<Indique se este é o PRD principal do produto ou um PRD especializado e qual fronteira ele governa.>
+
+## 2. Contexto / Visão
+
+<Definição curta do produto, capacidade ou frente coberta por este documento.>
+
+## 3. Problema
+
 <Problema real que será resolvido.>
 
-## 3. Público
-<Quem usa e em qual contexto.>
+## 4. Público / Atores
 
-## 4. Proposta de valor
+<Quem usa ou é afetado e em qual contexto.>
+
+## 5. Proposta de valor / Resultado esperado
+
 <Resultado central entregue.>
 
-## 5. Core loop
+## 6. Fluxo ou Core Loop relevante
+
 ```text
 <Ação → resultado → próxima ação>
 ```
 
-## 6. Escopo do MVP
+## 7. Escopo deste PRD
+
 - ...
 
-## 7. Requisitos e regras principais
+## 8. Requisitos e regras principais
+
 - ...
 
-## 8. Não objetivos
+## 9. Não objetivos
+
 - ...
 
-## 9. Métricas / critérios de sucesso
+## 10. Métricas, critérios de sucesso ou aceite
+
 - ...
 
-## 10. Riscos e hipóteses abertas
+## 11. Riscos e hipóteses abertas
+
 - ...
+
+## 12. Relação com outras fontes
+
+<PRD principal, PRDs especializados relacionados e outras fontes canônicas que delimitam este documento, quando aplicável.>
