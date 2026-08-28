@@ -1,4 +1,4 @@
-# PRD — Importação de Produtos via Browser
+# PRD — Importação de Produtos via Product Importer
 
 ## 1. Objetivo
 
@@ -9,11 +9,9 @@ A experiência principal deve ser:
 ```text
 Colar link do produto
 ↓
-Sistema abre o TikTok
+Product Importer abre a página em Chromium headless
 ↓
-Usuário autentica se necessário
-↓
-Sistema extrai os dados
+Agent Runner compreende e extrai os fatos
 ↓
 Usuário confirma
 ↓
@@ -23,9 +21,6 @@ Produto é salvo
 A regra é:
 
 > **O usuário informa qual é o produto. A plataforma descobre o restante.**
-
----
-
 ## 2. Problema
 
 O cadastro atual exige informações que o usuário não deveria precisar fornecer manualmente, como:
@@ -55,233 +50,111 @@ Informações estratégicas devem ser descobertas posteriormente pela Commerce I
 ```text
 Adicionar produto
 
-[ URL do TikTok Shop ]
+[ URL do produto ]
 
 [ Analisar produto ]
 ```
 
-O backend cria ou reutiliza um browser profile associado ao usuário.
+O Product Importer recebe a URL, abre a página em Chromium headless e inicia o Agent Runner especializado em Product Extraction.
 
 ```text
 URL
 ↓
-Browser Profile
+Product Importer
 ↓
-Chromium
+Agent Runner + Browser Harness
 ↓
-TikTok
+Chromium headless
+↓
+ProductCandidate
 ```
 
-### Se o TikTok exigir autenticação
+O agente observa e interage somente com a página analisada, usando o menor conjunto de ferramentas necessário para localizar o produto principal e seus fatos. Não há browser visual, portal, iframe, handoff ou autenticação interativa do creator.
 
-O browser é exibido de forma interativa dentro da aplicação.
+### Sessão
 
-O próprio usuário realiza:
+O browser é efêmero na POC. Profile persistente, se necessário para uma sessão técnica do TikTok, pertence ao Product Importer e não representa uma feature ou credencial do creator.
 
-* login;
-* QR Code;
-* 2FA;
-* CAPTCHA;
-* qualquer verificação necessária.
-
-Depois disso, o sistema assume novamente a operação.
-
-### Se a sessão ainda estiver válida
-
-O browser não precisa ser mostrado.
-
-```text
-URL
-↓
-Chromium já autenticado
-↓
-extração automática
-```
-
----
-
+O sistema nunca recebe ou armazena senha, cookie ou token fornecido pelo creator.
 ## 4. Persistência da sessão
 
-Não armazenar login ou senha do TikTok.
+Não armazenar login, senha, cookie ou token do TikTok na aplicação.
 
-O estado autenticado deve permanecer no próprio profile do Chromium:
+Na POC, o Chromium e seu estado são efêmeros. No MVP, um profile persistente poderá ser usado somente se a sessão técnica do TikTok exigir, sob responsabilidade do Product Importer, com isolamento e tratamento de segredo operacional.
 
-```text
-Browser Profile
-├── cookies
-├── localStorage
-├── IndexedDB
-└── demais dados do navegador
-```
+O profile não é associado ao usuário como feature de produto, não é exposto à interface e não é acessado por módulos de Product.
+## 5. Product Importer
 
-A aplicação principal guarda apenas a associação:
+O Product Importer é um único serviço/container responsável por orquestrar a extração:
 
 ```text
-userId → browserProfileId
+Commerce App / Next.js
+        ↓
+Product Importer
+        ├── HTTP API
+        ├── Agent Runner
+        ├── Browser Harness
+        ├── Chromium headless
+        └── Model Router / LLM
 ```
 
-O browser profile deve ser isolado por usuário.
+Na POC, pode executar de forma síncrona e manter estado somente durante a requisição. No MVP, deve suportar endpoint autenticado, `202 + importId`, polling, persistência de `ProductImportAttempt`, concorrência limitada, timeout e cleanup.
 
-O profile persistente do Chromium representa uma sessão autenticada e deve ser protegido como credencial, mesmo sem conter senha explícita.
+O Product Importer deve validar a URL, bloquear destinos proibidos, iniciar e encerrar Chromium, executar o Agent Runner específico, limitar ferramentas/duração/tokens/rede/navegação, devolver erros sanitizados e produzir somente `ProductCandidate`.
 
-A aplicação principal não deve manipular diretamente cookies, tokens ou dados internos da sessão do TikTok.
-
----
-
-## 5. Browser Service
-
-> **Nota de boundary documental:** os requisitos de sessão persistente, isolamento por usuário, human-in-the-loop e extração via browser pertencem a este PRD. A topologia concreta `Browser Service + Chromium + Browser Harness/CDP`, lifecycle, deployment e segurança operacional devem ser formalizados em ADR/Spec antes da implementação, sem alterar o comportamento de produto descrito aqui.
-
-Criar uma camada isolada responsável pelos browsers.
-
-```text
-Commerce API
-     ↓
-Browser Service
-     ↓
-Chromium + Browser Profile
-     ↓
-Browser Harness
-```
-
-Responsabilidades:
-
-* criar browser profile;
-* reutilizar browser profile;
-* iniciar Chromium;
-* abrir URL;
-* detectar necessidade de interação humana;
-* expor browser interativo quando necessário;
-* delegar navegação e inspeção ao Browser Harness;
-* executar extração;
-* encerrar browser quando terminar.
-
-A aplicação principal não deve implementar diretamente automação genérica de browser.
+A aplicação principal não deve implementar automação genérica de browser nem acessar CDP diretamente.
 
 ---
 
 ## 6. Browser Harness
 
-**Browser Harness será uma dependência oficial desta frente do sistema**, não apenas uma referência arquitetural.
-
-A skill deverá ser instalada e versionada no ambiente responsável pela automação do browser.
-
-Ela será utilizada pelo `Product Extraction Agent` para controlar, navegar e inspecionar o Chromium.
-
-Arquitetura:
+**Browser Harness é uma dependência oficial do Product Importer**, usada como infraestrutura de controle e inspeção do Chromium.
 
 ```text
-Commerce API
-     ↓
-Browser Service
-     ↓
-Chromium + Browser Profile
-     ↓
-Browser Harness Skill
-     ↓
-CDP
-     ↓
-TikTok Shop
+Product Importer
+        ↓
+Agent Runner + Browser Harness
+        ↓
+Chromium headless
+        ↓
+página do produto
 ```
 
-O Browser Harness será responsável por fornecer capacidades como:
+O Harness fornece observação e interação. O Agent Runner + LLM decide quais evidências são relevantes.
 
-* inspeção da Accessibility Tree;
-* interação com elementos da página;
-* execução de comandos via CDP;
-* leitura e inspeção de DOM;
-* inspeção de network quando necessário;
-* navegação na sessão autenticada;
-* execução de ações necessárias para revelar informações do produto.
+Capacidades permitidas:
 
-Prioridades de inspeção:
+* Accessibility Tree seletiva;
+* DOM;
+* Structured Data;
+* dados relevantes da página;
+* rolagem;
+* cliques;
+* expansão de seções.
 
-```text
-Accessibility Tree
-+
-DOM/CDP
-+
-Structured Data
-+
-Network
-```
-
-Evitar scrapers frágeis baseados principalmente em seletores específicos como:
-
-```text
-.product-title
-.price-wrapper > span
-```
-
-O agente deve interpretar semanticamente a interface.
-
-O sistema **não deverá reimplementar do zero as capacidades já fornecidas pelo Browser Harness**.
-
-A implementação própria deve ficar concentrada em:
-
-```text
-Browser Service
-+
-gestão dos browser profiles
-+
-human-in-the-loop
-+
-Product Extraction Agent
-+
-normalização para ProductCandidate
-```
-
-### Dependência
-
-Durante o setup do projeto, a skill Browser Harness deverá ser instalada e validada antes da implementação da frente de importação.
-
-O desenvolvimento deve assumir sua disponibilidade.
-
-### Regra
-
-> **Browser Harness é infraestrutura da solução, não código de referência para ser refeito internamente.**
+Não fornecer shell, filesystem, upload, download, novas abas ou navegação livre ao agente.
 
 ---
 
 ## 7. Product Extraction Agent
 
-O `Product Extraction Agent` utiliza o Browser Harness como infraestrutura de navegação e inspeção.
+O `Product Extraction Agent` é uma capability limitada ao fluxo:
 
-Sua responsabilidade é exclusivamente:
+```text
+URL
+↓
+produto principal
+↓
+ProductCandidate
+```
 
-> **Extrair os fatos necessários sobre o produto atualmente aberto no TikTok Shop.**
+Ele deve compreender a página, diferenciar o PDP de recomendações, reviews, banners, anúncios, navegação e produtos relacionados, e extrair apenas os fatos necessários.
 
-Dados desejados:
+O agente não pode criar estratégia, pesquisar concorrentes, seguir links arbitrários ou operar como browser agent genérico.
 
-* nome;
-* descrição;
-* preço;
-* moeda;
-* categoria;
-* marca;
-* características;
-* imagens;
-* seller;
-* variantes relevantes;
-* URL original.
+O Agent Runner executa um Agent Run por importação, com múltiplos turnos LLM/tool limitados por `maxSteps`, `maxDuration`, `maxTokens` e `maxNetworkInspections`. Esses valores devem ser calibrados com evals reais.
 
-O agente pode utilizar as capacidades fornecidas pelo Browser Harness para:
-
-* expandir descrições;
-* abrir seções necessárias;
-* abrir "Ver mais";
-* consultar Accessibility Tree;
-* consultar DOM/CDP;
-* consultar Structured Data;
-* inspecionar network quando útil;
-* navegar apenas pelas áreas necessárias para compreender o produto.
-
-O agente não deve implementar uma nova engine genérica de browser automation.
-
-O agente também não deve navegar pelo TikTok sem necessidade relacionada à extração do produto.
-
----
-
+O Product Importer solicita a task lógica `PRODUCT_PAGE_EXTRACTION`; provider e modelo não são escolhidos diretamente pelo importador.
 ## 8. Product Candidate
 
 A extração deve produzir primeiro um candidato:
@@ -403,47 +276,6 @@ Também não utilizar o Product Extraction Agent para gerar estratégia comercia
 
 ---
 
-## 11. Human in the Loop
-
-Quando o agente encontrar:
-
-```text
-LOGIN_REQUIRED
-CAPTCHA_REQUIRED
-2FA_REQUIRED
-USER_INTERACTION_REQUIRED
-```
-
-ele deve parar a automação e entregar o browser ao usuário.
-
-Fluxo:
-
-```text
-agente encontra bloqueio
-↓
-automação pausa
-↓
-browser interativo é exibido
-↓
-usuário resolve
-↓
-sistema detecta conclusão
-↓
-agente continua
-```
-
-O sistema não deve automatizar:
-
-* CAPTCHA;
-* senha;
-* QR Code;
-* 2FA;
-* confirmação humana solicitada pelo TikTok.
-
-Essas etapas pertencem ao usuário.
-
----
-
 ## 12. Fallback manual
 
 Se a extração falhar completamente:
@@ -467,39 +299,21 @@ Ele não deve virar o fluxo principal.
 
 ## 13. Desenvolvimento local
 
-Inicialmente:
+Na POC:
 
 ```text
 Docker
 ↓
-Browser Service
-↓
-Chromium
-↓
-Browser Harness
-↓
-volume persistente por browser profile
+Product Importer
+├── Agent Runner
+├── Browser Harness
+├── Chromium headless
+└── LLM
 ```
 
-Exemplo:
+O browser é efêmero e a execução pode ser síncrona. Não adicionar fila distribuída, proxy, MCP, event bus ou microserviço adicional.
 
-```text
-/browser-profiles/{profileId}
-```
-
-Cada usuário deve possuir profile isolado.
-
-Exemplo:
-
-```text
-/browser-profiles/user-a
-/browser-profiles/user-b
-```
-
-O profile deve poder sobreviver ao encerramento do Chromium para permitir reutilização da sessão.
-
----
-
+No MVP, o mesmo Product Importer pode adicionar endpoint autenticado, polling, persistência, concorrência, cleanup, observabilidade e profile persistente condicional.
 ## 14. Fora do escopo
 
 Não implementar nesta frente:
@@ -522,82 +336,45 @@ APIs oficiais poderão ser adicionadas futuramente como otimização interna.
 
 ## 15. Critérios de aceite
 
-A funcionalidade está pronta quando:
+A POC está pronta quando:
 
-1. usuário cola uma URL do TikTok Shop;
-2. sistema cria ou reutiliza browser profile;
-3. Chromium abre o produto;
-4. login manual pode ser realizado quando necessário;
-5. sessão permanece reutilizável através do browser profile;
-6. Browser Harness consegue controlar e inspecionar a página;
-7. Product Extraction Agent extrai os principais fatos;
-8. ProductCandidate é produzido;
-9. ProductCandidate é apresentado ao usuário;
-10. usuário pode confirmar ou editar;
-11. produto é salvo;
-12. produto pode seguir para a Commerce Intelligence Engine.
+1. uma URL pública é validada;
+2. o Product Importer abre a página em Chromium headless;
+3. o Agent Runner usa Browser Harness para observar/interagir;
+4. o agente localiza o produto principal;
+5. recomendações, navegação e produtos relacionados são ignorados;
+6. dados espalhados pela página são encontrados quando necessário;
+7. `ProductCandidate` limpo e schema-valid é produzido;
+8. lacunas permanecem lacunas;
+9. a saída não contém claims inventados nem dados de outros produtos;
+10. o Candidate é apresentado para confirmação/edição;
+11. o Product é salvo após confirmação;
+12. a POC funciona em 20–30 produtos públicos com métricas registradas.
 
----
-
+O MVP adiciona os contratos operacionais de autenticação, `202 + polling`, persistência, concorrência, cleanup, erros recuperáveis, entitlements e evals de regressão.
 ## 16. Ordem de implementação
 
 ```text
 1. Instalar e validar Browser Harness
-
-2. Criar Browser Service
-
-3. Implementar Chromium persistente por browser profile
-
-4. Integrar Browser Service ↔ Browser Harness
-
-5. Implementar browser interativo / human-in-the-loop
-
-6. Validar login manual no TikTok
-
-7. Validar persistência e reutilização da sessão
-
-8. Criar Product Extraction Agent
-
-9. Criar ProductCandidate
-
-10. Criar tela de confirmação
-
-11. Persistir Product
-
-12. Integrar Product com Commerce Intelligence
+2. Criar Product Importer
+3. Integrar Chromium headless
+4. Implementar Agent Runner restrito
+5. Integrar task PRODUCT_PAGE_EXTRACTION
+6. Produzir e validar ProductCandidate
+7. Validar com 20–30 produtos públicos
+8. Criar tela de confirmação
+9. Persistir Product
+10. Adicionar endurecimento do MVP
 ```
-
-Antes de avançar para as etapas de produto, deve existir uma POC comprovando:
-
-```text
-Chromium
-+
-Browser Harness
-+
-login manual TikTok
-+
-profile persistente
-+
-reabertura autenticada
-+
-extração de um produto real
-```
-
----
-
 ## 17. Regras para implementação
 
 ### Regra 1
 
-Sempre que surgir a ideia de adicionar um campo ao cadastro:
-
-> **A plataforma consegue descobrir isso sozinha?**
-
-Se sim, o campo não deve existir no fluxo principal.
+> **Product Importer é a única fronteira de browser.**
 
 ### Regra 2
 
-> **Não reimplementar capacidades genéricas de browser já fornecidas pelo Browser Harness.**
+> **O Agent Runner compreende a página; código determinístico valida e normaliza a saída.**
 
 ### Regra 3
 
@@ -605,18 +382,13 @@ Se sim, o campo não deve existir no fluxo principal.
 
 ### Regra 4
 
-> **Autenticação do TikTok acontece no próprio Chromium através da interação do usuário.**
+> **O agente não recebe shell, filesystem, credenciais ou navegação livre.**
 
 ### Regra 5
 
-> **O browser profile é uma credencial sensível e deve permanecer isolado por usuário.**
-
----
-
+> **Uma falha de acesso ou extração nunca inventa um ProductCandidate.**
 ## 18. Experiência final desejada
 
-### Primeira utilização
-
 ```text
 Adicionar produto
 ↓
@@ -624,41 +396,16 @@ Colar URL
 ↓
 Analisar
 ↓
-TikTok exige login
+Product Importer abre Chromium headless
 ↓
-browser é exibido
+Agent Runner extrai o produto principal
 ↓
-usuário autentica
+confirmar ou editar
 ↓
-produto é extraído
-↓
-confirmar
+Produto salvo
 ```
 
-### Utilizações seguintes
-
-```text
-Adicionar produto
-↓
-Colar URL
-↓
-Analisar
-↓
-Chromium reutiliza sessão
-↓
-produto é extraído
-↓
-confirmar
-```
-
-O browser interativo deve aparecer somente quando realmente houver necessidade de intervenção humana.
-
----
-
+Se a importação falhar, o creator pode preencher nome e descrição manualmente.
 ## 19. Regra final
 
-A experiência desejada é:
-
-> **Cole o produto. A plataforma se vira.**
-
-Se o creator precisar preencher manualmente informações que podem ser descobertas pelo sistema, o fluxo está errado.
+> **Cole a URL. O Product Importer compreende a página e devolve somente os fatos do produto.**

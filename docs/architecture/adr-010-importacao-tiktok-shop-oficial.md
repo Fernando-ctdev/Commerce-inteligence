@@ -2,7 +2,7 @@
 
 ## Status
 
-Superseded — a nova definição de produto exige importação por Browser Service, profile persistente e Browser Harness. A decisão vigente está em [ADR-011](./adr-011-importacao-browser-profile-e-harness.md).
+Superseded — a decisão vigente é a importação pelo Product Importer agentic com Chromium headless, registrada no ADR-016.
 
 ## Contexto histórico
 

@@ -23,7 +23,7 @@ Adotar um monólito modular em um único repositório e unidade principal de dep
 - um processo de worker assíncrono, usando o mesmo código e os mesmos módulos do monólito, para gerações demoradas;
 - adaptadores estreitos para serviços externos, sem SDK de fornecedor vazando para o domínio.
 
-Os módulos iniciais são limites de código, não serviços independentes: identidade/tenant (conforme ADR-009), browser service/importação (conforme ADR-011), produto, estratégia, plano/conteúdo, produção, geração e uso/plano. Dependências atravessam esses limites por casos de uso e contratos do módulo; detalhes de infraestrutura ficam nas bordas.
+Os módulos iniciais são limites de código, não serviços independentes: identidade/tenant, Product Importer (conforme ADR-016), produto, estratégia, plano/conteúdo, produção, geração e uso/plano. Dependências atravessam esses limites por casos de uso e contratos do módulo; detalhes de infraestrutura ficam nas bordas.
 
 O fornecedor específico de modelo de linguagem não é fixado neste ADR. O MVP terá uma implementação de provedor por vez, atrás do limite definido no ADR-002.
 

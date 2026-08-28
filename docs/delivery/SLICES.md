@@ -42,13 +42,13 @@ Este documento é um mapa de construção. Não é PRD, ADR, SPEC ou PLAN e não
 
 ## Princípios usados para definir os slices
 
-* **Comportamento antes de camada:** nenhum slice existe apenas para criar Database, Frontend, API, Auth, Worker, Browser Service ou Model Router.
+* **Comportamento antes de camada:** nenhum slice existe apenas para criar Database, Frontend, API, Auth, Worker, Product Importer ou Model Router.
 * **Verticalidade suficiente:** cada slice atravessa somente os domínios necessários para entregar um comportamento real e verificável.
-* **Infraestrutura just-in-time:** Browser Profile, Chromium e Browser Harness entram com a importação; job assíncrono durável, Model Router e validação de limites entram quando a primeira geração realmente precisa deles.
+* **Infraestrutura just-in-time:** Product Importer, Chromium headless, Browser Harness e Agent Runner entram com a importação; job assíncrono durável, Model Router e validação de limites entram quando a primeira geração realmente precisa deles.
 * **Fonte factual separada de inteligência:** Product Import encontra fatos e produz `ProductCandidate`. A Commerce Intelligence interpreta o Produto confirmado e produz Strategy, Plan, Opportunities e Briefings. Nenhuma assume o papel da outra.
 * **Primeira geração sem wizard estratégico:** depois da confirmação dos fatos e da resolução da quantidade inicial, o `CommerceIntelligenceJob` começa automaticamente. Não existe aprovação obrigatória de Strategy nem botão intermediário.
 * **Processamento assíncrono é parte da experiência:** um job ativo por usuário no MVP; o creator continua usando a aplicação e o App Shell comunica o estado pelo indicador global.
-* **Human-in-the-loop explícito:** login, CAPTCHA, QR Code e 2FA pertencem ao creator; a automação pausa e retoma depois da intervenção.
+* **Extração agentic limitada:** o Agent Runner compreende a página com Browser Harness; ferramentas, duração, tokens, rede e navegação permanecem limitados e configuráveis.
 * **Content possui identidade e Briefing possui versão:** editar, regenerar e aprovar preservam `Content` como identidade estável e criam versões rastreáveis de `ContentBriefVersion`; a versão aprovada é fixada.
 * **Aprovação e execução são etapas diferentes:** aprovar não coloca em gravação; contents aprovados são selecionados para formar um `RecordingBatch`.
 * **Lote significa gravação:** `RecordingBatch` é a unidade operacional do Estúdio; seus estados (`Aguardando`, `Gravando`, `Concluído`) são derivados do progresso. `lote` nunca significa nova geração de conteúdos.
@@ -67,11 +67,9 @@ Criar conta
 ↓
 colar URL do primeiro Produto
 ↓
-abrir TikTok utilizando Browser Profile
+Product Importer abre a página em Chromium headless
 ↓
-resolver autenticação manual quando necessário
-↓
-extrair fatos
+Agent Runner extrai fatos
 ↓
 ProductCandidate
 ↓
@@ -93,7 +91,7 @@ Adicionar Produto
 ↓
 colar URL
 ↓
-reutilizar Browser Profile autenticado
+executar Product Importer com browser efêmero
 ↓
 extrair fatos
 ↓
@@ -101,9 +99,6 @@ confirmar + quantidade
 ↓
 iniciar geração
 ```
-
-O browser interativo só aparece quando existir necessidade real de intervenção humana.
-
 ### Recuperação de importação
 
 ```text
@@ -118,7 +113,7 @@ confirmar Produto
 seguir para geração
 ```
 
-Uma falha de browser não pode bloquear permanentemente a entrada do Produto.
+Uma falha de acesso ou extração não pode bloquear permanentemente a entrada do Produto; o fallback manual permanece disponível.
 
 ### Primeira geração
 
@@ -227,31 +222,47 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 
 ---
 
-### Slice 002 — Importação de Product via Browser com confirmação
+### Slice 002 — Importação de Product via Product Importer
 
-**User Outcome:** O creator cola uma URL do TikTok Shop, reutiliza ou cria seu browser profile isolado, autentica manualmente quando necessário, revisa os fatos extraídos e confirma um Product ativo; quando a importação falhar, usa o fallback manual.
+**User Outcome:** O creator fornece uma URL pública de produto; o Product Importer abre a página em Chromium headless, usa um Agent Runner especializado com Browser Harness para compreender o produto principal e devolve um `ProductCandidate` limpo para confirmação. Quando a extração falhar, o creator usa o fallback manual.
 
 **Depends On:** Slice 001
 
-**Domain Areas:** Browser Service, Product Import, Product, Entitlements
+**Domain Areas:** Product Import, Product, Entitlements
 
 **Scope:**
 
-- Instalar, versionar e validar o Browser Harness como dependência oficial antes da aceitação do fluxo.
-- POC real comprovando Chromium + profile persistente + login manual + reabertura autenticada + extração de um produto TikTok Shop.
-- Aceitar URL de produto TikTok Shop como entrada principal, validando formato, tamanho e ausência de credenciais.
-- Criar ou reutilizar browser profile persistente isolado por Tenant/usuário, em volume protegido.
-- Abrir Chromium através do Browser Service e delegar navegação, Accessibility Tree, DOM/CDP, Structured Data e Network ao Browser Harness.
-- Detectar bloqueios de interação humana e pausar com `LOGIN_REQUIRED`, `CAPTCHA_REQUIRED`, `2FA_REQUIRED` ou `USER_INTERACTION_REQUIRED`.
-- Exibir o browser interativo para o creator resolver login, QR Code, CAPTCHA ou 2FA; nunca automatizar essas etapas.
-- Retomar após a sessão ficar pronta e executar o Product Extraction Agent somente na página do produto indicado.
+**POC do fluxo definitivo:**
+
+- Executar o Product Importer em um único container com HTTP API, Agent Runner, Browser Harness, Chromium headless e integração com LLM.
+- Aceitar uma URL pública de produto, validando formato, tamanho, ausência de credenciais e destinos proibidos.
+- Abrir a URL no Chromium headless e executar um Agent Runner especializado em Product Extraction.
+- Permitir ao agente observar e interagir somente com a página analisada usando o menor conjunto de ferramentas necessário: Accessibility Tree, DOM, Structured Data, rolagem, cliques e expansão de seções.
+- Usar a task lógica `PRODUCT_PAGE_EXTRACTION` sem selecionar provider/modelo diretamente no Product Importer.
+- Restringir o agente ao produto principal da URL; ignorar navegação, reviews, banners, anúncios, recomendações e produtos relacionados.
+- Proibir shell, filesystem, upload, download, novas abas, links arbitrários e navegação livre.
 - Produzir `ProductCandidate` com nome, descrição, preço/moeda, categoria, marca, características, imagens, seller, variantes relevantes e URL original, preservando lacunas e proveniência.
-- Apresentar o Candidate para revisão; resolver a quantidade inicial de conteúdos na mesma confirmação (preferência, default ou seletor compacto).
+- Aplicar schema validation, limpeza, normalização, deduplicação, limites e validação final de forma determinística depois do Agent Run.
+- Usar browser efêmero, timeout simples, erro técnico genérico, logs básicos e execução síncrona aceitável na POC.
+- Calibrar limites configuráveis (`maxSteps`, `maxDuration`, `maxTokens`, `maxNetworkInspections`) com 20–30 produtos públicos.
+- Avaliar localização do produto principal, contaminação por conteúdo externo, campos ausentes, claims inventados e custo.
+
+**Endurecimento do MVP no mesmo slice:**
+
+- Expor endpoint autenticado `POST /product-imports` com resposta `202` e `importId`.
+- Consultar o estado por `GET /product-imports/{id}`, com execução assíncrona e polling.
+- Persistir `ProductImportAttempt`, estados terminais e erros recuperáveis.
+- Aplicar concorrência limitada, timeout e cleanup garantidos.
+- Registrar observabilidade mínima sanitizada.
+- Evoluir para o schema canônico completo, incluindo `variants`.
+- Usar profile persistente somente se a sessão técnica do TikTok exigir.
+- Aplicar entitlement e limites de uso server-side.
+- Adicionar regressão/evals com produtos reais.
+- Apresentar o Candidate para revisão; resolver a quantidade inicial de conteúdos na mesma confirmação.
 - Oferecer fallback manual com nome e descrição obrigatórios e demais fatos opcionais, sem campos estratégicos.
 - Aplicar limite server-side de Products ativos com entitlement default provisionado por Tenant.
-- Encerrar o browser ao fim da operação sem destruir o profile persistente.
 
-**Out of Scope:** TikTok OAuth, TikTok Shop API, login por senha/cookies fornecidos ao sistema, armazenamento de credenciais do TikTok, scraping universal, crawler, automação de CAPTCHA/2FA/QR Code, Strategy, Plan, Content, geração, publicação, agendamento, analytics, sincronização de catálogo, outros marketplaces e download obrigatório de imagens.
+**Out of Scope:** Browser Service separado, browser interativo, portal, iframe, streaming visual, handoff, autenticação manual do creator, profile persistente por creator na POC, estados específicos de login/CAPTCHA/2FA, TikTok OAuth, TikTok Shop API, login por senha/cookies fornecidos ao sistema, armazenamento de credenciais do TikTok, scraping universal, crawler, automação de CAPTCHA/2FA/QR Code, Strategy, Plan, Content, geração, publicação, agendamento, analytics, sincronização de catálogo, outros marketplaces, download obrigatório de imagens, shell, filesystem, upload/download pelo agente, proxy, event bus, MCP, fila distribuída e microserviços adicionais.
 
 ---
 

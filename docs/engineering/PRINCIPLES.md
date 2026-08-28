@@ -17,7 +17,7 @@ Use `Product`, `ProductCandidate`, `ProductStrategy`, `ContentPlan`, `ContentOpp
 
 Um módulo possui comportamento e invariantes relacionados. Não transforme cada tabela em agregado nem crie serviço para cada verbo.
 
-O fluxo permanece reconhecível como `Product → CommerceIntelligenceJob → ProductStrategy → ContentPlan → Content → RecordingBatch → Execução`. A engine decide; Content Operations revisa e executa; Entitlements limita capacidade; o Model Router roteia modelos; o Browser Service é o único dono do browser e do profile. Nenhum módulo assume a responsabilidade de outro ou contorna o contrato de um irmão acessando banco, provider ou CDP diretamente.
+O fluxo permanece reconhecível como `Product → CommerceIntelligenceJob → ProductStrategy → ContentPlan → Content → RecordingBatch → Execução`. A engine decide; Content Operations revisa e executa; Entitlements limita capacidade; o Model Router roteia modelos; o Product Importer é o único dono do Chromium headless e do Agent Runner. Nenhum módulo assume a responsabilidade de outro ou contorna o contrato de um irmão acessando banco, provider ou CDP diretamente.
 
 ### 3. Prefira código explícito e pequeno
 
@@ -34,7 +34,7 @@ Application Services/Use Cases são o ponto de entrada para ações como iniciar
 
 ### 5. Interfaces somente em fronteiras reais
 
-Ports existem onde há fronteira que varia ou se testa isolada: persistência, sessão, browser (Browser Service/Harness), fila, provider de modelo (LLM Gateway) e mídia futura. Classe concreta interna não ganha interface por convenção.
+Ports existem onde há fronteira que varia ou se testa isolada: persistência, browser (Product Importer/Harness), fila, provider de modelo (LLM Gateway) e mídia futura. Classe concreta interna não ganha interface por convenção.
 
 Padrões apenas quando resolvem problema presente:
 
@@ -45,7 +45,7 @@ Padrões apenas quando resolvem problema presente:
 
 ### 6. Teste comportamento, não desenho interno
 
-Prove resultados e invariantes nas bordas de domínio e aplicação: isolamento de tenant, reserva/virada de quota, idempotência de job e retry, validação factual (`SUPPORTED`/`INFERRED_BUT_SAFE`/`UNSUPPORTED`/`CONTRADICTED`), schema/contract de cada capability, snapshot de memória e variedade, transições derivadas do lote, pausa/retomada do human-in-the-loop e recuperação de falha sem sucesso parcial.
+Prove resultados e invariantes nas bordas de domínio e aplicação: isolamento de tenant, reserva/virada de quota, idempotência de job e retry, validação factual (`SUPPORTED`/`INFERRED_BUT_SAFE`/`UNSUPPORTED`/`CONTRADICTED`), schema/contract de cada capability, snapshot de memória e variedade, transições derivadas do lote, limites do Agent Run e recuperação de falha sem sucesso parcial.
 
 Capabilities de LLM recebem **contract tests** (input → output schema). Qualidade estratégica é avaliada com o Golden Dataset por engine/Skill/prompt/modelo — eval é teste de regressão de qualidade, não decorativo. Nunca congele nomes de classes, chamadas internas ou estrutura de tabelas.
 

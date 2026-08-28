@@ -158,27 +158,31 @@ Essa camada funciona internamente ao `CommerceIntelligenceJob` já definido para
 
 ## 5. Aplicação na importação de produtos
 
-A extração de produtos deve continuar priorizando dados observáveis e mecanismos determinísticos através do Browser Harness.
+Na importação, o LLM participa da compreensão contextual da página por meio de um Agent Runner especializado. O Browser Harness fornece as ferramentas de observação e interação do Chromium; não decide qual conteúdo pertence ao produto.
 
-O LLM entra apenas quando realmente agregar valor.
-
-Fluxo preferencial:
+Fluxo:
 
 ```text
+Agent Runner + LLM
+↓
 Browser Harness
 ↓
-DOM / Accessibility Tree / Structured Data / Network
+Chromium headless
 ↓
-extração determinística
+observação/ação limitada na página
 ↓
-LLM quando necessário
+Agent Runner + LLM
 ↓
 ProductCandidate
+↓
+validação e normalização determinísticas
 ```
 
-Tarefas como normalizar descrição, consolidar características ou estruturar informações podem utilizar LOW.
+O agente pode consultar seletivamente DOM, Accessibility Tree, Structured Data e dados relevantes da página, além de rolar, clicar e expandir seções quando necessário. A tarefa é limitada ao produto principal da URL e não permite navegação livre.
 
-A extração não deve utilizar modelos caros para descobrir fatos que já estão disponíveis diretamente na página. Isso preserva a separação já definida entre **Product Import**, responsável por fatos, e **Commerce Intelligence**, responsável pela estratégia.
+O Product Importer solicita uma tarefa lógica, por exemplo `PRODUCT_PAGE_EXTRACTION`, sem selecionar provider/modelo diretamente. O tier deve ser calibrado por evals reais; não se assume antecipadamente que LOW seja suficiente.
+
+Código determinístico permanece responsável por schema validation, limpeza, normalização, validação de preço, moeda, URLs, deduplicação, limites e validação final. O modelo não decide regras de negócio, quota, persistência ou estados.
 
 ---
 

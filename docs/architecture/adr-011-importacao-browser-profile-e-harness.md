@@ -2,9 +2,9 @@
 
 ## Status
 
-Aceito — decisão vigente para a importação de produtos do TikTok Shop; substitui o caminho de API/OAuth descrito no ADR-010.
+Superseded — substituído pelo ADR-016. Mantido apenas como registro histórico da arquitetura removida.
 
-> **Atualização (POC validada):** a topologia operacional do Browser Service ficou comprovada em container próprio — Chromium + Browser Harness pinado como dependência, Xvfb/x11vnc/noVNC para o browser interativo, CDP restrito à rede interna do serviço, autenticação da app por token de serviço, volume persistente por profile, lock de exclusão por profile (impede dois browsers no mesmo profile) e URL guard com allowlist HTTPS + bloqueio de file/chrome/loopback/redes privadas/metadata. A POC comprovou os fluxos de sessão e human-in-the-loop; a extração real de produto autenticado segue pendente de intervenção humana (CAPTCHA), sem bypass — a implementação de produto do Slice 002 parte daqui.
+> Esta decisão não é vigente. Browser Service separado, browser visual, portal, handoff, Human-in-the-Loop e profile por usuário foram removidos.
 
 ## Contexto
 
