@@ -1,0 +1,375 @@
+/* Modal de candidato: Dialog + ScrollArea shadcn. Tokens em globals.css. */
+
+.dialog {
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* Altura definida (não max-height): % do viewport do ScrollArea exige
+     cadeia de altura definida; ambos os modos do formulário são longos. */
+  height: calc(90dvh - 32px);
+  padding: 32px;
+}
+
+.scrollArea {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.scrollArea > [data-slot="scroll-area-viewport"] {
+  overscroll-behavior: contain;
+}
+
+/* Faixa própria para a scrollbar não cobrir o botão Fechar. */
+.dialogInner {
+  display: grid;
+  gap: 20px;
+  padding-inline-end: 18px;
+  padding-inline-start: 6px;
+}
+
+.header {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.dialogTitle {
+  color: var(--color-text);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 30px;
+  margin: 2px 0 0;
+}
+
+.closeButton {
+  margin-inline-start: auto;
+}
+
+.disclaimer,
+.source,
+.previewHint {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+}
+
+.disclaimer {
+  border-inline-start: 3px solid var(--color-warning);
+  padding-inline-start: 12px;
+}
+
+.gaps {
+  border-inline-start: 3px solid var(--color-warning);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  padding-inline-start: 12px;
+}
+
+.gaps strong {
+  color: var(--color-text);
+}
+
+.gaps ul {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+
+.body {
+  align-items: start;
+  display: grid;
+  gap: 32px;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+}
+
+.previewColumn {
+  display: grid;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+}
+
+.preview,
+.previewEmpty {
+  align-items: center;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  min-height: 280px;
+  padding: 12px;
+}
+
+.preview img {
+  border-radius: 4px;
+  max-height: 420px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.previewEmpty {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.previewHint {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.field label {
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.fieldHead {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  /* Uniformiza a altura do header em todos os campos: os inputs das
+     colunas da grade ficam alinhados mesmo quando um tem addon. */
+  min-height: 32px;
+}
+
+.field input,
+.field textarea {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  font: inherit;
+  min-height: 44px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.field textarea {
+  min-height: 104px;
+  resize: vertical;
+}
+
+/* Item destacado (foco/hover) com texto branco padrão sobre o brand. */
+.currencyContent [data-slot="select-item"]:focus,
+.currencyContent [data-slot="select-item"][data-highlighted] {
+  color: var(--color-on-action);
+}
+
+.currencyTrigger {
+  block-size: 32px;
+  inline-size: auto;
+  min-inline-size: 56px;
+  padding-block: 4px;
+}
+
+.tagEditor {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 10px;
+}
+
+.tagEditorError {
+  border-color: var(--color-danger);
+}
+
+.tag {
+  align-items: center;
+  background: var(--color-surface-secondary);
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  font-size: 13px;
+  gap: 4px;
+  padding: 0 0 0 8px;
+}
+
+.tagRemove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0;
+}
+
+.tagInput {
+  background: transparent;
+  border: 0;
+  color: var(--color-text);
+  flex: 1 1 80px;
+  font: inherit;
+  min-height: 30px;
+  min-width: 80px;
+  outline: 0;
+  padding: 2px 0;
+}
+
+.error,
+.help {
+  font-size: 13px;
+  line-height: 18px;
+  margin: 0;
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.help {
+  color: var(--color-text-secondary);
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.preparationGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.preparationOptionGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.preparationQuantityOptions {
+  display: grid;
+  gap: 6px;
+}
+
+.quantityValue {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.quantityBounds {
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  line-height: 16px;
+}
+
+.preparationCreatorOptions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.actions {
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 20px;
+}
+
+.source {
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
+  line-height: 18px;
+  padding-top: 16px;
+  overflow-wrap: anywhere;
+}
+
+.source strong {
+  color: var(--color-text);
+}
+
+/* Mobile: dialog assume apresentação de sheet de base, confirmação
+   humana permanece modal. */
+
+@media (max-width: 767px) {
+  .dialog[data-slot="dialog-content"] {
+    align-items: stretch;
+    border-radius: 16px 16px 0 0;
+    height: calc(100dvh - 8px);
+    inset: 0;
+    max-width: 100%;
+    padding: 24px 16px calc(24px + var(--safe-bottom));
+    /* Não usar translate 0 0: identidade é removida pelo pipeline CSS,
+       reativando a centralização -50% das utilities. */
+    translate: 0 8px;
+    width: 100%;
+  }
+
+  .body {
+    gap: 20px;
+    grid-template-columns: 1fr;
+  }
+
+  .previewColumn {
+    position: static;
+  }
+
+  .preview,
+  .previewEmpty {
+    min-height: 180px;
+  }
+
+  .preview img {
+    max-height: 240px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preparationGrid {
+    grid-template-columns: 1fr;
+  }
+
+
+  .preparationCreatorOptions {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog,
+  .dialog *,
+  .dialogInner,
+  .dialogInner * {
+    animation-duration: 0.01ms;
+    scroll-behavior: auto;
+    transition-duration: 0.01ms;
+  }
+}

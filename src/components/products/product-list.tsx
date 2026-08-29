@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { ProductCreate } from "./product-create";
 import { listProducts, ProductApiError, ProductRecord } from "./product-api";
 import styles from "./product-list.module.css";
 
@@ -30,33 +31,34 @@ export function ProductList() {
 
   if (loading) {
     return (
-      <div aria-busy="true" className={styles.state} role="status">
-        <p className={styles.eyebrow}>Produtos</p>
-        <h2>Carregando seus Products…</h2>
-        <p>A estrutura da lista permanece visível enquanto buscamos os dados.</p>
+      <div className={styles.list}>
+        <ProductCreate />
+        <div aria-busy="true" className={styles.state} role="status">
+          <p className={styles.eyebrow}>Produtos</p>
+          <h2>Carregando seus Products…</h2>
+          <p>A estrutura da lista permanece visível enquanto buscamos os dados.</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className={styles.state} role="alert">
-        <p className={styles.eyebrow}>Não foi possível carregar</p>
-        <h2>Seus Products continuam protegidos.</h2>
-        <p>{error}</p>
-        <button className={styles.primaryButton} onClick={() => void load()} type="button">Tentar novamente</button>
+      <div className={styles.list}>
+        <ProductCreate />
+        <div className={styles.state} role="alert">
+          <p className={styles.eyebrow}>Não foi possível carregar</p>
+          <h2>Seus Products continuam protegidos.</h2>
+          <p>{error}</p>
+          <button className={styles.primaryButton} onClick={() => void load()} type="button">Tentar novamente</button>
+        </div>
       </div>
     );
   }
 
   if (products.length === 0) {
     return (
-      <div className={styles.state}>
-        <p className={styles.eyebrow}>Primeiro passo</p>
-        <h2>Adicione o produto que você quer vender.</h2>
-        <p>Nome e descrição bastam para criar seu primeiro Product. Você pode completar os fatos depois.</p>
-        <Link className={styles.primaryButton} href="/products/new">Adicionar produto</Link>
-      </div>
+      <ProductCreate />
     );
   }
 
@@ -67,8 +69,8 @@ export function ProductList() {
           <p className={styles.eyebrow}>Seu catálogo de trabalho</p>
           <h2>Produtos ativos</h2>
         </div>
-        <Link className={styles.primaryButton} href="/products/new">Adicionar produto</Link>
       </div>
+      <ProductCreate />
       <ul aria-label="Produtos ativos" className={styles.cards}>
         {products.map((product) => (
           <li className={styles.card} key={product.id}>
