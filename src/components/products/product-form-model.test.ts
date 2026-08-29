@@ -146,3 +146,49 @@ test("par preço/moeda vazio fica nulo e constraints omitidas somem do payload",
     creatorPresence: "on_camera",
   });
 });
+
+test("preço manual 23,44 usa BRL por padrão sem erro", () => {
+  const draft = {
+    name: "Escova",
+    description: "Cabelos",
+    category: "",
+    price: "23,44",
+    currency: "",
+    characteristics: "",
+  };
+
+  assert.equal(validateProductManualDraft({ ...draft, currency: "BRL" }).price, undefined);
+  assert.equal(buildManualProductPayload(
+    draft,
+    { targetContentCount: 20, creatorPresence: "either" },
+  ).priceCurrency, "BRL");
+});
+
+test("moeda padrão BRL sem preço não gera erro nem envia moeda", () => {
+  const draft = {
+    name: "Escova",
+    description: "Cabelos",
+    category: "",
+    price: "",
+    currency: "BRL",
+    characteristics: "",
+  };
+
+  assert.deepEqual(validateProductManualDraft(draft), {});
+  assert.deepEqual(
+    buildManualProductPayload(
+      draft,
+      { targetContentCount: 20, creatorPresence: "either" },
+    ),
+    {
+      name: "Escova",
+      description: "Cabelos",
+      category: null,
+      price: null,
+      priceCurrency: null,
+      features: [],
+      targetContentCount: 20,
+      creatorPresence: "either",
+    },
+  );
+});

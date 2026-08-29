@@ -18,6 +18,7 @@ import { createProduct, ProductApiError } from "./product-api";
 import { createIdempotencyKey } from "./product-create-model";
 import {
   buildManualProductPayload,
+  DEFAULT_PRODUCT_CURRENCY,
   digitsToPrice,
   formatPriceDisplay,
   preparationIsWithinLimits,
@@ -33,7 +34,7 @@ const emptyDraft: ProductManualDraft = {
   description: "",
   category: "",
   price: "",
-  currency: "",
+  currency: DEFAULT_PRODUCT_CURRENCY,
   characteristics: "",
 };
 

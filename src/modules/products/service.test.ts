@@ -87,6 +87,46 @@ test("validação: preço/moeda como par opcional, formato não negativo", () =>
   assert.equal(simples.priceCurrency, "USD");
   assert.equal(comPar.priceCurrency, "BRL");
 });
+test("validação: aceita preço decimal com ponto", () => {
+  const result = validateManualProductInput({
+    name: "Produto",
+    description: "Descrição",
+    price: "23.44",
+    priceCurrency: "BRL",
+    features: [],
+    targetContentCount: 20,
+    creatorPresence: "either",
+  });
+
+  assert.equal(result.priceAmount, "23.44");
+});
+test("validação: normaliza milhar pt-BR sem casas decimais", () => {
+  const result = validateManualProductInput({
+    name: "Produto",
+    description: "Descrição",
+    price: "1.234",
+    priceCurrency: "BRL",
+  });
+
+  assert.equal(result.priceAmount, "1234");
+});
+
+test("validação: rejeita preço com mais de duas casas decimais", () => {
+  assert.throws(
+    () =>
+      validateManualProductInput({
+        name: "Produto",
+        description: "Descrição",
+        price: "23.4567",
+        priceCurrency: "BRL",
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof ProductValidationError);
+      assert.equal(error.code, "VAL-PRICE-FORMAT");
+      return true;
+    },
+  );
+});
 
 test("validação: preparação com defaults 20/Tanto faz e limites 1–30/300", () => {
   const defaults = validateManualProductInput(validInput);

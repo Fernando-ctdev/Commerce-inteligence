@@ -15,6 +15,9 @@ export type ProductDraft = {
 
 export type ProductFieldErrors = Partial<Record<keyof ProductDraft, string>>;
 
+export const DEFAULT_PRODUCT_CURRENCY = "BRL";
+
+
 export type ProductPayload = {
   name: string;
   description: string;
@@ -138,7 +141,7 @@ export function buildManualProductPayload(
     description: clean(draft.description),
     category: cleanNullable(draft.category),
     price: pricePtBr,
-    priceCurrency: pricePtBr ? cleanNullable(draft.currency) : null,
+    priceCurrency: pricePtBr ? cleanNullable(draft.currency) || DEFAULT_PRODUCT_CURRENCY : null,
     features: lines(draft.characteristics),
     targetContentCount: preparation.targetContentCount,
     creatorPresence: preparation.creatorPresence,
@@ -161,7 +164,7 @@ export function validateProductManualDraft(draft: ProductManualDraft): ProductMa
     } else if (!/^[A-Za-z]{3}$/.test(currency)) {
       errors.currency = "Informe uma moeda válida.";
     }
-  } else if (price || currency) {
+  } else if (price || (currency && currency !== DEFAULT_PRODUCT_CURRENCY)) {
     errors.price = "Preço e Moeda devem ser preenchidos juntos ou deixados vazios.";
   }
   return errors;

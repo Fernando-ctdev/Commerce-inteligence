@@ -40,8 +40,8 @@ const QUANTITY_MIN = 1;
 const QUANTITY_MAX = 30;
 const NOTES_MAX = 300;
 const CURRENCIES = ["BRL", "USD", "EUR"];
-// Formato monetário pt-BR, não negativo: vírgula decimal e ponto de milhar (29,90 | 1.234,56 | 1290).
-const PRICE_PATTERN = /^\d{1,3}(\.\d{3})*(,\d{1,2})?$/;
+// Formato monetário não negativo: decimal canônico com ponto ou pt-BR com vírgula e milhar.
+const PRICE_PATTERN = /^(?:\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+\.\d{1,2})$/;
 
 // Teto defensivo dos fatos opcionais além dos limites da SPEC (PRINCIPLES §7).
 const NAME_MAX = 200;
@@ -197,7 +197,13 @@ export function validateManualProductInput(input: ManualProductInput): Validated
     name,
     description,
     category,
-    priceAmount: price ? price.replace(/\./g, "").replace(",", ".") : null,
+    priceAmount: price
+      ? price.includes(",")
+        ? price.replace(/\./g, "").replace(",", ".")
+        : /^\d{1,3}(?:\.\d{3})+$/.test(price)
+          ? price.replace(/\./g, "")
+          : price
+      : null,
     priceCurrency: priceCurrency,
     features,
     targetContentCount,
