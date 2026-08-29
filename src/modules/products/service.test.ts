@@ -3,17 +3,19 @@
 // Executar: npx tsx --test src/modules/products/service.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 
 import { SESSION_COOKIE } from "../identity/http.js";
 import { registerUser, resolveSession } from "../identity/service.js";
-import { handleCreateProduct, handleListProducts } from "./http.js";
+import { handleCreateProduct, handleDeleteProduct, handleGetProduct, handleListProducts, handleUpdateProduct } from "./http.js";
 import { ProductValidationError, validateManualProductInput } from "./service.js";
 
 const ORIGIN = process.env.APP_ORIGIN ?? "http://localhost:3000";
 const prisma = new PrismaClient();
 let dbUp = false;
+
+test.after(() => prisma.$disconnect());
 
 test("setup: banco acessível (skip dos testes de integração caso contrário)", async (t) => {
   try {
@@ -162,6 +164,56 @@ test("validação: preparação com defaults 20/Tanto faz e limites 1–30/300",
   assert.deepEqual(preparado.features, ["50 aulas", "certificado"]);
 });
 
+test("validação: imageRefs aceita http(s) e data URL de imagem, rejeita outros esquemas e excessos", () => {
+  const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const aceito = validateManualProductInput({
+    ...validInput,
+    imageRefs: ["https://cdn.exemplo.com/foto.jpg", png],
+  });
+  assert.deepEqual(aceito.imageRefs, ["https://cdn.exemplo.com/foto.jpg", png]);
+
+  const invalidos = [
+    "ftp://cdn.exemplo.com/foto.jpg",
+    "javascript:alert(1)",
+    "/uploads/local.png",
+    "data:text/html;base64,PGI+aGk8L2I+",
+    "data:image/png,sem-base64",
+    "data:image/png;base64,###",
+  ];
+  for (const imageRef of invalidos) {
+    assert.throws(
+      () => validateManualProductInput({ ...validInput, imageRefs: [imageRef] }),
+      (error: unknown) => {
+        assert.ok(error instanceof ProductValidationError);
+        assert.equal(error.code, "VAL-IMAGE-INVALID");
+        assert.ok(error.fieldErrors.imageRefs);
+        return true;
+      },
+      `esperava VAL-IMAGE-INVALID para ${imageRef}`,
+    );
+  }
+
+  const excesso = Array.from({ length: 7 }, () => "https://cdn.exemplo.com/foto.jpg");
+  assert.throws(
+    () => validateManualProductInput({ ...validInput, imageRefs: excesso }),
+    (error: unknown) => {
+      assert.ok(error instanceof ProductValidationError);
+      assert.equal(error.code, "VAL-IMAGE-LIMIT");
+      return true;
+    },
+  );
+
+  const gigante = `data:image/png;base64,${"A".repeat(2_800_000)}`; // ~2,1 MB decodificados
+  assert.throws(
+    () => validateManualProductInput({ ...validInput, imageRefs: [gigante] }),
+    (error: unknown) => {
+      assert.ok(error instanceof ProductValidationError);
+      assert.equal(error.code, "VAL-IMAGE-LIMIT");
+      return true;
+    },
+  );
+});
+
 // —— Integração (banco) ——
 
 const email = () => `slice002-${randomBytes(8).toString("hex")}@teste.local`;
@@ -290,4 +342,151 @@ test("GET sem sessão responde 401 AUTH-SESSION; validação via API devolve fie
   const body = (await invalid.json()) as { code?: string; fieldErrors?: Record<string, string> };
   assert.equal(body.code, "VAL-NAME-REQUIRED");
   assert.ok(body.fieldErrors?.name);
+});
+
+
+const getById = (token: string, id: string) =>
+  new Request(`${ORIGIN}/api/products/${id}`, {
+    method: "GET",
+    headers: { cookie: `${SESSION_COOKIE}=${token}` },
+  });
+
+const patch = (token: string, id: string, body: unknown) =>
+  new Request(`${ORIGIN}/api/products/${id}`, {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json",
+      origin: ORIGIN,
+      "sec-fetch-site": "same-origin",
+      cookie: `${SESSION_COOKIE}=${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+const del = (token: string, id: string) =>
+  new Request(`${ORIGIN}/api/products/${id}`, {
+    method: "DELETE",
+    headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", cookie: `${SESSION_COOKIE}=${token}` },
+  });
+
+const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+const updateFacts = {
+  name: "Curso de Excel Avançado",
+  description: "Curso atualizado com módulos novos",
+  category: "Educação",
+  price: "199,90",
+  priceCurrency: "USD",
+  features: ["120 aulas"],
+  imageRefs: ["https://cdn.exemplo.com/nova.png", PNG],
+  url: "",
+};
+
+async function criarProduct(token: string) {
+  const res = await handleCreateProduct(post(token, validInput, randomBytes(16).toString("base64url")));
+  assert.equal(res.status, 200);
+  return (await res.json()) as { id: string; version: number };
+}
+
+test("GET por id retorna o Product do tenant com moeda; inexistente responde 404", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+  const created = await criarProduct(token);
+
+  const res = await handleGetProduct(getById(token, created.id), created.id);
+  assert.equal(res.status, 200);
+  const view = (await res.json()) as Record<string, unknown>;
+  assert.equal(view.id, created.id);
+  assert.equal(view.version, 1);
+  assert.equal(view.price, "29.9");
+  assert.equal(view.priceCurrency, "BRL");
+  assert.deepEqual(view.features, ["50 aulas", "certificado"]);
+
+  const missing = await handleGetProduct(getById(token, randomUUID()), String(randomUUID()));
+  assert.equal(missing.status, 404);
+  assert.equal(((await missing.json()) as { code?: string }).code, "PRODUCT-NOT-FOUND");
+  assert.equal(await prisma.product.count({ where: { tenantId } }), 1);
+});
+
+test("GET/PATCH/DELETE de outro tenant responde 404 sem vazar o Product", async (t) => {
+  if (!dbUp) return t.skip();
+  const dona = await tenantOf();
+  const intrusa = await tenantOf();
+  const created = await criarProduct(dona.token);
+  const corpo = { ...updateFacts, expectedVersion: created.version };
+
+  const resGet = await handleGetProduct(getById(intrusa.token, created.id), created.id);
+  assert.equal(resGet.status, 404);
+  assert.equal(((await resGet.json()) as { code?: string }).code, "PRODUCT-NOT-FOUND");
+
+  const resPatch = await handleUpdateProduct(patch(intrusa.token, created.id, corpo), created.id);
+  assert.equal(resPatch.status, 404);
+  assert.equal(((await resPatch.json()) as { code?: string }).code, "PRODUCT-NOT-FOUND");
+
+  const resDel = await handleDeleteProduct(del(intrusa.token, created.id), created.id);
+  assert.equal(resDel.status, 404);
+  assert.equal(((await resDel.json()) as { code?: string }).code, "PRODUCT-NOT-FOUND");
+
+  assert.equal(await prisma.product.count({ where: { tenantId: dona.tenantId } }), 1);
+  assert.equal(await prisma.product.count({ where: { tenantId: intrusa.tenantId } }), 0);
+});
+
+test("PATCH atualiza fatos, persiste imagens por URL/data URL e bumpeia version", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+  const created = await criarProduct(token);
+
+  const res = await handleUpdateProduct(patch(token, created.id, { ...updateFacts, expectedVersion: created.version }), created.id);
+  assert.equal(res.status, 200);
+  const saved = (await res.json()) as { id: string; version: number };
+  assert.equal(saved.id, created.id);
+  assert.equal(saved.version, created.version + 1);
+
+  const row = await prisma.product.findUniqueOrThrow({ where: { id: created.id } });
+  assert.equal(row.name, "Curso de Excel Avançado");
+  assert.equal(row.priceAmount?.toString(), "199.9");
+  assert.deepEqual(row.images, ["https://cdn.exemplo.com/nova.png", PNG]);
+  assert.equal(row.submittedUrl, null);
+  // Preparação da primeira geração não é fato editável: permanece a da criação.
+  assert.deepEqual(row.generationConstraints, { creatorPresence: "either", constraints: "sem gírias" });
+
+  const view = (await (await handleGetProduct(getById(token, created.id), created.id)).json()) as Record<string, unknown>;
+  assert.equal(view.version, saved.version);
+  assert.equal(view.priceCurrency, "USD");
+  assert.deepEqual(view.imageRefs, ["https://cdn.exemplo.com/nova.png", PNG]);
+
+  // Mesmas validações obrigatórias do POST: preço vazio é rejeitado com fieldErrors.
+  const invalida = await handleUpdateProduct(patch(token, created.id, { ...updateFacts, price: "", expectedVersion: saved.version }), created.id);
+  assert.equal(invalida.status, 400);
+  const erro = (await invalida.json()) as { code?: string; fieldErrors?: Record<string, string> };
+  assert.equal(erro.code, "VAL-PRICE-REQUIRED");
+  assert.ok(erro.fieldErrors?.price);
+});
+
+test("PATCH com expectedVersion desatualizada responde 409 VERSION-CONFLICT", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token } = await tenantOf();
+  const created = await criarProduct(token);
+
+  const primeira = await handleUpdateProduct(patch(token, created.id, { ...updateFacts, expectedVersion: created.version }), created.id);
+  assert.equal(primeira.status, 200);
+
+  const conflito = await handleUpdateProduct(patch(token, created.id, { ...updateFacts, expectedVersion: created.version }), created.id);
+  assert.equal(conflito.status, 409);
+  assert.equal(((await conflito.json()) as { code?: string }).code, "VERSION-CONFLICT");
+});
+
+test("DELETE remove o Product do tenant e repetição responde 404", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+  const created = await criarProduct(token);
+
+  const res = await handleDeleteProduct(del(token, created.id), created.id);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { id: created.id });
+  assert.equal(await prisma.product.count({ where: { tenantId } }), 0);
+
+  const repetida = await handleDeleteProduct(del(token, created.id), created.id);
+  assert.equal(repetida.status, 404);
+  assert.equal(((await repetida.json()) as { code?: string }).code, "PRODUCT-NOT-FOUND");
 });

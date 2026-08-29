@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState, useRef } from "react";
+import { toast } from "sonner";
 
 import { createProduct, getProduct, ProductApiError, ProductRecord, updateProduct } from "./product-api";
 import { buildProductPayload, emptyProductDraft, ProductDraft, ProductFieldErrors, validateProductDraft, visibleProductFieldErrors } from "./product-form-model";
@@ -106,6 +107,31 @@ export function ProductForm({ mode, product, onSaved, onCreated }: ProductFormPr
     setSuccess(null);
   }
 
+  function readImageFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Escolha um arquivo de imagem.");
+      return;
+    }
+    if (file.size > 2_000_000) {
+      toast.error("A imagem deve ter no máximo 2 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setDraft((current) => ({
+          ...current,
+          imageReferences: `${current.imageReferences}${current.imageReferences ? "\n" : ""}${reader.result}`,
+        }));
+        setFieldErrors((current) => ({ ...current, imageReferences: undefined }));
+        setError(null);
+        setSuccess(null);
+      }
+    };
+    reader.onerror = () => toast.error("Não foi possível ler essa imagem.");
+    reader.readAsDataURL(file);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
@@ -131,6 +157,7 @@ export function ProductForm({ mode, product, onSaved, onCreated }: ProductFormPr
       const saved = isEdit && product ? await updateProduct(product.id, payload) : await createProduct(payload);
       setVersion(saved.version);
       setSuccess(isEdit ? "Alterações salvas." : "Produto salvo.");
+      toast.success(isEdit ? "Alterações salvas." : "Produto salvo.");
       if (!isEdit) {
         onCreated?.(saved.id);
         return;
@@ -141,15 +168,17 @@ export function ProductForm({ mode, product, onSaved, onCreated }: ProductFormPr
       onSaved?.(latest);
     } catch (caught) {
       if (caught instanceof ProductApiError) {
-        setFieldErrors(caught.fieldErrors);
         const isConflict = caught.status === 409 || caught.code === "version_conflict";
         setConflict(isConflict);
         setError(caught.message);
+        toast.error(caught.message);
         const firstErrorField = firstProductErrorField(caught.fieldErrors);
         if (firstErrorField) focusField(firstErrorField);
         else if (isConflict) requestAnimationFrame(() => conflictRef.current?.focus());
       } else {
-        setError("Não foi possível salvar agora. Seus dados continuam nesta tela; tente novamente.");
+        const message = "Não foi possível salvar agora. Seus dados continuam nesta tela; tente novamente.";
+        setError(message);
+        toast.error(message);
       }
     } finally {
       setSaving(false);
@@ -210,7 +239,21 @@ export function ProductForm({ mode, product, onSaved, onCreated }: ProductFormPr
         </div>
         <Field error={combinedErrors.characteristics} help="Uma característica por linha." label="Características" multiline name="characteristics" onChange={(value) => updateField("characteristics", value)} value={draft.characteristics} />
         <Field error={combinedErrors.observations} label="Observações" multiline name="observations" onChange={(value) => updateField("observations", value)} value={draft.observations} />
-        <Field error={combinedErrors.imageReferences} help="Uma referência http(s) por linha. Nenhum arquivo é enviado aqui." label="Referências de imagens" multiline name="imageReferences" onChange={(value) => updateField("imageReferences", value)} value={draft.imageReferences} />
+        <Field error={combinedErrors.imageReferences} help="Uma URL http(s) ou arquivo de imagem por linha." label="Referências de imagens" multiline name="imageReferences" onChange={(value) => updateField("imageReferences", value)} value={draft.imageReferences} />
+        <div className={styles.field}>
+          <label htmlFor="product-image-file">Adicionar arquivo de imagem</label>
+          <input
+            accept="image/*"
+            id="product-image-file"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) readImageFile(file);
+              event.target.value = "";
+            }}
+            type="file"
+          />
+          <p className={styles.help}>Imagem pequena, até 2 MB. O arquivo será convertido para data URL.</p>
+        </div>
         <Field error={combinedErrors.url} help="Opcional. A origem pode ser registrada como referência factual." label="URL do produto" name="url" onChange={(value) => updateField("url", value)} type="url" value={draft.url} />
       </section>
 

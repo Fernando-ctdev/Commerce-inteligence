@@ -4,7 +4,6 @@ import Link from "next/link";
 import { CalendarDays, Clapperboard, Flame, Home, Settings2, Sparkles, Tag } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
-
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -12,7 +11,6 @@ import {
   SidebarProvider,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useIsTablet } from "@/hooks/use-mobile";
 
 import styles from "./product-shell.module.css";
 
@@ -49,22 +47,27 @@ const destinations: {
 export function ShellRoot({
   sidebar,
   children,
+  initialOpen = true,
 }: {
   sidebar: ReactNode;
   children: ReactNode;
+  initialOpen?: boolean;
 }) {
-  const isTablet = useIsTablet();
-  const [openOverride, setOpenOverride] = useState<boolean | null>(null);
-  const open = openOverride ?? !isTablet;
+  const [openOverride, setOpenOverride] = useState<boolean>(initialOpen);
 
   return (
-    <SidebarProvider open={open} onOpenChange={setOpenOverride}>
+    <SidebarProvider
+      open={openOverride}
+      onOpenChange={(nextOpen) => {
+        document.documentElement.dataset.sidebarState = String(nextOpen);
+        setOpenOverride(nextOpen);
+      }}
+    >
       {sidebar}
       {children}
     </SidebarProvider>
   );
 }
-
 export function ShellNav({ active }: { active: DestinationKey }) {
   const { setOpenMobile } = useSidebar();
 

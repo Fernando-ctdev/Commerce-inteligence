@@ -1,6 +1,6 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
-
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Sidebar,
@@ -30,7 +30,7 @@ function userInitials(user: { name?: string | null; email: string }) {
   return (parts[0]?.[0] ?? source[0] ?? "?").concat(parts[1]?.[0] ?? "").toUpperCase();
 }
 
-export function ProductShell({
+export async function ProductShell({
   active = "products",
   eyebrow = "Produtos",
   title,
@@ -38,6 +38,8 @@ export function ProductShell({
   children,
   user,
 }: ProductShellProps) {
+  const sidebarState = (await cookies()).get("sidebar_state")?.value;
+  const initialOpen = sidebarState !== "false";
   const sidebar = (
     <Sidebar collapsible="icon" side="left">
       <SidebarHeader className={styles.sidebarHeader}>
@@ -71,7 +73,7 @@ export function ProductShell({
   );
 
   return (
-    <ShellRoot sidebar={sidebar}>
+    <ShellRoot initialOpen={initialOpen} sidebar={sidebar}>
       <SidebarInset className={styles.inset}>
         <header className={styles.toolbar}>
           <SidebarTrigger aria-label="Alternar navegação" />

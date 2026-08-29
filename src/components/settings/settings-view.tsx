@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import styles from "./settings-view.module.css";
@@ -18,6 +19,7 @@ export function SettingsView({ email }: SettingsViewProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     // O script pré-pintura aplica a classe antes da hidratação; este readback
@@ -40,6 +42,7 @@ export function SettingsView({ email }: SettingsViewProps) {
 
 
   async function logout() {
+    setConfirmOpen(false);
     setPending(true);
     setError(null);
     const response = await fetch("/api/access/logout", {
@@ -122,9 +125,29 @@ export function SettingsView({ email }: SettingsViewProps) {
             {error}
           </p>
         )}
-        <Button disabled={pending} onClick={() => void logout()} variant="outline">
-          Sair{pending && " — saindo"}
-        </Button>
+        <Dialog
+          onOpenChange={(next) => {
+            if (!pending) setConfirmOpen(next);
+          }}
+          open={confirmOpen}
+        >
+          <Button disabled={pending} onClick={() => setConfirmOpen(true)} variant="outline">
+            Sair{pending && " — saindo"}
+          </Button>
+          <DialogContent>
+            <DialogTitle>Sair da conta?</DialogTitle>
+            <DialogDescription>
+              Isso encerra a sessão deste navegador. Seus dados permanecem
+              preservados no workspace.
+            </DialogDescription>
+            <div className={styles.confirmActions}>
+              <Button onClick={() => setConfirmOpen(false)} variant="outline">
+                Cancelar
+              </Button>
+              <Button onClick={() => void logout()}>Sair</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </section>
     </div>
   );

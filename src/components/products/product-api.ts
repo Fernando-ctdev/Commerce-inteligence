@@ -192,3 +192,9 @@ export async function createProduct(payload: ProductPayload) {
 export async function updateProduct(id: string, payload: ProductPayload) {
   return mutationFromResponse(await request<unknown>(`/api/products/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) }));
 }
+
+export async function deleteProduct(id: string) {
+  return request<{ id: string }>(`/api/products/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}

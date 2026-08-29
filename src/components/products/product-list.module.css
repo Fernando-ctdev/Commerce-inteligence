@@ -11,6 +11,93 @@
   gap: 20px;
   justify-content: space-between;
 }
+.listHint {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+  margin: 8px 0 0;
+}
+
+.controls {
+  display: grid;
+  gap: 12px;
+}
+
+.searchLabel {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.searchInput {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  font: inherit;
+  min-height: 44px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filterButton,
+.secondaryButton {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 8px 14px;
+}
+.cardTopline {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.statusActive,
+.statusArchived {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.statusActive {
+  color: var(--color-success);
+}
+
+.filterButton[aria-pressed="true"] {
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: var(--color-surface);
+}
+
+.secondaryButton:hover,
+.filterButton:hover {
+  border-color: var(--color-focus);
+}
+
+.searchInput:focus-visible,
+.filterButton:focus-visible,
+.secondaryButton:focus-visible,
+.primaryButton:focus-visible,
+.cardAction:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-focus) 45%, transparent);
+  outline-offset: 2px;
+}
 
 .listIntro h2,
 .state h2 {
@@ -30,27 +117,51 @@
 
 .cards {
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 .card {
+  aspect-ratio: 1 / 1;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
-  min-height: 220px;
-  padding: 20px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.cardImage,
+.imageFallback {
+  aspect-ratio: 16 / 9;
+  display: block;
+  flex: 0 0 auto;
+  object-fit: cover;
+  width: 100%;
+}
+
+.imageFallback {
+  align-items: center;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 13px;
+  justify-content: center;
 }
 
 .cardBody {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px 14px;
 }
+
 
 .card h3 {
   font-size: 20px;
@@ -80,6 +191,17 @@
 
 .cardAction:hover {
   color: var(--color-focus);
+}
+.galleryEmpty {
+  color: var(--color-text-secondary);
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  padding: 32px 0;
+}
+
+.galleryEmpty p {
+  margin: 0;
 }
 
 .state {
@@ -136,7 +258,7 @@
   }
 
   .cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .state {

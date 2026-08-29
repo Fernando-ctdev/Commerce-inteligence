@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +37,7 @@ const emptyDraft: ProductManualDraft = {
   price: "",
   currency: DEFAULT_PRODUCT_CURRENCY,
   characteristics: "",
+  imageReferences: "",
 };
 
 const currencyOptions = [
@@ -52,7 +54,7 @@ const currencySymbols: Record<string, string> = {
 
 const creatorPresenceOptions = [
   { value: "on_camera", label: "Em câmera" },
-  { value: "hands_only_product", label: "mão e produto" },
+  { value: "hands_only_product", label: "Mão e produto" },
   { value: "either", label: "Tanto faz" },
 ] as const;
 
@@ -63,6 +65,7 @@ const errorFieldOrder: Array<keyof ProductManualFieldErrors> = [
   "price",
   "currency",
   "characteristics",
+  "imageReferences",
   "targetContentCount",
   "creatorPresence",
   "constraints",
@@ -119,6 +122,7 @@ function TextField({
   inputMode,
   maxLength,
   financial = false,
+  showCounter = false,
 }: {
   id: string;
   label: ReactNode;
@@ -130,8 +134,17 @@ function TextField({
   inputMode?: "decimal";
   maxLength?: number;
   financial?: boolean;
+  showCounter?: boolean;
 }) {
   const errorId = `${id}-error`;
+  const countId = `${id}-count`;
+  const describedBy = error
+    ? showCounter
+      ? `${errorId} ${countId}`
+      : errorId
+    : showCounter
+      ? countId
+      : undefined;
   const Control = multiline ? "textarea" : "input";
   return (
     <div className={styles.field}>
@@ -140,7 +153,7 @@ function TextField({
         {required && <span aria-hidden="true"> *</span>}
       </label>
       <Control
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={describedBy}
         aria-invalid={Boolean(error)}
         id={id}
         inputMode={inputMode}
@@ -152,6 +165,11 @@ function TextField({
         required={required}
         value={financial ? formatPriceDisplay(value) : value}
       />
+      {showCounter && maxLength !== undefined && (
+        <p className={styles.charCount} id={countId}>
+          {value.length}/{maxLength}
+        </p>
+      )}
       {error && (
         <p className={styles.fieldError} id={errorId} role="alert">
           {error}
@@ -207,6 +225,37 @@ export function ProductCreateForm() {
     setError(null);
   }
 
+  function readImageFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      const message = "Escolha um arquivo de imagem.";
+      setError(message);
+      toast.error(message);
+      return;
+    }
+    if (file.size > 2_000_000) {
+      const message = "A imagem deve ter no máximo 2 MB.";
+      setError(message);
+      toast.error(message);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") return;
+      setDraft((current) => ({
+        ...current,
+        imageReferences: `${current.imageReferences ?? ""}${current.imageReferences ? "\n" : ""}${reader.result}`,
+      }));
+      setFieldErrors((current) => ({ ...current, imageReferences: undefined }));
+      setError(null);
+    };
+    reader.onerror = () => {
+      const message = "Não foi possível ler essa imagem.";
+      setError(message);
+      toast.error(message);
+    };
+    reader.readAsDataURL(file);
+  }
+
   function focusFirstError(errors: ProductManualFieldErrors) {
     const first = errorFieldOrder.find((field) => Boolean(errors[field]));
     if (!first) return;
@@ -243,6 +292,7 @@ export function ProductCreateForm() {
 
     try {
       await createProduct(buildManualProductPayload(draft, contentPreferences, key));
+      toast.success("Produto salvo.");
       idempotencyKey.current = undefined;
       router.push("/products");
     } catch (caught) {
@@ -252,17 +302,20 @@ export function ProductCreateForm() {
           description: caught.fieldErrors.description,
           category: caught.fieldErrors.category,
           price: caught.fieldErrors.price,
-          currency: caught.fieldErrors.currency,
           characteristics: caught.fieldErrors.characteristics,
+          imageReferences: caught.fieldErrors.imageReferences,
           targetContentCount: caught.fieldErrors.targetContentCount,
           creatorPresence: caught.fieldErrors.creatorPresence,
           constraints: caught.fieldErrors.constraints,
         };
         setFieldErrors(apiErrors);
         setError(caught.message);
+        toast.error(caught.message);
         focusFirstError(apiErrors);
       } else {
-        setError("Não foi possível salvar agora. Seus dados continuam nesta tela; tente novamente.");
+        const message = "Não foi possível salvar agora. Seus dados continuam nesta tela; tente novamente.";
+        setError(message);
+        toast.error(message);
       }
     } finally {
       setSaving(false);
@@ -339,6 +392,28 @@ export function ProductCreateForm() {
           required
           value={draft.characteristics}
         />
+        <TextField
+          error={combinedErrors.imageReferences}
+          id={fieldId("imageReferences")}
+          label="Imagem por URL ou arquivo"
+          multiline
+          onChange={(value) => update("imageReferences", value)}
+          value={draft.imageReferences ?? ""}
+        />
+        <div className={styles.field}>
+          <label htmlFor={fieldId("imageFile")}>Adicionar arquivo de imagem</label>
+          <input
+            accept="image/*"
+            id={fieldId("imageFile")}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) readImageFile(file);
+              event.target.value = "";
+            }}
+            type="file"
+          />
+          <p className={styles.help}>Imagem pequena, até 2 MB. O arquivo é convertido para uma referência persistível.</p>
+        </div>
       </section>
 
       <section
@@ -361,8 +436,8 @@ export function ProductCreateForm() {
               <Slider
                 aria-describedby={
                   combinedErrors.targetContentCount
-                    ? `${fieldId("targetContentCount")}-error`
-                    : undefined
+                    ? `${fieldId("targetContentCount")}-error ${fieldId("targetContentCount")}-help`
+                    : `${fieldId("targetContentCount")}-help`
                 }
                 aria-invalid={Boolean(combinedErrors.targetContentCount)}
                 aria-label="Quantidade inicial de conteúdos"
@@ -381,6 +456,9 @@ export function ProductCreateForm() {
                 <span>30</span>
               </div>
             </div>
+            <p className={styles.help} id={`${fieldId("targetContentCount")}-help`}>
+              Use as setas do teclado para ajustar.
+            </p>
             {combinedErrors.targetContentCount && (
               <p
                 className={styles.fieldError}
@@ -437,6 +515,7 @@ export function ProductCreateForm() {
           multiline
           onChange={setNotes}
           required
+          showCounter
           value={notes}
         />
       </section>

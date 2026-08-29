@@ -1,15 +1,20 @@
-// Handlers HTTP do Slice 002: GET/POST /api/products (contrato compartilhado do slice).
-// Sessão/Tenant resolvidos server-side (RI-005); POST exige Idempotency-Key válida e limitada;
-// replay determinístico devolve o mesmo id/version (RI-007); erros sanitizados, sem detalhes internos.
+// Handlers HTTP do Slice 002: GET/POST /api/products e GET/PATCH/DELETE /api/products/:id.
+// Sessão/Tenant resolvidos server-side (RI-005); POST exige Idempotency-Key válida (RI-007);
+// PATCH edita fatos com controle otimista de versão; erros sanitizados, sem detalhes internos.
 import type { Product } from "@prisma/client";
 
 import { SESSION_COOKIE, json, readCookie, readJsonBody, sameOriginRequest } from "../identity/http";
 import { resolveSession } from "../identity/service";
 import {
+  ProductNotFoundError,
   ProductValidationError,
+  ProductVersionConflictError,
   createManualProduct,
+  deleteTenantProduct,
+  getTenantProduct,
   isValidIdempotencyKey,
   listTenantProducts,
+  updateTenantProduct,
 } from "./service";
 
 export type ProductView = {
@@ -19,6 +24,7 @@ export type ProductView = {
   description: string;
   category: string;
   price: string;
+  priceCurrency: string;
   features: string[];
   imageRefs: string[];
   notes: string;
@@ -57,6 +63,7 @@ function toProductView(product: Product): ProductView {
     description: product.description ?? "",
     category: product.category ?? "",
     price: product.priceAmount ? product.priceAmount.toString() : "",
+    priceCurrency: product.priceCurrency ?? "",
     features: stringList(product.features),
     imageRefs: stringList(product.images),
     notes: constraintsNotes(product.generationConstraints),
@@ -71,6 +78,39 @@ export async function handleListProducts(req: Request): Promise<Response> {
 
   const products = await listTenantProducts(session.tenantId);
   return jsonBody(200, { products: products.map(toProductView) });
+}
+
+export async function handleGetProduct(req: Request, id: string): Promise<Response> {
+  const session = await sessionOf(req);
+  if (!session) return json(401, { error: "Sessão necessária para acessar seu Product.", code: "AUTH-SESSION" });
+  const product = await getTenantProduct(session.tenantId, id);
+  return product ? jsonBody(200, toProductView(product)) : json(404, { error: "Product não encontrado.", code: "PRODUCT-NOT-FOUND" });
+}
+
+export async function handleUpdateProduct(req: Request, id: string): Promise<Response> {
+  if (!sameOriginRequest(req)) return json(403, { error: "Origem não permitida." });
+  const session = await sessionOf(req);
+  if (!session) return json(401, { error: "Sessão necessária para editar o Product.", code: "AUTH-SESSION" });
+  const body = await readJsonBody(req);
+  if (!body || typeof body.expectedVersion !== "number") return json(400, { error: "Versão esperada inválida.", code: "VERSION-REQUIRED" });
+  try {
+    const product = await updateTenantProduct(session.tenantId, id, body.expectedVersion, body);
+    return jsonBody(200, { id: product.id, version: product.version });
+  } catch (error) {
+    if (error instanceof ProductValidationError) return json(400, { error: error.message, code: error.code, fieldErrors: error.fieldErrors });
+    if (error instanceof ProductNotFoundError) return json(404, { error: "Product não encontrado.", code: "PRODUCT-NOT-FOUND" });
+    if (error instanceof ProductVersionConflictError) return json(409, { error: "Este Product foi alterado. Recarregue a versão mais recente.", code: "VERSION-CONFLICT" });
+    console.error("[products] falha ao editar Product", error);
+    return json(500, { error: "Não foi possível editar o Product agora.", code: "SAVE-FAILED" });
+  }
+}
+
+export async function handleDeleteProduct(req: Request, id: string): Promise<Response> {
+  if (!sameOriginRequest(req)) return json(403, { error: "Origem não permitida." });
+  const session = await sessionOf(req);
+  if (!session) return json(401, { error: "Sessão necessária para excluir o Product.", code: "AUTH-SESSION" });
+  const deleted = await deleteTenantProduct(session.tenantId, id);
+  return deleted ? jsonBody(200, { id }) : json(404, { error: "Product não encontrado.", code: "PRODUCT-NOT-FOUND" });
 }
 
 export async function handleCreateProduct(req: Request): Promise<Response> {

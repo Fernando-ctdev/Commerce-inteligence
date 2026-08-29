@@ -69,12 +69,16 @@
 }
 
 .error {
-  border-inline-start: 3px solid var(--color-danger);
   color: var(--color-danger);
   font-size: 15px;
   line-height: 22px;
   margin: 0;
-  padding-inline-start: 12px;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
 }
 
 .field {

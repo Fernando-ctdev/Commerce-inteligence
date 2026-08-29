@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { requireSession } from "@/modules/identity/application/require-session";
 
 import {
   Breadcrumb,
@@ -9,18 +8,14 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { ProductDetail } from "@/components/products/product-detail";
+import { ProductCreateForm } from "@/components/products/product-create-form";
 import { ProductShell } from "@/components/products/product-shell";
 
-type ProductPageProps = {
-  params: Promise<{ id: string }>;
-};
-
-export default async function ProductPage({ params }: ProductPageProps) {
-  const session = await requireSession();
-  const { id } = await params;
+/* O formulário é 100% estático (nenhum dado carrega): renderizar o
+   formulário real elimina qualquer troca de layout no loading. */
+export default function NewProductLoading() {
   return (
-    <ProductShell eyebrow="Produto" title="Revisar fatos" user={{ email: session.email }}>
+    <ProductShell eyebrow="Produtos" title="Adicionar produto">
       <Breadcrumb className="mb-6">
         <BreadcrumbList>
           <BreadcrumbItem>
@@ -28,11 +23,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
-            <BreadcrumbPage>Revisar produto</BreadcrumbPage>
+            <BreadcrumbPage>Adicionar produto</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
-      <ProductDetail id={id} />
+      <ProductCreateForm />
     </ProductShell>
   );
 }

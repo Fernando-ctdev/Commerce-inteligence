@@ -12,7 +12,7 @@ export function TodayEmpty() {
         Adicione um produto para transformar o que você vende em um plano
         claro de gravação.
       </p>
-      <Button className="w-fit" nativeButton={false} render={<Link href="/products" />} size="lg">
+      <Button className="w-fit" nativeButton={false} render={<Link href="/products/new" />} size="lg">
         Adicionar produto
       </Button>
     </section>

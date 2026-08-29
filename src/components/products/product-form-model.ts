@@ -67,14 +67,15 @@ export type ProductManualDraft = {
   price: string;
   currency: string;
   characteristics: string;
+  imageReferences?: string;
 };
 
 export type ProductManualFieldErrorKey =
   | keyof ProductManualDraft
+  | "imageReferences"
   | "targetContentCount"
   | "creatorPresence"
   | "constraints";
-
 export type ProductManualFieldErrors = Partial<Record<ProductManualFieldErrorKey, string>>;
 
 
@@ -136,6 +137,7 @@ export function buildManualProductPayload(
   /* O draft guarda o formato da máscara (39.90); a API espera pt-BR (39,90). */
   const pricePtBr = price ? formatPriceDisplay(price) : null;
   const constraints = cleanNullable(preparation.constraints ?? "");
+  const imageRefs = lines(draft.imageReferences ?? "");
   return {
     name: clean(draft.name),
     description: clean(draft.description),
@@ -143,6 +145,7 @@ export function buildManualProductPayload(
     price: pricePtBr,
     priceCurrency: pricePtBr ? cleanNullable(draft.currency) || DEFAULT_PRODUCT_CURRENCY : null,
     features: lines(draft.characteristics),
+    ...(imageRefs.length > 0 ? { imageRefs } : {}),
     targetContentCount: preparation.targetContentCount,
     creatorPresence: preparation.creatorPresence,
     ...(constraints ? { constraints } : {}),

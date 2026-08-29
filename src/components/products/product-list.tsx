@@ -1,27 +1,19 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import { listProducts, ProductApiError, ProductRecord } from "./product-api";
 import styles from "./product-list.module.css";
-
-/* CTA de criação (Slice 002): navega para a subpágina /products/new. */
-function ProductCreateLink() {
-  return (
-    <div className={styles.state}>
-      <p className={styles.eyebrow}>Novo produto</p>
-      <h2>Adicione um produto ao seu catálogo.</h2>
-      <p>Preencha os fatos manualmente. Você poderá completar ou ajustar os dados depois.</p>
-      <Link className={styles.primaryButton} href="/products/new">Adicionar produto</Link>
-    </div>
-  );
-}
 
 export function ProductList() {
   const [products, setProducts] = useState<ProductRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | "active" | "archived">("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -29,7 +21,7 @@ export function ProductList() {
     try {
       setProducts(await listProducts());
     } catch (caught) {
-      setError(caught instanceof ProductApiError ? caught.message : "Não foi possível carregar seus Products agora.");
+      setError(caught instanceof ProductApiError ? caught.message : "Não foi possível carregar seus produtos agora.");
     } finally {
       setLoading(false);
     }
@@ -40,62 +32,134 @@ export function ProductList() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  if (loading) {
-    return (
-      <div className={styles.list}>
-        <ProductCreateLink />
-        <div aria-busy="true" className={styles.state} role="status">
-          <p className={styles.eyebrow}>Produtos</p>
-          <h2>Carregando seus Products…</h2>
-          <p>A estrutura da lista permanece visível enquanto buscamos os dados.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={styles.list}>
-        <ProductCreateLink />
-        <div className={styles.state} role="alert">
-          <p className={styles.eyebrow}>Não foi possível carregar</p>
-          <h2>Seus Products continuam protegidos.</h2>
-          <p>{error}</p>
-          <button className={styles.primaryButton} onClick={() => void load()} type="button">Tentar novamente</button>
-        </div>
-      </div>
-    );
-  }
-
-  if (products.length === 0) {
-    return (
-      <ProductCreateLink />
-    );
-  }
+  const filteredProducts = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
+    return products.filter((product) => {
+      const matchesFilter =
+        filter === "all" || (filter === "active" ? product.active : !product.active);
+      const matchesQuery =
+        !normalizedQuery ||
+        `${product.name} ${product.category} ${product.description}`
+          .toLocaleLowerCase("pt-BR")
+          .includes(normalizedQuery);
+      return matchesFilter && matchesQuery;
+    });
+  }, [filter, products, query]);
 
   return (
     <div className={styles.list}>
       <div className={styles.listIntro}>
         <div>
           <p className={styles.eyebrow}>Seu catálogo de trabalho</p>
-          <h2>Produtos ativos</h2>
+          <h2>Produtos</h2>
+          <p className={styles.listHint}>Encontre um produto e continue pelo próximo passo.</p>
+        </div>
+        <Link className={styles.primaryButton} href="/products/new">Adicionar produto</Link>
+      </div>
+      <div className={styles.controls} role="search">
+        <label className={styles.searchLabel} htmlFor="product-search">Buscar produtos</label>
+        <input
+          className={styles.searchInput}
+          id="product-search"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Nome, categoria ou descrição"
+          type="search"
+          value={query}
+        />
+        <div aria-label="Filtrar produtos" className={styles.filters} role="group">
+          {([
+            ["all", "Todos"],
+            ["active", "Ativos"],
+            ["archived", "Arquivados"],
+          ] as const).map(([value, label]) => (
+            <button
+              aria-pressed={filter === value}
+              className={styles.filterButton}
+              key={value}
+              onClick={() => setFilter(value)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
-      <ProductCreateLink />
-      <ul aria-label="Produtos ativos" className={styles.cards}>
-        {products.map((product) => (
-          <li className={styles.card} key={product.id}>
-            <div className={styles.cardBody}>
-              <p className={styles.cardMeta}>{product.category || "Produto"}</p>
-              <h3>{product.name}</h3>
-              <p>{product.description}</p>
-            </div>
-            <Link className={styles.cardAction} href={`/products/${encodeURIComponent(product.id)}`}>
-              Abrir produto
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {loading ? (
+        <ul aria-hidden="true" className={styles.cards}>
+          {Array.from({ length: 6 }, (_, index) => (
+            <li className={styles.card} key={index}>
+              <Skeleton className={styles.imageFallback} />
+              <div className={styles.cardBody}>
+                <Skeleton className="rounded-md" style={{ blockSize: 12, inlineSize: "40%" }} />
+                <Skeleton className="rounded-md" style={{ blockSize: 20, inlineSize: "75%" }} />
+                <Skeleton className="rounded-md" style={{ blockSize: 14, inlineSize: "60%" }} />
+              </div>
+              <Skeleton className={styles.cardAction} style={{ blockSize: 16, inlineSize: 96 }} />
+            </li>
+          ))}
+        </ul>
+      ) : error ? (
+        <div className={styles.galleryEmpty} role="alert">
+          <p>Não foi possível carregar seus produtos. {error}</p>
+          <button className={styles.secondaryButton} onClick={() => void load()} type="button">
+            Tentar novamente
+          </button>
+        </div>
+      ) : filteredProducts.length === 0 ? (
+        <div className={styles.galleryEmpty}>
+          {products.length === 0 ? (
+            <p>Nenhum produto por aqui ainda. Use Adicionar produto para começar seu catálogo.</p>
+          ) : (
+            <>
+              <p>Nada encontrado para esta busca ou filtro.</p>
+              <button
+                className={styles.secondaryButton}
+                onClick={() => { setQuery(""); setFilter("all"); }}
+                type="button"
+              >
+                Limpar busca e filtros
+              </button>
+            </>
+          )}
+        </div>
+      ) : (
+        <ul aria-label="Produtos filtrados" className={styles.cards}>
+          {filteredProducts.map((product) => {
+            const imageUrl = product.imageReferences.find((value) => /^(?:https?:\/\/|data:image\/[a-z0-9.+-]+;base64,)/i.test(value));
+            return (
+              <li className={styles.card} key={product.id}>
+                {imageUrl ? (
+                  <Image
+                    alt={`Imagem de ${product.name}`}
+                    className={styles.cardImage}
+                    height={180}
+                    src={imageUrl}
+                    unoptimized
+                    width={320}
+                  />
+              ) : (
+                <div aria-label={`Produto ${product.name} sem imagem cadastrada`} className={styles.imageFallback} role="img">
+                  Sem imagem
+                </div>
+              )}
+              <div className={styles.cardBody}>
+                <div className={styles.cardTopline}>
+                  <p className={styles.cardMeta}>{product.category || "Produto"}</p>
+                  <span className={product.active ? styles.statusActive : styles.statusArchived}>
+                    {product.active ? "Ativo" : "Arquivado"}
+                  </span>
+                </div>
+                <h3>{product.name}</h3>
+                <p>{product.description}</p>
+              </div>
+              <Link className={styles.cardAction} href={`/products/${encodeURIComponent(product.id)}`}>
+                {product.active ? "Abrir produto" : "Consultar produto"}
+              </Link>
+            </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
