@@ -222,47 +222,40 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 
 ---
 
-### Slice 002 — Importação de Product via Product Importer
+### Slice 002 — Cadastro manual de Product
 
-**User Outcome:** O creator fornece uma URL pública de produto; o Product Importer abre a página em Chromium headless, usa um Agent Runner especializado com Browser Harness para compreender o produto principal e devolve um `ProductCandidate` limpo para confirmação. Quando a extração falhar, o creator usa o fallback manual.
+**User Outcome:** O creator abre a subpágina `/products/new` dentro de Produtos, cadastra manualmente os fatos do Product com Nome e Descrição obrigatórios, salva o registro escopado ao Tenant e vê seu card na lista de Produtos. As preferências da primeira geração ficam registradas como restrições, sem iniciar geração nesta etapa.
 
 **Depends On:** Slice 001
 
-**Domain Areas:** Product Import, Product, Entitlements
+**Domain Areas:** Product, Tenant
 
 **Scope:**
 
-**POC do fluxo definitivo:**
+- Disponibilizar a subpágina autenticada `/products/new` dentro de Produtos.
+- Preservar os campos e o conteúdo do modal manual existente: Nome do produto, Descrição, Categoria, Preço com Moeda, Características — uma por linha e a seção Preparação dos conteúdos.
+- Exigir Nome e Descrição; manter Categoria, Preço/Moeda e Características opcionais.
+- Validar Preço e Moeda como par opcional: ambos preenchidos ou ambos vazios.
+- Iniciar Preparação dos conteúdos com quantidade `20`, intervalo inteiro `1–30`, formato `Tanto faz` e notas/restrições opcionais até `300` caracteres.
+- Persistir as preferências de preparação como restrições da primeira geração, sem iniciar geração nesta etapa.
+- Salvar um `Product` com os fatos preenchidos, escopado ao `Tenant` resolvido pela sessão server-side.
+- Impedir acesso a Products de outro Tenant e evitar duplicidade em retry da mesma submissão.
+- Retornar à lista de Produtos após salvar e exibir um card do Product criado.
+- Manter validação, mensagens de erro, estado de salvamento, acessibilidade e experiência mobile alinhados ao `DESIGN.md`.
 
-- Executar o Product Importer em um único container com HTTP API, Agent Runner, Browser Harness, Chromium headless e integração com LLM.
-- Aceitar uma URL pública de produto, validando formato, tamanho, ausência de credenciais e destinos proibidos.
-- Abrir a URL no Chromium headless e executar um Agent Runner especializado em Product Extraction.
-- Permitir ao agente observar e interagir somente com a página analisada usando o menor conjunto de ferramentas necessário: Accessibility Tree, DOM, Structured Data, rolagem, cliques e expansão de seções.
-- Usar a task lógica `PRODUCT_PAGE_EXTRACTION` sem selecionar provider/modelo diretamente no Product Importer.
-- Restringir o agente ao produto principal da URL; ignorar navegação, reviews, banners, anúncios, recomendações e produtos relacionados.
-- Proibir shell, filesystem, upload, download, novas abas, links arbitrários e navegação livre.
-- Produzir `ProductCandidate` com nome, descrição, preço/moeda, categoria, marca, características, imagens, seller, variantes relevantes e URL original, preservando lacunas e proveniência.
-- Aplicar schema validation, limpeza, normalização, deduplicação, limites e validação final de forma determinística depois do Agent Run.
-- Usar browser efêmero, timeout simples, erro técnico genérico, logs básicos e execução síncrona aceitável na POC.
-- Calibrar limites configuráveis (`maxSteps`, `maxDuration`, `maxTokens`, `maxNetworkInspections`) com 20–30 produtos públicos.
-- Avaliar localização do produto principal, contaminação por conteúdo externo, campos ausentes, claims inventados e custo.
+**Out of Scope:** URL, serviço automatizado de descoberta de produto, LLM, Model Router, Agent Runner, Browser Harness, Chromium, browser headless ou interativo, Docker, descoberta automática de dados, geração de Strategy, Plan, Content ou Briefing, criação/execução de `CommerceIntelligenceJob`, publicação, agendamento, analytics, sincronização de catálogo, outros marketplaces, campos estratégicos, upload de arquivos, captura de mídia, criação de SPEC ou PLAN.
 
-**Endurecimento do MVP no mesmo slice:**
+**Critérios necessários:**
 
-- Expor endpoint autenticado `POST /product-imports` com resposta `202` e `importId`.
-- Consultar o estado por `GET /product-imports/{id}`, com execução assíncrona e polling.
-- Persistir `ProductImportAttempt`, estados terminais e erros recuperáveis.
-- Aplicar concorrência limitada, timeout e cleanup garantidos.
-- Registrar observabilidade mínima sanitizada.
-- Evoluir para o schema canônico completo, incluindo `variants`.
-- Usar profile persistente somente se a sessão técnica do TikTok exigir.
-- Aplicar entitlement e limites de uso server-side.
-- Adicionar regressão/evals com produtos reais.
-- Apresentar o Candidate para revisão; resolver a quantidade inicial de conteúdos na mesma confirmação.
-- Oferecer fallback manual com nome e descrição obrigatórios e demais fatos opcionais, sem campos estratégicos.
-- Aplicar limite server-side de Products ativos com entitlement default provisionado por Tenant.
-
-**Out of Scope:** Browser Service separado, browser interativo, portal, iframe, streaming visual, handoff, autenticação manual do creator, profile persistente por creator na POC, estados específicos de login/CAPTCHA/2FA, TikTok OAuth, TikTok Shop API, login por senha/cookies fornecidos ao sistema, armazenamento de credenciais do TikTok, scraping universal, crawler, automação de CAPTCHA/2FA/QR Code, Strategy, Plan, Content, geração, publicação, agendamento, analytics, sincronização de catálogo, outros marketplaces, download obrigatório de imagens, shell, filesystem, upload/download pelo agente, proxy, event bus, MCP, fila distribuída e microserviços adicionais.
+1. `/products/new` é acessível a partir de Produtos para usuário autenticado.
+2. O formulário apresenta os campos e a seção de preparação do modal manual existente.
+3. Nome e Descrição obrigatórios bloqueiam o salvamento quando vazios.
+4. Preço e Moeda podem ficar vazios juntos; informar somente um bloqueia o salvamento.
+5. A preparação usa defaults `20`, `1–30`, `Tanto faz` e notas limitadas a `300` caracteres.
+6. O salvamento persiste os fatos opcionais preenchidos e as restrições da primeira geração sem iniciar geração ou criar job.
+7. O Product é escopado ao Tenant da sessão e não é visível para outro Tenant.
+8. Após salvar, o card do Product aparece na lista de Produtos.
+9. Cancelar não cria Product; erros mantêm os valores preenchidos e permitem nova tentativa.
 
 ---
 

@@ -1,3 +1,5 @@
+import type { ContentPreparationPreferences } from "./product-import-model";
+
 export type ProductDraft = {
   name: string;
   description: string;
@@ -22,12 +24,56 @@ export type ProductPayload = {
   price: string | null;
   priceCurrency?: string | null;
   features: string[];
-  imageRefs: string[];
-  notes: string | null;
-  url: string | null;
+  imageRefs?: string[];
+  notes?: string | null;
+  url?: string | null;
   idempotency_key?: string;
-  expectedVersion?: number;
+  targetContentCount?: number;
+  creatorPresence?: ContentPreparationPreferences["creatorPresence"];
+  constraints?: string;
 };
+
+/* Máscara do Preço: o input exibe pt-BR (10,50) e o draft guarda o
+   formato aceito pelo gate (10.50). Digitação estilo caixa: cada dígito
+   entra como centavo. */
+export function digitsToPrice(raw: string) {
+  /* 10 dígitos = 99.999.999,99 — teto exato aceito pelo gate. */
+  /* Zeros à esquerda colapsam: sem eles, apagar ficava travado em 0,00. */
+  const digits = raw
+    .replace(/\D/g, "")
+    .replace(/^0+/, "")
+    .slice(0, 10);
+  if (!digits) return "";
+  return (Number(digits) / 100).toFixed(2);
+}
+
+export function formatPriceDisplay(price: string) {
+  if (!price) return "";
+  const amount = Number(price.replace(",", "."));
+  if (!Number.isFinite(amount)) return price;
+  return amount.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export type ProductManualDraft = {
+  name: string;
+  description: string;
+  category: string;
+  price: string;
+  currency: string;
+  characteristics: string;
+};
+
+export type ProductManualFieldErrorKey =
+  | keyof ProductManualDraft
+  | "targetContentCount"
+  | "creatorPresence"
+  | "constraints";
+
+export type ProductManualFieldErrors = Partial<Record<ProductManualFieldErrorKey, string>>;
+
 
 function clean(value: string) {
   return value.trim();
@@ -75,6 +121,59 @@ export function buildProductPayload(draft: ProductDraft, idempotencyKey?: string
     ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
     ...(version === undefined ? {} : { expectedVersion: version }),
   };
+}
+/* Criação manual do Slice 002: normaliza os fatos do modal e anexa a
+   preparação da primeira geração. Preço/Moeda é um par opcional. */
+export function buildManualProductPayload(
+  draft: ProductManualDraft,
+  preparation: ContentPreparationPreferences,
+  idempotencyKey?: string,
+): ProductPayload {
+  const price = cleanNullable(draft.price);
+  /* O draft guarda o formato da máscara (39.90); a API espera pt-BR (39,90). */
+  const pricePtBr = price ? formatPriceDisplay(price) : null;
+  const constraints = cleanNullable(preparation.constraints ?? "");
+  return {
+    name: clean(draft.name),
+    description: clean(draft.description),
+    category: cleanNullable(draft.category),
+    price: pricePtBr,
+    priceCurrency: pricePtBr ? cleanNullable(draft.currency) : null,
+    features: lines(draft.characteristics),
+    targetContentCount: preparation.targetContentCount,
+    creatorPresence: preparation.creatorPresence,
+    ...(constraints ? { constraints } : {}),
+    ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+  };
+}
+
+/* Validação client-side do cadastro manual (SPEC Slice 002, RI-001 a RI-003). */
+export function validateProductManualDraft(draft: ProductManualDraft): ProductManualFieldErrors {
+  const errors: ProductManualFieldErrors = {};
+  if (!clean(draft.name)) errors.name = "Informe o nome do produto.";
+  if (!clean(draft.description)) errors.description = "Informe uma descrição do produto.";
+  if (Array.from(draft.category.trim()).length > 120) errors.category = "Máximo de 120 caracteres.";
+  const price = draft.price.trim();
+  const currency = draft.currency.trim();
+  if (price && currency) {
+    if (!/^\d+(?:[.,]\d{1,2})?$/.test(price) || Number(price.replace(",", ".")) < 0) {
+      errors.price = "Informe um preço não negativo com até duas casas.";
+    } else if (!/^[A-Za-z]{3}$/.test(currency)) {
+      errors.currency = "Informe uma moeda válida.";
+    }
+  } else if (price || currency) {
+    errors.price = "Preço e Moeda devem ser preenchidos juntos ou deixados vazios.";
+  }
+  return errors;
+}
+
+/* Preparação: quantidade 1–30, formato conhecido e notas até 300 caracteres. */
+export function preparationIsWithinLimits(preparation: ContentPreparationPreferences) {
+  return Number.isInteger(preparation.targetContentCount)
+    && preparation.targetContentCount >= 1
+    && preparation.targetContentCount <= 30
+    && ["on_camera", "hands_only_product", "either"].includes(preparation.creatorPresence)
+    && Array.from(preparation.constraints ?? "").length <= 300;
 }
 
 export function emptyProductDraft(): ProductDraft {

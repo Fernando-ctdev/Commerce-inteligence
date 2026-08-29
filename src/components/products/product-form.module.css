@@ -124,6 +124,79 @@
   margin: 0;
 }
 
+.grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.factsGrid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Preparação dos conteúdos (Slice 002). */
+.preparationGrid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.preparationGroup {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.preparationGroup legend {
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  margin-bottom: 8px;
+}
+
+.preparationQuantity {
+  display: grid;
+  gap: 6px;
+}
+
+.quantityValue {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.quantityBounds {
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  line-height: 16px;
+}
+
+.creatorOptions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.currencyTrigger {
+  height: 44px;
+  inline-size: 100%;
+  justify-content: space-between;
+  min-inline-size: 0;
+}
+
+.currencyContent [data-slot="select-item"]:focus,
+.currencyContent [data-slot="select-item"][data-highlighted] {
+  color: var(--color-on-action);
+}
+
+
 .inlineActions,
 .submitBar {
   align-items: center;
@@ -173,7 +246,10 @@
 }
 
 .cancelLink {
+  align-items: center;
+  display: inline-flex;
   font-size: 14px;
+  min-height: 44px;
   padding: 10px;
 }
 
@@ -210,6 +286,24 @@
     flex: 1;
   }
 
+  .grid,
+  .factsGrid,
+  .preparationGrid,
+  .creatorOptions {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+/* Slider com alvo de toque de 44px (AC-002-16): o input nativo esticado
+   acompanha a altura do wrapper. */
+.quantitySlider {
+  min-height: 44px;
+}
+
+.optionalMark {
+  color: var(--color-text-secondary);
+  font-weight: 400;
 }
 
 @media (prefers-reduced-motion: reduce) {

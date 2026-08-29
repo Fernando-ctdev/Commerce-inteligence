@@ -97,9 +97,15 @@ model Product {
   sourceUrl          String?
   provenance         Json
   targetContentCount Int
+  // Slice 002 — cadastro manual: restrições da primeira geração ({creatorPresence, constraints?}),
+  // versão determinística da resposta e chave de idempotência de criação (nula no caminho legado).
+  generationConstraints Json?
+  createIdempotencyKey  String?
+  version            Int @default(1)
   createdAt          DateTime @default(now())
   tenant             Tenant   @relation(fields: [tenantId], references: [id])
 
+  @@unique([tenantId, createIdempotencyKey])
   @@index([tenantId])
   @@map("products")
 }

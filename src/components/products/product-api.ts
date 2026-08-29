@@ -20,16 +20,19 @@ export type ProductMutation = {
   replay?: boolean;
 };
 
+export type ServerFieldErrors = ProductFieldErrors &
+  Partial<Record<"targetContentCount" | "creatorPresence" | "constraints", string>>;
+
 export type ProductApiErrorOptions = {
   status: number;
   message: string;
-  fieldErrors?: ProductFieldErrors;
+  fieldErrors?: ServerFieldErrors;
   code?: string;
 };
 
 export class ProductApiError extends Error {
   readonly status: number;
-  readonly fieldErrors: ProductFieldErrors;
+  readonly fieldErrors: ServerFieldErrors;
   readonly code?: string;
 
   constructor({ status, message, fieldErrors = {}, code }: ProductApiErrorOptions) {
@@ -57,7 +60,10 @@ function listValue(value: unknown) {
     .filter(Boolean);
 }
 
-const serverFieldNames: Record<string, keyof ProductFieldErrors> = {
+/* Chaves do contrato do POST → chaves de erro do cliente. Erros de
+   preparação (targetContentCount, creatorPresence, constraints) passam
+   com o mesmo nome; chaves desconhecidas continuam descartadas. */
+const serverFieldNames: Record<string, string> = {
   name: "name",
   description: "description",
   category: "category",
@@ -65,14 +71,19 @@ const serverFieldNames: Record<string, keyof ProductFieldErrors> = {
   features: "characteristics",
   imageRefs: "imageReferences",
   notes: "observations",
-  url: "url",
+  priceCurrency: "price",
+  targetContentCount: "targetContentCount",
+  creatorPresence: "creatorPresence",
+  constraints: "constraints",
 };
 
-function mapFieldErrors(value: unknown): ProductFieldErrors {
+function mapFieldErrors(value: unknown): ServerFieldErrors {
   if (typeof value !== "object" || value === null) return {};
-  return Object.entries(value).reduce<ProductFieldErrors>((errors, [key, message]) => {
-    const field = serverFieldNames[key] ?? (key in serverFieldNames ? serverFieldNames[key] : undefined);
-    if (field && typeof message === "string") errors[field] = message;
+  return Object.entries(value).reduce<ServerFieldErrors>((errors, [key, message]) => {
+    const field = serverFieldNames[key];
+    if (field && typeof message === "string") {
+      errors[field as keyof ServerFieldErrors] = message;
+    }
     return errors;
   }, {});
 }
@@ -155,11 +166,25 @@ function mutationFromResponse(value: unknown): ProductMutation {
 }
 
 export async function createProduct(payload: ProductPayload) {
-  const { idempotency_key: idempotencyKey, ...body } = payload;
+  /* O POST de criação expõe somente o contrato do Slice 002; campos de
+     edição (seller, variants, imageRefs, notes, url, expectedVersion)
+     permanecem no PATCH. Campos ausentes caem fora do JSON. */
+  const {
+    idempotency_key: idempotencyKey,
+    name,
+    description,
+    category,
+    price,
+    priceCurrency,
+    features,
+    targetContentCount,
+    creatorPresence,
+    constraints,
+  } = payload;
   return mutationFromResponse(await request<unknown>("/api/products", {
     method: "POST",
     headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
-    body: JSON.stringify(body),
+    body: JSON.stringify({ name, description, category, price, priceCurrency, features, targetContentCount, creatorPresence, constraints }),
   }));
 }
 
