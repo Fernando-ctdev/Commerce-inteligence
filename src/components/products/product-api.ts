@@ -21,7 +21,7 @@ export type ProductMutation = {
 };
 
 export type ServerFieldErrors = ProductFieldErrors &
-  Partial<Record<"targetContentCount" | "creatorPresence" | "constraints", string>>;
+  Partial<Record<"currency" | "targetContentCount" | "creatorPresence" | "constraints", string>>;
 
 export type ProductApiErrorOptions = {
   status: number;
@@ -71,7 +71,8 @@ const serverFieldNames: Record<string, string> = {
   features: "characteristics",
   imageRefs: "imageReferences",
   notes: "observations",
-  priceCurrency: "price",
+  currency: "currency",
+  priceCurrency: "currency",
   targetContentCount: "targetContentCount",
   creatorPresence: "creatorPresence",
   constraints: "constraints",

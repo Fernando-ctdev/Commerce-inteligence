@@ -27,6 +27,11 @@ test("setup: banco acessível (skip dos testes de integração caso contrário)"
 const validInput = {
   name: "Curso de Excel",
   description: "Curso completo de planilhas",
+  category: "Educação",
+  price: "29,90",
+  priceCurrency: "BRL",
+  features: ["50 aulas", "certificado"],
+  constraints: "sem gírias",
 };
 
 test("validação: nome e descrição obrigatórios após trim, com código do primeiro erro", () => {
@@ -49,23 +54,31 @@ test("validação: nome e descrição obrigatórios após trim, com código do p
   );
 });
 
-test("validação: preço/moeda como par opcional, formato não negativo", () => {
-  assert.throws(
-    () => validateManualProductInput({ ...validInput, price: "29,90" }),
-    (error: unknown) => {
-      assert.ok(error instanceof ProductValidationError);
-      assert.equal(error.code, "VAL-PRICE-CURRENCY-PAIR");
-      return true;
-    },
-  );
-  assert.throws(
-    () => validateManualProductInput({ ...validInput, priceCurrency: "BRL" }),
-    (error: unknown) => {
-      assert.ok(error instanceof ProductValidationError);
-      assert.equal(error.code, "VAL-PRICE-CURRENCY-PAIR");
-      return true;
-    },
-  );
+test("validação: campos obrigatórios retornam códigos VAL-*-REQUIRED", () => {
+  const casos: Array<[Record<string, unknown>, string, string]> = [
+    [{ ...validInput, name: "   " }, "name", "VAL-NAME-REQUIRED"],
+    [{ ...validInput, description: "" }, "description", "VAL-DESCRIPTION-REQUIRED"],
+    [{ ...validInput, category: "" }, "category", "VAL-CATEGORY-REQUIRED"],
+    [{ ...validInput, price: "" }, "price", "VAL-PRICE-REQUIRED"],
+    [{ ...validInput, priceCurrency: "" }, "priceCurrency", "VAL-CURRENCY-REQUIRED"],
+    [{ ...validInput, features: [] }, "features", "VAL-FEATURES-REQUIRED"],
+    [{ ...validInput, features: ["", "   "] }, "features", "VAL-FEATURES-REQUIRED"],
+    [{ ...validInput, constraints: "" }, "constraints", "VAL-NOTES-REQUIRED"],
+  ];
+  for (const [input, field, code] of casos) {
+    assert.throws(
+      () => validateManualProductInput(input),
+      (error: unknown) => {
+        assert.ok(error instanceof ProductValidationError);
+        assert.equal(error.code, code);
+        assert.ok(error.fieldErrors[field]);
+        return true;
+      },
+    );
+  }
+});
+
+test("validação: preço não negativo, moeda válida e normalização preservada", () => {
   assert.throws(
     () => validateManualProductInput({ ...validInput, price: "-5", priceCurrency: "BRL" }),
     (error: unknown) => {
@@ -74,64 +87,41 @@ test("validação: preço/moeda como par opcional, formato não negativo", () =>
       return true;
     },
   );
-
-  const semPar = validateManualProductInput(validInput);
-  assert.equal(semPar.priceAmount, null);
-  assert.equal(semPar.priceCurrency, null);
-
-  const comPar = validateManualProductInput({ ...validInput, price: "1.234,56", priceCurrency: "brl" });
-  assert.equal(comPar.priceAmount, "1234.56"); // pt-BR: ponto de milhar sai, vírgula vira ponto decimal
-
-  const simples = validateManualProductInput({ ...validInput, price: "29,90", priceCurrency: "USD" });
-  assert.equal(simples.priceAmount, "29.90");
-  assert.equal(simples.priceCurrency, "USD");
-  assert.equal(comPar.priceCurrency, "BRL");
-});
-test("validação: aceita preço decimal com ponto", () => {
-  const result = validateManualProductInput({
-    name: "Produto",
-    description: "Descrição",
-    price: "23.44",
-    priceCurrency: "BRL",
-    features: [],
-    targetContentCount: 20,
-    creatorPresence: "either",
-  });
-
-  assert.equal(result.priceAmount, "23.44");
-});
-test("validação: normaliza milhar pt-BR sem casas decimais", () => {
-  const result = validateManualProductInput({
-    name: "Produto",
-    description: "Descrição",
-    price: "1.234",
-    priceCurrency: "BRL",
-  });
-
-  assert.equal(result.priceAmount, "1234");
-});
-
-test("validação: rejeita preço com mais de duas casas decimais", () => {
   assert.throws(
-    () =>
-      validateManualProductInput({
-        name: "Produto",
-        description: "Descrição",
-        price: "23.4567",
-        priceCurrency: "BRL",
-      }),
+    () => validateManualProductInput({ ...validInput, price: "23.4567", priceCurrency: "BRL" }),
     (error: unknown) => {
       assert.ok(error instanceof ProductValidationError);
       assert.equal(error.code, "VAL-PRICE-FORMAT");
       return true;
     },
   );
+
+  const comPar = validateManualProductInput({ ...validInput, price: "1.234,56", priceCurrency: "brl" });
+  assert.equal(comPar.priceAmount, "1234.56"); // pt-BR: ponto de milhar sai, vírgula vira ponto decimal
+  assert.equal(comPar.priceCurrency, "BRL");
+
+  const simples = validateManualProductInput({ ...validInput, price: "29,90", priceCurrency: "USD" });
+  assert.equal(simples.priceAmount, "29.90");
+  assert.equal(simples.priceCurrency, "USD");
+});
+
+test("validação: aceita preço decimal com ponto", () => {
+  const result = validateManualProductInput({ ...validInput, price: "23.44", priceCurrency: "BRL" });
+  assert.equal(result.priceAmount, "23.44");
+});
+
+test("validação: normaliza milhar pt-BR sem casas decimais", () => {
+  const milhar = validateManualProductInput({ ...validInput, price: "1.234" });
+  assert.equal(milhar.priceAmount, "1234");
+
+  const milharMaior = validateManualProductInput({ ...validInput, price: "1.234.567" });
+  assert.equal(milharMaior.priceAmount, "1234567");
 });
 
 test("validação: preparação com defaults 20/Tanto faz e limites 1–30/300", () => {
   const defaults = validateManualProductInput(validInput);
   assert.equal(defaults.targetContentCount, 20);
-  assert.deepEqual(defaults.generationConstraints, { creatorPresence: "either" });
+  assert.deepEqual(defaults.generationConstraints, { creatorPresence: "either", constraints: "sem gírias" });
 
   for (const quantity of [0, 31, 2.5]) {
     assert.throws(

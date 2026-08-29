@@ -37,8 +37,10 @@ Fontes de autoridade:
   - quantidade inicial de conteúdos;
   - formato do creator;
   - observações ou restrições.
-- Nome e Descrição obrigatórios.
-- Categoria, Características e o par Preço/Moeda opcionais.
+- Todos os campos do formulário são obrigatórios: Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições.
+- Preço deve ser não negativo, válido e ter no máximo duas casas decimais; Moeda deve ser uma das opções permitidas.
+- Quantidade e formato têm defaults válidos e aparecem com `*`; Observações ou restrições aparecem com `*` e são obrigatórias, até `300` caracteres.
+- O asterisco é apenas indicação visual; HTML/cliente e servidor validam a obrigatoriedade.
 - Persistência do Product e das restrições de preparação no Tenant resolvido server-side.
 - Retorno à lista de Produtos e exibição do card do Product criado.
 - Estados de validação, salvamento, sucesso e erro necessários ao fluxo.
@@ -63,20 +65,20 @@ Fontes de autoridade:
 ### B-001 — Acesso e contexto
 
 Usuário autenticado acessa Produtos e aciona `Adicionar produto`. O sistema abre `/products/new` mantendo o contexto de Produtos e apresenta `Salvar produto` como ação primária e `Cancelar` como ação secundária.
-
 ### B-002 — Campos factuais
 
-O sistema apresenta somente os campos factuais definidos nesta SPEC. Nome e Descrição são campos persistentes do Product. Categoria, Preço/Moeda e Características podem ser deixados vazios.
+O sistema apresenta somente os campos factuais definidos nesta SPEC. Nome, Descrição, Categoria, Preço, Moeda e Características são campos persistentes do Product e obrigatórios; deve existir ao menos uma característica não vazia.
 
 Características são informadas uma por linha; cada linha não vazia representa uma característica.
-
 ### B-003 — Preparação dos conteúdos
 
 O sistema apresenta a seção `Preparação dos conteúdos` com estes valores iniciais e limites:
 
-- quantidade inicial: `20`, inteiro entre `1` e `30`;
-- formato do creator: `Tanto faz`, com opções `Em câmera`, `mão e produto` e `Tanto faz`;
-- observações ou restrições: vazias por padrão, opcionais, máximo de `300` caracteres.
+- quantidade inicial: `20`, inteiro entre `1` e `30`, exibida com `*`;
+- formato do creator: `Tanto faz`, com opções `Em câmera`, `mão e produto` e `Tanto faz`, exibido com `*`;
+- observações ou restrições: exibidas com `*`, obrigatórias, não vazias após remoção de espaços, máximo de `300` caracteres.
+
+O asterisco é apenas indicação visual; a obrigatoriedade é validada no HTML/cliente e no servidor.
 
 ### B-004 — Salvamento válido
 
@@ -98,13 +100,11 @@ Se a mesma submissão for repetida por retry técnico, o sistema não cria Produ
 
 ### RI-001 — Obrigatoriedade
 
-Nome e Descrição devem conter valor não vazio após remoção de espaços. Nenhum Product é persistido sem os dois campos.
+Nome, Descrição e Categoria devem conter valor não vazio após remoção de espaços. Preço e Moeda devem ser informados e válidos. Deve existir ao menos uma Característica não vazia. Observações ou restrições devem conter valor não vazio após remoção de espaços e não exceder `300` caracteres. Nenhum Product é persistido sem esses campos obrigatórios.
 
-### RI-002 — Preço e Moeda como par
+### RI-002 — Preço e Moeda obrigatórios
 
-Preço e Moeda são um par opcional: ambos vazios ou ambos preenchidos. Preço preenchido sem Moeda, ou Moeda preenchida sem Preço, é inválido.
-
-As moedas disponíveis são `BRL` (R$ Reais), `USD` ($ Dólar) e `EUR` (€ Euro). Preço não pode ser negativo e deve respeitar formato monetário válido.
+Preço e Moeda são obrigatórios e devem ser informados conjuntamente. Preço não pode ser negativo, deve respeitar formato monetário válido e ter no máximo duas casas decimais. As moedas disponíveis são `BRL` (R$ Reais), `USD` ($ Dólar) e `EUR` (€ Euro).
 
 ### RI-003 — Preparação válida
 
@@ -136,8 +136,12 @@ Este slice não altera estado de geração e não antecipa o comportamento de qu
 |---|---|---|
 | `VAL-NAME-REQUIRED` | Nome ausente ou vazio | Exibir erro junto ao campo, manter valor e focar o primeiro erro. |
 | `VAL-DESCRIPTION-REQUIRED` | Descrição ausente ou vazia | Exibir erro junto ao campo, manter valor e focar o primeiro erro. |
-| `VAL-PRICE-CURRENCY-PAIR` | Somente Preço ou somente Moeda preenchido | Bloquear salvamento e explicar que os dois campos devem ser preenchidos juntos ou deixados vazios. |
-| `VAL-PRICE-FORMAT` | Preço negativo ou formato inválido | Bloquear salvamento e explicar o formato esperado. |
+| `VAL-CATEGORY-REQUIRED` | Categoria ausente ou vazia | Exibir erro junto ao campo, manter valor e focar o primeiro erro. |
+| `VAL-PRICE-REQUIRED` | Preço ausente | Bloquear salvamento e explicar que o preço é obrigatório. |
+| `VAL-CURRENCY-REQUIRED` | Moeda ausente | Bloquear salvamento e explicar que a moeda é obrigatória. |
+| `VAL-FEATURES-REQUIRED` | Nenhuma característica não vazia | Bloquear salvamento e orientar o preenchimento de ao menos uma linha. |
+| `VAL-NOTES-REQUIRED` | Observações/restrições ausentes ou vazias | Bloquear salvamento e exibir erro associado ao campo. |
+| `VAL-PRICE-FORMAT` | Preço negativo, formato inválido ou com mais de duas casas | Bloquear salvamento e explicar o formato esperado. |
 | `VAL-QUANTITY-RANGE` | Quantidade não inteira ou fora de `1–30` | Bloquear salvamento e manter o valor editável. |
 | `VAL-CREATOR-FORMAT` | Formato fora das opções permitidas | Bloquear salvamento e manter a seleção válida anterior. |
 | `VAL-NOTES-LENGTH` | Notas/restrições acima de `300` caracteres | Impedir excedente ou bloquear salvamento com mensagem associada ao campo. |
@@ -185,10 +189,10 @@ Requisitos visuais e de acessibilidade:
 |---|---|
 | `AC-002-01` | **WHEN** um usuário autenticado acionar `Adicionar produto` em Produtos, **o sistema SHALL** abrir `/products/new` dentro do contexto de Produtos. |
 | `AC-002-02` | **WHEN** `/products/new` for exibida, **o sistema SHALL** apresentar exatamente Nome do produto, Descrição, Categoria, Preço, Moeda, Características — uma por linha — e a seção Preparação dos conteúdos. |
-| `AC-002-03` | **WHILE** Nome ou Descrição estiver ausente ou vazio após remoção de espaços, **o sistema SHALL** impedir o salvamento, exibir o erro associado e preservar os valores digitados. |
-| `AC-002-04` | **WHEN** somente Preço ou somente Moeda estiver preenchido, **o sistema SHALL** impedir o salvamento e informar a regra do par opcional. |
-| `AC-002-05` | **WHEN** Preço e Moeda estiverem ambos vazios ou ambos válidos, **o sistema SHALL** aceitar o par, desde que o restante do formulário seja válido. |
-| `AC-002-06` | **WHEN** o formulário for carregado, **o sistema SHALL** definir quantidade `20`, permitir somente inteiros de `1` a `30`, definir formato `Tanto faz` e limitar observações/restrições a `300` caracteres. |
+| `AC-002-03` | **WHILE** Nome, Descrição, Categoria, Preço, Moeda, Características (sem ao menos uma linha não vazia) ou Observações/restrições estiver ausente, vazio ou inválido, **o sistema SHALL** impedir o salvamento, exibir o erro associado e preservar os valores digitados. |
+| `AC-002-04` | **WHEN** Preço ou Moeda estiver ausente, ou o preço for negativo, inválido ou tiver mais de duas casas decimais, **o sistema SHALL** impedir o salvamento e informar a regra correspondente. |
+| `AC-002-05` | **WHEN** o formulário for carregado, **o sistema SHALL** definir quantidade `20`, permitir somente inteiros de `1` a `30`, definir formato `Tanto faz`, exibir `*` em Quantidade, Formato e Observações/restrições e limitar estas últimas a `300` caracteres. |
+| `AC-002-06` | **WHEN** o formulário for submetido, **o sistema SHALL** validar campos obrigatórios no HTML/cliente e no servidor; o asterisco SHALL ser apenas indicação visual. |
 | `AC-002-07` | **WHEN** uma submissão válida for salva, **o sistema SHALL** persistir o Product com os fatos preenchidos e as preferências de preparação como restrições da primeira geração. |
 | `AC-002-08` | **WHEN** o Product for salvo, **o sistema SHALL NOT** criar `CommerceIntelligenceJob`, iniciar geração ou produzir Strategy, Plan, Content ou Briefing. |
 | `AC-002-09` | **WHEN** o Product for persistido, **o sistema SHALL** associá-lo ao Tenant resolvido server-side. |
@@ -201,15 +205,11 @@ Requisitos visuais e de acessibilidade:
 | `AC-002-16` | **WHEN** um controle interativo for exibido, **o sistema SHALL** oferecer alvo de toque de pelo menos `44×44px`. |
 | `AC-002-17` | **WHEN** a mesma submissão for repetida com a mesma chave de idempotência, **o sistema SHALL** retornar o mesmo Product, com o mesmo `id` e a mesma versão, sem criar novo registro. |
 
-## 11. Rastreabilidade
-
-| Requisito | Fonte canônica | Cobertura nesta SPEC |
-|---|---|---|
 | Cadastro em `/products/new` dentro de Produtos | PRD específico § 4; SLICES Slice 002 | B-001, AC-002-01 |
-| Campos exatos e conteúdo do modal manual | PRD específico § 5; SLICES Slice 002 Scope | B-002, B-003, AC-002-02, AC-002-06 |
-| Nome e Descrição obrigatórios | PRD específico § 5; SLICES Slice 002 | RI-001, VAL-NAME-REQUIRED, VAL-DESCRIPTION-REQUIRED, AC-002-03 |
-| Preço/Moeda como par opcional | PRD específico § 5; SLICES Slice 002 | RI-002, VAL-PRICE-CURRENCY-PAIR, AC-002-04, AC-002-05 |
-| Defaults e limites de preparação | PRD específico § 5; SLICES Slice 002 | RI-003, AC-002-06 |
+| Campos exatos e conteúdo do modal manual | PRD específico § 5; SLICES Slice 002 Scope | B-002, B-003, AC-002-02, AC-002-05 |
+| Todos os campos obrigatórios e validação HTML/cliente/servidor | PRD específico §§ 5 e 6; SLICES Slice 002 | RI-001, VAL-*-REQUIRED, AC-002-03, AC-002-06 |
+| Preço e Moeda obrigatórios; preço válido até duas casas | PRD específico § 5; SLICES Slice 002 | RI-002, VAL-PRICE-REQUIRED, VAL-CURRENCY-REQUIRED, VAL-PRICE-FORMAT, AC-002-04 |
+| Defaults, asteriscos e limites de preparação | PRD específico §§ 5 e 6; SLICES Slice 002 | RI-003, AC-002-05 |
 | Persistir restrições sem iniciar geração | PRD específico §§ 5 e 11; SLICES Slice 002 | B-004, B-005, RI-008, AC-002-07, AC-002-08 |
 | Tenant server-side e isolamento | PRD específico § 7; SYSTEM-DESIGN §§ 3 e 8; PRINCIPLES § 7 | RI-005, segurança, AC-002-09, AC-002-10 |
 | Retry sem duplicata | PRD específico § 7; SLICES Slice 002 | B-007, RI-007, SAVE-DUPLICATE, AC-002-17 |
@@ -220,9 +220,10 @@ Requisitos visuais e de acessibilidade:
 
 - A entrada desta etapa é a subpágina `/products/new` dentro de Produtos.
 - O formulário mantém exatamente os campos e a seção do modal manual existente.
-- Nome e Descrição são obrigatórios; os demais fatos são opcionais.
-- Preço e Moeda são um par opcional: ambos preenchidos ou ambos vazios.
-- A preparação usa quantidade default `20`, intervalo `1–30`, formato default `Tanto faz` e notas/restrições de até `300` caracteres.
+- Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições são obrigatórios.
+- Preço e Moeda devem ser informados; preço não negativo, válido e com no máximo duas casas decimais.
+- Quantidade e Formato mantêm defaults `20`, `1–30` e `Tanto faz`, aparecem com `*`; Observações/restrições também aparece com `*`, é obrigatória e limitada a `300` caracteres.
+- O asterisco é apenas indicação visual; HTML/cliente e servidor validam.
 - As preferências são persistidas como restrições da primeira geração, sem criar job ou iniciar geração.
 - O Tenant é resolvido server-side pela sessão e é o único escopo de autorização da criação.
 - Retry da mesma submissão é idempotente e não cria duplicata.

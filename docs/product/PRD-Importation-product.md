@@ -24,7 +24,7 @@ O cadastro deve manter a complexidade da plataforma fora do formulário. A prime
 
 O creator precisa registrar um produto para começar a trabalhar, mas não deve ser obrigado a fornecer público, objetivo, dores, desejos, objeções, benefícios, posicionamento, ângulos ou qualquer outro contexto estratégico.
 
-O cadastro inicial deve solicitar somente fatos do produto. Nome e descrição são suficientes para criar o registro; os demais fatos podem ser preenchidos quando conhecidos.
+O cadastro inicial solicita somente fatos do produto e as preferências de preparação. Todos os campos do formulário são obrigatórios para garantir dados bons para a inteligência posterior; quantidade e formato permanecem preenchidos por defaults válidos.
 
 ## 3. Fluxo principal
 
@@ -64,28 +64,33 @@ O formulário deve preservar os campos e o conteúdo do modal manual existente:
 |---|---|
 | Nome do produto | Obrigatório; não pode ser vazio após remover espaços. |
 | Descrição | Obrigatória; não pode ser vazia após remover espaços. Campo multilinha. |
-| Categoria | Opcional. |
-| Preço | Opcional, mas somente válido quando informado junto com a moeda. Não aceitar valor negativo ou formato inválido. |
-| Moeda | Opcional, mas forma par com Preço: ambos preenchidos ou ambos vazios. Opções preservadas: `BRL` (R$ Reais), `USD` ($ Dólar) e `EUR` (€ Euro). |
-| Características — uma por linha | Opcional; cada linha representa uma característica. |
+| Categoria | Obrigatória; não pode ser vazia após remover espaços. |
+| Preço | Obrigatório; deve ser válido, não negativo e ter no máximo duas casas decimais. |
+| Moeda | Obrigatória; opções preservadas: `BRL` (R$ Reais), `USD` ($ Dólar) e `EUR` (€ Euro). |
+| Características — uma por linha | Obrigatórias; deve haver ao menos uma linha não vazia. |
 
-Preço e moeda são um único fato opcional do ponto de vista da validação: não persistir apenas um dos dois.
+Preço e moeda são fatos obrigatórios e devem ser informados conjuntamente; não há par opcional.
+
+Cada linha não vazia de Características representa uma característica.
 
 ### Preparação dos conteúdos
 
 O formulário mantém a seção `Preparação dos conteúdos` do modal manual, sem iniciar geração ao salvar:
 
-- `Quantidade inicial de conteúdos`: default `20`, inteiro entre `1` e `30`.
-- `Formato do creator`: default `Tanto faz`; opções `Em câmera`, `mão e produto` e `Tanto faz`.
-- `Observações ou restrições`: opcional, até `300` caracteres.
+- `Quantidade inicial de conteúdos *`: default `20`, inteiro entre `1` e `30`.
+- `Formato do creator *`: default `Tanto faz`; opções `Em câmera`, `mão e produto` e `Tanto faz`.
+- `Observações ou restrições *`: obrigatórias; não podem ser vazias após remover espaços e têm até `300` caracteres.
+
+O asterisco é apenas indicação visual de obrigatoriedade; a validação deve ocorrer no HTML/cliente e novamente no servidor.
 
 Essas preferências são persistidas como restrições da primeira geração do Product. Elas não criam `CommerceIntelligenceJob`, não geram Strategy, Plan, Content ou Briefing e não alteram o escopo desta etapa.
+
 
 Informações estratégicas não pertencem ao cadastro factual do Product. O formulário não deve solicitar público, dores, desejos, objeções, benefícios, argumentos, posicionamento, ângulos, hooks, scripts ou CTA.
 
 ## 6. Validação e estados
 
-- Validar Nome e Descrição no cliente para orientar a correção e no servidor antes da persistência.
+- Validar Nome, Descrição, Categoria, Preço, Moeda, Características e Observações/restrições no HTML/cliente para orientar a correção e no servidor antes da persistência.
 - Manter o valor digitado quando houver erro.
 - Associar labels e mensagens de erro aos respectivos controles.
 - Informar visualmente foco, erro, salvamento e sucesso sem depender somente de cor.
@@ -97,7 +102,7 @@ Informações estratégicas não pertencem ao cadastro factual do Product. O for
 
 - Criar um `Product` somente após submissão válida.
 - Resolver o `Tenant` pela sessão server-side; nenhum identificador de Tenant enviado pelo cliente é autoridade.
-- Persistir o Product com o Tenant resolvido, incluindo os fatos opcionais fornecidos.
+- Persistir o Product com o Tenant resolvido, incluindo os fatos obrigatórios validados.
 - Persistir as preferências de preparação como restrições da primeira geração vinculadas ao Product.
 - Impedir leitura ou alteração de Products pertencentes a outro Tenant.
 - A criação deve ser idempotente quando a mesma submissão for repetida por retry técnico, sem criar Products duplicados.
@@ -138,10 +143,10 @@ Esta frente não inclui:
 
 1. Usuário autenticado consegue acessar `/products/new` a partir de Produtos.
 2. A tela apresenta os campos Nome, Descrição, Categoria, Preço, Moeda e Características, além da seção Preparação dos conteúdos do modal manual existente.
-3. Nome e Descrição impedem o salvamento quando ausentes ou vazios.
-4. Preço e Moeda são opcionais como par; informar somente um deles impede o salvamento.
-5. A preparação inicia com quantidade `20`, aceita somente valores inteiros de `1` a `30`, inicia com formato `Tanto faz` e limita notas a `300` caracteres.
-6. Categoria, preço/moeda e características podem permanecer vazios sem impedir o salvamento.
+3. Nome, Descrição, Categoria, Preço, Moeda, Características (com ao menos uma linha não vazia) e Observações ou restrições impedem o salvamento quando ausentes, vazios ou inválidos.
+4. Preço e Moeda são obrigatórios; ambos devem ser informados e o preço deve ser válido, não negativo e ter no máximo duas casas decimais.
+5. A preparação inicia com quantidade `20`, aceita somente valores inteiros de `1` a `30`, inicia com formato `Tanto faz` e limita notas a `300` caracteres; esses campos aparecem com `*`.
+6. O asterisco é apenas indicação visual; HTML/cliente e servidor validam todos os campos obrigatórios.
 7. O salvamento persiste os fatos preenchidos e as preferências de preparação como restrições da primeira geração.
 8. Salvar não inicia geração, não cria job e não produz Strategy, Plan, Content ou Briefing.
 9. O Product salvo pertence ao Tenant resolvido pela sessão e não fica acessível a outro Tenant.

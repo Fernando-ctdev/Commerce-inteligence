@@ -150,23 +150,22 @@ export function buildManualProductPayload(
   };
 }
 
-/* Validação client-side do cadastro manual (SPEC Slice 002, RI-001 a RI-003). */
-export function validateProductManualDraft(draft: ProductManualDraft): ProductManualFieldErrors {
+export function validateProductManualDraft(draft: ProductManualDraft, notes: string): ProductManualFieldErrors {
   const errors: ProductManualFieldErrors = {};
   if (!clean(draft.name)) errors.name = "Informe o nome do produto.";
   if (!clean(draft.description)) errors.description = "Informe uma descrição do produto.";
-  if (Array.from(draft.category.trim()).length > 120) errors.category = "Máximo de 120 caracteres.";
+  if (!draft.category.trim()) errors.category = "Informe a categoria do produto.";
+  else if (Array.from(draft.category.trim()).length > 120) errors.category = "Máximo de 120 caracteres.";
   const price = draft.price.trim();
-  const currency = draft.currency.trim();
-  if (price && currency) {
-    if (!/^\d+(?:[.,]\d{1,2})?$/.test(price) || Number(price.replace(",", ".")) < 0) {
-      errors.price = "Informe um preço não negativo com até duas casas.";
-    } else if (!/^[A-Za-z]{3}$/.test(currency)) {
-      errors.currency = "Informe uma moeda válida.";
-    }
-  } else if (price || (currency && currency !== DEFAULT_PRODUCT_CURRENCY)) {
-    errors.price = "Preço e Moeda devem ser preenchidos juntos ou deixados vazios.";
+  if (!price) errors.price = "Informe o preço do produto.";
+  else if (!/^\d+(?:[.,]\d{1,2})?$/.test(price) || Number(price.replace(",", ".")) < 0) {
+    errors.price = "Informe um preço não negativo com até duas casas.";
   }
+  const currency = draft.currency.trim();
+  if (!currency) errors.currency = "Informe a moeda do produto.";
+  else if (!/^[A-Za-z]{3}$/.test(currency)) errors.currency = "Informe uma moeda válida.";
+  if (lines(draft.characteristics).length === 0) errors.characteristics = "Informe ao menos uma característica.";
+  if (!notes.trim()) errors.constraints = "Informe observações ou restrições.";
   return errors;
 }
 

@@ -224,7 +224,7 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 
 ### Slice 002 — Cadastro manual de Product
 
-**User Outcome:** O creator abre a subpágina `/products/new` dentro de Produtos, cadastra manualmente os fatos do Product com Nome e Descrição obrigatórios, salva o registro escopado ao Tenant e vê seu card na lista de Produtos. As preferências da primeira geração ficam registradas como restrições, sem iniciar geração nesta etapa.
+**User Outcome:** O creator abre a subpágina `/products/new` dentro de Produtos, cadastra manualmente os fatos do Product com todos os campos obrigatórios, salva o registro escopado ao Tenant e vê seu card na lista de Produtos. As preferências da primeira geração ficam registradas como restrições, sem iniciar geração nesta etapa.
 
 **Depends On:** Slice 001
 
@@ -233,10 +233,12 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 **Scope:**
 
 - Disponibilizar a subpágina autenticada `/products/new` dentro de Produtos.
-- Preservar os campos e o conteúdo do modal manual existente: Nome do produto, Descrição, Categoria, Preço com Moeda, Características — uma por linha e a seção Preparação dos conteúdos.
-- Exigir Nome e Descrição; manter Categoria, Preço/Moeda e Características opcionais.
-- Validar Preço e Moeda como par opcional: ambos preenchidos ou ambos vazios.
-- Iniciar Preparação dos conteúdos com quantidade `20`, intervalo inteiro `1–30`, formato `Tanto faz` e notas/restrições opcionais até `300` caracteres.
+- Preservar os campos e o conteúdo do modal manual existente: Nome do produto, Descrição, Categoria, Preço, Moeda, Características — uma por linha — e a seção Preparação dos conteúdos.
+- Exigir Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições.
+- Validar Preço como valor não negativo, válido e com no máximo duas casas decimais; Preço e Moeda são ambos obrigatórios.
+- Exibir `*` em Quantidade inicial de conteúdos, Formato do creator e Observações ou restrições; o asterisco é apenas indicação visual.
+- Iniciar Preparação dos conteúdos com quantidade default `20`, intervalo inteiro `1–30`, formato default `Tanto faz` e notas/restrições obrigatórias até `300` caracteres.
+- Validar todos os campos obrigatórios no HTML/cliente e no servidor.
 - Persistir as preferências de preparação como restrições da primeira geração, sem iniciar geração nesta etapa.
 - Salvar um `Product` com os fatos preenchidos, escopado ao `Tenant` resolvido pela sessão server-side.
 - Impedir acesso a Products de outro Tenant e evitar duplicidade em retry da mesma submissão.
@@ -249,13 +251,14 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 
 1. `/products/new` é acessível a partir de Produtos para usuário autenticado.
 2. O formulário apresenta os campos e a seção de preparação do modal manual existente.
-3. Nome e Descrição obrigatórios bloqueiam o salvamento quando vazios.
-4. Preço e Moeda podem ficar vazios juntos; informar somente um bloqueia o salvamento.
-5. A preparação usa defaults `20`, `1–30`, `Tanto faz` e notas limitadas a `300` caracteres.
-6. O salvamento persiste os fatos opcionais preenchidos e as restrições da primeira geração sem iniciar geração ou criar job.
-7. O Product é escopado ao Tenant da sessão e não é visível para outro Tenant.
-8. Após salvar, o card do Product aparece na lista de Produtos.
-9. Cancelar não cria Product; erros mantêm os valores preenchidos e permitem nova tentativa.
+3. Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições obrigatoriamente preenchidos bloqueiam o salvamento quando ausentes, vazios ou inválidos.
+4. Preço deve ser não negativo, válido e ter no máximo duas casas decimais; Moeda deve ser informada.
+5. A preparação usa defaults `20`, `1–30` e `Tanto faz`; Quantidade e Formato aparecem com `*`, e Observações ou restrições são obrigatórias e limitadas a `300` caracteres.
+6. O asterisco é apenas indicação visual; HTML/cliente e servidor validam os campos obrigatórios.
+7. O salvamento persiste os fatos preenchidos e as restrições da primeira geração sem iniciar geração ou criar job.
+8. O Product é escopado ao Tenant da sessão e não é visível para outro Tenant.
+9. Após salvar, o card do Product aparece na lista de Produtos.
+10. Cancelar não cria Product; erros mantêm os valores preenchidos e permitem nova tentativa.
 
 ---
 

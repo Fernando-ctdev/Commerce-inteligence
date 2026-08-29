@@ -61,6 +61,7 @@ const errorFieldOrder: Array<keyof ProductManualFieldErrors> = [
   "description",
   "category",
   "price",
+  "currency",
   "characteristics",
   "targetContentCount",
   "creatorPresence",
@@ -172,7 +173,9 @@ function CurrencyField({
   const errorId = `${fieldId("currency")}-error`;
   return (
     <div className={styles.field}>
-      <label htmlFor={fieldId("currency")}>Moeda</label>
+      <label htmlFor={fieldId("currency")}>
+        Moeda <span aria-hidden="true"> *</span>
+      </label>
       <CurrencySelect error={error} onChange={onChange} value={value} />
       {error && (
         <p className={styles.fieldError} id={errorId} role="alert">
@@ -224,7 +227,7 @@ export function ProductCreateForm() {
       setError("Revise a preparação dos conteúdos antes de salvar.");
       return;
     }
-    const validation = validateProductManualDraft(draft);
+    const validation = validateProductManualDraft(draft, notes);
     if (Object.keys(validation).length > 0) {
       setFieldErrors(validation);
       setError("Revise os campos destacados para continuar.");
@@ -249,6 +252,7 @@ export function ProductCreateForm() {
           description: caught.fieldErrors.description,
           category: caught.fieldErrors.category,
           price: caught.fieldErrors.price,
+          currency: caught.fieldErrors.currency,
           characteristics: caught.fieldErrors.characteristics,
           targetContentCount: caught.fieldErrors.targetContentCount,
           creatorPresence: caught.fieldErrors.creatorPresence,
@@ -266,7 +270,7 @@ export function ProductCreateForm() {
   }
 
   const combinedErrors: ProductManualFieldErrors = validationVisible
-    ? { ...validateProductManualDraft(draft), ...fieldErrors }
+    ? { ...validateProductManualDraft(draft, notes), ...fieldErrors }
     : fieldErrors;
 
   return (
@@ -281,10 +285,7 @@ export function ProductCreateForm() {
         <div className={styles.sectionHeading}>
           <p className={styles.eyebrow}>Novo produto</p>
           <h2 id="new-product-facts-title">Informe os fatos que você conhece</h2>
-          <p>
-            Nome e descrição são obrigatórios. Os demais fatos são opcionais e
-            podem ser completados depois.
-          </p>
+          <p>Todos os campos são obrigatórios.</p>
         </div>
         <TextField
           error={combinedErrors.name}
@@ -310,6 +311,7 @@ export function ProductCreateForm() {
             label="Categoria"
             maxLength={120}
             onChange={(value) => update("category", value)}
+            required
             value={draft.category}
           />
           <TextField
@@ -319,6 +321,7 @@ export function ProductCreateForm() {
             inputMode="decimal"
             label="Preço"
             onChange={(value) => update("price", value)}
+            required
             value={draft.price}
           />
           <CurrencyField
@@ -333,6 +336,7 @@ export function ProductCreateForm() {
           label="Características — uma por linha"
           multiline
           onChange={(value) => update("characteristics", value)}
+          required
           value={draft.characteristics}
         />
       </section>
@@ -347,7 +351,9 @@ export function ProductCreateForm() {
         </div>
         <div className={styles.preparationGrid}>
           <fieldset className={styles.preparationGroup}>
-            <legend>Quantidade inicial de conteúdos</legend>
+            <legend>
+              Quantidade inicial de conteúdos <span aria-hidden="true">*</span>
+            </legend>
             <div className={styles.preparationQuantity}>
               <span aria-hidden="true" className={styles.quantityValue}>
                 {quantity}
@@ -386,7 +392,9 @@ export function ProductCreateForm() {
             )}
           </fieldset>
           <fieldset className={styles.preparationGroup}>
-            <legend>Formato do creator</legend>
+            <legend>
+              Formato do creator <span aria-hidden="true">*</span>
+            </legend>
             <div
               aria-describedby={
                 combinedErrors.creatorPresence
@@ -424,17 +432,11 @@ export function ProductCreateForm() {
         <TextField
           error={combinedErrors.constraints}
           id={fieldId("constraints")}
-          label={
-            <>
-              Observações ou restrições{" "}
-              <span aria-hidden="true" className={styles.optionalMark}>
-                (opcional)
-              </span>
-            </>
-          }
+          label="Observações ou restrições"
           maxLength={300}
           multiline
           onChange={setNotes}
+          required
           value={notes}
         />
       </section>

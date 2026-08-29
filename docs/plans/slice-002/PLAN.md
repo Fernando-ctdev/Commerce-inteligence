@@ -32,19 +32,20 @@ Reutilizar os campos atuais do modelo `Product`:
 
 - `tenantId` resolvido pela sessão;
 - `name` e `description` preenchidos após validação;
-- `category` opcional;
-- `priceAmount` e `priceCurrency` opcionais como par;
-- `features` como lista de características não vazias;
+- `category` obrigatório após validação;
+- `priceAmount` e `priceCurrency` obrigatórios;
+- `features` como lista com ao menos uma característica não vazia;
 - `images` como lista vazia nesta etapa;
 - `brand`, `seller`, `variants`, `submittedUrl` e `sourceUrl` sem entrada na tela;
 - `provenance` com a origem manual factual já prevista pelo contrato vigente;
-- `targetContentCount` com a quantidade inicial entre `1` e `30`.
+- `targetContentCount` com a quantidade inicial entre `1` e `30`;
+- `generationConstraints` com observações/restrições obrigatórias, além de `creatorPresence`.
 
 ### 3.2 Alteração necessária
 
 Adicionar ao `Product`:
 
-- `generationConstraints Json?` para armazenar as restrições da primeira geração por Product, contendo somente `creatorPresence` e `constraints` quando fornecidos;
+- `generationConstraints Json?` para armazenar as restrições da primeira geração por Product, contendo obrigatoriamente `creatorPresence` e `constraints`; ambos devem ser persistidos com os valores validados da preparação;
 - `createIdempotencyKey String?` para associar a submissão de criação ao Tenant;
 - `version Int @default(1)` para tornar a resposta de criação/replay determinística e manter compatibilidade com o contrato cliente existente;
 - índice único composto `tenantId + createIdempotencyKey`, permitindo valores nulos para registros sem chave legada.
@@ -60,10 +61,12 @@ Criar migration aditiva, por exemplo `prisma/migrations/<timestamp>_slice002_man
 1. Atualizar `prisma/schema.prisma` com os campos/índice aditivos e gerar a migration correspondente.
 2. Criar um caso de uso Product focado em `createProduct` e `listProducts`:
    - receber `tenantId` resolvido server-side, nunca do body;
-   - validar e normalizar fatos, quantidade, formato, notas e par Preço/Moeda;
+   - validar e normalizar fatos, quantidade, formato, notas e Preço/Moeda;
+   - exigir Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações/restrições;
+   - aceitar preço não negativo, válido e com no máximo duas casas decimais;
    - montar `generationConstraints` somente com os valores de preparação;
    - preencher defaults `targetContentCount = 20` e `creatorPresence = "either"` quando omitidos;
-   - persistir `Product` e retornar o mesmo registro quando a chave idempotente já existir para o Tenant;
+   - persistir Product e retornar o mesmo registro quando a chave idempotente já existir para o Tenant;
    - consultar a lista sempre filtrando por `tenantId`.
 3. Criar `src/app/api/products/route.ts`:
    - `GET` resolve sessão e lista somente Products do Tenant;
@@ -76,8 +79,10 @@ Criar migration aditiva, por exemplo `prisma/migrations/<timestamp>_slice002_man
 6. Criar ou extrair o formulário manual focado, reutilizando `Button`, `Select`, `Slider` e estilos/tokens existentes:
    - campos exatamente: Nome do produto, Descrição, Categoria, Preço, Moeda e Características — uma por linha;
    - seção `Preparação dos conteúdos` com quantidade, formato e observações/restrições;
-   - preço em formato pt-BR e moeda `BRL`, `USD` ou `EUR`, mantendo o par opcional;
-   - defaults `20`, `Tanto faz` e notas vazias com limite de `300`;
+   - marcar com `*` Quantidade, Formato e Observações/restrições; o asterisco é apenas indicação visual;
+   - validar todos os campos obrigatórios no HTML/cliente e servidor;
+   - preço em formato pt-BR, não negativo, com no máximo duas casas decimais, e moeda `BRL`, `USD` ou `EUR`, ambos obrigatórios;
+   - defaults `20`, `Tanto faz` e notas obrigatórias, com limite de `300`;
    - ação `Salvar produto` e cancelamento para `/products`;
    - gerar uma única `Idempotency-Key` quando começar a tentativa lógica daquele formulário, guardar a chave durante a tentativa e reutilizá-la em todo retry após falha; não gerar nova chave a cada novo submit da mesma tentativa; limpar a chave somente após sucesso, cancelamento ou início de um novo formulário;
    - sem URL, imagens, seller, variantes, preview ou campos estratégicos.
@@ -100,8 +105,8 @@ Criar migration aditiva, por exemplo `prisma/migrations/<timestamp>_slice002_man
 
 Implementar os códigos comportamentais da SPEC:
 
-- `VAL-NAME-REQUIRED` e `VAL-DESCRIPTION-REQUIRED`: validação client/server, mensagem inline, foco no primeiro erro e preservação da entrada;
-- `VAL-PRICE-CURRENCY-PAIR` e `VAL-PRICE-FORMAT`: rejeição determinística do par incompleto ou preço inválido;
+- `VAL-NAME-REQUIRED`, `VAL-DESCRIPTION-REQUIRED`, `VAL-CATEGORY-REQUIRED`, `VAL-PRICE-REQUIRED`, `VAL-CURRENCY-REQUIRED`, `VAL-FEATURES-REQUIRED` e `VAL-NOTES-REQUIRED`: validação HTML/cliente e server, mensagem inline, foco no primeiro erro e preservação da entrada;
+- `VAL-PRICE-FORMAT`: rejeição determinística de preço negativo, inválido ou com mais de duas casas decimais;
 - `VAL-QUANTITY-RANGE`, `VAL-CREATOR-FORMAT` e `VAL-NOTES-LENGTH`: rejeição server-side e feedback associado ao controle;
 - `VAL-IDEMPOTENCY-KEY`: POST sem `Idempotency-Key` válida é rejeitado antes da persistência;
 - `AUTH-SESSION` e `AUTH-TENANT`: resposta não autorizada/erro sanitizado sem persistência;
@@ -114,7 +119,7 @@ O formulário deve representar `idle`, `editing`, `invalid`, `saving`, `success`
 
 Adicionar somente os testes necessários às invariantes:
 
-1. **Modelo/validação:** Nome e Descrição obrigatórios; Preço/Moeda como par; quantidade `20` e faixa `1–30`; formato permitido; notas até `300`; características por linha.
+1. **Modelo/validação:** todos os campos obrigatórios (Nome, Descrição, Categoria, Preço, Moeda, ao menos uma característica não vazia e Observações/restrições); preço não negativo, válido e até duas casas decimais; defaults de quantidade `20` e formato `Tanto faz`; faixa `1–30`; notas até `300`; asteriscos sem substituir validação HTML/cliente/servidor; características por linha.
 2. **Caso de uso/API:** cria Product com `tenantId` da sessão, grava `targetContentCount` e `generationConstraints`, não cria job e lista apenas o Tenant atual.
 3. **Idempotência:** POST sem chave é rejeitado; duas criações com mesma chave e Tenant retornam mesmo `id`/`version` e uma única linha; chaves iguais em Tenants diferentes não colidem; retry do formulário reutiliza a chave original.
 4. **Cliente/formulário:** payload mantém os campos do modal e preserva entrada/erros; cancelamento não chama criação.

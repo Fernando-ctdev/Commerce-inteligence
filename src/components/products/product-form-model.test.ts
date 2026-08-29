@@ -77,24 +77,29 @@ test("máscara de preço converte dígitos em valor com duas casas", () => {
   assert.equal(digitsToPrice(""), "");
 });
 
-test("valida cadastro manual: obrigatoriedade, par preço/moeda e formato", () => {
+test("valida cadastro manual: todos os campos obrigatórios e formatos", () => {
   assert.deepEqual(
-    validateProductManualDraft({ name: " ", description: "", category: "", price: "", currency: "", characteristics: "" }),
+    validateProductManualDraft({ name: " ", description: "", category: "", price: "", currency: "", characteristics: "" }, ""),
     {
       name: "Informe o nome do produto.",
       description: "Informe uma descrição do produto.",
+      category: "Informe a categoria do produto.",
+      price: "Informe o preço do produto.",
+      currency: "Informe a moeda do produto.",
+      characteristics: "Informe ao menos uma característica.",
+      constraints: "Informe observações ou restrições.",
     },
   );
   assert.deepEqual(
-    validateProductManualDraft({ name: "Escova", description: "Cabelos", category: "", price: "39.90", currency: "", characteristics: "" }),
-    { price: "Preço e Moeda devem ser preenchidos juntos ou deixados vazios." },
-  );
-  assert.deepEqual(
-    validateProductManualDraft({ name: "Escova", description: "Cabelos", category: "", price: "-1", currency: "BRL", characteristics: "" }),
+    validateProductManualDraft({ name: "Escova", description: "Cabelos", category: "Beleza", price: "-1", currency: "BRL", characteristics: "cerdas" }, "notas"),
     { price: "Informe um preço não negativo com até duas casas." },
   );
   assert.deepEqual(
-    validateProductManualDraft({ name: "Escova", description: "Cabelos", category: "", price: "39.90", currency: "BRL", characteristics: "" }),
+    validateProductManualDraft({ name: "Escova", description: "Cabelos", category: "Beleza", price: "39.90", currency: "BRLX", characteristics: "cerdas" }, "notas"),
+    { currency: "Informe uma moeda válida." },
+  );
+  assert.deepEqual(
+    validateProductManualDraft({ name: "Escova", description: "Cabelos", category: "Beleza", price: "39.90", currency: "BRL", characteristics: "cerdas" }, "sem gírias"),
     {},
   );
 });
@@ -147,48 +152,43 @@ test("par preço/moeda vazio fica nulo e constraints omitidas somem do payload",
   });
 });
 
-test("preço manual 23,44 usa BRL por padrão sem erro", () => {
+test("preço manual 23,44 com moeda padrão BRL é válido", () => {
   const draft = {
     name: "Escova",
     description: "Cabelos",
-    category: "",
+    category: "Beleza",
     price: "23,44",
-    currency: "",
-    characteristics: "",
+    currency: "BRL",
+    characteristics: "cerdas",
   };
 
-  assert.equal(validateProductManualDraft({ ...draft, currency: "BRL" }).price, undefined);
+  assert.deepEqual(validateProductManualDraft(draft, "notas"), {});
   assert.equal(buildManualProductPayload(
     draft,
     { targetContentCount: 20, creatorPresence: "either" },
   ).priceCurrency, "BRL");
 });
 
-test("moeda padrão BRL sem preço não gera erro nem envia moeda", () => {
-  const draft = {
-    name: "Escova",
-    description: "Cabelos",
-    category: "",
-    price: "",
-    currency: "BRL",
-    characteristics: "",
-  };
-
-  assert.deepEqual(validateProductManualDraft(draft), {});
+test("preço vazio com moeda padrão BRL é rejeitado como obrigatório", () => {
   assert.deepEqual(
-    buildManualProductPayload(
-      draft,
-      { targetContentCount: 20, creatorPresence: "either" },
+    validateProductManualDraft(
+      { name: "Escova", description: "Cabelos", category: "Beleza", price: "", currency: "BRL", characteristics: "cerdas" },
+      "notas",
     ),
-    {
-      name: "Escova",
-      description: "Cabelos",
-      category: null,
-      price: null,
-      priceCurrency: null,
-      features: [],
-      targetContentCount: 20,
-      creatorPresence: "either",
-    },
+    { price: "Informe o preço do produto." },
+  );
+  assert.deepEqual(
+    validateProductManualDraft(
+      { name: "Escova", description: "Cabelos", category: "Beleza", price: "23,44", currency: "", characteristics: "cerdas" },
+      "notas",
+    ),
+    { currency: "Informe a moeda do produto." },
+  );
+  assert.deepEqual(
+    validateProductManualDraft(
+      { name: "Escova", description: "Cabelos", category: "Beleza", price: "23,44", currency: "BRL", characteristics: "cerdas" },
+      " ",
+    ),
+    { constraints: "Informe observações ou restrições." },
   );
 });

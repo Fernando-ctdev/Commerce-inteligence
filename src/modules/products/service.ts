@@ -23,12 +23,13 @@ export class ProductValidationError extends Error {
 const FIELD_CODE_PRIORITY = [
   "name",
   "description",
-  "price",
   "category",
+  "price",
+  "priceCurrency",
   "features",
+  "constraints",
   "targetContentCount",
   "creatorPresence",
-  "constraints",
 ] as const;
 export const CREATOR_PRESENCE_OPTIONS = ["on_camera", "hands_only_product", "either"] as const;
 export type CreatorPresence = (typeof CREATOR_PRESENCE_OPTIONS)[number];
@@ -78,13 +79,19 @@ function requireBoundedText(
   }
   return trimmed;
 }
+/** 23,44 → 23.44 | 1.234 / 1.234.567 → 1234 / 1234567 | 23.44 → 23.44. */
+function normalizePriceAmount(price: string): string {
+  if (price.includes(",")) return price.replace(/\./g, "").replace(",", ".");
+  if (/^\d{1,3}(?:\.\d{3})+$/.test(price)) return price.replace(/\./g, "");
+  return price;
+}
 
 type ValidatedManualProduct = {
   name: string;
   description: string;
-  category: string | null;
-  priceAmount: string | null;
-  priceCurrency: string | null;
+  category: string;
+  priceAmount: string;
+  priceCurrency: string;
   features: string[];
   targetContentCount: number;
   generationConstraints: Prisma.InputJsonValue;
@@ -120,35 +127,43 @@ export function validateManualProductInput(input: ManualProductInput): Validated
     fail,
   );
 
-  const category = asTrimmedString(input.category);
-  if (category && category.length > CATEGORY_MAX) {
-    fail("category", `A categoria deve ter até ${CATEGORY_MAX} caracteres.`, "VAL-CATEGORY-INVALID");
-  }
+  const category = requireBoundedText(
+    input.category,
+    "category",
+    "Informe a categoria do produto.",
+    `A categoria deve ter até ${CATEGORY_MAX} caracteres.`,
+    CATEGORY_MAX,
+    "VAL-CATEGORY-REQUIRED",
+    fail,
+  );
 
-  // Preço/Moeda são um par opcional (RI-002): ambos preenchidos ou ambos vazios.
-  const price = asTrimmedString(input.price);
-  const priceCurrency = asTrimmedString(input.priceCurrency)?.toUpperCase() ?? null;
-  if (price && !PRICE_PATTERN.test(price)) {
-    fail("price", "Informe um preço válido e não negativo, como 29,90.", "VAL-PRICE-FORMAT");
+  // Preço e Moeda são obrigatórios e informados em par (RI-002); preço não negativo, até 2 casas.
+  const price = asTrimmedString(input.price) ?? "";
+  const priceCurrency = (asTrimmedString(input.priceCurrency) ?? "").toUpperCase();
+  if (!price) {
+    fail("price", "Informe o preço do produto.", "VAL-PRICE-REQUIRED");
+  } else if (!PRICE_PATTERN.test(price)) {
+    fail("price", "Informe um preço válido e não negativo, com até duas casas decimais, como 29,90.", "VAL-PRICE-FORMAT");
   }
-  if (priceCurrency && !CURRENCIES.includes(priceCurrency)) {
-    fail("price", "Moeda não suportada. Use BRL, USD ou EUR.", "VAL-PRICE-FORMAT");
-  }
-  if ((price === null) !== (priceCurrency === null)) {
-    fail("price", "Preço e moeda devem ser preenchidos juntos ou deixados vazios.", "VAL-PRICE-CURRENCY-PAIR");
+  if (!priceCurrency) {
+    fail("priceCurrency", "Informe a moeda do produto.", "VAL-CURRENCY-REQUIRED");
+  } else if (!CURRENCIES.includes(priceCurrency)) {
+    fail("priceCurrency", "Moeda não suportada. Use BRL, USD ou EUR.", "VAL-PRICE-FORMAT");
   }
 
   // Características: uma por linha no formulário; aqui chegam como lista de strings não vazias.
   const rawFeatures = input.features;
   let features: string[] = [];
   if (rawFeatures == null) {
-    features = [];
+    fail("features", "Informe ao menos uma característica do produto.", "VAL-FEATURES-REQUIRED");
   } else if (Array.isArray(rawFeatures)) {
     features = rawFeatures
       .filter((item): item is string => typeof item === "string")
       .map((item) => item.trim())
       .filter(Boolean);
-    if (features.length > FEATURES_MAX_ITEMS) {
+    if (features.length === 0) {
+      fail("features", "Informe ao menos uma característica do produto.", "VAL-FEATURES-REQUIRED");
+    } else if (features.length > FEATURES_MAX_ITEMS) {
       fail("features", `Use até ${FEATURES_MAX_ITEMS} características.`, "VAL-FEATURES-INVALID");
     } else if (features.some((item) => item.length > FEATURE_MAX_LENGTH)) {
       fail("features", `Cada característica deve ter até ${FEATURE_MAX_LENGTH} caracteres.`, "VAL-FEATURES-INVALID");
@@ -178,8 +193,11 @@ export function validateManualProductInput(input: ManualProductInput): Validated
     }
   }
 
-  const constraints = asTrimmedString(input.constraints);
-  if (constraints && constraints.length > NOTES_MAX) {
+  // Observações/restrições obrigatórias, não vazias após trim e até 300 caracteres (RI-001/RI-003).
+  const constraints = asTrimmedString(input.constraints) ?? "";
+  if (!constraints) {
+    fail("constraints", "Informe as observações ou restrições da primeira geração.", "VAL-NOTES-REQUIRED");
+  } else if (constraints.length > NOTES_MAX) {
     fail("constraints", `As observações devem ter até ${NOTES_MAX} caracteres.`, "VAL-NOTES-LENGTH");
   }
 
@@ -188,23 +206,15 @@ export function validateManualProductInput(input: ManualProductInput): Validated
     throw new ProductValidationError(errors, code);
   }
 
-  // Restrições guardam somente a preparação da primeira geração (RI-004) — sem fatos estratégicos.
-  const generationConstraints: Prisma.InputJsonValue = constraints
-    ? { creatorPresence, constraints }
-    : { creatorPresence };
+  // Restrições guardam somente a preparação da primeira geração (RI-004) — sempre com creatorPresence e constraints.
+  const generationConstraints: Prisma.InputJsonValue = { creatorPresence, constraints };
 
   return {
     name,
     description,
     category,
-    priceAmount: price
-      ? price.includes(",")
-        ? price.replace(/\./g, "").replace(",", ".")
-        : /^\d{1,3}(?:\.\d{3})+$/.test(price)
-          ? price.replace(/\./g, "")
-          : price
-      : null,
-    priceCurrency: priceCurrency,
+    priceAmount: normalizePriceAmount(price),
+    priceCurrency,
     features,
     targetContentCount,
     generationConstraints,
