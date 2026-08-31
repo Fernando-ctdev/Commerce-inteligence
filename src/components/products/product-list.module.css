@@ -42,10 +42,15 @@
 .filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
+  max-width: 100%;
 }
 
-.filterButton,
+.filters [data-slot="tabs-trigger"] {
+  min-height: 44px;
+  cursor: pointer;
+}
+
 .secondaryButton {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -79,19 +84,11 @@
   color: var(--color-success);
 }
 
-.filterButton[aria-pressed="true"] {
-  background: var(--color-text);
-  border-color: var(--color-text);
-  color: var(--color-surface);
-}
-
-.secondaryButton:hover,
-.filterButton:hover {
+.secondaryButton:hover {
   border-color: var(--color-focus);
 }
 
 .searchInput:focus-visible,
-.filterButton:focus-visible,
 .secondaryButton:focus-visible,
 .primaryButton:focus-visible,
 .cardAction:focus-visible {
@@ -125,7 +122,6 @@
 }
 
 .card {
-  aspect-ratio: 1 / 1;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -134,6 +130,13 @@
   min-height: 0;
   overflow: hidden;
   padding: 0;
+  position: relative;
+}
+
+.card:hover,
+.card:focus-within {
+  background: var(--color-surface-secondary);
+  border-color: var(--color-focus);
 }
 
 .cardImage,
@@ -156,17 +159,18 @@
 
 .cardBody {
   display: grid;
+  flex: 1 1 auto;
   gap: 6px;
   min-height: 0;
-  overflow: hidden;
+  min-width: 0;
   padding: 12px 14px;
 }
-
 
 .card h3 {
   font-size: 20px;
   line-height: 26px;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .cardBody > p:not(.cardMeta) {
@@ -183,15 +187,60 @@
   display: flex;
   font-size: 14px;
   font-weight: 700;
+  justify-content: center;
   margin-top: auto;
   min-height: 44px;
-  padding-top: 12px;
+  padding: 12px 14px;
+  text-align: center;
   text-decoration: none;
 }
 
-.cardAction:hover {
-  color: var(--color-focus);
+.card > a.cardAction {
+  align-items: center;
+  background: var(--color-action);
+  border: 1px solid var(--color-action);
+  border-radius: 8px;
+  color: var(--color-on-action);
+  inset: auto;
+  left: 50%;
+  margin: 0;
+  max-width: calc(100% - 32px);
+  opacity: 0;
+  padding: 10px 16px;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: max-content;
+  z-index: 1;
 }
+
+.card:hover > a.cardAction,
+.card:focus-within > a.cardAction {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.card > a.cardAction:hover {
+  background: var(--color-action);
+  color: var(--color-on-action);
+}
+
+@media (hover: none) {
+  .card > a.cardAction {
+    border-radius: 0;
+    border-inline: 0;
+    border-block-end: 0;
+    opacity: 1;
+    pointer-events: auto;
+    position: static;
+    transform: none;
+    width: 100%;
+  }
+}
+
+
 .galleryEmpty {
   color: var(--color-text-secondary);
   display: grid;
@@ -255,6 +304,15 @@
 
   .listIntro .primaryButton {
     width: 100%;
+  }
+  .filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    width: 100%;
+  }
+
+  .filters [data-slot="tabs-trigger"] {
+    flex: 0 0 auto;
   }
 
   .cards {

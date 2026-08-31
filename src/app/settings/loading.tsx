@@ -6,7 +6,7 @@ import settingsStyles from "@/components/settings/settings-view.module.css";
    nos valores dinâmicos: avatar e e-mail da sessão. */
 export default function SettingsLoading() {
   return (
-    <ProductShell active="settings" eyebrow="Configurações" title="Sua conta">
+    <ProductShell active="settings" title="Sua conta">
       <div className={settingsStyles.surface}>
         <section className={settingsStyles.section}>
           <p className={settingsStyles.eyebrow}>Conta</p>
@@ -18,7 +18,10 @@ export default function SettingsLoading() {
             <div className={settingsStyles.fact}>
               <dt>E-mail</dt>
               <dd>
-                <Skeleton className="rounded-md" style={{ blockSize: 22, inlineSize: 200 }} />
+                <Skeleton
+                  className="rounded-md"
+                  style={{ blockSize: 22, inlineSize: 200 }}
+                />
               </dd>
             </div>
             <div className={settingsStyles.fact}>
@@ -27,8 +30,8 @@ export default function SettingsLoading() {
             </div>
           </dl>
           <p>
-            Seu workspace é individual: nenhuma outra pessoa acessa seus produtos
-            e conteúdos.
+            Seu workspace é individual: nenhuma outra pessoa acessa seus
+            produtos e conteúdos.
           </p>
         </section>
         <section className={settingsStyles.section}>
@@ -36,10 +39,17 @@ export default function SettingsLoading() {
           <h2>Aparência</h2>
           <div className={settingsStyles.field}>
             <label htmlFor="appearance-theme">Tema da interface</label>
-            <button disabled id="appearance-theme" style={{ blockSize: 44 }} type="button">
+            <button
+              disabled
+              id="appearance-theme"
+              style={{ blockSize: 44 }}
+              type="button"
+            >
               Claro
             </button>
-            <p className={settingsStyles.fieldHelp}>A escolha fica neste dispositivo e é aplicada imediatamente.</p>
+            <p className={settingsStyles.fieldHelp}>
+              A escolha fica neste dispositivo e é aplicada imediatamente.
+            </p>
           </div>
         </section>
         <section className={settingsStyles.section}>
@@ -49,7 +59,9 @@ export default function SettingsLoading() {
             Ao sair, a sessão deste navegador é encerrada. Seus dados permanecem
             preservados no workspace.
           </p>
-          <button disabled type="button">Sair</button>
+          <button disabled type="button">
+            Sair
+          </button>
         </section>
       </div>
     </ProductShell>

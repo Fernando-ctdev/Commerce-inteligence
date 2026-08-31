@@ -101,6 +101,8 @@ model Product {
   // versão determinística da resposta e chave de idempotência de criação (nula no caminho legado).
   generationConstraints Json?
   createIdempotencyKey  String?
+  // Slice 002 — lifecycle do Product (PRD: ACTIVE/ARCHIVED); arquivar não apaga dados.
+  lifecycle          String   @default("ACTIVE")
   version            Int @default(1)
   createdAt          DateTime @default(now())
   tenant             Tenant   @relation(fields: [tenantId], references: [id])

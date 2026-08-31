@@ -16,11 +16,13 @@ import { ProductShell } from "@/components/products/product-shell";
 export default async function NewProductPage() {
   const session = await requireSession();
   return (
-    <ProductShell eyebrow="Produtos" title="Adicionar produto" user={{ email: session.email }}>
+    <ProductShell title="Adicionar produto" user={{ email: session.email }}>
       <Breadcrumb className="mb-6">
         <BreadcrumbList>
           <BreadcrumbItem>
-            <BreadcrumbLink render={<Link href="/products" />}>Produtos</BreadcrumbLink>
+            <BreadcrumbLink render={<Link href="/products" />}>
+              Produtos
+            </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>

@@ -7,7 +7,11 @@ export default async function TodayPage() {
   const session = await requireSession();
 
   return (
-    <ProductShell active="home" eyebrow="Home" title="Home" user={{ email: session.email }}>
+    <ProductShell
+      active="home"
+      title="Bem vindo!"
+      user={{ email: session.email }}
+    >
       <TodayEmpty />
     </ProductShell>
   );

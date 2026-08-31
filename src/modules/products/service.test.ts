@@ -8,8 +8,22 @@ import { PrismaClient } from "@prisma/client";
 
 import { SESSION_COOKIE } from "../identity/http.js";
 import { registerUser, resolveSession } from "../identity/service.js";
-import { handleCreateProduct, handleDeleteProduct, handleGetProduct, handleListProducts, handleUpdateProduct } from "./http.js";
-import { ProductValidationError, validateManualProductInput } from "./service.js";
+import {
+  handleArchiveProduct,
+  handleCreateProduct,
+  handleDeleteProduct,
+  handleGetProduct,
+  handleListProducts,
+  handleReactivateProduct,
+  handleUpdateProduct,
+} from "./http.js";
+import {
+  ProductNotFoundError,
+  ProductValidationError,
+  archiveTenantProduct,
+  reactivateTenantProduct,
+  validateManualProductInput,
+} from "./service.js";
 
 const ORIGIN = process.env.APP_ORIGIN ?? "http://localhost:3000";
 const prisma = new PrismaClient();
@@ -59,13 +73,24 @@ test("validação: nome e descrição obrigatórios após trim, com código do p
 test("validação: campos obrigatórios retornam códigos VAL-*-REQUIRED", () => {
   const casos: Array<[Record<string, unknown>, string, string]> = [
     [{ ...validInput, name: "   " }, "name", "VAL-NAME-REQUIRED"],
-    [{ ...validInput, description: "" }, "description", "VAL-DESCRIPTION-REQUIRED"],
+    [
+      { ...validInput, description: "" },
+      "description",
+      "VAL-DESCRIPTION-REQUIRED",
+    ],
     [{ ...validInput, category: "" }, "category", "VAL-CATEGORY-REQUIRED"],
     [{ ...validInput, price: "" }, "price", "VAL-PRICE-REQUIRED"],
-    [{ ...validInput, priceCurrency: "" }, "priceCurrency", "VAL-CURRENCY-REQUIRED"],
+    [
+      { ...validInput, priceCurrency: "" },
+      "priceCurrency",
+      "VAL-CURRENCY-REQUIRED",
+    ],
     [{ ...validInput, features: [] }, "features", "VAL-FEATURES-REQUIRED"],
-    [{ ...validInput, features: ["", "   "] }, "features", "VAL-FEATURES-REQUIRED"],
-    [{ ...validInput, constraints: "" }, "constraints", "VAL-NOTES-REQUIRED"],
+    [
+      { ...validInput, features: ["", "   "] },
+      "features",
+      "VAL-FEATURES-REQUIRED",
+    ],
   ];
   for (const [input, field, code] of casos) {
     assert.throws(
@@ -78,11 +103,19 @@ test("validação: campos obrigatórios retornam códigos VAL-*-REQUIRED", () =>
       },
     );
   }
+  assert.doesNotThrow(() =>
+    validateManualProductInput({ ...validInput, constraints: "" }),
+  );
 });
 
 test("validação: preço não negativo, moeda válida e normalização preservada", () => {
   assert.throws(
-    () => validateManualProductInput({ ...validInput, price: "-5", priceCurrency: "BRL" }),
+    () =>
+      validateManualProductInput({
+        ...validInput,
+        price: "-5",
+        priceCurrency: "BRL",
+      }),
     (error: unknown) => {
       assert.ok(error instanceof ProductValidationError);
       assert.equal(error.code, "VAL-PRICE-FORMAT");
@@ -90,7 +123,12 @@ test("validação: preço não negativo, moeda válida e normalização preserva
     },
   );
   assert.throws(
-    () => validateManualProductInput({ ...validInput, price: "23.4567", priceCurrency: "BRL" }),
+    () =>
+      validateManualProductInput({
+        ...validInput,
+        price: "23.4567",
+        priceCurrency: "BRL",
+      }),
     (error: unknown) => {
       assert.ok(error instanceof ProductValidationError);
       assert.equal(error.code, "VAL-PRICE-FORMAT");
@@ -98,17 +136,29 @@ test("validação: preço não negativo, moeda válida e normalização preserva
     },
   );
 
-  const comPar = validateManualProductInput({ ...validInput, price: "1.234,56", priceCurrency: "brl" });
+  const comPar = validateManualProductInput({
+    ...validInput,
+    price: "1.234,56",
+    priceCurrency: "brl",
+  });
   assert.equal(comPar.priceAmount, "1234.56"); // pt-BR: ponto de milhar sai, vírgula vira ponto decimal
   assert.equal(comPar.priceCurrency, "BRL");
 
-  const simples = validateManualProductInput({ ...validInput, price: "29,90", priceCurrency: "USD" });
+  const simples = validateManualProductInput({
+    ...validInput,
+    price: "29,90",
+    priceCurrency: "USD",
+  });
   assert.equal(simples.priceAmount, "29.90");
   assert.equal(simples.priceCurrency, "USD");
 });
 
 test("validação: aceita preço decimal com ponto", () => {
-  const result = validateManualProductInput({ ...validInput, price: "23.44", priceCurrency: "BRL" });
+  const result = validateManualProductInput({
+    ...validInput,
+    price: "23.44",
+    priceCurrency: "BRL",
+  });
   assert.equal(result.priceAmount, "23.44");
 });
 
@@ -116,18 +166,28 @@ test("validação: normaliza milhar pt-BR sem casas decimais", () => {
   const milhar = validateManualProductInput({ ...validInput, price: "1.234" });
   assert.equal(milhar.priceAmount, "1234");
 
-  const milharMaior = validateManualProductInput({ ...validInput, price: "1.234.567" });
+  const milharMaior = validateManualProductInput({
+    ...validInput,
+    price: "1.234.567",
+  });
   assert.equal(milharMaior.priceAmount, "1234567");
 });
 
 test("validação: preparação com defaults 20/Tanto faz e limites 1–30/300", () => {
   const defaults = validateManualProductInput(validInput);
   assert.equal(defaults.targetContentCount, 20);
-  assert.deepEqual(defaults.generationConstraints, { creatorPresence: "either", constraints: "sem gírias" });
+  assert.deepEqual(defaults.generationConstraints, {
+    creatorPresence: "either",
+    constraints: "sem gírias",
+  });
 
   for (const quantity of [0, 31, 2.5]) {
     assert.throws(
-      () => validateManualProductInput({ ...validInput, targetContentCount: quantity }),
+      () =>
+        validateManualProductInput({
+          ...validInput,
+          targetContentCount: quantity,
+        }),
       (error: unknown) => {
         assert.ok(error instanceof ProductValidationError);
         assert.equal(error.code, "VAL-QUANTITY-RANGE");
@@ -136,7 +196,8 @@ test("validação: preparação com defaults 20/Tanto faz e limites 1–30/300",
     );
   }
   assert.throws(
-    () => validateManualProductInput({ ...validInput, creatorPresence: "selfie" }),
+    () =>
+      validateManualProductInput({ ...validInput, creatorPresence: "selfie" }),
     (error: unknown) => {
       assert.ok(error instanceof ProductValidationError);
       assert.equal(error.code, "VAL-CREATOR-FORMAT");
@@ -144,7 +205,11 @@ test("validação: preparação com defaults 20/Tanto faz e limites 1–30/300",
     },
   );
   assert.throws(
-    () => validateManualProductInput({ ...validInput, constraints: "x".repeat(301) }),
+    () =>
+      validateManualProductInput({
+        ...validInput,
+        constraints: "x".repeat(301),
+      }),
     (error: unknown) => {
       assert.ok(error instanceof ProductValidationError);
       assert.equal(error.code, "VAL-NOTES-LENGTH");
@@ -157,15 +222,21 @@ test("validação: preparação com defaults 20/Tanto faz e limites 1–30/300",
     targetContentCount: 30,
     creatorPresence: "on_camera",
     constraints: "sem gírias",
+    imageRefs: ["https://cdn.exemplo.com/produto.png"],
+    url: "https://exemplo.com/produto",
     features: ["  50 aulas ", "", "certificado"],
   });
   assert.equal(preparado.targetContentCount, 30);
-  assert.deepEqual(preparado.generationConstraints, { creatorPresence: "on_camera", constraints: "sem gírias" });
+  assert.deepEqual(preparado.generationConstraints, {
+    creatorPresence: "on_camera",
+    constraints: "sem gírias",
+  });
   assert.deepEqual(preparado.features, ["50 aulas", "certificado"]);
 });
 
 test("validação: imageRefs aceita http(s) e data URL de imagem, rejeita outros esquemas e excessos", () => {
-  const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const png =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
   const aceito = validateManualProductInput({
     ...validInput,
     imageRefs: ["https://cdn.exemplo.com/foto.jpg", png],
@@ -182,7 +253,8 @@ test("validação: imageRefs aceita http(s) e data URL de imagem, rejeita outros
   ];
   for (const imageRef of invalidos) {
     assert.throws(
-      () => validateManualProductInput({ ...validInput, imageRefs: [imageRef] }),
+      () =>
+        validateManualProductInput({ ...validInput, imageRefs: [imageRef] }),
       (error: unknown) => {
         assert.ok(error instanceof ProductValidationError);
         assert.equal(error.code, "VAL-IMAGE-INVALID");
@@ -193,7 +265,10 @@ test("validação: imageRefs aceita http(s) e data URL de imagem, rejeita outros
     );
   }
 
-  const excesso = Array.from({ length: 7 }, () => "https://cdn.exemplo.com/foto.jpg");
+  const excesso = Array.from(
+    { length: 7 },
+    () => "https://cdn.exemplo.com/foto.jpg",
+  );
   assert.throws(
     () => validateManualProductInput({ ...validInput, imageRefs: excesso }),
     (error: unknown) => {
@@ -266,26 +341,47 @@ test("POST válido persiste Product no tenant da sessão e POST repetido com a m
     targetContentCount: 7,
     creatorPresence: "on_camera",
     constraints: "sem gírias",
+    imageRefs: ["https://cdn.exemplo.com/produto.png"],
+    url: "https://exemplo.com/produto",
   };
   const key = randomBytes(16).toString("base64url");
 
   const first = await handleCreateProduct(post(token, body, key));
   assert.equal(first.status, 200);
-  const created = (await first.json()) as { id: string; version: number; replay: boolean };
+  const created = (await first.json()) as {
+    id: string;
+    version: number;
+    replay: boolean;
+  };
   assert.deepEqual(created, { id: created.id, version: 1, replay: false });
 
-  const row = await prisma.product.findUniqueOrThrow({ where: { id: created.id } });
+  const row = await prisma.product.findUniqueOrThrow({
+    where: { id: created.id },
+  });
   assert.equal(row.tenantId, tenantId);
   assert.equal(row.targetContentCount, 7);
   const provenance = row.provenance;
-  assert.ok(typeof provenance === "object" && provenance !== null && "origin" in provenance);
+  assert.ok(
+    typeof provenance === "object" &&
+      provenance !== null &&
+      "origin" in provenance,
+  );
   assert.equal(provenance.origin, "manual");
-  assert.deepEqual(row.generationConstraints, { creatorPresence: "on_camera", constraints: "sem gírias" });
+  assert.deepEqual(row.generationConstraints, {
+    creatorPresence: "on_camera",
+    constraints: "sem gírias",
+  });
   assert.equal(row.priceCurrency, "BRL");
+  assert.deepEqual(row.images, ["https://cdn.exemplo.com/produto.png"]);
+  assert.equal(row.submittedUrl, "https://exemplo.com/produto");
 
   const replayRes = await handleCreateProduct(post(token, body, key));
   assert.equal(replayRes.status, 200);
-  const replayed = (await replayRes.json()) as { id: string; version: number; replay: boolean };
+  const replayed = (await replayRes.json()) as {
+    id: string;
+    version: number;
+    replay: boolean;
+  };
   assert.equal(replayed.id, created.id);
   assert.equal(replayed.version, created.version);
   assert.equal(replayed.replay, true);
@@ -299,7 +395,9 @@ test("retries concorrentes com a mesma chave criam uma única linha", async (t) 
   const results = await Promise.all(
     [0, 1, 2].map(() => handleCreateProduct(post(token, validInput, key))),
   );
-  const payload = await Promise.all(results.map((res) => res.json() as Promise<{ id: string }>));
+  const payload = await Promise.all(
+    results.map((res) => res.json() as Promise<{ id: string }>),
+  );
   assert.equal(new Set(payload.map((item) => item.id)).size, 1);
   assert.equal(await prisma.product.count({ where: { tenantId } }), 1);
 });
@@ -310,8 +408,12 @@ test("mesma chave em tenants diferentes não colide; listagem isola por tenant",
   const b = await tenantOf();
   const key = randomBytes(16).toString("base64url");
 
-  const resA = await handleCreateProduct(post(a.token, { ...validInput, name: "Produto A" }, key));
-  const resB = await handleCreateProduct(post(b.token, { ...validInput, name: "Produto B" }, key));
+  const resA = await handleCreateProduct(
+    post(a.token, { ...validInput, name: "Produto A" }, key),
+  );
+  const resB = await handleCreateProduct(
+    post(b.token, { ...validInput, name: "Produto B" }, key),
+  );
   assert.equal(resA.status, 200);
   assert.equal(resB.status, 200);
   const idA = ((await resA.json()) as { id: string }).id;
@@ -320,30 +422,48 @@ test("mesma chave em tenants diferentes não colide; listagem isola por tenant",
 
   const listA = await handleListProducts(get(a.token));
   assert.equal(listA.status, 200);
-  const viewA = (await listA.json()) as { products: Array<Record<string, unknown>> };
+  const viewA = (await listA.json()) as {
+    products: Array<Record<string, unknown>>;
+  };
   assert.equal(viewA.products.length, 1);
   assert.equal(viewA.products[0]!.id, idA);
   assert.equal(viewA.products[0]!.name, "Produto A");
 
   const listB = await handleListProducts(get(b.token));
   const viewB = (await listB.json()) as { products: Array<{ id: string }> };
-  assert.deepEqual(viewB.products.map((product) => product.id), [idB]);
+  assert.deepEqual(
+    viewB.products.map((product) => product.id),
+    [idB],
+  );
 });
 
 test("GET sem sessão responde 401 AUTH-SESSION; validação via API devolve fieldErrors", async (t) => {
   if (!dbUp) return t.skip();
-  const unauthorized = await handleListProducts(new Request(`${ORIGIN}/api/products`));
+  const unauthorized = await handleListProducts(
+    new Request(`${ORIGIN}/api/products`),
+  );
   assert.equal(unauthorized.status, 401);
-  assert.equal(((await unauthorized.json()) as { code?: string }).code, "AUTH-SESSION");
+  assert.equal(
+    ((await unauthorized.json()) as { code?: string }).code,
+    "AUTH-SESSION",
+  );
 
   const { token } = await tenantOf();
-  const invalid = await handleCreateProduct(post(token, { description: "sem nome" }, randomBytes(16).toString("base64url")));
+  const invalid = await handleCreateProduct(
+    post(
+      token,
+      { description: "sem nome" },
+      randomBytes(16).toString("base64url"),
+    ),
+  );
   assert.equal(invalid.status, 400);
-  const body = (await invalid.json()) as { code?: string; fieldErrors?: Record<string, string> };
+  const body = (await invalid.json()) as {
+    code?: string;
+    fieldErrors?: Record<string, string>;
+  };
   assert.equal(body.code, "VAL-NAME-REQUIRED");
   assert.ok(body.fieldErrors?.name);
 });
-
 
 const getById = (token: string, id: string) =>
   new Request(`${ORIGIN}/api/products/${id}`, {
@@ -366,10 +486,35 @@ const patch = (token: string, id: string, body: unknown) =>
 const del = (token: string, id: string) =>
   new Request(`${ORIGIN}/api/products/${id}`, {
     method: "DELETE",
-    headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", cookie: `${SESSION_COOKIE}=${token}` },
+    headers: {
+      origin: ORIGIN,
+      "sec-fetch-site": "same-origin",
+      cookie: `${SESSION_COOKIE}=${token}`,
+    },
   });
 
-const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const archive = (token: string, id: string) =>
+  new Request(`${ORIGIN}/api/products/${id}/archive`, {
+    method: "POST",
+    headers: {
+      origin: ORIGIN,
+      "sec-fetch-site": "same-origin",
+      cookie: `${SESSION_COOKIE}=${token}`,
+    },
+  });
+
+const reactivate = (token: string, id: string) =>
+  new Request(`${ORIGIN}/api/products/${id}/reactivate`, {
+    method: "POST",
+    headers: {
+      origin: ORIGIN,
+      "sec-fetch-site": "same-origin",
+      cookie: `${SESSION_COOKIE}=${token}`,
+    },
+  });
+
+const PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
 const updateFacts = {
   name: "Curso de Excel Avançado",
@@ -379,11 +524,16 @@ const updateFacts = {
   priceCurrency: "USD",
   features: ["120 aulas"],
   imageRefs: ["https://cdn.exemplo.com/nova.png", PNG],
-  url: "",
+  url: "https://exemplo.com/produto-atualizado",
+  targetContentCount: 12,
+  creatorPresence: "hands_only_product",
+  constraints: "mostrar detalhes",
 };
 
 async function criarProduct(token: string) {
-  const res = await handleCreateProduct(post(token, validInput, randomBytes(16).toString("base64url")));
+  const res = await handleCreateProduct(
+    post(token, validInput, randomBytes(16).toString("base64url")),
+  );
   assert.equal(res.status, 200);
   return (await res.json()) as { id: string; version: number };
 }
@@ -402,9 +552,15 @@ test("GET por id retorna o Product do tenant com moeda; inexistente responde 404
   assert.equal(view.priceCurrency, "BRL");
   assert.deepEqual(view.features, ["50 aulas", "certificado"]);
 
-  const missing = await handleGetProduct(getById(token, randomUUID()), String(randomUUID()));
+  const missing = await handleGetProduct(
+    getById(token, randomUUID()),
+    String(randomUUID()),
+  );
   assert.equal(missing.status, 404);
-  assert.equal(((await missing.json()) as { code?: string }).code, "PRODUCT-NOT-FOUND");
+  assert.equal(
+    ((await missing.json()) as { code?: string }).code,
+    "PRODUCT-NOT-FOUND",
+  );
   assert.equal(await prisma.product.count({ where: { tenantId } }), 1);
 });
 
@@ -415,20 +571,53 @@ test("GET/PATCH/DELETE de outro tenant responde 404 sem vazar o Product", async 
   const created = await criarProduct(dona.token);
   const corpo = { ...updateFacts, expectedVersion: created.version };
 
-  const resGet = await handleGetProduct(getById(intrusa.token, created.id), created.id);
+  const resGet = await handleGetProduct(
+    getById(intrusa.token, created.id),
+    created.id,
+  );
   assert.equal(resGet.status, 404);
-  assert.equal(((await resGet.json()) as { code?: string }).code, "PRODUCT-NOT-FOUND");
+  assert.equal(
+    ((await resGet.json()) as { code?: string }).code,
+    "PRODUCT-NOT-FOUND",
+  );
 
-  const resPatch = await handleUpdateProduct(patch(intrusa.token, created.id, corpo), created.id);
+  const resPatch = await handleUpdateProduct(
+    patch(intrusa.token, created.id, corpo),
+    created.id,
+  );
   assert.equal(resPatch.status, 404);
-  assert.equal(((await resPatch.json()) as { code?: string }).code, "PRODUCT-NOT-FOUND");
+  assert.equal(
+    ((await resPatch.json()) as { code?: string }).code,
+    "PRODUCT-NOT-FOUND",
+  );
 
-  const resDel = await handleDeleteProduct(del(intrusa.token, created.id), created.id);
+  const resDel = await handleDeleteProduct(
+    del(intrusa.token, created.id),
+    created.id,
+  );
   assert.equal(resDel.status, 404);
-  assert.equal(((await resDel.json()) as { code?: string }).code, "PRODUCT-NOT-FOUND");
+  assert.equal(
+    ((await resDel.json()) as { code?: string }).code,
+    "PRODUCT-NOT-FOUND",
+  );
+  const resArchive = await handleArchiveProduct(
+    archive(intrusa.token, created.id),
+    created.id,
+  );
+  assert.equal(resArchive.status, 404);
+  assert.equal(
+    ((await resArchive.json()) as { code?: string }).code,
+    "PRODUCT-NOT-FOUND",
+  );
 
-  assert.equal(await prisma.product.count({ where: { tenantId: dona.tenantId } }), 1);
-  assert.equal(await prisma.product.count({ where: { tenantId: intrusa.tenantId } }), 0);
+  assert.equal(
+    await prisma.product.count({ where: { tenantId: dona.tenantId } }),
+    1,
+  );
+  assert.equal(
+    await prisma.product.count({ where: { tenantId: intrusa.tenantId } }),
+    0,
+  );
 });
 
 test("PATCH atualiza fatos, persiste imagens por URL/data URL e bumpeia version", async (t) => {
@@ -436,29 +625,52 @@ test("PATCH atualiza fatos, persiste imagens por URL/data URL e bumpeia version"
   const { token, tenantId } = await tenantOf();
   const created = await criarProduct(token);
 
-  const res = await handleUpdateProduct(patch(token, created.id, { ...updateFacts, expectedVersion: created.version }), created.id);
+  const res = await handleUpdateProduct(
+    patch(token, created.id, {
+      ...updateFacts,
+      expectedVersion: created.version,
+    }),
+    created.id,
+  );
   assert.equal(res.status, 200);
   const saved = (await res.json()) as { id: string; version: number };
   assert.equal(saved.id, created.id);
   assert.equal(saved.version, created.version + 1);
 
-  const row = await prisma.product.findUniqueOrThrow({ where: { id: created.id } });
+  const row = await prisma.product.findUniqueOrThrow({
+    where: { id: created.id },
+  });
   assert.equal(row.name, "Curso de Excel Avançado");
   assert.equal(row.priceAmount?.toString(), "199.9");
   assert.deepEqual(row.images, ["https://cdn.exemplo.com/nova.png", PNG]);
-  assert.equal(row.submittedUrl, null);
-  // Preparação da primeira geração não é fato editável: permanece a da criação.
-  assert.deepEqual(row.generationConstraints, { creatorPresence: "either", constraints: "sem gírias" });
+  assert.equal(row.submittedUrl, "https://exemplo.com/produto-atualizado");
+  assert.equal(row.targetContentCount, 20);
+  assert.deepEqual(row.generationConstraints, {
+    creatorPresence: "either",
+    constraints: "sem gírias",
+  });
 
-  const view = (await (await handleGetProduct(getById(token, created.id), created.id)).json()) as Record<string, unknown>;
+  const view = (await (
+    await handleGetProduct(getById(token, created.id), created.id)
+  ).json()) as Record<string, unknown>;
   assert.equal(view.version, saved.version);
   assert.equal(view.priceCurrency, "USD");
   assert.deepEqual(view.imageRefs, ["https://cdn.exemplo.com/nova.png", PNG]);
 
   // Mesmas validações obrigatórias do POST: preço vazio é rejeitado com fieldErrors.
-  const invalida = await handleUpdateProduct(patch(token, created.id, { ...updateFacts, price: "", expectedVersion: saved.version }), created.id);
+  const invalida = await handleUpdateProduct(
+    patch(token, created.id, {
+      ...updateFacts,
+      price: "",
+      expectedVersion: saved.version,
+    }),
+    created.id,
+  );
   assert.equal(invalida.status, 400);
-  const erro = (await invalida.json()) as { code?: string; fieldErrors?: Record<string, string> };
+  const erro = (await invalida.json()) as {
+    code?: string;
+    fieldErrors?: Record<string, string>;
+  };
   assert.equal(erro.code, "VAL-PRICE-REQUIRED");
   assert.ok(erro.fieldErrors?.price);
 });
@@ -468,12 +680,27 @@ test("PATCH com expectedVersion desatualizada responde 409 VERSION-CONFLICT", as
   const { token } = await tenantOf();
   const created = await criarProduct(token);
 
-  const primeira = await handleUpdateProduct(patch(token, created.id, { ...updateFacts, expectedVersion: created.version }), created.id);
+  const primeira = await handleUpdateProduct(
+    patch(token, created.id, {
+      ...updateFacts,
+      expectedVersion: created.version,
+    }),
+    created.id,
+  );
   assert.equal(primeira.status, 200);
 
-  const conflito = await handleUpdateProduct(patch(token, created.id, { ...updateFacts, expectedVersion: created.version }), created.id);
+  const conflito = await handleUpdateProduct(
+    patch(token, created.id, {
+      ...updateFacts,
+      expectedVersion: created.version,
+    }),
+    created.id,
+  );
   assert.equal(conflito.status, 409);
-  assert.equal(((await conflito.json()) as { code?: string }).code, "VERSION-CONFLICT");
+  assert.equal(
+    ((await conflito.json()) as { code?: string }).code,
+    "VERSION-CONFLICT",
+  );
 });
 
 test("DELETE remove o Product do tenant e repetição responde 404", async (t) => {
@@ -486,7 +713,153 @@ test("DELETE remove o Product do tenant e repetição responde 404", async (t) =
   assert.deepEqual(await res.json(), { id: created.id });
   assert.equal(await prisma.product.count({ where: { tenantId } }), 0);
 
-  const repetida = await handleDeleteProduct(del(token, created.id), created.id);
+  const repetida = await handleDeleteProduct(
+    del(token, created.id),
+    created.id,
+  );
   assert.equal(repetida.status, 404);
-  assert.equal(((await repetida.json()) as { code?: string }).code, "PRODUCT-NOT-FOUND");
+  assert.equal(
+    ((await repetida.json()) as { code?: string }).code,
+    "PRODUCT-NOT-FOUND",
+  );
+});
+
+test("POST archive arquiva sem apagar dados; repetição é replay e preserva version", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+  const created = await criarProduct(token);
+
+  const res = await handleArchiveProduct(archive(token, created.id), created.id);
+  assert.equal(res.status, 200);
+  const view = (await res.json()) as Record<string, unknown>;
+  assert.equal(view.id, created.id);
+  assert.equal(view.version, created.version + 1);
+  assert.equal(view.active, false);
+
+  // Sem delete: a linha persiste com lifecycle ARCHIVED.
+  const row = await prisma.product.findUniqueOrThrow({
+    where: { id: created.id },
+  });
+  assert.equal(row.lifecycle, "ARCHIVED");
+  assert.equal(await prisma.product.count({ where: { tenantId } }), 1);
+
+  // Dados preservados: GET continua retornando o Product, agora inativo.
+  const depois = await handleGetProduct(getById(token, created.id), created.id);
+  assert.equal(depois.status, 200);
+  const viewDepois = (await depois.json()) as Record<string, unknown>;
+  assert.equal(viewDepois.active, false);
+
+  // Idempotência: repetição devolve 200 sem bumpear version.
+  const replay = await handleArchiveProduct(
+    archive(token, created.id),
+    created.id,
+  );
+  assert.equal(replay.status, 200);
+  const viewReplay = (await replay.json()) as Record<string, unknown>;
+  assert.equal(viewReplay.version, created.version + 1);
+  assert.equal(viewReplay.active, false);
+});
+
+test("archives concorrentes resolvem em replay único, com um só bump de version", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+  const created = await criarProduct(token);
+
+  const resultados = await Promise.all([
+    archiveTenantProduct(tenantId, created.id),
+    archiveTenantProduct(tenantId, created.id),
+    archiveTenantProduct(tenantId, created.id),
+  ]);
+  for (const product of resultados) {
+    assert.equal(product.lifecycle, "ARCHIVED");
+    assert.equal(product.id, created.id);
+  }
+  const row = await prisma.product.findUniqueOrThrow({
+    where: { id: created.id },
+  });
+  assert.equal(row.lifecycle, "ARCHIVED");
+  assert.equal(row.version, created.version + 1);
+});
+
+test("archive de Product removido no meio responde ProductNotFoundError", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+  const created = await criarProduct(token);
+  await prisma.product.delete({ where: { id: created.id } });
+
+  await assert.rejects(
+    () => archiveTenantProduct(tenantId, created.id),
+    ProductNotFoundError,
+  );
+});
+
+test("POST reactivate reverte archive; repetição é replay e outro tenant responde 404", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+  const intrusa = await tenantOf();
+  const created = await criarProduct(token);
+
+  const arquivado = await handleArchiveProduct(
+    archive(token, created.id),
+    created.id,
+  );
+  assert.equal(arquivado.status, 200);
+
+  const res = await handleReactivateProduct(
+    reactivate(token, created.id),
+    created.id,
+  );
+  assert.equal(res.status, 200);
+  const view = (await res.json()) as Record<string, unknown>;
+  assert.equal(view.id, created.id);
+  assert.equal(view.active, true);
+  assert.equal(view.version, created.version + 2);
+
+  const row = await prisma.product.findUniqueOrThrow({
+    where: { id: created.id },
+  });
+  assert.equal(row.lifecycle, "ACTIVE");
+  assert.equal(await prisma.product.count({ where: { tenantId } }), 1);
+
+  // Idempotência: reagir um Product ativo dá replay sem bumpear version.
+  const replay = await handleReactivateProduct(
+    reactivate(token, created.id),
+    created.id,
+  );
+  assert.equal(replay.status, 200);
+  const viewReplay = (await replay.json()) as Record<string, unknown>;
+  assert.equal(viewReplay.version, created.version + 2);
+
+  // Tenant estrangeiro não reativa: 404 sem vazar existência.
+  const proibido = await handleReactivateProduct(
+    reactivate(intrusa.token, created.id),
+    created.id,
+  );
+  assert.equal(proibido.status, 404);
+  assert.equal(
+    ((await proibido.json()) as { code?: string }).code,
+    "PRODUCT-NOT-FOUND",
+  );
+});
+
+test("reactivates concorrentes resolvem em replay único, com um só bump de version", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+  const created = await criarProduct(token);
+  await archiveTenantProduct(tenantId, created.id);
+
+  const resultados = await Promise.all([
+    reactivateTenantProduct(tenantId, created.id),
+    reactivateTenantProduct(tenantId, created.id),
+  ]);
+  for (const product of resultados) {
+    assert.equal(product.lifecycle, "ACTIVE");
+    assert.equal(product.id, created.id);
+  }
+  const row = await prisma.product.findUniqueOrThrow({
+    where: { id: created.id },
+  });
+  assert.equal(row.lifecycle, "ACTIVE");
+  // archive (+1) e exatamente um reactivate (+1).
+  assert.equal(row.version, created.version + 2);
 });

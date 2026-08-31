@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireSession } from "@/modules/identity/application/require-session";
+import { getTenantProduct } from "@/modules/products/service";
 
 import {
   Breadcrumb,
@@ -19,16 +20,25 @@ type ProductPageProps = {
 export default async function ProductPage({ params }: ProductPageProps) {
   const session = await requireSession();
   const { id } = await params;
+  const product = await getTenantProduct(session.tenantId, id);
+  const archived = product?.lifecycle === "ARCHIVED";
   return (
-    <ProductShell eyebrow="Produto" title="Revisar fatos" user={{ email: session.email }}>
+    <ProductShell
+      title={archived ? "Produto arquivado" : "Revisar fatos"}
+      user={{ email: session.email }}
+    >
       <Breadcrumb className="mb-6">
         <BreadcrumbList>
           <BreadcrumbItem>
-            <BreadcrumbLink render={<Link href="/products" />}>Produtos</BreadcrumbLink>
+            <BreadcrumbLink render={<Link href="/products" />}>
+              Produtos
+            </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
-            <BreadcrumbPage>Revisar produto</BreadcrumbPage>
+            <BreadcrumbPage>
+              {archived ? "Produto arquivado" : "Revisar produto"}
+            </BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>

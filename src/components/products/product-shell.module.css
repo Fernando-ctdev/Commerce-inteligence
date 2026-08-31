@@ -131,26 +131,13 @@
   gap: 12px;
 }
 
-.toolbar .titleGroup {
+.toolbar .title {
   margin-inline-end: auto;
 }
 
 .mobileHeader {
   gap: 12px;
   justify-content: flex-start;
-}
-
-.titleGroup {
-  display: grid;
-  gap: 2px;
-}
-
-.eyebrow {
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 16px;
-  margin: 0;
 }
 
 .title {

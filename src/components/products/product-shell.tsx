@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -18,7 +17,6 @@ import { ShellNav, ShellRoot } from "./product-shell-nav";
 import styles from "./product-shell.module.css";
 
 type ProductShellProps = {
-  eyebrow?: string;
   title: string;
   action?: ReactNode;
   children: ReactNode;
@@ -35,16 +33,13 @@ function userInitials(user: { name?: string | null; email: string }) {
     .toUpperCase();
 }
 
-export async function ProductShell({
+export function ProductShell({
   active = "products",
-  eyebrow = "Produtos",
   title,
   action,
   children,
   user,
 }: ProductShellProps) {
-  const sidebarState = (await cookies()).get("sidebar_state")?.value;
-  const initialOpen = sidebarState !== "false";
   const sidebar = (
     <Sidebar collapsible="icon" side="left">
       <SidebarHeader className={styles.sidebarHeader}>
@@ -80,14 +75,11 @@ export async function ProductShell({
   );
 
   return (
-    <ShellRoot initialOpen={initialOpen} sidebar={sidebar}>
+    <ShellRoot sidebar={sidebar}>
       <SidebarInset className={styles.inset}>
         <header className={styles.toolbar}>
           <SidebarTrigger aria-label="Alternar navegação" />
-          <div className={styles.titleGroup}>
-            <p className={styles.eyebrow}>{eyebrow}</p>
-            <h1 className={styles.title}>{title}</h1>
-          </div>
+          <h1 className={styles.title}>{title}</h1>
           {action && <div className={styles.toolbarAction}>{action}</div>}
         </header>
 
@@ -96,10 +88,7 @@ export async function ProductShell({
             aria-label="Abrir navegação"
             className={styles.mobileTrigger}
           />
-          <div className={styles.titleGroup}>
-            <p className={styles.eyebrow}>{eyebrow}</p>
-            <h1 className={styles.title}>{title}</h1>
-          </div>
+          <h1 className={styles.title}>{title}</h1>
         </header>
 
         <div className={styles.main}>{children}</div>

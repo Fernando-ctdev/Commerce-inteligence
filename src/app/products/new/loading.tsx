@@ -15,11 +15,13 @@ import { ProductShell } from "@/components/products/product-shell";
    formulário real elimina qualquer troca de layout no loading. */
 export default function NewProductLoading() {
   return (
-    <ProductShell eyebrow="Produtos" title="Adicionar produto">
+    <ProductShell title="Adicionar produto">
       <Breadcrumb className="mb-6">
         <BreadcrumbList>
           <BreadcrumbItem>
-            <BreadcrumbLink render={<Link href="/products" />}>Produtos</BreadcrumbLink>
+            <BreadcrumbLink render={<Link href="/products" />}>
+              Produtos
+            </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>

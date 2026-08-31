@@ -1,7 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildManualProductPayload, buildProductPayload, digitsToPrice, emptyProductDraft, preparationIsWithinLimits, validateProductManualDraft, validateProductDraft, visibleProductFieldErrors } from "./product-form-model";
+import {
+  buildManualProductPayload,
+  buildProductPayload,
+  digitsToPrice,
+  emptyProductDraft,
+  preparationIsWithinLimits,
+  validateProductManualDraft,
+  validateProductDraft,
+  visibleProductFieldErrors,
+} from "./product-form-model";
 import { productPathForCreatedProduct } from "./product-create-model";
 import { firstProductErrorField } from "./product-ui-model";
 
@@ -21,7 +30,10 @@ test("mantém validação neutra até submit e preserva erro server-side", () =>
     name: "Informe o nome do produto.",
     description: "Informe uma descrição do produto.",
   });
-  assert.deepEqual(visibleProductFieldErrors(draft, serverError, false), serverError);
+  assert.deepEqual(
+    visibleProductFieldErrors(draft, serverError, false),
+    serverError,
+  );
   assert.deepEqual(visibleProductFieldErrors(draft, serverError, true), {
     name: "Já existe um produto com este nome.",
     description: "Informe uma descrição do produto.",
@@ -62,13 +74,22 @@ test("monta payload manual com fatos normalizados", () => {
 });
 
 test("foco de erro escolhe o primeiro campo na ordem do formulário", () => {
-  assert.equal(firstProductErrorField({ description: "Obrigatória", name: "Obrigatório" }), "name");
-  assert.equal(firstProductErrorField({ url: "Inválida", category: "Inválida" }), "category");
+  assert.equal(
+    firstProductErrorField({ description: "Obrigatória", name: "Obrigatório" }),
+    "name",
+  );
+  assert.equal(
+    firstProductErrorField({ url: "Inválida", category: "Inválida" }),
+    "category",
+  );
   assert.equal(firstProductErrorField({}), undefined);
 });
 
 test("navegação após criação aponta para o Product criado", () => {
-  assert.equal(productPathForCreatedProduct("product/id"), "/products/product%2Fid");
+  assert.equal(
+    productPathForCreatedProduct("product/id"),
+    "/products/product%2Fid",
+  );
 });
 
 test("máscara de preço converte dígitos em valor com duas casas", () => {
@@ -79,7 +100,17 @@ test("máscara de preço converte dígitos em valor com duas casas", () => {
 
 test("valida cadastro manual: todos os campos obrigatórios e formatos", () => {
   assert.deepEqual(
-    validateProductManualDraft({ name: " ", description: "", category: "", price: "", currency: "", characteristics: "" }, ""),
+    validateProductManualDraft(
+      {
+        name: " ",
+        description: "",
+        category: "",
+        price: "",
+        currency: "",
+        characteristics: "",
+      },
+      "",
+    ),
     {
       name: "Informe o nome do produto.",
       description: "Informe uma descrição do produto.",
@@ -87,37 +118,117 @@ test("valida cadastro manual: todos os campos obrigatórios e formatos", () => {
       price: "Informe o preço do produto.",
       currency: "Informe a moeda do produto.",
       characteristics: "Informe ao menos uma característica.",
-      constraints: "Informe observações ou restrições.",
     },
   );
   assert.deepEqual(
-    validateProductManualDraft({ name: "Escova", description: "Cabelos", category: "Beleza", price: "-1", currency: "BRL", characteristics: "cerdas" }, "notas"),
+    validateProductManualDraft(
+      {
+        name: "Escova",
+        description: "Cabelos",
+        category: "Beleza",
+        price: "-1",
+        currency: "BRL",
+        characteristics: "cerdas",
+      },
+      "notas",
+    ),
     { price: "Informe um preço não negativo com até duas casas." },
   );
   assert.deepEqual(
-    validateProductManualDraft({ name: "Escova", description: "Cabelos", category: "Beleza", price: "39.90", currency: "BRLX", characteristics: "cerdas" }, "notas"),
+    validateProductManualDraft(
+      {
+        name: "Escova",
+        description: "Cabelos",
+        category: "Beleza",
+        price: "39.90",
+        currency: "BRLX",
+        characteristics: "cerdas",
+      },
+      "notas",
+    ),
     { currency: "Informe uma moeda válida." },
   );
   assert.deepEqual(
-    validateProductManualDraft({ name: "Escova", description: "Cabelos", category: "Beleza", price: "39.90", currency: "BRL", characteristics: "cerdas" }, "sem gírias"),
+    validateProductManualDraft(
+      {
+        name: "Escova",
+        description: "Cabelos",
+        category: "Beleza",
+        price: "39.90",
+        currency: "BRL",
+        characteristics: "cerdas",
+      },
+      "sem gírias",
+    ),
     {},
   );
 });
 
 test("preparação aceita default 20 e rejeita fora de 1–30 ou notas acima de 300", () => {
-  assert.equal(preparationIsWithinLimits({ targetContentCount: 20, creatorPresence: "either" }), true);
-  assert.equal(preparationIsWithinLimits({ targetContentCount: 1, creatorPresence: "on_camera", constraints: "sem gírias" }), true);
-  assert.equal(preparationIsWithinLimits({ targetContentCount: 0, creatorPresence: "either" }), false);
-  assert.equal(preparationIsWithinLimits({ targetContentCount: 31, creatorPresence: "either" }), false);
-  assert.equal(preparationIsWithinLimits({ targetContentCount: 20, creatorPresence: "hands_only_product", constraints: "a".repeat(301) }), false);
-  assert.equal(preparationIsWithinLimits({ targetContentCount: 2.5, creatorPresence: "either" }), false);
+  assert.equal(
+    preparationIsWithinLimits({
+      targetContentCount: 20,
+      creatorPresence: "either",
+    }),
+    true,
+  );
+  assert.equal(
+    preparationIsWithinLimits({
+      targetContentCount: 1,
+      creatorPresence: "on_camera",
+      constraints: "sem gírias",
+    }),
+    true,
+  );
+  assert.equal(
+    preparationIsWithinLimits({
+      targetContentCount: 0,
+      creatorPresence: "either",
+    }),
+    false,
+  );
+  assert.equal(
+    preparationIsWithinLimits({
+      targetContentCount: 31,
+      creatorPresence: "either",
+    }),
+    false,
+  );
+  assert.equal(
+    preparationIsWithinLimits({
+      targetContentCount: 20,
+      creatorPresence: "hands_only_product",
+      constraints: "a".repeat(301),
+    }),
+    false,
+  );
+  assert.equal(
+    preparationIsWithinLimits({
+      targetContentCount: 2.5,
+      creatorPresence: "either",
+    }),
+    false,
+  );
 });
 
 test("monta payload manual com fatos normalizados, preparação e chave", () => {
   assert.deepEqual(
     buildManualProductPayload(
-      { name: " Escova ", description: " Para cabelos ", category: " Beleza ", price: " 39.90 ", currency: " BRL ", characteristics: "cerdas macias\n\n cabo leve" },
-      { targetContentCount: 20, creatorPresence: "either", constraints: " Sem gírias " },
+      {
+        name: " Escova ",
+        description: " Para cabelos ",
+        category: " Beleza ",
+        price: " 39.90 ",
+        currency: " BRL ",
+        characteristics: "cerdas macias\n\n cabo leve",
+        imageReferences: "https://example.com/image.jpg",
+        url: " https://example.com/product ",
+      },
+      {
+        targetContentCount: 20,
+        creatorPresence: "either",
+        constraints: " Sem gírias ",
+      },
       "idempotency-key",
     ),
     {
@@ -127,6 +238,8 @@ test("monta payload manual com fatos normalizados, preparação e chave", () => 
       price: "39,90",
       priceCurrency: "BRL",
       features: ["cerdas macias", "cabo leve"],
+      imageRefs: ["https://example.com/image.jpg"],
+      url: "https://example.com/product",
       targetContentCount: 20,
       creatorPresence: "either",
       constraints: "Sem gírias",
@@ -137,7 +250,14 @@ test("monta payload manual com fatos normalizados, preparação e chave", () => 
 
 test("par preço/moeda vazio fica nulo e constraints omitidas somem do payload", () => {
   const payload = buildManualProductPayload(
-    { name: "Escova", description: "Cabelos", category: "", price: "", currency: "", characteristics: "" },
+    {
+      name: "Escova",
+      description: "Cabelos",
+      category: "",
+      price: "",
+      currency: "",
+      characteristics: "",
+    },
     { targetContentCount: 10, creatorPresence: "on_camera" },
   );
   assert.deepEqual(payload, {
@@ -163,32 +283,56 @@ test("preço manual 23,44 com moeda padrão BRL é válido", () => {
   };
 
   assert.deepEqual(validateProductManualDraft(draft, "notas"), {});
-  assert.equal(buildManualProductPayload(
-    draft,
-    { targetContentCount: 20, creatorPresence: "either" },
-  ).priceCurrency, "BRL");
+  assert.equal(
+    buildManualProductPayload(draft, {
+      targetContentCount: 20,
+      creatorPresence: "either",
+    }).priceCurrency,
+    "BRL",
+  );
 });
 
 test("preço vazio com moeda padrão BRL é rejeitado como obrigatório", () => {
   assert.deepEqual(
     validateProductManualDraft(
-      { name: "Escova", description: "Cabelos", category: "Beleza", price: "", currency: "BRL", characteristics: "cerdas" },
+      {
+        name: "Escova",
+        description: "Cabelos",
+        category: "Beleza",
+        price: "",
+        currency: "BRL",
+        characteristics: "cerdas",
+      },
       "notas",
     ),
     { price: "Informe o preço do produto." },
   );
   assert.deepEqual(
     validateProductManualDraft(
-      { name: "Escova", description: "Cabelos", category: "Beleza", price: "23,44", currency: "", characteristics: "cerdas" },
+      {
+        name: "Escova",
+        description: "Cabelos",
+        category: "Beleza",
+        price: "23,44",
+        currency: "",
+        characteristics: "cerdas",
+      },
       "notas",
     ),
     { currency: "Informe a moeda do produto." },
   );
   assert.deepEqual(
     validateProductManualDraft(
-      { name: "Escova", description: "Cabelos", category: "Beleza", price: "23,44", currency: "BRL", characteristics: "cerdas" },
+      {
+        name: "Escova",
+        description: "Cabelos",
+        category: "Beleza",
+        price: "23,44",
+        currency: "BRL",
+        characteristics: "cerdas",
+      },
       " ",
     ),
-    { constraints: "Informe observações ou restrições." },
+    {},
   );
 });

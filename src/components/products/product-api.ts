@@ -7,10 +7,13 @@ export type ProductRecord = {
   description: string;
   category: string;
   price: string;
+  priceCurrency: string;
   characteristics: string[];
   imageReferences: string[];
   observations: string;
   url: string;
+  targetContentCount: number;
+  creatorPresence: "on_camera" | "hands_only_product" | "either";
   active: boolean;
 };
 
@@ -21,7 +24,12 @@ export type ProductMutation = {
 };
 
 export type ServerFieldErrors = ProductFieldErrors &
-  Partial<Record<"currency" | "targetContentCount" | "creatorPresence" | "constraints", string>>;
+  Partial<
+    Record<
+      "currency" | "targetContentCount" | "creatorPresence" | "constraints",
+      string
+    >
+  >;
 
 export type ProductApiErrorOptions = {
   status: number;
@@ -35,7 +43,12 @@ export class ProductApiError extends Error {
   readonly fieldErrors: ServerFieldErrors;
   readonly code?: string;
 
-  constructor({ status, message, fieldErrors = {}, code }: ProductApiErrorOptions) {
+  constructor({
+    status,
+    message,
+    fieldErrors = {},
+    code,
+  }: ProductApiErrorOptions) {
     super(message);
     this.name = "ProductApiError";
     this.status = status;
@@ -53,7 +66,11 @@ function nullableString(value: unknown) {
 }
 
 function listValue(value: unknown) {
-  if (Array.isArray(value)) return value.map(stringValue).map((item) => item.trim()).filter(Boolean);
+  if (Array.isArray(value))
+    return value
+      .map(stringValue)
+      .map((item) => item.trim())
+      .filter(Boolean);
   return stringValue(value)
     .split(/\r?\n/)
     .map((item) => item.trim())
@@ -71,6 +88,7 @@ const serverFieldNames: Record<string, string> = {
   features: "characteristics",
   imageRefs: "imageReferences",
   notes: "observations",
+  url: "url",
   currency: "currency",
   priceCurrency: "currency",
   targetContentCount: "targetContentCount",
@@ -80,23 +98,35 @@ const serverFieldNames: Record<string, string> = {
 
 function mapFieldErrors(value: unknown): ServerFieldErrors {
   if (typeof value !== "object" || value === null) return {};
-  return Object.entries(value).reduce<ServerFieldErrors>((errors, [key, message]) => {
-    const field = serverFieldNames[key];
-    if (field && typeof message === "string") {
-      errors[field as keyof ServerFieldErrors] = message;
-    }
-    return errors;
-  }, {});
+  return Object.entries(value).reduce<ServerFieldErrors>(
+    (errors, [key, message]) => {
+      const field = serverFieldNames[key];
+      if (field && typeof message === "string") {
+        errors[field as keyof ServerFieldErrors] = message;
+      }
+      return errors;
+    },
+    {},
+  );
 }
 
 export function normalizeProduct(value: unknown): ProductRecord {
-  if (typeof value !== "object" || value === null) throw new Error("Resposta de Product inválida.");
+  if (typeof value !== "object" || value === null)
+    throw new Error("Resposta de Product inválida.");
   const record = value as Record<string, unknown>;
   const url = nullableString(record.url);
   const rawCents = record.priceCents ?? record.price_cents;
-  const cents = typeof rawCents === "number" ? rawCents : typeof rawCents === "string" && /^\d+$/.test(rawCents) ? Number(rawCents) : null;
+  const cents =
+    typeof rawCents === "number"
+      ? rawCents
+      : typeof rawCents === "string" && /^\d+$/.test(rawCents)
+        ? Number(rawCents)
+        : null;
   const rawPrice = record.price ?? record.price_brl;
-  const price = cents !== null ? (cents / 100).toFixed(2).replace(".", ",") : nullableString(rawPrice);
+  const price =
+    cents !== null
+      ? (cents / 100).toFixed(2).replace(".", ",")
+      : nullableString(rawPrice);
   return {
     id: nullableString(record.id ?? record.product_id),
     version: typeof record.version === "number" ? record.version : 0,
@@ -104,10 +134,23 @@ export function normalizeProduct(value: unknown): ProductRecord {
     description: nullableString(record.description),
     category: nullableString(record.category),
     price,
+    priceCurrency:
+      nullableString(record.priceCurrency ?? record.price_currency) || "BRL",
     characteristics: listValue(record.features ?? record.characteristics),
-    imageReferences: listValue(record.imageRefs ?? record.imageReferences ?? record.image_references),
+    imageReferences: listValue(
+      record.imageRefs ?? record.imageReferences ?? record.image_references,
+    ),
     observations: nullableString(record.notes ?? record.observations),
     url,
+    targetContentCount:
+      typeof record.targetContentCount === "number"
+        ? record.targetContentCount
+        : 20,
+    creatorPresence:
+      record.creatorPresence === "on_camera" ||
+      record.creatorPresence === "hands_only_product"
+        ? record.creatorPresence
+        : "either",
     active: record.active !== false,
   };
 }
@@ -119,21 +162,40 @@ function productFromResponse(value: unknown) {
   return normalizeProduct(value);
 }
 
-async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
+async function request<T>(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<T> {
   const response = await fetch(input, {
     credentials: "same-origin",
-    headers: { Accept: "application/json", "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...init?.headers,
+    },
     ...init,
   }).catch(() => null);
 
-  const data: unknown = response ? await response.json().catch(() => null) : null;
-  if (!response) throw new ProductApiError({ status: 0, message: "Não foi possível conectar agora. Tente novamente." });
+  const data: unknown = response
+    ? await response.json().catch(() => null)
+    : null;
+  if (!response)
+    throw new ProductApiError({
+      status: 0,
+      message: "Não foi possível conectar agora. Tente novamente.",
+    });
   if (!response.ok) {
-    const body = typeof data === "object" && data !== null ? data as Record<string, unknown> : {};
+    const body =
+      typeof data === "object" && data !== null
+        ? (data as Record<string, unknown>)
+        : {};
     throw new ProductApiError({
       status: response.status,
       code: typeof body.code === "string" ? body.code : undefined,
-      message: typeof body.error === "string" ? body.error : "Não foi possível concluir esta ação.",
+      message:
+        typeof body.error === "string"
+          ? body.error
+          : "Não foi possível concluir esta ação.",
       fieldErrors: mapFieldErrors(body.fieldErrors),
     });
   }
@@ -143,18 +205,28 @@ async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise
 export async function listProducts() {
   const data = await request<unknown>("/api/products", { method: "GET" });
   if (Array.isArray(data)) return data.map(normalizeProduct);
-  if (typeof data === "object" && data !== null && "products" in data && Array.isArray((data as { products: unknown }).products)) {
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "products" in data &&
+    Array.isArray((data as { products: unknown }).products)
+  ) {
     return (data as { products: unknown[] }).products.map(normalizeProduct);
   }
   return [];
 }
 
 export async function getProduct(id: string) {
-  return productFromResponse(await request<unknown>(`/api/products/${encodeURIComponent(id)}`, { method: "GET" }));
+  return productFromResponse(
+    await request<unknown>(`/api/products/${encodeURIComponent(id)}`, {
+      method: "GET",
+    }),
+  );
 }
 
 function mutationFromResponse(value: unknown): ProductMutation {
-  if (typeof value !== "object" || value === null) throw new Error("Resposta de Product inválida.");
+  if (typeof value !== "object" || value === null)
+    throw new Error("Resposta de Product inválida.");
   const record = value as Record<string, unknown>;
   const id = nullableString(record.id ?? record.product_id);
   const version = typeof record.version === "number" ? record.version : null;
@@ -167,9 +239,8 @@ function mutationFromResponse(value: unknown): ProductMutation {
 }
 
 export async function createProduct(payload: ProductPayload) {
-  /* O POST de criação expõe somente o contrato do Slice 002; campos de
-     edição (seller, variants, imageRefs, notes, url, expectedVersion)
-     permanecem no PATCH. Campos ausentes caem fora do JSON. */
+  /* Campos ausentes caem fora do JSON; fatos opcionais preservam o mesmo
+     contrato visual entre criação e edição. */
   const {
     idempotency_key: idempotencyKey,
     name,
@@ -178,23 +249,64 @@ export async function createProduct(payload: ProductPayload) {
     price,
     priceCurrency,
     features,
+    imageRefs,
+    url,
     targetContentCount,
     creatorPresence,
     constraints,
   } = payload;
-  return mutationFromResponse(await request<unknown>("/api/products", {
-    method: "POST",
-    headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
-    body: JSON.stringify({ name, description, category, price, priceCurrency, features, targetContentCount, creatorPresence, constraints }),
-  }));
+  return mutationFromResponse(
+    await request<unknown>("/api/products", {
+      method: "POST",
+      headers: idempotencyKey
+        ? { "Idempotency-Key": idempotencyKey }
+        : undefined,
+      body: JSON.stringify({
+        name,
+        description,
+        category,
+        price,
+        priceCurrency,
+        features,
+        imageRefs,
+        url,
+        targetContentCount,
+        creatorPresence,
+        constraints,
+      }),
+    }),
+  );
 }
 
 export async function updateProduct(id: string, payload: ProductPayload) {
-  return mutationFromResponse(await request<unknown>(`/api/products/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) }));
+  return mutationFromResponse(
+    await request<unknown>(`/api/products/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export async function deleteProduct(id: string) {
   return request<{ id: string }>(`/api/products/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+export async function archiveProduct(id: string) {
+  return productFromResponse(
+    await request<unknown>(
+      `/api/products/${encodeURIComponent(id)}/archive`,
+      { method: "POST" },
+    ),
+  );
+}
+
+export async function reactivateProduct(id: string) {
+  return productFromResponse(
+    await request<unknown>(
+      `/api/products/${encodeURIComponent(id)}/reactivate`,
+      { method: "POST" },
+    ),
+  );
 }

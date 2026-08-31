@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { listProducts, ProductApiError, ProductRecord } from "./product-api";
 import styles from "./product-list.module.css";
@@ -21,7 +22,11 @@ export function ProductList() {
     try {
       setProducts(await listProducts());
     } catch (caught) {
-      setError(caught instanceof ProductApiError ? caught.message : "Não foi possível carregar seus produtos agora.");
+      setError(
+        caught instanceof ProductApiError
+          ? caught.message
+          : "Não foi possível carregar seus produtos agora.",
+      );
     } finally {
       setLoading(false);
     }
@@ -36,7 +41,8 @@ export function ProductList() {
     const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
     return products.filter((product) => {
       const matchesFilter =
-        filter === "all" || (filter === "active" ? product.active : !product.active);
+        filter === "all" ||
+        (filter === "active" ? product.active : !product.active);
       const matchesQuery =
         !normalizedQuery ||
         `${product.name} ${product.category} ${product.description}`
@@ -51,12 +57,18 @@ export function ProductList() {
       <div className={styles.listIntro}>
         <div>
           <h2>Produtos</h2>
-          <p className={styles.listHint}>Encontre um produto e continue pelo próximo passo.</p>
+          <p className={styles.listHint}>
+            Encontre um produto e continue pelo próximo passo.
+          </p>
         </div>
-        <Link className={styles.primaryButton} href="/products/new">Adicionar produto</Link>
+        <Link className={styles.primaryButton} href="/products/new">
+          Adicionar produto
+        </Link>
       </div>
       <div className={styles.controls} role="search">
-        <label className={styles.searchLabel} htmlFor="product-search">Buscar produtos</label>
+        <label className={styles.searchLabel} htmlFor="product-search">
+          Buscar produtos
+        </label>
         <input
           className={styles.searchInput}
           id="product-search"
@@ -65,23 +77,17 @@ export function ProductList() {
           type="search"
           value={query}
         />
-        <div aria-label="Filtrar produtos" className={styles.filters} role="group">
-          {([
-            ["all", "Todos"],
-            ["active", "Ativos"],
-            ["archived", "Arquivados"],
-          ] as const).map(([value, label]) => (
-            <button
-              aria-pressed={filter === value}
-              className={styles.filterButton}
-              key={value}
-              onClick={() => setFilter(value)}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          aria-label="Filtrar produtos"
+          onValueChange={(value) => setFilter(value as typeof filter)}
+          value={filter}
+        >
+          <TabsList className={styles.filters} variant="line">
+            <TabsTrigger value="all">Todos</TabsTrigger>
+            <TabsTrigger value="active">Ativos</TabsTrigger>
+            <TabsTrigger value="archived">Arquivados</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
       {loading ? (
         <ul aria-hidden="true" className={styles.cards}>
@@ -89,31 +95,53 @@ export function ProductList() {
             <li className={styles.card} key={index}>
               <Skeleton className={styles.imageFallback} />
               <div className={styles.cardBody}>
-                <Skeleton className="rounded-md" style={{ blockSize: 12, inlineSize: "40%" }} />
-                <Skeleton className="rounded-md" style={{ blockSize: 20, inlineSize: "75%" }} />
-                <Skeleton className="rounded-md" style={{ blockSize: 14, inlineSize: "60%" }} />
+                <Skeleton
+                  className="rounded-md"
+                  style={{ blockSize: 12, inlineSize: "40%" }}
+                />
+                <Skeleton
+                  className="rounded-md"
+                  style={{ blockSize: 20, inlineSize: "75%" }}
+                />
+                <Skeleton
+                  className="rounded-md"
+                  style={{ blockSize: 14, inlineSize: "60%" }}
+                />
               </div>
-              <Skeleton className={styles.cardAction} style={{ blockSize: 16, inlineSize: 96 }} />
+              <Skeleton
+                className={styles.cardAction}
+                style={{ blockSize: 16, inlineSize: 96 }}
+              />
             </li>
           ))}
         </ul>
       ) : error ? (
         <div className={styles.galleryEmpty} role="alert">
           <p>Não foi possível carregar seus produtos. {error}</p>
-          <button className={styles.secondaryButton} onClick={() => void load()} type="button">
+          <button
+            className={styles.secondaryButton}
+            onClick={() => void load()}
+            type="button"
+          >
             Tentar novamente
           </button>
         </div>
       ) : filteredProducts.length === 0 ? (
         <div className={styles.galleryEmpty}>
           {products.length === 0 ? (
-            <p>Nenhum produto por aqui ainda. Use Adicionar produto para começar seu catálogo.</p>
+            <p>
+              Nenhum produto por aqui ainda. Use Adicionar produto para começar
+              seu catálogo.
+            </p>
           ) : (
             <>
               <p>Nada encontrado para esta busca ou filtro.</p>
               <button
                 className={styles.secondaryButton}
-                onClick={() => { setQuery(""); setFilter("all"); }}
+                onClick={() => {
+                  setQuery("");
+                  setFilter("all");
+                }}
                 type="button"
               >
                 Limpar busca e filtros
@@ -124,7 +152,14 @@ export function ProductList() {
       ) : (
         <ul aria-label="Produtos filtrados" className={styles.cards}>
           {filteredProducts.map((product) => {
-            const imageUrl = product.imageReferences.find((value) => /^(?:https?:\/\/|data:image\/[a-z0-9.+-]+;base64,)/i.test(value));
+            const firstImage = product.imageReferences[0];
+            const imageUrl =
+              firstImage &&
+              /^(?:https?:\/\/|data:image\/[a-z0-9.+-]+;base64,)/i.test(
+                firstImage,
+              )
+                ? firstImage
+                : null;
             return (
               <li className={styles.card} key={product.id}>
                 {imageUrl ? (
@@ -136,25 +171,39 @@ export function ProductList() {
                     unoptimized
                     width={320}
                   />
-              ) : (
-                <div aria-label={`Produto ${product.name} sem imagem cadastrada`} className={styles.imageFallback} role="img">
-                  Sem imagem
+                ) : (
+                  <div
+                    aria-label={`Produto ${product.name} sem imagem cadastrada`}
+                    className={styles.imageFallback}
+                    role="img"
+                  >
+                    Sem imagem
+                  </div>
+                )}
+                <div className={styles.cardBody}>
+                  <div className={styles.cardTopline}>
+                    <p className={styles.cardMeta}>
+                      {product.category || "Produto"}
+                    </p>
+                    <span
+                      className={
+                        product.active
+                          ? styles.statusActive
+                          : styles.statusArchived
+                      }
+                    >
+                      {product.active ? "Ativo" : "Arquivado"}
+                    </span>
+                  </div>
+                  <h3>{product.name}</h3>
                 </div>
-              )}
-              <div className={styles.cardBody}>
-                <div className={styles.cardTopline}>
-                  <p className={styles.cardMeta}>{product.category || "Produto"}</p>
-                  <span className={product.active ? styles.statusActive : styles.statusArchived}>
-                    {product.active ? "Ativo" : "Arquivado"}
-                  </span>
-                </div>
-                <h3>{product.name}</h3>
-                <p>{product.description}</p>
-              </div>
-              <Link className={styles.cardAction} href={`/products/${encodeURIComponent(product.id)}`}>
-                {product.active ? "Abrir produto" : "Consultar produto"}
-              </Link>
-            </li>
+                <Link
+                  className={styles.cardAction}
+                  href={`/products/${encodeURIComponent(product.id)}`}
+                >
+                  {product.active ? "Abrir produto" : "Consultar produto"}
+                </Link>
+              </li>
             );
           })}
         </ul>

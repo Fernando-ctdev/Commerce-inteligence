@@ -8,7 +8,6 @@ import { prisma } from "../db";
 
 export type ManualProductInput = Record<string, unknown>;
 
-
 export class ProductValidationError extends Error {
   readonly fieldErrors: Record<string, string>;
   readonly code: string;
@@ -44,11 +43,16 @@ const FIELD_CODE_PRIORITY = [
   "priceCurrency",
   "features",
   "imageRefs",
+  "url",
   "constraints",
   "targetContentCount",
   "creatorPresence",
 ] as const;
-export const CREATOR_PRESENCE_OPTIONS = ["on_camera", "hands_only_product", "either"] as const;
+export const CREATOR_PRESENCE_OPTIONS = [
+  "on_camera",
+  "hands_only_product",
+  "either",
+] as const;
 export type CreatorPresence = (typeof CREATOR_PRESENCE_OPTIONS)[number];
 
 // Defaults e limites da SPEC (RI-002/RI-003).
@@ -63,7 +67,8 @@ const PRICE_PATTERN = /^(?:\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+\.\d{1,2})$/;
 // Imagens: refs http(s) ou data URL de imagem em base64 — o projeto não tem storage de arquivos.
 const IMAGE_REFS_MAX = 6;
 const IMAGE_DATA_MAX_BYTES = 2_000_000;
-const DATA_URL_PATTERN = /^data:image\/[a-z0-9.+-]+;base64,([A-Za-z0-9+/]+={0,2})$/;
+const DATA_URL_PATTERN =
+  /^data:image\/[a-z0-9.+-]+;base64,([A-Za-z0-9+/]+={0,2})$/;
 
 type Fail = (field: string, message: string, code: string) => void;
 
@@ -76,15 +81,25 @@ function dataUrlBytes(payload: string): number {
 function validateImageRefs(value: unknown, fail: Fail): string[] {
   if (value == null) return [];
   if (!Array.isArray(value)) {
-    fail("imageRefs", "Informe as imagens como lista de URLs ou data URLs de imagem.", "VAL-IMAGE-INVALID");
+    fail(
+      "imageRefs",
+      "Informe as imagens como lista de URLs ou data URLs de imagem.",
+      "VAL-IMAGE-INVALID",
+    );
     return [];
   }
   const items: unknown[] = value;
   if (items.some((item) => typeof item !== "string")) {
-    fail("imageRefs", "Informe as imagens como lista de URLs ou data URLs de imagem.", "VAL-IMAGE-INVALID");
+    fail(
+      "imageRefs",
+      "Informe as imagens como lista de URLs ou data URLs de imagem.",
+      "VAL-IMAGE-INVALID",
+    );
     return [];
   }
-  const refs = items.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean);
+  const refs = items
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
   if (refs.length > IMAGE_REFS_MAX) {
     fail("imageRefs", `Use até ${IMAGE_REFS_MAX} imagens.`, "VAL-IMAGE-LIMIT");
     return [];
@@ -93,16 +108,25 @@ function validateImageRefs(value: unknown, fail: Fail): string[] {
     const dataUrl = DATA_URL_PATTERN.exec(ref);
     if (dataUrl) {
       if (dataUrlBytes(dataUrl[1] ?? "") > IMAGE_DATA_MAX_BYTES) {
-        fail("imageRefs", "Cada imagem embutida deve ter até 2 MB.", "VAL-IMAGE-LIMIT");
+        fail(
+          "imageRefs",
+          "Cada imagem embutida deve ter até 2 MB.",
+          "VAL-IMAGE-LIMIT",
+        );
         return [];
       }
       continue;
     }
     try {
       const url = new URL(ref);
-      if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error(ref);
+      if (url.protocol !== "http:" && url.protocol !== "https:")
+        throw new Error(ref);
     } catch {
-      fail("imageRefs", "Use URLs http(s) ou data URL de imagem (base64).", "VAL-IMAGE-INVALID");
+      fail(
+        "imageRefs",
+        "Use URLs http(s) ou data URL de imagem (base64).",
+        "VAL-IMAGE-INVALID",
+      );
       return [];
     }
   }
@@ -164,7 +188,26 @@ type ValidatedFacts = {
 type ValidatedManualProduct = ValidatedFacts & {
   targetContentCount: number;
   generationConstraints: Prisma.InputJsonValue;
+  submittedUrl: string | null;
 };
+
+function validateOptionalUrl(value: unknown, fail: Fail): string | null {
+  const submittedUrl = asTrimmedString(value);
+  if (!submittedUrl) return null;
+  try {
+    const parsed = new URL(submittedUrl);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+      throw new Error(submittedUrl);
+    return submittedUrl;
+  } catch {
+    fail(
+      "url",
+      "Informe uma URL http(s) válida ou deixe vazia.",
+      "VAL-URL-INVALID",
+    );
+    return null;
+  }
+}
 
 /** Fatos compartilhados entre POST e PATCH: mesmas obrigatoriedades e códigos. */
 function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
@@ -198,37 +241,71 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
 
   // Preço e Moeda são obrigatórios e informados em par (RI-002); preço não negativo, até 2 casas.
   const price = asTrimmedString(input.price) ?? "";
-  const priceCurrency = (asTrimmedString(input.priceCurrency) ?? "").toUpperCase();
+  const priceCurrency = (
+    asTrimmedString(input.priceCurrency) ?? ""
+  ).toUpperCase();
   if (!price) {
     fail("price", "Informe o preço do produto.", "VAL-PRICE-REQUIRED");
   } else if (!PRICE_PATTERN.test(price)) {
-    fail("price", "Informe um preço válido e não negativo, com até duas casas decimais, como 29,90.", "VAL-PRICE-FORMAT");
+    fail(
+      "price",
+      "Informe um preço válido e não negativo, com até duas casas decimais, como 29,90.",
+      "VAL-PRICE-FORMAT",
+    );
   }
   if (!priceCurrency) {
-    fail("priceCurrency", "Informe a moeda do produto.", "VAL-CURRENCY-REQUIRED");
+    fail(
+      "priceCurrency",
+      "Informe a moeda do produto.",
+      "VAL-CURRENCY-REQUIRED",
+    );
   } else if (!CURRENCIES.includes(priceCurrency)) {
-    fail("priceCurrency", "Moeda não suportada. Use BRL, USD ou EUR.", "VAL-PRICE-FORMAT");
+    fail(
+      "priceCurrency",
+      "Moeda não suportada. Use BRL, USD ou EUR.",
+      "VAL-PRICE-FORMAT",
+    );
   }
 
   // Características: uma por linha no formulário; aqui chegam como lista de strings não vazias.
   const rawFeatures = input.features;
   let features: string[] = [];
   if (rawFeatures == null) {
-    fail("features", "Informe ao menos uma característica do produto.", "VAL-FEATURES-REQUIRED");
+    fail(
+      "features",
+      "Informe ao menos uma característica do produto.",
+      "VAL-FEATURES-REQUIRED",
+    );
   } else if (Array.isArray(rawFeatures)) {
     features = rawFeatures
       .filter((item): item is string => typeof item === "string")
       .map((item) => item.trim())
       .filter(Boolean);
     if (features.length === 0) {
-      fail("features", "Informe ao menos uma característica do produto.", "VAL-FEATURES-REQUIRED");
+      fail(
+        "features",
+        "Informe ao menos uma característica do produto.",
+        "VAL-FEATURES-REQUIRED",
+      );
     } else if (features.length > FEATURES_MAX_ITEMS) {
-      fail("features", `Use até ${FEATURES_MAX_ITEMS} características.`, "VAL-FEATURES-INVALID");
+      fail(
+        "features",
+        `Use até ${FEATURES_MAX_ITEMS} características.`,
+        "VAL-FEATURES-INVALID",
+      );
     } else if (features.some((item) => item.length > FEATURE_MAX_LENGTH)) {
-      fail("features", `Cada característica deve ter até ${FEATURE_MAX_LENGTH} caracteres.`, "VAL-FEATURES-INVALID");
+      fail(
+        "features",
+        `Cada característica deve ter até ${FEATURE_MAX_LENGTH} caracteres.`,
+        "VAL-FEATURES-INVALID",
+      );
     }
   } else {
-    fail("features", "Informe as características como lista de textos.", "VAL-FEATURES-INVALID");
+    fail(
+      "features",
+      "Informe as características como lista de textos.",
+      "VAL-FEATURES-INVALID",
+    );
   }
 
   const imageRefs = validateImageRefs(input.imageRefs, fail);
@@ -244,15 +321,22 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
   };
 }
 
-function throwIfErrors(errors: Record<string, string>, codes: Record<string, string>): void {
+function throwIfErrors(
+  errors: Record<string, string>,
+  codes: Record<string, string>,
+): void {
   if (Object.keys(errors).length > 0) {
-    const code = FIELD_CODE_PRIORITY.map((field) => codes[field]).find(Boolean) ?? "VAL-PRODUCT-INVALID";
+    const code =
+      FIELD_CODE_PRIORITY.map((field) => codes[field]).find(Boolean) ??
+      "VAL-PRODUCT-INVALID";
     throw new ProductValidationError(errors, code);
   }
 }
 
 /** Valida e normaliza o corpo do POST (fatos + preparação). Erros ficam em ProductValidationError. */
-export function validateManualProductInput(input: ManualProductInput): ValidatedManualProduct {
+export function validateManualProductInput(
+  input: ManualProductInput,
+): ValidatedManualProduct {
   const errors: Record<string, string> = {};
   const codes: Record<string, string> = {};
   // Primeira falha de cada campo vence — mensagem e código ficam sempre em par.
@@ -263,13 +347,23 @@ export function validateManualProductInput(input: ManualProductInput): Validated
   };
 
   const facts = validateFacts(input, fail);
+  const submittedUrl = validateOptionalUrl(input.url, fail);
 
   // Preparação (RI-003): defaults 20 / "either" quando omitidos (PLAN §4.2).
   const rawCount = input.targetContentCount;
   let targetContentCount = DEFAULT_TARGET_CONTENT_COUNT;
   if (rawCount != null) {
-    if (typeof rawCount !== "number" || !Number.isInteger(rawCount) || rawCount < QUANTITY_MIN || rawCount > QUANTITY_MAX) {
-      fail("targetContentCount", `A quantidade inicial deve ser um inteiro entre ${QUANTITY_MIN} e ${QUANTITY_MAX}.`, "VAL-QUANTITY-RANGE");
+    if (
+      typeof rawCount !== "number" ||
+      !Number.isInteger(rawCount) ||
+      rawCount < QUANTITY_MIN ||
+      rawCount > QUANTITY_MAX
+    ) {
+      fail(
+        "targetContentCount",
+        `A quantidade inicial deve ser um inteiro entre ${QUANTITY_MIN} e ${QUANTITY_MAX}.`,
+        "VAL-QUANTITY-RANGE",
+      );
     } else {
       targetContentCount = rawCount;
     }
@@ -278,34 +372,48 @@ export function validateManualProductInput(input: ManualProductInput): Validated
   const rawPresence = input.creatorPresence;
   let creatorPresence: CreatorPresence = DEFAULT_CREATOR_PRESENCE;
   if (rawPresence != null) {
-    if (typeof rawPresence === "string" && (CREATOR_PRESENCE_OPTIONS as readonly string[]).includes(rawPresence)) {
+    if (
+      typeof rawPresence === "string" &&
+      (CREATOR_PRESENCE_OPTIONS as readonly string[]).includes(rawPresence)
+    ) {
       creatorPresence = rawPresence as CreatorPresence;
     } else {
-      fail("creatorPresence", "Formato do creator inválido.", "VAL-CREATOR-FORMAT");
+      fail(
+        "creatorPresence",
+        "Formato do creator inválido.",
+        "VAL-CREATOR-FORMAT",
+      );
     }
   }
 
-  // Observações/restrições obrigatórias, não vazias após trim e até 300 caracteres (RI-001/RI-003).
+  // Observações/restrições são opcionais e limitadas a 300 caracteres.
   const constraints = asTrimmedString(input.constraints) ?? "";
-  if (!constraints) {
-    fail("constraints", "Informe as observações ou restrições da primeira geração.", "VAL-NOTES-REQUIRED");
-  } else if (constraints.length > NOTES_MAX) {
-    fail("constraints", `As observações devem ter até ${NOTES_MAX} caracteres.`, "VAL-NOTES-LENGTH");
+  if (constraints.length > NOTES_MAX) {
+    fail(
+      "constraints",
+      `As observações devem ter até ${NOTES_MAX} caracteres.`,
+      "VAL-NOTES-LENGTH",
+    );
   }
 
   throwIfErrors(errors, codes);
 
   // Restrições guardam somente a preparação da primeira geração (RI-004) — sempre com creatorPresence e constraints.
-  const generationConstraints: Prisma.InputJsonValue = { creatorPresence, constraints };
+  const generationConstraints: Prisma.InputJsonValue = {
+    creatorPresence,
+    constraints,
+  };
 
-  return { ...facts, targetContentCount, generationConstraints };
+  return { ...facts, targetContentCount, generationConstraints, submittedUrl };
 }
 
 /**
  * Valida somente os fatos editáveis do PATCH: mesmo contrato do POST, sem a
  * preparação da primeira geração — não editável e ignorada se enviada.
  */
-export function validateProductFacts(input: ManualProductInput): ValidatedFacts & { submittedUrl: string | null } {
+export function validateProductFacts(
+  input: ManualProductInput,
+): ValidatedFacts & { submittedUrl: string | null } {
   const errors: Record<string, string> = {};
   const codes: Record<string, string> = {};
   const fail: Fail = (field, message, code) => {
@@ -317,28 +425,29 @@ export function validateProductFacts(input: ManualProductInput): ValidatedFacts 
   const facts = validateFacts(input, fail);
 
   // URL opcional: vazia limpa; presente precisa ser http(s).
-  const submittedUrl = asTrimmedString(input.url);
-  if (submittedUrl) {
-    try {
-      const parsed = new URL(submittedUrl);
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error(submittedUrl);
-    } catch {
-      fail("url", "Informe uma URL http(s) válida ou deixe vazia.", "VAL-URL-INVALID");
-    }
-  }
+  const submittedUrl = validateOptionalUrl(input.url, fail);
 
   throwIfErrors(errors, codes);
-  return { ...facts, submittedUrl: submittedUrl ?? null };
+  return { ...facts, submittedUrl };
 }
 
 export type ManualProductResult = { product: Product; replay: boolean };
 
 /** Cria o Product no Tenant resolvido; chave já usada no Tenant devolve o mesmo registro (replay). */
-export async function createManualProduct(tenantId: string, input: ManualProductInput, idempotencyKey: string): Promise<ManualProductResult> {
+export async function createManualProduct(
+  tenantId: string,
+  input: ManualProductInput,
+  idempotencyKey: string,
+): Promise<ManualProductResult> {
   const data = validateManualProductInput(input);
 
   const existing = await prisma.product.findUnique({
-    where: { tenantId_createIdempotencyKey: { tenantId, createIdempotencyKey: idempotencyKey } },
+    where: {
+      tenantId_createIdempotencyKey: {
+        tenantId,
+        createIdempotencyKey: idempotencyKey,
+      },
+    },
   });
   if (existing) return { product: existing, replay: true };
 
@@ -353,6 +462,7 @@ export async function createManualProduct(tenantId: string, input: ManualProduct
         priceCurrency: data.priceCurrency,
         features: data.features,
         images: data.imageRefs,
+        submittedUrl: data.submittedUrl,
         provenance: { origin: "manual" },
         targetContentCount: data.targetContentCount,
         generationConstraints: data.generationConstraints,
@@ -362,9 +472,17 @@ export async function createManualProduct(tenantId: string, input: ManualProduct
     return { product, replay: false };
   } catch (error) {
     // Corrida entre retries concorrentes: o índice único decide — o vencedor retorna replay.
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
       const product = await prisma.product.findUnique({
-        where: { tenantId_createIdempotencyKey: { tenantId, createIdempotencyKey: idempotencyKey } },
+        where: {
+          tenantId_createIdempotencyKey: {
+            tenantId,
+            createIdempotencyKey: idempotencyKey,
+          },
+        },
       });
       if (product) return { product, replay: true };
     }
@@ -380,7 +498,10 @@ export async function listTenantProducts(tenantId: string): Promise<Product[]> {
   });
 }
 
-export async function getTenantProduct(tenantId: string, id: string): Promise<Product | null> {
+export async function getTenantProduct(
+  tenantId: string,
+  id: string,
+): Promise<Product | null> {
   // Sem id não há Product: evita que findFirst ignore o filtro e vaze outro registro.
   if (!id) return null;
   return prisma.product.findFirst({ where: { id, tenantId } });
@@ -388,7 +509,7 @@ export async function getTenantProduct(tenantId: string, id: string): Promise<Pr
 
 /**
  * Substitui os fatos editáveis do Product no Tenant da sessão, com controle
- * otimista de versão. Preparação (generationConstraints) não é editável aqui.
+ * otimista de versão. Preparação não é editável aqui.
  */
 export async function updateTenantProduct(
   tenantId: string,
@@ -414,7 +535,10 @@ export async function updateTenantProduct(
       },
     });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
       // Sem correspondência: inexistente/fora do tenant (404) ou versão desatualizada (409).
       const existing = await getTenantProduct(tenantId, id);
       if (!existing) throw new ProductNotFoundError();
@@ -424,7 +548,62 @@ export async function updateTenantProduct(
   }
 }
 
-export async function deleteTenantProduct(tenantId: string, id: string): Promise<boolean> {
+/**
+ * Transição de lifecycle do Product no Tenant da sessão, sem apagar dados
+ * (PRD: ACTIVE/ARCHIVED). Idempotente: 200 só retorna com o Product no estado
+ * alvo — já no estado dá replay sem mudar nada; corrida com PATCH/DELETE
+ * reavalia o estado relido (replay, retry ou 404) em vez de confiar na leitura
+ * antiga. Versão bumpa apenas na transição real, mantendo o optimistic locking.
+ */
+async function transitionTenantProduct(
+  tenantId: string,
+  id: string,
+  target: "ACTIVE" | "ARCHIVED",
+): Promise<Product> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const existing = await getTenantProduct(tenantId, id);
+    if (!existing) throw new ProductNotFoundError();
+    if (existing.lifecycle === target) return existing;
+    try {
+      return await prisma.product.update({
+        // Versão no where: editor concorrente com expectedVersion desatualizado recebe 409.
+        where: { id, tenantId, version: existing.version },
+        data: { lifecycle: target, version: { increment: 1 } },
+      });
+    } catch (error) {
+      // P2025: a versão mudou no meio (PATCH/transição concorrente) ou a linha sumiu.
+      // A releitura do próximo loop decide: alvo → replay, outro → retry, sem linha → 404.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2025"
+      )
+        continue;
+      throw error;
+    }
+  }
+  // Disputa persistente com outros escritores: conflito explícito, não erro interno.
+  throw new ProductVersionConflictError();
+}
+
+export function archiveTenantProduct(
+  tenantId: string,
+  id: string,
+): Promise<Product> {
+  return transitionTenantProduct(tenantId, id, "ARCHIVED");
+}
+
+/** Desarquivar/reativar: volta o Product para ACTIVE, idempotente como archive. */
+export function reactivateTenantProduct(
+  tenantId: string,
+  id: string,
+): Promise<Product> {
+  return transitionTenantProduct(tenantId, id, "ACTIVE");
+}
+
+export async function deleteTenantProduct(
+  tenantId: string,
+  id: string,
+): Promise<boolean> {
   const result = await prisma.product.deleteMany({ where: { id, tenantId } });
   return result.count === 1;
 }

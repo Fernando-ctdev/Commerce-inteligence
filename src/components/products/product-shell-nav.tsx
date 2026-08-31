@@ -1,8 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarDays, Clapperboard, Flame, Home, Settings2, Sparkles, Tag } from "lucide-react";
-import { useState } from "react";
+import {
+  CalendarDays,
+  Clapperboard,
+  Flame,
+  Home,
+  Settings2,
+  Sparkles,
+  Tag,
+} from "lucide-react";
+import { useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import {
   SidebarMenu,
@@ -36,8 +44,18 @@ const destinations: {
   // Placeholders futuros: sem href/rota/store — inertes por decisão de escopo.
   { key: "ai-influencer", label: "IA Influencer", icon: Sparkles },
   { key: "virais", label: "Virais", icon: Flame },
-  { key: "settings", label: "Configurações", href: "/settings", icon: Settings2 },
+  {
+    key: "settings",
+    label: "Configurações",
+    href: "/settings",
+    icon: Settings2,
+  },
 ];
+
+const subscribeToSidebarState = () => () => {};
+const getServerSidebarState = () => true;
+const getSidebarState = () =>
+  document.documentElement.dataset.sidebarState !== "false";
 
 /**
  * Adaptado do Sidebar shadcn: o breakpoint define o estado inicial
@@ -47,17 +65,21 @@ const destinations: {
 export function ShellRoot({
   sidebar,
   children,
-  initialOpen = true,
 }: {
   sidebar: ReactNode;
   children: ReactNode;
-  initialOpen?: boolean;
 }) {
-  const [openOverride, setOpenOverride] = useState<boolean>(initialOpen);
+  const persistedOpen = useSyncExternalStore(
+    subscribeToSidebarState,
+    getSidebarState,
+    getServerSidebarState,
+  );
+  const [openOverride, setOpenOverride] = useState<boolean | null>(null);
+  const open = openOverride ?? persistedOpen;
 
   return (
     <SidebarProvider
-      open={openOverride}
+      open={open}
       onOpenChange={(nextOpen) => {
         document.documentElement.dataset.sidebarState = String(nextOpen);
         setOpenOverride(nextOpen);

@@ -9,7 +9,6 @@ export default async function SettingsPage() {
   return (
     <ProductShell
       active="settings"
-      eyebrow="Configurações"
       title="Sua conta"
       user={{ email: session.email }}
     >
