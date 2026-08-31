@@ -113,7 +113,6 @@ type ImageSource = "links" | "files";
 type FormStep = "facts" | "preparation";
 type UploadedImage = { name: string; reference: string };
 
-
 function imageReferenceLines(value: string) {
   return value
     .split(/\r?\n/)
@@ -678,7 +677,8 @@ export function ProductCreateForm({
         return false;
       }
     });
-  const previewImage = selectedImage ?? firstPreviewLink ?? uploadedImages[0] ?? null;
+  const previewImage =
+    selectedImage ?? firstPreviewLink ?? uploadedImages[0] ?? null;
 
   return (
     <form
@@ -767,7 +767,7 @@ export function ProductCreateForm({
             label="Características do produto"
             multiline
             onChange={(value) => update("characteristics", value)}
-            placeholder="Uma por linha. Ex.: Recarregável por USB-C"
+            placeholder="Ex.: Recarregável por USB-C..."
             required
             value={draft.characteristics}
           />
@@ -1065,7 +1065,6 @@ export function ProductCreateForm({
             maxLength={300}
             multiline
             onChange={setNotes}
-            placeholder="Ex.: Sem gírias; mencionar a garantia de 12 meses."
             showCounter
             value={notes}
           />
@@ -1075,6 +1074,7 @@ export function ProductCreateForm({
       <div className={styles.submitBar}>
         {!isEdit && formStep === "facts" && (
           <Button onClick={continueToPreparation} type="button">
+            placeholder="Ex.: Sem gírias; mencionar a garantia de 12 meses."
             Continuar
           </Button>
         )}
