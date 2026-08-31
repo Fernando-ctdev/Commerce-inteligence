@@ -201,8 +201,12 @@ revisar
 A recorrência busca novas oportunidades relevantes e reduz repetição sem reconstruir desnecessariamente toda a Strategy.
 
 ## Sequência completa dos slices
+**Status possíveis:** `Pendente` · `Em andamento` · `Done`
+
 
 ### Slice 001 — Workspace pessoal e primeiro acesso
+**Status:** `Done`
+
 
 **User Outcome:** O creator cria sua conta, entra em seu Workspace pessoal e encontra uma próxima ação clara para começar.
 
@@ -223,6 +227,8 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 ---
 
 ### Slice 002 — Cadastro manual de Product
+**Status:** `Done`
+
 
 **User Outcome:** O creator abre a subpágina `/products/new` dentro de Produtos, cadastra manualmente os fatos do Product com todos os campos obrigatórios, salva o registro escopado ao Tenant e vê seu card na lista de Produtos. As preferências da primeira geração ficam registradas como restrições, sem iniciar geração nesta etapa.
 
@@ -263,6 +269,8 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 ---
 
 ### Slice 003 — Primeira geração: CommerceIntelligenceJob até Briefings
+**Status:** `Pendente`
+
 
 **User Outcome:** Depois de confirmar o Produto, o creator recebe, sem etapas intermediárias, uma Strategy comercial e um conjunto consistente de Briefings em `DRAFT` prontos para revisão — podendo continuar usando a aplicação enquanto a análise trabalha.
 
@@ -290,6 +298,8 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 ---
 
 ### Slice 004 — Revisão e controle de Content
+**Status:** `Pendente`
+
 
 **User Outcome:** O creator compreende, edita, aprova ou descarta cada Briefing gerado, com versionamento rastreável.
 
@@ -312,6 +322,8 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 ---
 
 ### Slice 005 — Regeneração contextual de Content
+**Status:** `Pendente`
+
 
 **User Outcome:** O creator regenera uma parte ou a versão completa de um Content sem repetir todo o contexto e sem perder o histórico.
 
@@ -333,6 +345,8 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 ---
 
 ### Slice 006 — Lote de gravação e Agenda
+**Status:** `Pendente`
+
 
 **User Outcome:** O creator seleciona Contents aprovados, organiza um lote de gravação e escolhe quando pretende gravá-lo, visualizando tudo na Agenda.
 
@@ -355,6 +369,8 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 ---
 
 ### Slice 007 — Estúdio e execução contínua
+**Status:** `Pendente`
+
 
 **User Outcome:** Durante uma sessão real de gravação, o creator usa o Estúdio como guia, marca conteúdos concluídos e vê o lote avançar sem gestão manual de status.
 
@@ -378,6 +394,8 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 ---
 
 ### Slice 008 — Nova geração com memória e variedade
+**Status:** `Pendente`
+
 
 **User Outcome:** O creator solicita um novo conjunto de conteúdos para um Produto existente e recebe Briefings que priorizam lacunas estratégicas em vez de repetir o histórico.
 
@@ -400,6 +418,8 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 ---
 
 ### Slice 009 — Home operacional
+**Status:** `Pendente`
+
 
 **User Outcome:** O creator abre a Home e sabe imediatamente o que precisa produzir agora, com o caminho mais curto para a próxima ação.
 
@@ -420,6 +440,7 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 ---
 
 ### Slice 010 — Histórico do Produto
+**Status:** `Pendente`
 
 **User Outcome:** O creator consulta, dentro do Produto, a memória intelectual e operacional dos seus conteúdos e lotes.
 

@@ -1074,7 +1074,6 @@ export function ProductCreateForm({
       <div className={styles.submitBar}>
         {!isEdit && formStep === "facts" && (
           <Button onClick={continueToPreparation} type="button">
-            placeholder="Ex.: Sem gírias; mencionar a garantia de 12 meses."
             Continuar
           </Button>
         )}
