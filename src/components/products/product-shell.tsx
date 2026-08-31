@@ -1,6 +1,9 @@
 import { cookies } from "next/headers";
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import logo from "@/assets/logo/logo.png";
+import logoText from "@/assets/logo/logo_text.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Sidebar,
@@ -27,7 +30,9 @@ type ProductShellProps = {
 function userInitials(user: { name?: string | null; email: string }) {
   const source = (user.name ?? user.email).trim();
   const parts = source.split(/[\s@._-]+/).filter(Boolean);
-  return (parts[0]?.[0] ?? source[0] ?? "?").concat(parts[1]?.[0] ?? "").toUpperCase();
+  return (parts[0]?.[0] ?? source[0] ?? "?")
+    .concat(parts[1]?.[0] ?? "")
+    .toUpperCase();
 }
 
 export async function ProductShell({
@@ -43,14 +48,14 @@ export async function ProductShell({
   const sidebar = (
     <Sidebar collapsible="icon" side="left">
       <SidebarHeader className={styles.sidebarHeader}>
-        <Link className={styles.brand} href="/today">
-          <span aria-hidden="true" className={styles.brandMark}>
-            CI
-          </span>
-          <span className={styles.brandName}>
-            <span>Commerce</span>
-            <span>Intelligence</span>
-          </span>
+        <Link aria-label="Viewefy" className={styles.brand} href="/today">
+          <Image alt="" className={styles.brandLogo} src={logo} />
+          <Image
+            alt=""
+            className={styles.brandLogoText}
+            priority
+            src={logoText}
+          />
         </Link>
       </SidebarHeader>
       <SidebarContent className={styles.sidebarContent}>
@@ -64,7 +69,9 @@ export async function ProductShell({
             </Avatar>
             <div className={styles.userInfo}>
               <span className={styles.userName}>{user.name ?? user.email}</span>
-              {user.name && <span className={styles.userEmail}>{user.email}</span>}
+              {user.name && (
+                <span className={styles.userEmail}>{user.email}</span>
+              )}
             </div>
           </div>
         </SidebarFooter>
@@ -85,7 +92,10 @@ export async function ProductShell({
         </header>
 
         <header className={styles.mobileHeader}>
-          <SidebarTrigger aria-label="Abrir navegação" className={styles.mobileTrigger} />
+          <SidebarTrigger
+            aria-label="Abrir navegação"
+            className={styles.mobileTrigger}
+          />
           <div className={styles.titleGroup}>
             <p className={styles.eyebrow}>{eyebrow}</p>
             <h1 className={styles.title}>{title}</h1>

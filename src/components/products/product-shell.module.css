@@ -51,32 +51,24 @@
   align-items: center;
   color: var(--color-text);
   display: flex;
-  gap: 10px;
   margin: 0 8px 36px;
   min-height: 44px;
   text-decoration: none;
 }
 
-.brandMark {
-  align-items: center;
-  background: var(--color-brand);
-  border-radius: 8px;
-  color: #fff;
-  display: inline-flex;
-  flex: 0 0 38px;
-  font-size: 16px;
-  font-weight: 700;
+.brandLogo {
+  display: none;
   height: 38px;
-  justify-content: center;
-  letter-spacing: -0.05em;
+  object-fit: contain;
+  width: 38px;
 }
 
-.brandName {
-  display: grid;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 17px;
+.brandLogoText {
+  display: block;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+  width: 168px;
 }
 
 .navMenu {
@@ -185,7 +177,7 @@
    (ShellRoot colapsa a Sidebar via matchMedia). */
 
 :global([data-slot="sidebar"][data-collapsible="icon"]) .sidebarHeader {
-  padding-inline: 17px;
+  padding-inline: 2px;
 }
 
 :global([data-slot="sidebar"][data-collapsible="icon"]) .sidebarContent {
@@ -197,7 +189,14 @@
   margin-inline: 0;
 }
 
-:global([data-slot="sidebar"][data-collapsible="icon"]) .brandName {
+:global([data-slot="sidebar"][data-collapsible="icon"]) .brandLogo {
+  display: block;
+  height: 68px;
+  max-width: none;
+  width: 68px;
+}
+
+:global([data-slot="sidebar"][data-collapsible="icon"]) .brandLogoText {
   display: none;
 }
 

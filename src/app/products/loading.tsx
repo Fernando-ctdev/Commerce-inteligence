@@ -10,7 +10,6 @@ export default function ProductsLoading() {
       <div className={listStyles.list}>
         <div className={listStyles.listIntro}>
           <div>
-            <p className={listStyles.eyebrow}>Seu catálogo de trabalho</p>
             <h2>Produtos</h2>
             <p className={listStyles.listHint}>Encontre um produto e continue pelo próximo passo.</p>
           </div>

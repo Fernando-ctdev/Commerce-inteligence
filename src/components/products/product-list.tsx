@@ -50,7 +50,6 @@ export function ProductList() {
     <div className={styles.list}>
       <div className={styles.listIntro}>
         <div>
-          <p className={styles.eyebrow}>Seu catálogo de trabalho</p>
           <h2>Produtos</h2>
           <p className={styles.listHint}>Encontre um produto e continue pelo próximo passo.</p>
         </div>
