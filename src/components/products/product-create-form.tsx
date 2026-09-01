@@ -718,6 +718,9 @@ export function ProductCreateForm({
             <h2 id="new-product-facts-title">
               Informe os dados que você conhece
             </h2>
+            <p className={styles.sectionDescription}>
+              Essas informações ajudam a inteligência do sistema a criar a melhor estratégia de conteúdo.
+            </p>
           </div>
           <TextField
             error={combinedErrors.name}
