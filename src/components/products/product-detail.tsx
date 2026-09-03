@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SectionSwitcher, SectionSwitcherContent, SectionSwitcherList, SectionSwitcherTrigger } from "@/components/ui/section-switcher";
 
 import {
   archiveProduct,
@@ -227,19 +227,20 @@ export function ProductDetail({ id }: { id: string }) {
         title="Reativar produto?"
       />
       {product.active ? (
-        <Tabs
+        <SectionSwitcher
           className={styles.tabs}
           onValueChange={changeTab}
           value={tab}
         >
-          <TabsList className={styles.tabsList} variant="line">
-            <TabsTrigger value="overview">Visão geral</TabsTrigger>
-            <TabsTrigger value="strategy">Estratégia</TabsTrigger>
-            <TabsTrigger value="contents">Conteúdos</TabsTrigger>
-            <TabsTrigger value="history">Histórico</TabsTrigger>
-          </TabsList>
-          <TabsContent value="overview">
+          <SectionSwitcherList className={styles.tabsList}>
+            <SectionSwitcherTrigger value="overview">Visão geral</SectionSwitcherTrigger>
+            <SectionSwitcherTrigger value="strategy">Estratégia</SectionSwitcherTrigger>
+            <SectionSwitcherTrigger value="contents">Conteúdos</SectionSwitcherTrigger>
+            <SectionSwitcherTrigger value="history">Histórico</SectionSwitcherTrigger>
+          </SectionSwitcherList>
+          <SectionSwitcherContent className={styles.overviewContent} value="overview">
             <GenerationStatusCard
+              className={styles.nextActionCard}
               generationAction={product.generationAction}
               onOpenContents={() => changeTab("contents")}
               productName={product.name}
@@ -247,25 +248,27 @@ export function ProductDetail({ id }: { id: string }) {
               state={generation}
               targetContentCount={product.targetContentCount}
             />
-            <ProductCreateForm
-              mode="edit"
-              onSaved={setProduct}
-              product={product}
-            />
-          </TabsContent>
-          <TabsContent value="strategy">
+            <div className={styles.editSection}>
+              <ProductCreateForm
+                mode="edit"
+                onSaved={setProduct}
+                product={product}
+              />
+            </div>
+          </SectionSwitcherContent>
+          <SectionSwitcherContent value="strategy">
             <StrategyView job={generation.job} />
-          </TabsContent>
-          <TabsContent value="contents">
+          </SectionSwitcherContent>
+          <SectionSwitcherContent value="contents">
             <ContentsView
               active={generation.active}
               job={generation.job}
             />
-          </TabsContent>
-          <TabsContent value="history">
+          </SectionSwitcherContent>
+          <SectionSwitcherContent value="history">
             <HistoryView job={generation.job} />
-          </TabsContent>
-        </Tabs>
+          </SectionSwitcherContent>
+        </SectionSwitcher>
       ) : (
         <ProductCreateForm
           mode="edit"

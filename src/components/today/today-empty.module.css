@@ -1,8 +1,10 @@
 .empty {
+  border-inline-start: 3px solid var(--color-intelligence);
   display: grid;
-  gap: 20px;
+  gap: 24px;
   margin: 0 auto;
-  max-width: 560px;
+  max-width: 640px;
+  padding-inline-start: 24px;
 }
 
 .eyebrow {
@@ -30,6 +32,11 @@
 
 
 @media (max-width: 767px) {
+  .empty {
+    gap: 20px;
+    padding-inline-start: 16px;
+  }
+
   .empty h2 {
     font-size: 24px;
     line-height: 30px;

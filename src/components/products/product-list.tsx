@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SectionSwitcher, SectionSwitcherList, SectionSwitcherTrigger } from "@/components/ui/section-switcher";
 
 import { listProducts, ProductApiError, ProductRecord } from "./product-api";
 import styles from "./product-list.module.css";
@@ -81,18 +81,18 @@ export function ProductList() {
           type="search"
           value={query}
         />
-        <Tabs
+        <SectionSwitcher
           aria-label="Filtrar produtos"
           onValueChange={(value) => setFilter(value as typeof filter)}
           value={filter}
         >
-          <TabsList className={styles.filters} variant="line">
-            <TabsTrigger value="all">Todos</TabsTrigger>
-            <TabsTrigger value="active">Ativos</TabsTrigger>
-            <TabsTrigger value="pending">Pendentes</TabsTrigger>
-            <TabsTrigger value="archived">Arquivados</TabsTrigger>
-          </TabsList>
-        </Tabs>
+          <SectionSwitcherList className={styles.filters}>
+            <SectionSwitcherTrigger value="all">Todos</SectionSwitcherTrigger>
+            <SectionSwitcherTrigger value="active">Ativos</SectionSwitcherTrigger>
+            <SectionSwitcherTrigger value="pending">Pendentes</SectionSwitcherTrigger>
+            <SectionSwitcherTrigger value="archived">Arquivados</SectionSwitcherTrigger>
+          </SectionSwitcherList>
+        </SectionSwitcher>
       </div>
       {loading ? (
         <ul aria-hidden="true" className={styles.cards}>

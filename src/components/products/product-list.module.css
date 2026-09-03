@@ -1,8 +1,8 @@
 .list {
   display: grid;
-  gap: 24px;
+  gap: 20px;
   margin: 0 auto;
-  max-width: 1080px;
+  max-width: 960px;
   min-width: 0;
   width: 100%;
 }
@@ -326,13 +326,13 @@
     width: 100%;
   }
   .filters {
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
   }
 
   .filters [data-slot="tabs-trigger"] {
-    flex: 0 0 auto;
+    min-width: 0;
   }
 
   .cards {

@@ -4,12 +4,13 @@
 
 .section {
   display: grid;
-  gap: 12px;
-  padding-block: 24px;
+  gap: 16px;
+  padding-block: 28px;
 }
 
 .section + .section {
   border-block-start: 1px solid var(--color-border);
+  padding-block-start: 32px;
 }
 
 .eyebrow {
