@@ -52,3 +52,20 @@ Bloqueio de escopo: sem fixture/hash/limiares **aprovados**, qualquer runner que
 - archive/reactivate: `{ id, version }`; UI refaz GET autenticado pós-commit (consumo frontend já em `e9d9596`).
 - POST `/api/generations` inalterado e autoritativo (CSRF, escopo, transação, reserva, revalidação).
 - Validações: `service.test.ts` 26/26 (3 cenários ADR-016: AVAILABLE/omissão archive, GEN-ACTIVE sem vazamento, GEN-CAPACITY no limiar exato) · suíte completa 129/129 · typecheck/lint/build limpos.
+
+## 6. Diagnóstico 429 `GEN-PROVIDER` (OpenRouter) — evidências
+
+Fontes: `commerce_intelligence_jobs.metadata.internalError` (31 falhas GEN-PROVIDER em 2 dias), `intelligence_runs.metadata.capabilities` (46 chamadas em runs SUCCEEDED), janelas de execução de 29 jobs terminais de hoje. Nenhuma chave exposta; análise read-only.
+
+**Descartado:**
+- Concorrência interna: 0 pares de janelas [startedAt,finishedAt] sobrepostas (worker serial, 1 job/processo, nenhum segundo worker via lease).
+- Retry agressivo: provider faz 1 única tentativa (sem retry/backoff próprio); 100% dos 429 morrem com `attempt=1` em FAILED terminal — não há amplificação por retry; backoff (`2^attempt`, cap 5 min) só existe no reclaim de lease, que não cobre erro de provider.
+- Payload: requestBytes 1,3–12 KB (avg 6,4 KB); 429s ocorrem em `PRODUCT_UNDERSTANDING`, a menor projection do pipeline.
+
+**Causa determinada: rate limit no nível da conta/chave OpenRouter sobre o modelo dominante (`openai/gpt-5.6-luna`, único usado — MID=HIGH no env; LOW `deepseek-v4-flash` não é referenciado por nenhuma tarefa).** Evidências: (a) rajada 18:32:46–18:35:54Z com 11× 429 em 9 tenants distintos, todos na primeira chamada do Job, cadência 5–15 s (ritmo interno ~5–12 req/min — baixo; o que pesa é o volume acumulado do lote de QA: 21 Jobs de 15 tenants em ~40 min); (b) recuperação espontânea sem mudança de código — 18:52:33Z o mesmo tenant `d36256b2` completou run SUCCEEDED com 6× 200 no mesmo modelo, 3 min após o último 429; (c) intermitente há 2 dias (429s em 09-02 21:02–09-03 02:13 BRT), sempre em janelas de uso intenso; (d) `rate=null` em 100% dos 429s persistidos — nenhum dos 4 headers da allowlist (`retry-after`, `x-ratelimit-*`) veio na resposta, impedindo distinguir RPM vs créditos e impedindo espera correta.
+
+**Correção mínima proposta (implementar após aprovação):**
+1. `provider.ts`: retry curto só para 429/503 — até 2 tentativas com `retry-after` (ou backoff exponencial + jitter, 2s/8s) dentro do orçamento de timeout; demais status permanecem falha imediata.
+2. `worker.ts`: em `GEN-PROVIDER` com `providerStatus=429`, reenfileirar (`QUEUED` + `nextAttemptAt = now + retry-after|backoff`) em vez de FAILED terminal — hoje 1× 429 mata o Job e o usuário só tem "Tentar novamente".
+3. Telemetria: incluir `model` no detail do erro e estender a allowlist com headers OpenRouter (`x-ratelimit-remaining-requests`, `x-ratelimit-reset-requests`) para atribuir por modelo e distinguir RPM vs crédito na próxima ocorrência.
+4. Ops: espaçar lotes de QA (a rajada veio de criação em lote) e verificar plano/créditos do modelo no OpenRouter.
