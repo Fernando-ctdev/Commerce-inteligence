@@ -103,15 +103,18 @@ export function ShellNav({ active }: { active: DestinationKey }) {
           );
 
           if (!destination.href) {
+            const unavailableId = `${destination.key}-unavailable`;
             return (
               <SidebarMenuItem key={destination.label}>
                 <SidebarMenuButton
+                  aria-describedby={unavailableId}
                   aria-disabled="true"
                   className={buttonClassName}
                   render={<span />}
-                  title={destination.label}
+                  title={`${destination.label} indisponível nesta versão`}
                 >
                   {content}
+                  <span className={styles.navUnavailable} id={unavailableId}>Indisponível nesta versão</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );

@@ -45,9 +45,6 @@
 }
 
 .filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
   max-width: 100%;
   min-width: 0;
   width: 100%;
@@ -326,13 +323,7 @@
     width: 100%;
   }
   .filters {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
-  }
-
-  .filters [data-slot="tabs-trigger"] {
-    min-width: 0;
   }
 
   .cards {
