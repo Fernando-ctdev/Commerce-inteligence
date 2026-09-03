@@ -10,6 +10,7 @@ import {
   isActiveLimitError,
   isCapacityUnavailableError,
   isRetryableGeneration,
+  isToastDismissed,
   normalizeGenerationAction,
   stageMessage,
 } from "./generation-ui-model";
@@ -95,4 +96,14 @@ test("mapeia reason da projecao para a copy aprovada de bloqueio", () => {
     blockedActionCopy({ state: "BLOCKED", reason: "GEN-CAPACITY", nextAction: "WAIT_FOR_CAPACITY" }),
     CAPACITY_UNAVAILABLE_MESSAGE,
   );
+});
+
+test("dismiss do toast persiste por job/estado e reapresenta em mudanca", () => {
+  const jobQueued = { id: "job-1", status: "QUEUED" };
+  assert.equal(isToastDismissed("job-1:QUEUED", jobQueued), true);
+  assert.equal(isToastDismissed(null, jobQueued), false);
+  assert.equal(isToastDismissed("job-1:QUEUED", { id: "job-1", status: "RUNNING" }), false);
+  assert.equal(isToastDismissed("job-1:QUEUED", { id: "job-2", status: "QUEUED" }), false);
+  assert.equal(isToastDismissed("job-1:QUEUED", null), true);
+  assert.equal(isToastDismissed(null, null), true);
 });

@@ -77,3 +77,14 @@ export const BLOCKED_ACTIVE_MESSAGE =
   "Uma análise já está em andamento. Aguarde a conclusão para analisar este produto.";
 export const CAPACITY_UNAVAILABLE_MESSAGE =
   "Não há capacidade disponível para gerar esses conteúdos agora. Tente novamente quando houver capacidade.";
+
+/**
+ * Dismiss do GenerationToast persiste enquanto o Job e o estado forem os
+ * mesmos — inclusive entre páginas, na mesma árvore React. Job diferente,
+ * estado diferente ou Job ausente reapresenta legitimamente.
+ */
+export function isToastDismissed(dismissedSnapshot: string | null, job: { id: string; status: string } | null): boolean {
+  if (!job) return true;
+  if (!dismissedSnapshot) return false;
+  return dismissedSnapshot === `${job.id}:${job.status}`;
+}

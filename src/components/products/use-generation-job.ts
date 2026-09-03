@@ -143,14 +143,17 @@ export function useGenerationJob({ productId, readiness, onProjectionStale }: Us
     }
   }, [busy, job, onProjectionStale]);
 
-  const cancel = useCallback(async () => {
-    if (!job || busy) return;
+  /** true quando o cancelamento foi aceito pelo backend; false mantém o diálogo aberto. */
+  const cancel = useCallback(async (): Promise<boolean> => {
+    if (!job || busy) return false;
     setBusy(true);
     setError(null);
     try {
       setJob(await cancelGeneration(job.id));
+      return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Não foi possível cancelar a análise agora.");
+      return false;
     } finally {
       setBusy(false);
     }

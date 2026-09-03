@@ -25,8 +25,8 @@ export type GenerationState = {
   failed: boolean;
   blockedByOther: boolean;
   start: () => Promise<void>;
+  cancel: () => Promise<boolean>;
   retry: () => Promise<void>;
-  cancel: () => Promise<void>;
 };
 
 function text(value: unknown) { return typeof value === "string" ? value : ""; }
@@ -142,7 +142,10 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
       <ConfirmationDialog
         confirmLabel="Cancelar análise"
         description="A análise na fila será cancelada. Os dados do produto permanecem preservados e você pode tentar novamente depois."
-        onConfirm={() => void cancel()}
+        error={error}
+        onConfirm={async () => {
+          if (await cancel()) setCancelOpen(false);
+        }}
         onOpenChange={setCancelOpen}
         open={cancelOpen}
         pending={busy}

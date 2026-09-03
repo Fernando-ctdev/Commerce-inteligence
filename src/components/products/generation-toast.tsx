@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   createGenerationIdempotencyKey,
@@ -10,14 +9,13 @@ import {
   retryGeneration,
   type GenerationRecord,
 } from "./generation-api";
-import { stageMessage, statusMessage } from "./generation-ui-model";
+import { isToastDismissed, stageMessage, statusMessage } from "./generation-ui-model";
 import styles from "./generation-toast.module.css";
 
 export function GenerationToast() {
   const [job, setJob] = useState<GenerationRecord | null>(null);
   const [busy, setBusy] = useState(false);
-  const [dismissed, setDismissed] = useState<{ snapshot: string; path: string } | null>(null);
-  const pathname = usePathname();
+  const [dismissedSnapshot, setDismissedSnapshot] = useState<string | null>(null);
   const loadRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
@@ -42,7 +40,6 @@ export function GenerationToast() {
     };
   }, []);
 
-
   const retry = async () => {
     if (!job || busy) return;
     setBusy(true);
@@ -58,11 +55,10 @@ export function GenerationToast() {
     }
   };
 
-  const dismiss = () => setDismissed({ path: pathname, snapshot: `${job?.id ?? ""}:${job?.status ?? ""}` });
-  const dismissKey = job ? `${job.id}:${job.status}` : null;
-  const dismissedHere = dismissed !== null && dismissKey !== null && dismissed.snapshot === dismissKey && dismissed.path === pathname;
-
-  if (!job || dismissedHere) return null;
+  /* Dismiss persiste enquanto o Job/estado for o mesmo — inclusive entre
+     páginas (mesma árvore React). Job ou estado diferente reapresenta. */
+  const dismiss = () => setDismissedSnapshot(job ? `${job.id}:${job.status}` : null);
+  if (!job || isToastDismissed(dismissedSnapshot, job)) return null;
   const active = isActiveGeneration(job.status);
   const failed = job.status === "FAILED" || job.status === "CANCELLED";
   const href = `/products/${encodeURIComponent(job.productId)}#generated-contents`;
