@@ -7,11 +7,13 @@ import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import type { GenerationRecord } from "./generation-api";
 import {
   BLOCKED_ACTIVE_MESSAGE,
+  blockedActionCopy,
   canCancelGeneration,
   generationStatusLabel,
   stageMessage,
   statusLabels,
   statusMessage,
+  type GenerationActionProjection,
 } from "./generation-ui-model";
 import styles from "./generation-panel.module.css";
 
@@ -68,16 +70,22 @@ function EmptyRegion({ children }: { children: React.ReactNode }) {
 }
 
 /** Aba Visão geral: estado do job, ação primária, bloqueio preventivo e cancelamento (só QUEUED). */
-export function GenerationStatusCard({ productName, targetContentCount, readiness, state, onOpenContents }: {
+export function GenerationStatusCard({ productName, targetContentCount, readiness, state, generationAction, onOpenContents }: {
   productName: string;
   targetContentCount: number;
   readiness: GenerationRecord["readiness"];
   state: GenerationState;
+  generationAction?: GenerationActionProjection;
   onOpenContents: () => void;
 }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const { job, busy, error, active, failed, blockedByOther, start, retry, cancel } = state;
   const canCancel = !!job && canCancelGeneration(job.status);
+  /* ADR-016: com a projeção presente, ela é a única fonte do bloqueio preventivo;
+     a inferência por GET current é só fallback para payload que ainda não a carrega. */
+  const projectedBlocked = generationAction?.state === "BLOCKED" ? generationAction : null;
+  const projectedNote = projectedBlocked ? blockedActionCopy(projectedBlocked) : null;
+  const fallbackNote = !generationAction && blockedByOther ? BLOCKED_ACTIVE_MESSAGE : null;
   return (
     <section aria-busy={busy || active} aria-labelledby="generation-title" className={styles.panel}>
       <div className={styles.heading}>
@@ -110,11 +118,11 @@ export function GenerationStatusCard({ productName, targetContentCount, readines
         </div>
       ) : (
         <div className={styles.actions}>
-          <Button disabled={busy || readiness !== "PENDING" || blockedByOther} onClick={() => void start()} type="button">
+          <Button disabled={busy || readiness !== "PENDING" || blockedByOther || !!projectedBlocked} onClick={() => void start()} type="button">
             {busy ? "Iniciando análise…" : "Analisar produto"}
           </Button>
-          {blockedByOther && <p className={styles.blockedNote}>{BLOCKED_ACTIVE_MESSAGE}</p>}
-          {readiness !== "PENDING" && !blockedByOther && (
+          {(projectedNote ?? fallbackNote) && <p className={styles.blockedNote}>{projectedNote ?? fallbackNote}</p>}
+          {readiness !== "PENDING" && !projectedBlocked && !blockedByOther && (
             <p className={styles.error}>Este produto não está disponível para uma nova análise.</p>
           )}
         </div>

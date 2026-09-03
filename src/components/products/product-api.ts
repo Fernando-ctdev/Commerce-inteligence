@@ -1,4 +1,5 @@
 import type { ProductFieldErrors, ProductPayload } from "./product-form-model";
+import { normalizeGenerationAction, type GenerationActionProjection } from "./generation-ui-model";
 
 export type ProductReadiness = "PENDING" | "ANALYZING" | "READY" | "FAILED";
 
@@ -18,6 +19,8 @@ export type ProductRecord = {
   creatorPresence: "on_camera" | "hands_only_product" | "either";
   active: boolean;
   readiness: ProductReadiness;
+  /** ADR-016: presente apenas em ActiveProductView; ausente em archived. */
+  generationAction?: GenerationActionProjection;
 };
 
 export type ProductMutation = {
@@ -159,6 +162,7 @@ export function normalizeProduct(value: unknown): ProductRecord {
       record.readiness === "ANALYZING" || record.readiness === "READY" || record.readiness === "FAILED"
         ? record.readiness
         : "PENDING",
+    generationAction: normalizeGenerationAction(record.generationAction),
   };
 }
 
@@ -294,8 +298,10 @@ export async function updateProduct(id: string, payload: ProductPayload) {
   );
 }
 
+// ADR-016: archive/reactivate respondem { id, version } (mutação mínima, sem projeção).
+// A UI refaz GET autenticado após o commit para ler ActiveProductView/ArchivedProductView.
 export async function archiveProduct(id: string) {
-  return productFromResponse(
+  return mutationFromResponse(
     await request<unknown>(
       `/api/products/${encodeURIComponent(id)}/archive`,
       { method: "POST" },
@@ -304,7 +310,7 @@ export async function archiveProduct(id: string) {
 }
 
 export async function reactivateProduct(id: string) {
-  return productFromResponse(
+  return mutationFromResponse(
     await request<unknown>(
       `/api/products/${encodeURIComponent(id)}/reactivate`,
       { method: "POST" },

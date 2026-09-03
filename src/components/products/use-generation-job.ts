@@ -21,7 +21,12 @@ import {
   isCapacityUnavailableError,
 } from "./generation-ui-model";
 
-type UseGenerationJobArgs = { productId: string | null; readiness: GenerationRecord["readiness"] };
+type UseGenerationJobArgs = {
+  productId: string | null;
+  readiness: GenerationRecord["readiness"];
+  /** ADR-016: recarrega a projeção de Product após conflito do POST. */
+  onProjectionStale?: () => void;
+};
 
 function actionErrorMessage(caught: unknown) {
   if (caught instanceof GenerationApiError) {
@@ -32,14 +37,19 @@ function actionErrorMessage(caught: unknown) {
   return caught instanceof Error && caught.message ? caught.message : "Não foi possível concluir a ação agora.";
 }
 
+function isProjectionConflict(caught: unknown) {
+  return caught instanceof GenerationApiError && (isActiveLimitError(caught.code) || isCapacityUnavailableError(caught.code));
+}
+
 /**
  * Estado do CommerceIntelligenceJob na página do Produto. O backend é a única
  * fonte de verdade: carga no mount (reentrada), polling enquanto ativo e
- * detecção preventiva de bloqueio por job ativo de outro produto (GEN-ACTIVE).
+ * detecção de bloqueio por job ativo de outro produto (GEN-ACTIVE).
  * Capacidade insuficiente (GEN-CAPACITY/GEN-PRODUCT-CAPACITY) não é
- * conhecível antes do POST e permanece erro pós-clique.
+ * conhecível antes do POST; o POST permanece autoritativo e, após conflito,
+ * a projeção do ADR-016 é recarregada via onProjectionStale.
  */
-export function useGenerationJob({ productId, readiness }: UseGenerationJobArgs) {
+export function useGenerationJob({ productId, readiness, onProjectionStale }: UseGenerationJobArgs) {
   const [job, setJob] = useState<GenerationRecord | null>(null);
   const [blockedJob, setBlockedJob] = useState<GenerationRecord | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,8 +66,8 @@ export function useGenerationJob({ productId, readiness }: UseGenerationJobArgs)
     return () => { disposed = true; };
   }, [productId]);
 
-  // Bloqueio preventivo: job ativo do usuário em outro Produto. Reconsulta
-  // em 15s apenas enquanto existir bloqueio, para liberar o botão quando acabar.
+  // Fallback de bloqueio (payload sem projeção ADR-016): job ativo do usuário
+  // em outro Produto. Reconsulta em 15s enquanto existir bloqueio.
   useEffect(() => {
     if (!productId) return;
     let disposed = false;
@@ -111,10 +121,11 @@ export function useGenerationJob({ productId, readiness }: UseGenerationJobArgs)
       keyRef.current = undefined;
     } catch (caught) {
       setError(actionErrorMessage(caught));
+      if (isProjectionConflict(caught)) onProjectionStale?.();
     } finally {
       setBusy(false);
     }
-  }, [busy, productId]);
+  }, [busy, productId, onProjectionStale]);
 
   const retry = useCallback(async () => {
     if (!job || busy) return;
@@ -126,10 +137,11 @@ export function useGenerationJob({ productId, readiness }: UseGenerationJobArgs)
       keyRef.current = undefined;
     } catch (caught) {
       setError(actionErrorMessage(caught));
+      if (isProjectionConflict(caught)) onProjectionStale?.();
     } finally {
       setBusy(false);
     }
-  }, [busy, job]);
+  }, [busy, job, onProjectionStale]);
 
   const cancel = useCallback(async () => {
     if (!job || busy) return;

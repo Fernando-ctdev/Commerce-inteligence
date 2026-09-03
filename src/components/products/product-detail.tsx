@@ -87,6 +87,7 @@ export function ProductDetail({ id }: { id: string }) {
   const generation = useGenerationJob({
     productId: product?.active ? product.id : null,
     readiness: product?.readiness ?? "PENDING",
+    onProjectionStale: () => void load(),
   });
 
   if (loading) {
@@ -126,9 +127,11 @@ export function ProductDetail({ id }: { id: string }) {
     setArchiving(true);
     setError(null);
     try {
-      setProduct(await archiveProduct(product.id));
+      // ADR-016: a mutação confirma { id, version }; o estado (com a projeção recalculada
+      // ou ArchivedProductView sem geraçãoAction) chega sempre pelo GET autenticado seguinte.
+      await archiveProduct(product.id);
+      setProduct(await getProduct(product.id));
       setArchiveConfirmationOpen(false);
-      toast.success("Produto arquivado.");
     } catch (caught) {
       const message =
         caught instanceof ProductApiError
@@ -146,7 +149,8 @@ export function ProductDetail({ id }: { id: string }) {
     setReactivating(true);
     setError(null);
     try {
-      setProduct(await reactivateProduct(product.id));
+      await reactivateProduct(product.id);
+      setProduct(await getProduct(product.id));
       setReactivateConfirmationOpen(false);
       toast.success("Produto reativado.");
     } catch (caught) {
@@ -236,6 +240,7 @@ export function ProductDetail({ id }: { id: string }) {
           </TabsList>
           <TabsContent value="overview">
             <GenerationStatusCard
+              generationAction={product.generationAction}
               onOpenContents={() => changeTab("contents")}
               productName={product.name}
               readiness={generation.readiness}
