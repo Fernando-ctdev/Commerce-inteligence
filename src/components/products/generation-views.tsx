@@ -98,9 +98,13 @@ export function GenerationStatusCard({ productName, targetContentCount, readines
           <h3>{statusLabels[job.status]}</h3>
           <p>{stageMessage(job.stage)}</p>
           <p>{statusMessage(job.status, productName)}</p>
-          {canCancel && (
-            <Button disabled={busy} onClick={() => setCancelOpen(true)} type="button" variant="outline">Cancelar</Button>
-          )}
+          <div className={styles.actions}>
+            {/* SPEC/PLAN: a ação permanece visível-desabilitada enquanto o job ativo existe. */}
+            <Button disabled type="button">Analisar produto</Button>
+            {canCancel && (
+              <Button disabled={busy} onClick={() => setCancelOpen(true)} type="button" variant="outline">Cancelar</Button>
+            )}
+          </div>
         </div>
       ) : failed && job ? (
         <div aria-live="polite" className={styles.state} role="alert">
