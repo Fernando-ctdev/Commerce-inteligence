@@ -120,3 +120,23 @@ test("non-2xx without rate headers omits rate but keeps errorKind and providerSt
     assert.equal(detail.rate, undefined);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test("429 carrega telemetria sanitizada (modelo/endpoint/request-id/status) sem expor a API key", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("rate limited", { status: 429, headers: { "x-request-id": "req_abc123", "x-ratelimit-remaining": "0" } })) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "sk-secret-key-valor", models: { MID: "modelo-efetivo" }, timeoutMs: 5000 });
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
+    assert.fail("should have thrown");
+  } catch (error) {
+    const detail = (error as GenerationError).detail as { providerStatus: number; model: string; endpoint: string; requestId?: string; rate?: Record<string, string>; errorKind: string };
+    assert.equal(detail.providerStatus, 429);
+    assert.equal(detail.errorKind, "http_status");
+    assert.equal(detail.model, "modelo-efetivo", "modelo efetivo registrado na falha");
+    assert.equal(detail.endpoint, "https://api.exemplo", "origem do endpoint registrada, sem caminho/query");
+    assert.equal(detail.requestId, "req_abc123", "request-id para correlação com portal");
+    assert.equal(detail.rate?.["x-ratelimit-remaining"], "0");
+    const serialized = JSON.stringify({ detail, message: (error as Error).message });
+    assert.equal(serialized.includes("sk-secret-key-valor"), false, "API key nunca vaza em erro/telemetria");
+  } finally { globalThis.fetch = originalFetch; }
+});
