@@ -45,10 +45,21 @@
 }
 
 .action {
+  background: transparent;
+  border: 0;
   color: var(--color-brand);
+  cursor: pointer;
+  font: inherit;
   font-size: 13px;
   font-weight: 600;
+  min-height: 44px;
+  padding: 0;
   white-space: nowrap;
+}
+
+.action:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .dismiss {

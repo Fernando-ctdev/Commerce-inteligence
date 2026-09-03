@@ -74,6 +74,6 @@ export const isCapacityUnavailableError = (code?: string | null) =>
   code === "GEN-CAPACITY" || code === "GEN-PRODUCT-CAPACITY";
 
 export const BLOCKED_ACTIVE_MESSAGE =
-  "Uma análise já está em andamento. Acompanhe o progresso no indicador acima.";
+  "Uma análise já está em andamento. Aguarde a conclusão para analisar este produto.";
 export const CAPACITY_UNAVAILABLE_MESSAGE =
   "Não há capacidade disponível para gerar esses conteúdos agora. Tente novamente quando houver capacidade.";

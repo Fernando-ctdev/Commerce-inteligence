@@ -2,15 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { getCurrentGeneration, isActiveGeneration, type GenerationRecord } from "./generation-api";
+import { useEffect, useRef, useState } from "react";
+import {
+  createGenerationIdempotencyKey,
+  getCurrentGeneration,
+  isActiveGeneration,
+  retryGeneration,
+  type GenerationRecord,
+} from "./generation-api";
 import { stageMessage, statusMessage } from "./generation-ui-model";
 import styles from "./generation-toast.module.css";
 
 export function GenerationToast() {
   const [job, setJob] = useState<GenerationRecord | null>(null);
+  const [busy, setBusy] = useState(false);
   const [dismissed, setDismissed] = useState<{ snapshot: string; path: string } | null>(null);
   const pathname = usePathname();
+  const loadRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -25,11 +33,32 @@ export function GenerationToast() {
         if (!disposed) timer = window.setTimeout(() => void load(), 15000);
       }
     };
+    loadRef.current = load;
     void load();
-    return () => { disposed = true; if (timer) window.clearTimeout(timer); };
+    return () => {
+      disposed = true;
+      loadRef.current = null;
+      if (timer) window.clearTimeout(timer);
+    };
   }, []);
 
-  /* Mudança de rota invalida o dismiss: reentrada encontra estado acionável. */
+
+  const retry = async () => {
+    if (!job || busy) return;
+    setBusy(true);
+    try {
+      const next = await retryGeneration(job.id, createGenerationIdempotencyKey());
+      setJob(next);
+      void loadRef.current?.();
+    } catch {
+      /* falha é reapresentada pelo polling com o estado real do backend */
+      void loadRef.current?.();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const dismiss = () => setDismissed({ path: pathname, snapshot: `${job?.id ?? ""}:${job?.status ?? ""}` });
   const dismissKey = job ? `${job.id}:${job.status}` : null;
   const dismissedHere = dismissed !== null && dismissKey !== null && dismissed.snapshot === dismissKey && dismissed.path === pathname;
 
@@ -38,14 +67,20 @@ export function GenerationToast() {
   const failed = job.status === "FAILED" || job.status === "CANCELLED";
   const href = `/products/${encodeURIComponent(job.productId)}#generated-contents`;
   return (
-    <aside aria-atomic="true" aria-busy={active} aria-live={failed ? "assertive" : "polite"} className={styles.toast} role={failed ? "alert" : "status"}>
+    <aside aria-atomic="true" aria-busy={active || busy} aria-live={failed ? "assertive" : "polite"} className={styles.toast} role={failed ? "alert" : "status"}>
       <div className={styles.copy}>
         <strong>{active ? "Análise em andamento" : job.status === "SUCCEEDED" ? "Produto pronto para revisão" : "A análise precisa de atenção"}</strong>
         <span>{active ? stageMessage(job.stage) : statusMessage(job.status)}</span>
       </div>
       <div className={styles.actions}>
-        <Link className={styles.action} href={href}>{job.status === "SUCCEEDED" ? "Revisar conteúdos" : failed ? "Tentar novamente" : "Abrir produto"}</Link>
-        <button aria-label="Dispensar aviso de geração" className={styles.dismiss} onClick={() => dismissKey && setDismissed({ path: pathname, snapshot: dismissKey })} type="button">×</button>
+        {failed ? (
+          <button className={styles.action} disabled={busy} onClick={() => void retry()} type="button">
+            {busy ? "Tentando novamente…" : "Tentar novamente"}
+          </button>
+        ) : (
+          <Link className={styles.action} href={href}>{job.status === "SUCCEEDED" ? "Revisar conteúdos" : "Abrir produto"}</Link>
+        )}
+        <button aria-label="Dispensar aviso de geração" className={styles.dismiss} disabled={busy} onClick={dismiss} type="button">×</button>
       </div>
     </aside>
   );
