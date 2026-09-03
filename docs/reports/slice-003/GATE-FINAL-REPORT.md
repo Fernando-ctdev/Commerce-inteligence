@@ -44,3 +44,11 @@ Bloqueio de escopo: sem fixture/hash/limiares **aprovados**, qualquer runner que
 - Gate de proveniência: **APROVADO** (correção de teste com causa raiz comprovada; dados intactos).
 - Smoke `count=1`/`count=16` e registro de proveniência ADR-003: **APROVADO** (jobs `SUCCEEDED` com exact-N).
 - Golden Dataset: **BLOCKED** — aguardando itens 1–3 acima. A engine **não** é declarável plenamente validada/production-ready até o gate fechar.
+
+## 5. ADR-016 — Projeção `generationAction` — IMPLEMENTADO (commit `d782505`)
+
+- `projectGenerationAction({tenantId,userId})` em `commerce-intelligence/service.ts`: mesma ordem do POST (GEN-ACTIVE precede capacidade); bloqueio de capacidade quando folga mensal < 1; nunca autoriza mutação.
+- `GET /api/products` e `GET /api/products/:id`: `ActiveProductView` sempre com `generationAction` completo (`AVAILABLE`/`null`/`null`; `BLOCKED`+`GEN-ACTIVE`/`VIEW_ACTIVE_ANALYSIS`; `BLOCKED`+`GEN-CAPACITY`/`WAIT_FOR_CAPACITY`); `ArchivedProductView` omite o campo; sem quota/plano/saldo/IDs de Job no payload (`no-store` preservado).
+- archive/reactivate: `{ id, version }`; UI refaz GET autenticado pós-commit (consumo frontend já em `e9d9596`).
+- POST `/api/generations` inalterado e autoritativo (CSRF, escopo, transação, reserva, revalidação).
+- Validações: `service.test.ts` 26/26 (3 cenários ADR-016: AVAILABLE/omissão archive, GEN-ACTIVE sem vazamento, GEN-CAPACITY no limiar exato) · suíte completa 129/129 · typecheck/lint/build limpos.
