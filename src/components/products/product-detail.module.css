@@ -98,6 +98,7 @@
 
 .tabsList {
   margin-block-end: 4px;
+  max-width: 100%;
 }
 
 @media (max-width: 767px) {
@@ -116,5 +117,15 @@
 
   .actionRegion .actions {
     width: 100%;
+  }
+
+  /* DESIGN: tabs podem rolar horizontalmente no mobile, com corte visível
+     do próximo item como indicação de continuidade (nunca carrossel).
+     flex-start vence o justify-center herdado: centrado + overflow esconde
+     o início da lista e torna os primeiros itens inalcançáveis. */
+  .tabsList {
+    justify-content: flex-start !important;
+    overflow-x: auto;
+    scrollbar-width: thin;
   }
 }

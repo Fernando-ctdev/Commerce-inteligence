@@ -4,10 +4,8 @@ import Link from "next/link";
 import {
   CalendarDays,
   Clapperboard,
-  Flame,
   Home,
   Settings2,
-  Sparkles,
   Tag,
 } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
@@ -27,9 +25,7 @@ type DestinationKey =
   | "products"
   | "studio"
   | "agenda"
-  | "settings"
-  | "ai-influencer"
-  | "virais";
+  | "settings";
 
 const destinations: {
   key: DestinationKey;
@@ -41,9 +37,6 @@ const destinations: {
   { key: "products", label: "Produtos", href: "/products", icon: Tag },
   { key: "studio", label: "Estúdio", icon: Clapperboard },
   { key: "agenda", label: "Agenda", icon: CalendarDays },
-  // Placeholders futuros: sem href/rota/store — inertes por decisão de escopo.
-  { key: "ai-influencer", label: "IA Influencer", icon: Sparkles },
-  { key: "virais", label: "Virais", icon: Flame },
   {
     key: "settings",
     label: "Configurações",
