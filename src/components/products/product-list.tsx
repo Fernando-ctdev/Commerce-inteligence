@@ -191,6 +191,7 @@ export function ProductList() {
                       {product.category || "Produto"}
                     </p>
                     <span
+                      aria-label={`Estado: ${product.readiness === "ANALYZING" ? "Analisando" : product.readiness === "READY" ? "Pronto" : product.readiness === "FAILED" ? "Falhou" : product.active ? "Pendente" : "Arquivado"}`}
                       className={
                         product.readiness === "ANALYZING"
                           ? styles.statusPending
@@ -202,7 +203,10 @@ export function ProductList() {
                                 ? styles.statusActive
                                 : styles.statusArchived
                       }
+                      data-readiness={product.readiness}
+                      role="status"
                     >
+                      <span aria-hidden="true" className={styles.statusDot} />
                       {product.readiness === "ANALYZING"
                         ? "Analisando"
                         : product.readiness === "READY"
@@ -215,6 +219,9 @@ export function ProductList() {
                     </span>
                   </div>
                   <h3>{product.name}</h3>
+                  <p className={styles.cardFacts}>
+                    {[product.category, product.price ? `${product.price} ${product.priceCurrency}`.trim() : null].filter(Boolean).join(" · ")}
+                  </p>
                 </div>
                 <Link
                   className={styles.cardAction}

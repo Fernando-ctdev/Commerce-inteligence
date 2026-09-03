@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/sidebar";
 
 import { ShellNav, ShellRoot } from "./product-shell-nav";
-import { GlobalActivityIndicator } from "./global-activity-indicator";
+import { GenerationToast } from "./generation-toast";
 import styles from "./product-shell.module.css";
 
 type ProductShellProps = {
@@ -91,7 +91,7 @@ export function ProductShell({
           />
           <h1 className={styles.title}>{title}</h1>
         </header>
-        <GlobalActivityIndicator />
+        <GenerationToast />
 
         <div className={styles.main}>{children}</div>
       </SidebarInset>

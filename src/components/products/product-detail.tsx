@@ -174,15 +174,47 @@ export function ProductDetail({ id }: { id: string }) {
       )}
       <section
         aria-labelledby="product-actions-title"
-        className={styles.actionRegion}
+        className={styles.objectHeader}
       >
-        <div>
+        {product.imageReferences[0] &&
+        /^(?:https?:\/\/|data:image\/[a-z0-9.+-]+;base64,)/i.test(
+          product.imageReferences[0],
+        ) ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            alt={`Imagem de ${product.name}`}
+            className={styles.objectImage}
+            src={product.imageReferences[0]}
+          />
+        ) : null}
+        <div className={styles.objectIdentity}>
           <p className={styles.eyebrow}>Produto</p>
           <h2 id="product-actions-title">{product.name}</h2>
-          <p className={styles.actionContext}>
-            Edite os fatos ou arquive este produto. Os dados permanecem
-            preservados.
+          <p className={styles.objectFacts}>
+            {[
+              product.category,
+              product.price
+                ? `${product.price} ${product.priceCurrency}`.trim()
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
+          <span
+            aria-label={`Estado: ${product.readiness === "ANALYZING" ? "Analisando" : product.readiness === "READY" ? "Pronto" : product.readiness === "FAILED" ? "Falhou" : "Pendente"}`}
+            className={styles.objectStatus}
+            data-readiness={product.readiness}
+            role="status"
+          >
+            <span aria-hidden="true" className={styles.statusDot} />
+            {product.readiness === "ANALYZING"
+              ? "Analisando"
+              : product.readiness === "READY"
+                ? "Pronto"
+                : product.readiness === "FAILED"
+                  ? "Falhou"
+                  : "Pendente"}
+          </span>
         </div>
         <div className={styles.actionActions}>
           <Button

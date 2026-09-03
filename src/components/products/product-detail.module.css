@@ -52,17 +52,77 @@
   text-decoration: none;
 }
 
-.actionRegion {
+.objectHeader {
   align-items: center;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   display: flex;
   gap: 20px;
-  justify-content: space-between;
   margin-bottom: 24px;
   padding: 20px 24px;
 }
+
+.objectImage {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  flex: 0 0 auto;
+  height: 72px;
+  object-fit: cover;
+  width: 72px;
+}
+
+.objectIdentity {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.objectIdentity h2 {
+  font-size: 20px;
+  line-height: 26px;
+  margin: 0;
+}
+
+.objectFacts {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  margin: 0;
+}
+
+.objectStatus {
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+  justify-self: start;
+  padding: 4px 10px;
+}
+
+.objectStatus[data-readiness="ANALYZING"] {
+  color: var(--color-intelligence);
+}
+
+.objectStatus[data-readiness="READY"] {
+  color: var(--color-success);
+}
+
+.objectStatus[data-readiness="FAILED"] {
+  color: var(--color-danger);
+}
+
+.statusDot {
+  background: currentColor;
+  border-radius: 999px;
+  height: 6px;
+  width: 6px;
+}
+
 .actionActions {
   align-items: center;
   display: flex;
@@ -147,13 +207,13 @@
     padding: 24px 16px;
   }
 
-  .actionRegion {
+  .objectHeader {
     align-items: stretch;
     flex-direction: column;
     padding: 16px;
   }
 
-  .actionRegion .actions {
+  .objectHeader .actionActions {
     width: 100%;
   }
 }

@@ -100,6 +100,20 @@
   color: var(--color-danger);
 }
 
+.statusDot {
+  background: currentColor;
+  border-radius: 999px;
+  height: 6px;
+  width: 6px;
+}
+
+.cardFacts {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  margin: 0;
+}
+
 .secondaryButton:hover {
   border-color: var(--color-focus);
 }
