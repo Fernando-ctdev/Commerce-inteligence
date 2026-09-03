@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import {
   archiveProduct,
@@ -14,9 +15,20 @@ import {
   ProductRecord,
   reactivateProduct,
 } from "./product-api";
-import { GenerationPanel } from "./generation-panel";
+import {
+  ContentsView,
+  GenerationStatusCard,
+  HistoryView,
+  StrategyView,
+} from "./generation-views";
 import { ProductCreateForm } from "./product-create-form";
+import { useGenerationJob } from "./use-generation-job";
 import styles from "./product-detail.module.css";
+
+type ProductTab = "overview" | "strategy" | "contents" | "history";
+
+const hashToTab = (hash: string): ProductTab | null =>
+  hash === "#generated-contents" ? "contents" : null;
 
 export function ProductDetail({ id }: { id: string }) {
   const [product, setProduct] = useState<ProductRecord | null>(null);
@@ -24,6 +36,10 @@ export function ProductDetail({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [reactivating, setReactivating] = useState(false);
+  const [tab, setTab] = useState<ProductTab>(() =>
+    hashToTab(typeof window === "undefined" ? "" : window.location.hash) ??
+      "overview",
+  );
   const [archiveConfirmationOpen, setArchiveConfirmationOpen] = useState(false);
   const [reactivateConfirmationOpen, setReactivateConfirmationOpen] =
     useState(false);
@@ -43,11 +59,35 @@ export function ProductDetail({ id }: { id: string }) {
       setLoading(false);
     }
   }, [id]);
-
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  // Deep-link do indicador global: /products/:id#generated-contents abre Conteúdos.
+  useEffect(() => {
+    const sync = () => {
+      const fromHash = hashToTab(window.location.hash);
+      if (fromHash) setTab(fromHash);
+    };
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+
+  function changeTab(next: string) {
+    const value = next as ProductTab;
+    setTab(value);
+    window.history.replaceState(
+      null,
+      "",
+      value === "contents" ? "#generated-contents" : window.location.pathname,
+    );
+  }
+
+  const generation = useGenerationJob({
+    productId: product?.active ? product.id : null,
+    readiness: product?.readiness ?? "PENDING",
+  });
 
   if (loading) {
     return (
@@ -80,7 +120,6 @@ export function ProductDetail({ id }: { id: string }) {
       </div>
     );
   }
-
 
   async function archive() {
     if (!product || archiving) return;
@@ -137,7 +176,8 @@ export function ProductDetail({ id }: { id: string }) {
           <p className={styles.eyebrow}>Produto</p>
           <h2 id="product-actions-title">{product.name}</h2>
           <p className={styles.actionContext}>
-            Edite os fatos ou remova este produto do seu workspace.
+            Edite os fatos ou arquive este produto. Os dados permanecem
+            preservados.
           </p>
         </div>
         <div className={styles.actionActions}>
@@ -182,19 +222,52 @@ export function ProductDetail({ id }: { id: string }) {
         pendingLabel="Reativando…"
         title="Reativar produto?"
       />
-      {product.active && (
-        <GenerationPanel
-          productId={product.id}
-          productName={product.name}
-          readiness={product.readiness}
-          targetContentCount={product.targetContentCount}
+      {product.active ? (
+        <Tabs
+          className={styles.tabs}
+          onValueChange={changeTab}
+          value={tab}
+        >
+          <TabsList className={styles.tabsList} variant="line">
+            <TabsTrigger value="overview">Visão geral</TabsTrigger>
+            <TabsTrigger value="strategy">Estratégia</TabsTrigger>
+            <TabsTrigger value="contents">Conteúdos</TabsTrigger>
+            <TabsTrigger value="history">Histórico</TabsTrigger>
+          </TabsList>
+          <TabsContent value="overview">
+            <GenerationStatusCard
+              onOpenContents={() => changeTab("contents")}
+              productName={product.name}
+              readiness={generation.readiness}
+              state={generation}
+              targetContentCount={product.targetContentCount}
+            />
+            <ProductCreateForm
+              mode="edit"
+              onSaved={setProduct}
+              product={product}
+            />
+          </TabsContent>
+          <TabsContent value="strategy">
+            <StrategyView job={generation.job} />
+          </TabsContent>
+          <TabsContent value="contents">
+            <ContentsView
+              active={generation.active}
+              job={generation.job}
+            />
+          </TabsContent>
+          <TabsContent value="history">
+            <HistoryView job={generation.job} />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <ProductCreateForm
+          mode="edit"
+          onSaved={setProduct}
+          product={product}
         />
       )}
-      <ProductCreateForm
-        mode="edit"
-        onSaved={setProduct}
-        product={product}
-      />
     </>
   );
 }

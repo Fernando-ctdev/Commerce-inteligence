@@ -294,12 +294,6 @@ export async function updateProduct(id: string, payload: ProductPayload) {
   );
 }
 
-export async function deleteProduct(id: string) {
-  return request<{ id: string }>(`/api/products/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-  });
-}
-
 export async function archiveProduct(id: string) {
   return productFromResponse(
     await request<unknown>(

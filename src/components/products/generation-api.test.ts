@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GenerationApiError, normalizeGeneration, startGeneration } from "./generation-api";
+import { GenerationApiError, normalizeGeneration, cancelGeneration, getCurrentGenerationForProduct, startGeneration } from "./generation-api";
 
 test("normaliza estados e stage canônicos sem aceitar status desconhecido", () => {
   const job = normalizeGeneration({ id: "job-1", productId: "product-1", status: "RUNNING", stage: "BUILDING_STRATEGY", targetContentCount: 3 });
@@ -27,6 +27,7 @@ test("busca o envelope completo após o 202 mínimo de início", async () => {
     assert.equal(requests[1].url, "http://localhost/api/generations/job-1");
   } finally { globalThis.fetch = originalFetch; }
 });
+
 test("aceita SUCCEEDED somente com Strategy, Plan e exact-N Briefings completos", () => {
   const job = normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: { objective: "Vender" }, plan: { targetContentCount: 1 }, contents: [{ id: "content-1", angle: "Demonstração", hook: "Veja isto", script: "Mostre o produto", scenes: ["Cena 1", "Cena 2"], cta: "Confira agora" }] });
   assert.equal(job.readiness, "READY");
@@ -36,8 +37,40 @@ test("aceita SUCCEEDED somente com Strategy, Plan e exact-N Briefings completos"
 test("sanitiza erro público sem expor controle de workflow", () => {
   assert.equal(normalizeGeneration({ id: "job-1", productId: "product-1", status: "FAILED", targetContentCount: 1, error: "provider\nfalhou\u0000" }).error, "provider falhou");
 });
+
 test("rejeita envelope sem ownership válido, quantidade inválida ou briefing incompleto", () => {
   assert.throws(() => normalizeGeneration({ id: "", productId: "product-1", status: "QUEUED", targetContentCount: 1 }), GenerationApiError);
   assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "QUEUED", targetContentCount: 0 }), GenerationApiError);
   assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: {}, plan: {}, contents: [{ id: "content-1" }] }), GenerationApiError);
+});
+
+test("consulta o estado atual escopado ao Product e aceita resposta vazia", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Request[] = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(typeof input === "string" ? new URL(input, "http://localhost") : input, init);
+    requests.push(request);
+    return new Response("null", { status: 200 });
+  };
+  try {
+    assert.equal(await getCurrentGenerationForProduct("product-1"), null);
+    assert.equal(requests[0].url, "http://localhost/api/generations/current?productId=product-1");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("cancela apenas com POST no endpoint do job e normaliza o terminal", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Request[] = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(typeof input === "string" ? new URL(input, "http://localhost") : input, init);
+    requests.push(request);
+    return new Response(JSON.stringify({ id: "job-1", productId: "product-1", status: "CANCELLED", targetContentCount: 1 }), { status: 200 });
+  };
+  try {
+    const job = await cancelGeneration("job-1");
+    assert.equal(job.status, "CANCELLED");
+    assert.equal(job.readiness, "FAILED");
+    assert.equal(requests[0].method, "POST");
+    assert.equal(requests[0].url, "http://localhost/api/generations/job-1/cancel");
+  } finally { globalThis.fetch = originalFetch; }
 });

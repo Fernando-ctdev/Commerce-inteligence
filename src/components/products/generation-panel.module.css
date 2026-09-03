@@ -228,6 +228,20 @@
   font-size: 15px;
 }
 
+.listTitle,
+.hook {
+  color: var(--color-text);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+  margin: 0;
+}
+
+.blockedNote {
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
 .dimensions {
   border-block: 1px solid var(--color-border);
   display: grid;

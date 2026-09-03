@@ -92,6 +92,14 @@
   margin: 12px 0;
 }
 
+.tabs {
+  margin-top: 8px;
+}
+
+.tabsList {
+  margin-block-end: 4px;
+}
+
 @media (max-width: 767px) {
   .state {
     border-inline: 0;
