@@ -99,7 +99,7 @@ export function GenerationStatusCard({ productName, targetContentCount, readines
           <h3>{statusLabels[job.status]}</h3>
           <p>{job.error ?? statusMessage(job.status, productName)}</p>
           <Button disabled={busy} onClick={() => void retry()} type="button">
-            {busy ? "Tentando novamente..." : "Tentar novamente"}
+            {busy ? "Tentando novamente…" : "Tentar novamente"}
           </Button>
         </div>
       ) : job?.status === "SUCCEEDED" ? (
@@ -111,7 +111,7 @@ export function GenerationStatusCard({ productName, targetContentCount, readines
       ) : (
         <div className={styles.actions}>
           <Button disabled={busy || readiness !== "PENDING" || blockedByOther} onClick={() => void start()} type="button">
-            {busy ? "Iniciando análise..." : "Analisar produto"}
+            {busy ? "Iniciando análise…" : "Analisar produto"}
           </Button>
           {blockedByOther && <p className={styles.blockedNote}>{BLOCKED_ACTIVE_MESSAGE}</p>}
           {readiness !== "PENDING" && !blockedByOther && (
@@ -127,7 +127,7 @@ export function GenerationStatusCard({ productName, targetContentCount, readines
         onOpenChange={setCancelOpen}
         open={cancelOpen}
         pending={busy}
-        pendingLabel="Cancelando..."
+        pendingLabel="Cancelando…"
         title="Cancelar análise?"
       />
     </section>
