@@ -38,6 +38,22 @@
   gap: 8px;
 }
 
+/* Bloco compacto de status/action: uma linha de sinal + ações. */
+.state {
+  gap: 12px;
+}
+
+.stateLine {
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+}
+
+.stateLine strong {
+  font-weight: 600;
+}
+
 .heading h2,
 .state h3,
 .result h3 {

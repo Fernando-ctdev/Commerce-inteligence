@@ -70,7 +70,8 @@ function EmptyRegion({ children }: { children: React.ReactNode }) {
 }
 
 /** Aba Visão geral: estado do job, ação primária, bloqueio preventivo e cancelamento (só QUEUED). */
-export function GenerationStatusCard({ productName, targetContentCount, readiness, state, generationAction, onOpenContents }: {
+export function GenerationStatusCard({ className, productName, targetContentCount, readiness, state, generationAction, onOpenContents }: {
+  className?: string;
   productName: string;
   targetContentCount: number;
   readiness: GenerationRecord["readiness"];
@@ -87,7 +88,7 @@ export function GenerationStatusCard({ productName, targetContentCount, readines
   const projectedNote = projectedBlocked ? blockedActionCopy(projectedBlocked) : null;
   const fallbackNote = !generationAction && blockedByOther ? BLOCKED_ACTIVE_MESSAGE : null;
   return (
-    <section aria-busy={busy || active} aria-labelledby="generation-title" className={styles.panel}>
+    <section aria-busy={busy || active} aria-labelledby="generation-title" className={[styles.panel, className].filter(Boolean).join(" ")}>
       <div className={styles.heading}>
         <p className={styles.eyebrow}>Próxima ação</p>
         <h2 id="generation-title">Analisar produto</h2>
@@ -95,9 +96,9 @@ export function GenerationStatusCard({ productName, targetContentCount, readines
       </div>
       {active && job ? (
         <div aria-live="polite" className={styles.state} role="status">
-          <h3>{statusLabels[job.status]}</h3>
-          <p>{stageMessage(job.stage)}</p>
-          <p>{statusMessage(job.status, productName)}</p>
+          <p className={styles.stateLine}>
+            <strong>{statusLabels[job.status]}</strong> · {stageMessage(job.stage)}
+          </p>
           <div className={styles.actions}>
             {/* SPEC/PLAN: a ação permanece visível-desabilitada enquanto o job ativo existe. */}
             <Button disabled type="button">Analisar produto</Button>
@@ -108,17 +109,23 @@ export function GenerationStatusCard({ productName, targetContentCount, readines
         </div>
       ) : failed && job ? (
         <div aria-live="polite" className={styles.state} role="alert">
-          <h3>{statusLabels[job.status]}</h3>
-          <p>{job.error ?? statusMessage(job.status, productName)}</p>
-          <Button disabled={busy} onClick={() => void retry()} type="button">
-            {busy ? "Tentando novamente…" : "Tentar novamente"}
-          </Button>
+          <p className={styles.stateLine}>
+            <strong>{statusLabels[job.status]}</strong>{job.error ? ` · ${job.error}` : ` · ${statusMessage(job.status, productName)}`}
+          </p>
+          <div className={styles.actions}>
+            <Button disabled={busy} onClick={() => void retry()} type="button">
+              {busy ? "Tentando novamente…" : "Tentar novamente"}
+            </Button>
+          </div>
         </div>
       ) : job?.status === "SUCCEEDED" ? (
         <div aria-live="polite" className={styles.state} role="status">
-          <h3>{statusLabels[job.status]}</h3>
-          <p>{statusMessage(job.status, productName)}</p>
-          <Button onClick={onOpenContents} type="button">Revisar conteúdos</Button>
+          <p className={styles.stateLine}>
+            <strong>{statusLabels[job.status]}</strong> · {statusMessage(job.status, productName)}
+          </p>
+          <div className={styles.actions}>
+            <Button onClick={onOpenContents} type="button">Revisar conteúdos</Button>
+          </div>
         </div>
       ) : (
         <div className={styles.actions}>

@@ -93,15 +93,53 @@
 }
 
 .tabs {
+  max-width: 760px; /* P2 desktop: coluna de leitura, menos canvas vazio. */
   margin-top: 8px;
+}
+
+/* O scroller é um container próprio: a lista fica com largura natural e o
+   estouro fica contido aqui, sem depender da cascata com utilitários tailwind. */
+.tabsScroller {
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .tabsList {
   margin-block-end: 4px;
-  max-width: 100%;
+}
+
+/* Ritmo next-action-first: o bloco de ação é o primeiro cartão da aba;
+   a edição de fatos vem depois, separada por divisória. */
+.overviewContent {
+  align-content: start;
+  display: grid;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.nextActionCard {
+  margin-top: 0;
+}
+
+.editSection {
+  border-top: 1px solid var(--color-border);
+  padding-top: 24px;
 }
 
 @media (max-width: 767px) {
+  /* P1 mobile: tabs em grade 2x2 com todos os nomes visíveis, sem scroll/corte. */
+  .tabsScroller {
+    overflow: visible;
+  }
+
+  .tabsList {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
   .state {
     border-inline: 0;
     border-radius: 0;
@@ -117,15 +155,5 @@
 
   .actionRegion .actions {
     width: 100%;
-  }
-
-  /* DESIGN: tabs podem rolar horizontalmente no mobile, com corte visível
-     do próximo item como indicação de continuidade (nunca carrossel).
-     flex-start vence o justify-center herdado: centrado + overflow esconde
-     o início da lista e torna os primeiros itens inalcançáveis. */
-  .tabsList {
-    justify-content: flex-start !important;
-    overflow-x: auto;
-    scrollbar-width: thin;
   }
 }
