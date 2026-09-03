@@ -121,7 +121,7 @@ test("non-2xx without rate headers omits rate but keeps errorKind and providerSt
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test("429 carrega telemetria sanitizada (modelo/endpoint/request-id/status) sem expor a API key", async () => {
+test("ADR-017: 429 carrega telemetria sanitizada (modelo/endpoint/request-id/status) sem expor a API key", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response("rate limited", { status: 429, headers: { "x-request-id": "req_abc123", "x-ratelimit-remaining": "0" } })) as typeof fetch;
   const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "sk-secret-key-valor", models: { MID: "modelo-efetivo" }, timeoutMs: 5000 });
@@ -129,14 +129,98 @@ test("429 carrega telemetria sanitizada (modelo/endpoint/request-id/status) sem 
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
     assert.fail("should have thrown");
   } catch (error) {
-    const detail = (error as GenerationError).detail as { providerStatus: number; model: string; endpoint: string; requestId?: string; rate?: Record<string, string>; errorKind: string };
+    const detail = (error as GenerationError).detail as { providerStatus: number; model: string; endpoint: string; providerRequestId?: string; providerRequestIdSource?: string; rate?: Record<string, string>; errorKind: string };
     assert.equal(detail.providerStatus, 429);
     assert.equal(detail.errorKind, "http_status");
     assert.equal(detail.model, "modelo-efetivo", "modelo efetivo registrado na falha");
     assert.equal(detail.endpoint, "https://api.exemplo", "origem do endpoint registrada, sem caminho/query");
-    assert.equal(detail.requestId, "req_abc123", "request-id para correlação com portal");
+    assert.equal(detail.providerRequestId, "req_abc123", "request-id para correlação com portal");
+    assert.equal(detail.providerRequestIdSource, "header");
     assert.equal(detail.rate?.["x-ratelimit-remaining"], "0");
     const serialized = JSON.stringify({ detail, message: (error as Error).message });
     assert.equal(serialized.includes("sk-secret-key-valor"), false, "API key nunca vaza em erro/telemetria");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("ADR-017: 429 com header x-request-id — header precede body.id e nada do corpo vaza", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ id: "gen-body-111", error: { message: "Mensagem-interna-de-rate-limit-NAO-PERSISTIR" } }), { status: 429, headers: { "x-request-id": "req_header_001" } })) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "sk-secret-key-valor", models: { MID: "modelo-efetivo" }, timeoutMs: 5000 });
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
+    assert.fail("should have thrown");
+  } catch (error) {
+    const detail = (error as GenerationError).detail as { providerRequestId?: string; providerRequestIdSource?: string };
+    assert.equal(detail.providerRequestId, "req_header_001");
+    assert.equal(detail.providerRequestIdSource, "header");
+    const serialized = JSON.stringify(error);
+    assert.equal(serialized.includes("gen-body-111"), false, "body.id ignorado quando header presente");
+    assert.equal(serialized.includes("NAO-PERSISTIR"), false, "mensagem do corpo nunca persistida");
+    assert.equal(serialized.includes("sk-secret-key-valor"), false, "API key nunca vaza");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("ADR-017: 429 sem header cai para body.id (chave raiz JSON, validado)", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ id: "gen-1788464706-UnG9QGb0YH53nkPWhJXC", error: { message: "rate-limited" } }), { status: 429 })) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
+    assert.fail("should have thrown");
+  } catch (error) {
+    const detail = (error as GenerationError).detail as { providerRequestId?: string; providerRequestIdSource?: string };
+    assert.equal(detail.providerRequestId, "gen-1788464706-UnG9QGb0YH53nkPWhJXC");
+    assert.equal(detail.providerRequestIdSource, "body.id");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("ADR-017: valores inválidos são omitidos (header inválido não cai para body; body não-JSON ok)", async () => {
+  const originalFetch = globalThis.fetch;
+  // Header presente porém inválido (>200 inviabiliza? aqui caracteres proibidos) — omitido, sem fallback.
+  globalThis.fetch = (async () => new Response(JSON.stringify({ id: "gen-valido" }), { status: 429, headers: { "x-request-id": "id com espaço!!!" } })) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
+    assert.fail("should have thrown");
+  } catch (error) {
+    const detail = (error as GenerationError).detail as { providerRequestId?: string; providerRequestIdSource?: string };
+    assert.equal(detail.providerRequestId, undefined);
+    assert.equal(detail.providerRequestIdSource, undefined);
+  } finally { globalThis.fetch = originalFetch; }
+
+  // Corpo não-JSON em erro: omitido sem lançar exceção de parse.
+  globalThis.fetch = (async () => new Response("gateway timeout html<>", { status: 503 })) as typeof fetch;
+  const provider2 = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  try {
+    await provider2.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
+    assert.fail("should have thrown");
+  } catch (error) {
+    const detail = (error as GenerationError).detail as { providerRequestId?: string; providerRequestIdSource?: string };
+    assert.equal(detail.providerRequestId, undefined);
+    assert.equal(detail.providerRequestIdSource, undefined);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("ADR-017: sucesso 200 expõe providerRequestId via onMetrics (body.id quando sem header)", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ id: "gen-ok-987", choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  let captured: { providerRequestId?: string; providerRequestIdSource?: string } | undefined;
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (metrics) => { captured = metrics; });
+    assert.equal(captured?.providerRequestId, "gen-ok-987");
+    assert.equal(captured?.providerRequestIdSource, "body.id");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("ADR-017: id raiz não-string ou ausente é omitido", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ id: 42, choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  let captured: { providerRequestId?: string; providerRequestIdSource?: string } | undefined;
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (metrics) => { captured = metrics; });
+    assert.equal(captured?.providerRequestId, undefined);
+    assert.equal(captured?.providerRequestIdSource, undefined);
   } finally { globalThis.fetch = originalFetch; }
 });

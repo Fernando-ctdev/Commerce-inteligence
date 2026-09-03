@@ -20,6 +20,17 @@ const INSTRUCTION: Record<LogicalTask, string> = {
   CONTENT_PLAN_GENERATION: "Retorne um objeto JSON raiz (NUNCA array) com as chaves platformId e opportunities: um array com quantidade EXATA de oportunidades de conteúdo igual ao targetContentCount recebido. Cada opportunity tem commercialObjective, angle, coreMessage, hookMechanism e noveltyTargets (array de strings com pelo menos 1 item; nunca vazio). Não coloque texto fora do JSON; não inclua ownership, status, quota, provider, model, tier ou comandos de workflow.",
   CONTENT_BRIEF_GENERATION: "Retorne um objeto JSON raiz com o campo items contendo EXATAMENTE a mesma quantidade de briefings que oportunidades recebidas na entrada, um briefing por oportunidade, na mesma ordem. Cada briefing tem angle, hook, script, scenes (array JSON com 2 a 6 strings não vazias; nunca string única, nunca array vazio, nunca fora dessa faixa) e cta. A quantidade de items deve ser exatamente igual à quantidade de oportunidades recebidas; nunca omita, adicione ou duplique. Não inclua contentId, briefVersionId, ownership, status, quota, provider, model, tier ou comandos de workflow.",
 };
+// ADR-017: correlação sanitizada — header precede; na ausência de header, apenas a chave
+// raiz JSON `id` do corpo (nunca o corpo/mensagem). ASCII 1–200; inválido omite ambos.
+const PROVIDER_REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
+type ProviderRequestCorrelation = { providerRequestId?: string; providerRequestIdSource?: "header" | "body.id" };
+const requestIdHeader = (headers: Headers): string | null => ["x-request-id", "request-id"].map((header) => headers.get(header)).find((value) => value != null) ?? null;
+const providerCorrelationOf = (headers: Headers, bodyRootId: unknown): ProviderRequestCorrelation => {
+  const headerValue = requestIdHeader(headers);
+  if (headerValue !== null) return PROVIDER_REQUEST_ID_RE.test(headerValue) ? { providerRequestId: headerValue, providerRequestIdSource: "header" } : {};
+  if (typeof bodyRootId === "string" && PROVIDER_REQUEST_ID_RE.test(bodyRootId)) return { providerRequestId: bodyRootId, providerRequestIdSource: "body.id" };
+  return {};
+};
 export function createHttpProvider(config = configFromEnv()): ModelRouter {
   const instruction = (task: LogicalTask): string => INSTRUCTION[task] ?? "Retorne JSON compatível com o contrato solicitado; não inclua ownership, status ou comandos de workflow.";
   const modelFor = (task: LogicalTask): string => modelForTier(config, task);
@@ -39,12 +50,12 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
     const forwardAbort = () => controller.abort();
     signal?.addEventListener("abort", forwardAbort, { once: true });
     let providerStatus: number | null = null;
-    let requestId: string | null = null;
+    let providerCorrelation: ProviderRequestCorrelation = {};
     let responseBytes: number | null = null;
     let requestBytes = 0;
     let trustedContextBytes = 0;
     let externalBytes = 0;
-    const report = () => onMetrics?.({ model: modelFor(task), reasoning: "low", providerStatus, requestBytes, trustedContextBytes, externalBytes, responseBytes, durationMs: Date.now() - startedAt });
+    const report = () => onMetrics?.({ model: modelFor(task), reasoning: "low", providerStatus, requestBytes, trustedContextBytes, externalBytes, responseBytes, durationMs: Date.now() - startedAt, ...providerCorrelation });
     try {
       trustedContextBytes = Buffer.byteLength(JSON.stringify(input.trustedContext), "utf8");
       externalBytes = Buffer.byteLength(JSON.stringify(input.externalData ?? {}), "utf8");
@@ -53,34 +64,37 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
       requestBytes = Buffer.byteLength(body, "utf8");
       const response = await fetch(endpoint, { method: "POST", signal: controller.signal, headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` }, body });
       providerStatus = response.status;
-      // Correlação com portal: request-id sanitizado (header), nunca corpo/prompt/segredo.
-      requestId = ["x-request-id", "request-id"].map((header) => response.headers.get(header)).find((value) => value != null) ?? null;
       if (!response.ok) {
-        // Observabilidade de rate limit: apenas headers allowlisted, nunca corpo/prompt/segredo.
+        // ADR-017: extrai somente a chave raiz `id` do corpo de erro (nunca o corpo/mensagem).
+        let errorBodyRootId: unknown;
+        try { errorBodyRootId = (JSON.parse(await response.text()) as Record<string, unknown>)?.id; } catch { errorBodyRootId = undefined; }
+        providerCorrelation = providerCorrelationOf(response.headers, requestIdHeader(response.headers) === null ? errorBodyRootId : undefined);
         const rate: Record<string, string> = {};
         for (const header of ["retry-after", "x-ratelimit-reset", "x-ratelimit-remaining", "x-ratelimit-limit"]) { const value = response.headers.get(header); if (value) rate[header] = value; }
-        console.info("[generation-provider] metrics", { task, tier: ROUTER_MAP[task], model: modelFor(task), endpoint: endpointOrigin, requestId, durationMs: Date.now() - startedAt, providerStatus, errorKind: "http_status", rate, timeoutMs: config.timeoutMs, ok: false, errorName: "http_status" });
-        throw new GenerationError("GEN-PROVIDER", "Provider indisponível", true, { task, providerStatus, errorKind: "http_status", model: modelFor(task), endpoint: endpointOrigin, ...(requestId ? { requestId } : {}), ...(Object.keys(rate).length > 0 ? { rate } : {}) });
+        console.info("[generation-provider] metrics", { task, tier: ROUTER_MAP[task], model: modelFor(task), endpoint: endpointOrigin, durationMs: Date.now() - startedAt, providerStatus, errorKind: "http_status", rate, timeoutMs: config.timeoutMs, ok: false, errorName: "http_status", ...providerCorrelation });
+        throw new GenerationError("GEN-PROVIDER", "Provider indisponível", true, { task, providerStatus, errorKind: "http_status", model: modelFor(task), endpoint: endpointOrigin, ...providerCorrelation, ...(Object.keys(rate).length > 0 ? { rate } : {}) });
       }
       const text = await response.text();
       responseBytes = Buffer.byteLength(text, "utf8");
+      let envelope: { choices?: Array<{ message?: { content?: string } }>; id?: unknown } | null = null;
       let content: unknown;
-      try { const parsed = JSON.parse(text) as { choices?: Array<{ message?: { content?: string } }> }; content = parsed.choices?.[0]?.message?.content; } catch { throw new GenerationError("GEN-SCHEMA", "Resposta JSON do provider inválida"); }
+      try { envelope = JSON.parse(text) as { choices?: Array<{ message?: { content?: string } }>; id?: unknown }; content = envelope?.choices?.[0]?.message?.content; } catch { throw new GenerationError("GEN-SCHEMA", "Resposta JSON do provider inválida"); }
       if (typeof content !== "string") throw new GenerationError("GEN-SCHEMA", "Resposta do provider sem conteúdo");
+      providerCorrelation = providerCorrelationOf(response.headers, requestIdHeader(response.headers) === null ? envelope?.id : undefined);
       let parsedContent: unknown;
       try { parsedContent = JSON.parse(content); } catch { throw new GenerationError("GEN-SCHEMA", "Conteúdo do provider sem contrato JSON"); }
       // Guard de tipo raiz ANTES da métrica: array/não-objeto é GEN-SCHEMA tipado com
       // detail, não GEN-PROVIDER genérico pós-métrica (regressão do job count16).
       if (!parsedContent || typeof parsedContent !== "object" || Array.isArray(parsedContent)) {
-        console.info("[generation-provider] metrics", { task, tier: ROUTER_MAP[task], model: modelFor(task), endpoint: endpointOrigin, requestId, instructionHash: instructionHash(promptInstruction), durationMs: Date.now() - startedAt, providerStatus, responseBytes, timeoutMs: config.timeoutMs, ok: false, errorName: "GEN-SCHEMA-root-shape" });
-        throw new GenerationError("GEN-SCHEMA", "Resposta do provider deve ser um objeto JSON", true, { task, providerStatus, rootShape: Array.isArray(parsedContent) ? "array" : typeof parsedContent, model: modelFor(task), endpoint: endpointOrigin, ...(requestId ? { requestId } : {}) });
+        console.info("[generation-provider] metrics", { task, tier: ROUTER_MAP[task], model: modelFor(task), endpoint: endpointOrigin, instructionHash: instructionHash(promptInstruction), durationMs: Date.now() - startedAt, providerStatus, responseBytes, timeoutMs: config.timeoutMs, ok: false, errorName: "GEN-SCHEMA-root-shape", ...providerCorrelation });
+        throw new GenerationError("GEN-SCHEMA", "Resposta do provider deve ser um objeto JSON", true, { task, providerStatus, rootShape: Array.isArray(parsedContent) ? "array" : typeof parsedContent, model: modelFor(task), endpoint: endpointOrigin, ...providerCorrelation });
       }
       const checked = assertProviderOutput(parsedContent);
-      console.info("[generation-provider] metrics", { task, tier: ROUTER_MAP[task], model: modelFor(task), reasoning: "low", instructionHash: instructionHash(promptInstruction), durationMs: Date.now() - startedAt, requestBytes, trustedContextBytes, externalBytes, responseBytes, providerStatus, timeoutMs: config.timeoutMs, ok: true });
+      console.info("[generation-provider] metrics", { task, tier: ROUTER_MAP[task], model: modelFor(task), endpoint: endpointOrigin, reasoning: "low", instructionHash: instructionHash(promptInstruction), durationMs: Date.now() - startedAt, requestBytes, trustedContextBytes, externalBytes, responseBytes, providerStatus, timeoutMs: config.timeoutMs, ok: true, ...providerCorrelation });
       return checked;
     } catch (error) {
       if (error instanceof GenerationError) throw error;
-      const name = error instanceof Error ? error.name : typeof error === "string" ? error : "unknown error"; const message = error instanceof Error ? error.message : String(error); console.info("[generation-provider] metrics", { task, tier: ROUTER_MAP[task], model: modelFor(task), endpoint: endpointOrigin, requestId, instructionHash: instructionHash(INSTRUCTION[task] ?? ""), durationMs: Date.now() - startedAt, providerStatus, responseBytes, timeoutMs: config.timeoutMs, ok: false, errorName: name }); throw new GenerationError("GEN-PROVIDER", "Provider indisponível", true, { task, providerStatus, model: modelFor(task), endpoint: endpointOrigin, ...(requestId ? { requestId } : {}), error: { name, message } });
+      const name = error instanceof Error ? error.name : typeof error === "string" ? error : "unknown error"; const message = error instanceof Error ? error.message : String(error); console.info("[generation-provider] metrics", { task, tier: ROUTER_MAP[task], model: modelFor(task), endpoint: endpointOrigin, instructionHash: instructionHash(INSTRUCTION[task] ?? ""), durationMs: Date.now() - startedAt, providerStatus, responseBytes, timeoutMs: config.timeoutMs, ok: false, errorName: name, ...providerCorrelation }); throw new GenerationError("GEN-PROVIDER", "Provider indisponível", true, { task, providerStatus, model: modelFor(task), endpoint: endpointOrigin, ...providerCorrelation, error: { name, message } });
     } finally { report(); clearTimeout(timer); signal?.removeEventListener("abort", forwardAbort); }
   }, describe, hash, modelFor };
 }

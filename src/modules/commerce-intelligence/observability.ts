@@ -16,7 +16,7 @@ export type JobEventName =
 export type JobEventFields = {
   jobId?: string; attempt?: number; stage?: string; task?: string; tier?: string; model?: string; instructionHash?: string;
   durationMs?: number; timeoutMs?: number; requestBytes?: number; trustedContextBytes?: number; externalBytes?: number; responseBytes?: number;
-  providerStatus?: number; rootShape?: string; responseKeys?: string[]; arrayLength?: number; endpoint?: string; requestId?: string;
+  providerStatus?: number; rootShape?: string; responseKeys?: string[]; arrayLength?: number; endpoint?: string; providerRequestId?: string; providerRequestIdSource?: string;
   expected?: number; received?: number; retry?: number; errorName?: string; errorCode?: string; reservationAction?: string; contextDigest?: string; item?: number; issue?: string; errorKind?: string; rate?: Record<string, string>; gateReports?: SanitizedGateReport[];
 };
 
@@ -37,8 +37,8 @@ const EVENT_ALLOWLIST: Record<JobEventName, (keyof JobEventFields)[]> = {
   "stage.started": BASE_ALLOWLIST,
   "stage.completed": [...BASE_ALLOWLIST, "durationMs"],
   "capability.started": [...BASE_ALLOWLIST, "timeoutMs", "requestBytes", "trustedContextBytes", "externalBytes", "contextDigest"],
-  "capability.completed": [...BASE_ALLOWLIST, "durationMs", "timeoutMs", "requestBytes", "trustedContextBytes", "externalBytes", "responseBytes", "providerStatus", "rootShape", "responseKeys", "arrayLength", "retry"],
-  "capability.failed": [...BASE_ALLOWLIST, "durationMs", "timeoutMs", "providerStatus", "endpoint", "requestId", "expected", "received", "retry", "item", "issue", "errorKind", "rate"],
+  "capability.completed": [...BASE_ALLOWLIST, "durationMs", "timeoutMs", "requestBytes", "trustedContextBytes", "externalBytes", "responseBytes", "providerStatus", "rootShape", "responseKeys", "arrayLength", "retry", "providerRequestId", "providerRequestIdSource"],
+  "capability.failed": [...BASE_ALLOWLIST, "durationMs", "timeoutMs", "providerStatus", "endpoint", "providerRequestId", "providerRequestIdSource", "expected", "received", "retry", "item", "issue", "errorKind", "rate"],
   "repair.started": [...BASE_ALLOWLIST, "expected"],
   "repair.completed": [...BASE_ALLOWLIST, "durationMs", "expected", "received", "retry", "gateReports"],
   "job.finalizing": BASE_ALLOWLIST,
