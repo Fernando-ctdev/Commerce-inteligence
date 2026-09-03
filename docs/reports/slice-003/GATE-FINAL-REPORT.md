@@ -80,3 +80,14 @@ Reavaliação aceita: causalidade OpenRouter **não atribuída**; gates internos
 4. **Retry 429**: não implementado — fora da decisão aceita nesta nota; permanece follow-up para o Arquiteto (hoje: 1× 429 = FAILED terminal, attempt=1, "Tentar novamente" manual).
 
 Validações: 135/135 testes (6 novos: precedência/higiene do loader, telemetria 429 sem vazamento de key) · typecheck/lint/build limpos · smoke de boot com sentinela.
+
+## 8. ADR-017 — Correlação sanitizada implementada (commit `1e14cc5`)
+
+Escopo executado exatamente conforme decisão (sem retry 429):
+- `provider.ts`: captura de `providerRequestId`/`providerRequestIdSource` em toda resposta — header (`x-request-id`, depois `request-id`) precede; na ausência de header, somente a chave raiz JSON `id` do corpo (inclusive em erro HTTP), sem persistir corpo/mensagem. Validação `/^[A-Za-z0-9._:-]{1,200}$/` (ASCII 1–200); inválido/ausente omite ambos. Header presente porém inválido **não** cai para `body.id` (ordem canônica).
+- Propagação: `ProviderCallMetrics` → `CapabilityEvent` → `intelligence_runs.metadata.capabilities` (sucesso) e detail de falha → `jobs.metadata.internalError`; eventos JSONL `capability.completed`/`capability.failed` carregam os campos (allowlist atualizada). Nunca na UI.
+- Textos de instrução (`INSTRUCTION`) verificados byte-a-byte contra HEAD — `instructionHash` inalterado.
+- Testes (5 novos, provider.test.ts): header precede body.id sem vazamento do corpo; fallback `body.id`; header inválido omitido sem fallback; corpo não-JSON tolerado; sucesso expõe correlação via `onMetrics`; `id` raiz não-string omitido. API key assertivamente ausente de toda serialização.
+- Validações: 140/140 testes · typecheck/lint/build limpos.
+
+**Release permanece BLOQUEADO**: (1) `GEN-REPAIR-EXHAUSTED`/factualidade — smoke `ea16a5cf` demonstrou briefing com claim objetivo `"magnetic"` rejeitado pelo Fact Gate (fatos autorizados pt-BR `"Base magnética"`); hipótese principal: features do Product não entram no evidence snapshot consumido pelo gate (worker → `input.facts`), a confirmar; (2) Golden Dataset sem fixture/hash/limiares aprovados. Correlação ADR-017 habilita a próxima investigação com evidência de modelo/endpoint/request-id.
