@@ -69,3 +69,14 @@ Fontes: `commerce_intelligence_jobs.metadata.internalError` (31 falhas GEN-PROVI
 2. `worker.ts`: em `GEN-PROVIDER` com `providerStatus=429`, reenfileirar (`QUEUED` + `nextAttemptAt = now + retry-after|backoff`) em vez de FAILED terminal — hoje 1× 429 mata o Job e o usuário só tem "Tentar novamente".
 3. Telemetria: incluir `model` no detail do erro e estender a allowlist com headers OpenRouter (`x-ratelimit-remaining-requests`, `x-ratelimit-reset-requests`) para atribuir por modelo e distinguir RPM vs crédito na próxima ocorrência.
 4. Ops: espaçar lotes de QA (a rajada veio de criação em lote) e verificar plano/créditos do modelo no OpenRouter.
+
+## 7. Gate interno 429 — correções implementadas (commit `5daa5f3`)
+
+Reavaliação aceita: causalidade OpenRouter **não atribuída**; gates internos corrigidos.
+
+1. **Carregamento de env**: reprodução empírica no Node v20.19.5 mostrou `process.loadEnvFile` não sobrescrevendo env injetado — mas a dupla via (loadEnvFile + loader custom, sem teste) dependia de semântica implícita que varia entre versões do Node. Substituída por loader único (`src/modules/env-loader.ts`) com precedência explícita e testada: **env-injetado > .env** (arquivo só preenche ausentes/vazios), retornando apenas NOMES de chaves (valores nunca). `scripts/worker.mts` loga os nomes carregados no boot. Teste de boot com key-sentinela injetada provou: env injetado preservado, sentinela não vaza em nenhum log, `baseUrl: https://openrouter.ai` e `modelConfigured: true` visíveis.
+2. **Telemetria sanitizada de falha**: toda falha de provider persiste agora em `job.metadata.internalError` e em `capability.failed` (JSONL): `model` (efetivo por tier), `endpoint` (apenas origem), `requestId` (header `x-request-id`/`request-id`, para correlação com o portal OpenRouter), `providerStatus`, `rate` (headers allowlist). Prova por teste: API key não aparece em nenhum detalhe/serialização.
+3. **Evidência de modelo/endpoint efetivos**: forward-looking via telemetria nova; retroativa — timeline: 00:57–04:16Z worker sem attribution (código antigo); 05:07–05:25Z MID=`qwen/qwen3.8-flash`, HIGH=`gpt-5.6-luna`; `.env` editado 18:48Z (BALANCED→luna); 18:52Z todos luna. Os 429s ocorreram sempre com o modelo da janela (qwen até 18:49Z de hoje; 200 no luna às 18:52Z). Env atual: `LLM_MODEL_MID`/`LLM_MODEL_HIGH` **não existem** e nunca foram lidas pelo provider (só FAST/BALANCED/QUALITY roteiam); `LLM_MODEL_MID/HIGH` aparecem apenas no flag `llmConfigured` do boot.
+4. **Retry 429**: não implementado — fora da decisão aceita nesta nota; permanece follow-up para o Arquiteto (hoje: 1× 429 = FAILED terminal, attempt=1, "Tentar novamente" manual).
+
+Validações: 135/135 testes (6 novos: precedência/higiene do loader, telemetria 429 sem vazamento de key) · typecheck/lint/build limpos · smoke de boot com sentinela.
