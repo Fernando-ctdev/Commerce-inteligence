@@ -4,6 +4,7 @@
 // PATCH edita fatos com controle otimista de versão; erros sanitizados, sem detalhes internos.
 import type { Product } from "@prisma/client";
 import { prisma } from "../db";
+import { projectGenerationAction, type GenerationAction } from "../commerce-intelligence/service";
 
 import {
   SESSION_COOKIE,
@@ -28,6 +29,10 @@ import {
   updateTenantProduct,
 } from "./service";
 
+// ADR-016 (nota canônica): ActiveProductView sempre carrega generationAction completo
+// (state AVAILABLE|BLOCKED; reason/nextAction tokens do servidor, nunca texto pt-BR, nunca
+// omitidos nem null em BLOCKED). ArchivedProductView omite o campo. Nenhuma quota, plano,
+// saldo ou reserva no payload. A projeção é advisory; POST /api/generations permanece autoritativo.
 export type ProductView = {
   id: string;
   version: number;
@@ -45,6 +50,9 @@ export type ProductView = {
   active: boolean;
   readiness: "PENDING" | "ANALYZING" | "READY" | "FAILED";
 };
+
+export type ArchivedProductView = ProductView;
+export type ActiveProductView = ProductView & { generationAction: GenerationAction };
 
 function jsonBody(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -111,7 +119,15 @@ export async function handleListProducts(req: Request): Promise<Response> {
     });
 
   const products = await listTenantProducts(session.tenantId);
-  return jsonBody(200, { products: await Promise.all(products.map(async (product) => toProductView(product, await productReadiness(session.tenantId, product.id)))) });
+  // Projeção por usuário (GEN-ACTIVE é escopo user; GEN-CAPACITY é tenant). Calculada
+  // uma vez por leitura: vale igual para todo Product ACTIVE da lista.
+  const generationAction = await projectGenerationAction({ tenantId: session.tenantId, userId: session.userId });
+  return jsonBody(200, {
+    products: await Promise.all(products.map(async (product) => {
+      const view = toProductView(product, await productReadiness(session.tenantId, product.id));
+      return product.lifecycle === "ACTIVE" ? { ...view, generationAction } : view;
+    })),
+  });
 }
 
 export async function handleGetProduct(
@@ -125,14 +141,14 @@ export async function handleGetProduct(
       code: "AUTH-SESSION",
     });
   const product = await getTenantProduct(session.tenantId, id);
-  return product
-    ? jsonBody(200, toProductView(product, await productReadiness(session.tenantId, product.id)))
-    : json(404, {
-        error: "Product não encontrado.",
-        code: "PRODUCT-NOT-FOUND",
-      });
+  if (!product)
+    return json(404, {
+      error: "Product não encontrado.",
+      code: "PRODUCT-NOT-FOUND",
+    });
+  const view = toProductView(product, await productReadiness(session.tenantId, product.id));
+  return jsonBody(200, product.lifecycle === "ACTIVE" ? { ...view, generationAction: await projectGenerationAction({ tenantId: session.tenantId, userId: session.userId }) } : view);
 }
-
 export async function handleUpdateProduct(
   req: Request,
   id: string,
@@ -197,8 +213,9 @@ export async function handleArchiveProduct(
       code: "AUTH-SESSION",
     });
   try {
+    // ADR-016: contrato mínimo de mutação — sem projeção de leitura. UI refaz GET autenticado.
     const product = await archiveTenantProduct(session.tenantId, id);
-    return jsonBody(200, toProductView(product));
+    return jsonBody(200, { id: product.id, version: product.version });
   } catch (error) {
     if (error instanceof ProductNotFoundError)
       return json(404, {
@@ -231,8 +248,9 @@ export async function handleReactivateProduct(
       code: "AUTH-SESSION",
     });
   try {
+    // ADR-016: mutação devolve { id, version }; a projeção recalculada chega pelo GET seguinte.
     const product = await reactivateTenantProduct(session.tenantId, id);
-    return jsonBody(200, toProductView(product));
+    return jsonBody(200, { id: product.id, version: product.version });
   } catch (error) {
     if (error instanceof ProductNotFoundError)
       return json(404, {

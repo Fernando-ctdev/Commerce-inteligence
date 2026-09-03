@@ -36,6 +36,25 @@ export async function startCommerceIntelligence(input: { tenantId: string; userI
 export function activeJobWhere(tenantId: string, userId: string, productId?: string) {
   return { tenantId, userId, ...(productId ? { productId } : {}), status: { in: ["QUEUED", "RUNNING"] as CommerceIntelligenceJobStatus[] } };
 }
+
+// ADR-016: projeção server-authoritative advisory para leituras autenticadas de Product.
+// Nunca autoriza mutação — POST /api/generations conserva sessão, CSRF, escopo e transação
+// como fonte definitiva. Escopada a tenantId+userId da sessão; sem plano, limite, saldo ou
+// reserva no payload. GEN-ACTIVE precede capacidade (mesma ordem do POST). Block de
+// capacidade: restante mensal < 1 (menor targetContentCount válido, AC 1–30).
+export type GenerationAction =
+  | { state: "AVAILABLE"; reason: null; nextAction: null }
+  | { state: "BLOCKED"; reason: "GEN-ACTIVE" | "GEN-CAPACITY"; nextAction: "VIEW_ACTIVE_ANALYSIS" | "WAIT_FOR_CAPACITY" };
+
+export async function projectGenerationAction(scope: { tenantId: string; userId: string }): Promise<GenerationAction> {
+  const active = await prisma.commerceIntelligenceJob.findFirst({ where: activeJobWhere(scope.tenantId, scope.userId) });
+  if (active) return { state: "BLOCKED", reason: "GEN-ACTIVE", nextAction: "VIEW_ACTIVE_ANALYSIS" };
+  const held = await prisma.generationUsageReservation.aggregate({ _sum: { quantity: true }, where: { tenantId: scope.tenantId, generatedContentsMonth: monthUtc(), status: { in: ["RESERVED", "CONFIRMED"] } } });
+  const capacity = Number(process.env.GENERATED_CONTENTS_MONTH_LIMIT);
+  const remaining = Number.isInteger(capacity) && capacity > 0 ? capacity - (held._sum.quantity ?? 0) : 0;
+  if (remaining < 1) return { state: "BLOCKED", reason: "GEN-CAPACITY", nextAction: "WAIT_FOR_CAPACITY" };
+  return { state: "AVAILABLE", reason: null, nextAction: null };
+}
 export async function findBlockingGeneration(tenantId: string, userId: string, productId?: string) {
   return prisma.commerceIntelligenceJob.findFirst({ where: activeJobWhere(tenantId, userId, productId), orderBy: { createdAt: "desc" } });
 }

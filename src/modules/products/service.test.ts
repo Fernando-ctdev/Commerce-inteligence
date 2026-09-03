@@ -24,6 +24,7 @@ import {
   reactivateTenantProduct,
   validateManualProductInput,
 } from "./service.js";
+import { monthUtc } from "../entitlements/generation.js";
 
 // APP_ORIGIN pode ser lista separada por vírgula; o runtime valida contra o conjunto.
 const ORIGIN = (process.env.APP_ORIGIN ?? "http://localhost:3000").split(",")[0].trim();
@@ -302,7 +303,7 @@ async function tenantOf() {
   // garante o limite de configuração do runtime no tenant, como o .env faz em produção.
   const limit = Number(process.env.ENTITLEMENT_ACTIVE_PRODUCTS ?? 5);
   await prisma.tenantEntitlement.update({ where: { tenantId: session.tenantId }, data: { activeProductsLimit: limit } });
-  return { token, tenantId: session.tenantId };
+  return { token, tenantId: session.tenantId, userId: session.userId };
 }
 
 const post = (token: string, body: unknown, key?: string) =>
@@ -725,10 +726,8 @@ test("POST archive arquiva sem apagar dados; repetição é replay e preserva ve
 
   const res = await handleArchiveProduct(archive(token, created.id), created.id);
   assert.equal(res.status, 200);
-  const view = (await res.json()) as Record<string, unknown>;
-  assert.equal(view.id, created.id);
-  assert.equal(view.version, created.version + 1);
-  assert.equal(view.active, false);
+  // ADR-016: contrato mínimo de mutação { id, version } — sem projeção de leitura.
+  assert.deepEqual(await res.json(), { id: created.id, version: created.version + 1 });
 
   // Sem delete: a linha persiste com lifecycle ARCHIVED.
   const row = await prisma.product.findUniqueOrThrow({
@@ -750,8 +749,7 @@ test("POST archive arquiva sem apagar dados; repetição é replay e preserva ve
   );
   assert.equal(replay.status, 200);
   const viewReplay = (await replay.json()) as Record<string, unknown>;
-  assert.equal(viewReplay.version, created.version + 1);
-  assert.equal(viewReplay.active, false);
+  assert.deepEqual(viewReplay, { id: created.id, version: created.version + 1 });
 });
 
 test("archives concorrentes resolvem em replay único, com um só bump de version", async (t) => {
@@ -804,10 +802,8 @@ test("POST reactivate reverte archive; repetição é replay e outro tenant resp
     created.id,
   );
   assert.equal(res.status, 200);
-  const view = (await res.json()) as Record<string, unknown>;
-  assert.equal(view.id, created.id);
-  assert.equal(view.active, true);
-  assert.equal(view.version, created.version + 2);
+  // ADR-016: reactivate também responde só { id, version }; a projeção volta pelo GET.
+  assert.deepEqual(await res.json(), { id: created.id, version: created.version + 2 });
 
   const row = await prisma.product.findUniqueOrThrow({
     where: { id: created.id },
@@ -822,7 +818,7 @@ test("POST reactivate reverte archive; repetição é replay e outro tenant resp
   );
   assert.equal(replay.status, 200);
   const viewReplay = (await replay.json()) as Record<string, unknown>;
-  assert.equal(viewReplay.version, created.version + 2);
+  assert.deepEqual(viewReplay, { id: created.id, version: created.version + 2 });
 
   // Tenant estrangeiro não reativa: 404 sem vazar existência.
   const proibido = await handleReactivateProduct(
@@ -856,4 +852,91 @@ test("reactivates concorrentes resolvem em replay único, com um só bump de ver
   assert.equal(row.lifecycle, "ACTIVE");
   // archive (+1) e exatamente um reactivate (+1).
   assert.equal(row.version, created.version + 2);
+});
+
+// —— ADR-016: projection server-authoritative da ação de geração nas leituras autenticadas ——
+
+async function withEnv<T>(vars: Record<string, string>, run: () => Promise<T>): Promise<T> {
+  const saved: Record<string, string | undefined> = {};
+  for (const key of Object.keys(vars)) saved[key] = process.env[key];
+  Object.assign(process.env, vars);
+  try {
+    return await run();
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+const AVAILABLE = { state: "AVAILABLE", reason: null, nextAction: null };
+
+test("ActiveProductView traz generationAction AVAILABLE completo; ArchivedProductView o omite (GET e listagem)", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token } = await tenantOf();
+  const created = await criarProduct(token);
+  await withEnv({ GENERATED_CONTENTS_MONTH_LIMIT: "100" }, async () => {
+    const view = (await (await handleGetProduct(getById(token, created.id), created.id)).json()) as Record<string, unknown>;
+    assert.deepEqual(view.generationAction, AVAILABLE);
+    assert.deepEqual(Object.keys(view.generationAction as object).sort(), ["nextAction", "reason", "state"]);
+
+    // Mutação: contrato mínimo { id, version }, sem projeção (UI refaz GET após commit).
+    const arq = await handleArchiveProduct(archive(token, created.id), created.id);
+    assert.equal(arq.status, 200);
+    assert.deepEqual(await arq.json(), { id: created.id, version: created.version + 1 });
+
+    const archived = (await (await handleGetProduct(getById(token, created.id), created.id)).json()) as Record<string, unknown>;
+    assert.equal("generationAction" in archived, false, "ArchivedProductView omite o campo");
+
+    const b = await criarProduct(token);
+    const list = (await (await handleListProducts(get(token))).json()) as { products: Array<Record<string, unknown>> };
+    const inList = (id: string) => list.products.find((p) => p.id === id);
+    assert.deepEqual(inList(b.id)?.generationAction, AVAILABLE);
+    assert.equal("generationAction" in (inList(created.id) ?? {}), false);
+  });
+});
+
+test("Job QUEUED do usuário bloqueia a leitura com GEN-ACTIVE/VIEW_ACTIVE_ANALYSIS, sem vazar IDs", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId, userId } = await tenantOf();
+  const a = await criarProduct(token);
+  const b = await criarProduct(token);
+  await withEnv({ GENERATED_CONTENTS_MONTH_LIMIT: "100" }, async () => {
+    const job = await prisma.commerceIntelligenceJob.create({
+      data: { tenantId, userId, productId: a.id, idempotencyKey: randomBytes(16).toString("base64url"), fingerprint: "adr016", targetContentCount: 1, generatedContentsMonth: monthUtc(), status: "QUEUED" },
+    });
+    for (const id of [a.id, b.id]) {
+      const view = (await (await handleGetProduct(getById(token, id), id)).json()) as Record<string, unknown>;
+      assert.deepEqual(view.generationAction, { state: "BLOCKED", reason: "GEN-ACTIVE", nextAction: "VIEW_ACTIVE_ANALYSIS" });
+    }
+    const serialized = JSON.stringify(await (await handleListProducts(get(token))).json());
+    assert.equal(serialized.includes(job.id), false, "nenhum ID de Job no payload");
+  });
+});
+
+test("reserva do mês consome a projeção: GEN-CAPACITY/WAIT_FOR_CAPACITY sem folga, AVAILABLE com folga", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId, userId } = await tenantOf();
+  const created = await criarProduct(token);
+  const month = monthUtc();
+  const job = await prisma.commerceIntelligenceJob.create({
+    data: { tenantId, userId, productId: created.id, idempotencyKey: randomBytes(16).toString("base64url"), fingerprint: "adr016-cap", targetContentCount: 30, generatedContentsMonth: month, status: "FAILED" },
+  });
+  await prisma.generationUsageReservation.create({
+    data: { tenantId, jobId: job.id, generatedContentsMonth: month, quantity: 100, status: "CONFIRMED" },
+  });
+  const read = async () => ((await (await handleGetProduct(getById(token, created.id), created.id)).json()) as Record<string, unknown>).generationAction;
+  await withEnv({ GENERATED_CONTENTS_MONTH_LIMIT: "100" }, async () => {
+    assert.deepEqual(await read(), { state: "BLOCKED", reason: "GEN-CAPACITY", nextAction: "WAIT_FOR_CAPACITY" });
+    const serialized = JSON.stringify(await (await handleListProducts(get(token))).json());
+    for (const leak of ["generatedContentsMonth", "quantity", "activeProducts", "limit"]) {
+      assert.equal(serialized.includes(leak), false, `payload não deve conter ${leak}`);
+    }
+  });
+  // Limiar da projeção: com exatamente 1 de folga mensal ela ainda é AVAILABLE.
+  await prisma.generationUsageReservation.update({ where: { jobId: job.id }, data: { quantity: 99 } });
+  await withEnv({ GENERATED_CONTENTS_MONTH_LIMIT: "100" }, async () => {
+    assert.deepEqual(await read(), AVAILABLE);
+  });
 });
