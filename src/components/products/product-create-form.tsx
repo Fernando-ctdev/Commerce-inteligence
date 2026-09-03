@@ -61,8 +61,6 @@ type ProductCreateFormProps = {
   mode?: "create" | "edit";
   product?: ProductRecord;
   onSaved?: (product: ProductRecord) => void;
-  onDeleteRequest?: () => void;
-  deleting?: boolean;
 };
 
 const currencyOptions = [
@@ -387,8 +385,6 @@ export function ProductCreateForm({
   mode = "create",
   product,
   onSaved,
-  onDeleteRequest,
-  deleting = false,
 }: ProductCreateFormProps) {
   const router = useRouter();
   const isEdit = mode === "edit";
@@ -725,7 +721,7 @@ export function ProductCreateForm({
           <TextField
             error={combinedErrors.name}
             id={fieldId("name")}
-            placeholder="Ex.: Fone de ouvido Bluetooth com cancelamento de ruído"
+            placeholder="Escreva o nome do produto"
             label="Nome do produto"
             onChange={(value) => update("name", value)}
             required
@@ -733,7 +729,7 @@ export function ProductCreateForm({
           />
           <TextField
             error={combinedErrors.description}
-            placeholder="Ex.: Fone sem fio com até 30 horas de bateria, ideal para estudos e trabalho..."
+            placeholder="Cole aqui a descrição do produto, ou descreva-o em detalhes"
             id={fieldId("description")}
             label="Descrição"
             multiline
@@ -770,7 +766,7 @@ export function ProductCreateForm({
             label="Características do produto"
             multiline
             onChange={(value) => update("characteristics", value)}
-            placeholder="Ex.: Recarregável por USB-C..."
+            placeholder="Descreva as características do produto, isso ajuda a inteligencia do sistema a gerar conteúdos ainda melhores"
             required
             value={draft.characteristics}
           />
@@ -1097,16 +1093,6 @@ export function ProductCreateForm({
               : isEdit
                 ? "Salvar alterações"
                 : "Salvar produto"}
-          </Button>
-        )}
-        {isEdit && onDeleteRequest && (
-          <Button
-            disabled={saving || deleting}
-            onClick={onDeleteRequest}
-            type="button"
-            variant="destructive"
-          >
-            {deleting ? "Excluindo…" : "Excluir produto"}
           </Button>
         )}
         {/* Cancelar bloqueado durante o salvamento: navegar com POST em

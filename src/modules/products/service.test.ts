@@ -25,7 +25,8 @@ import {
   validateManualProductInput,
 } from "./service.js";
 
-const ORIGIN = process.env.APP_ORIGIN ?? "http://localhost:3000";
+// APP_ORIGIN pode ser lista separada por vírgula; o runtime valida contra o conjunto.
+const ORIGIN = (process.env.APP_ORIGIN ?? "http://localhost:3000").split(",")[0].trim();
 const prisma = new PrismaClient();
 let dbUp = false;
 
@@ -297,6 +298,10 @@ async function tenantOf() {
   const token = await registerUser(email(), "senha-segura-123");
   const session = await resolveSession(token);
   assert.ok(session);
+  // O provisioning do entitlement default é produção (registerUser/ADR-006); o teste só
+  // garante o limite de configuração do runtime no tenant, como o .env faz em produção.
+  const limit = Number(process.env.ENTITLEMENT_ACTIVE_PRODUCTS ?? 5);
+  await prisma.tenantEntitlement.update({ where: { tenantId: session.tenantId }, data: { activeProductsLimit: limit } });
   return { token, tenantId: session.tenantId };
 }
 
@@ -703,25 +708,14 @@ test("PATCH com expectedVersion desatualizada responde 409 VERSION-CONFLICT", as
   );
 });
 
-test("DELETE remove o Product do tenant e repetição responde 404", async (t) => {
+test("DELETE sempre rejeita exclusão física e preserva o Product", async (t) => {
   if (!dbUp) return t.skip();
   const { token, tenantId } = await tenantOf();
   const created = await criarProduct(token);
-
   const res = await handleDeleteProduct(del(token, created.id), created.id);
-  assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { id: created.id });
-  assert.equal(await prisma.product.count({ where: { tenantId } }), 0);
-
-  const repetida = await handleDeleteProduct(
-    del(token, created.id),
-    created.id,
-  );
-  assert.equal(repetida.status, 404);
-  assert.equal(
-    ((await repetida.json()) as { code?: string }).code,
-    "PRODUCT-NOT-FOUND",
-  );
+  assert.equal(res.status, 409);
+  assert.equal(((await res.json()) as { code?: string }).code, "PRODUCT_DELETE_UNSUPPORTED");
+  assert.equal(await prisma.product.count({ where: { tenantId, id: created.id } }), 1);
 });
 
 test("POST archive arquiva sem apagar dados; repetição é replay e preserva version", async (t) => {

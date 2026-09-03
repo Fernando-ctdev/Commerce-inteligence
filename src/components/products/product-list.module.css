@@ -3,6 +3,8 @@
   gap: 24px;
   margin: 0 auto;
   max-width: 1080px;
+  min-width: 0;
+  width: 100%;
 }
 
 .listIntro {
@@ -21,6 +23,8 @@
 .controls {
   display: grid;
   gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
 }
 
 .searchLabel {
@@ -35,6 +39,7 @@
   color: var(--color-text);
   font: inherit;
   min-height: 44px;
+  min-width: 0;
   padding: 10px 12px;
   width: 100%;
 }
@@ -44,6 +49,8 @@
   flex-wrap: wrap;
   gap: 4px;
   max-width: 100%;
+  min-width: 0;
+  width: 100%;
 }
 
 .filters [data-slot="tabs-trigger"] {
@@ -71,7 +78,10 @@
 }
 
 .statusActive,
-.statusArchived {
+.statusArchived,
+.statusPending,
+.statusReady,
+.statusFailed {
   border: 1px solid var(--color-border);
   border-radius: 999px;
   color: var(--color-text-secondary);
@@ -80,8 +90,17 @@
   padding: 4px 8px;
 }
 
-.statusActive {
+.statusActive,
+.statusReady {
   color: var(--color-success);
+}
+
+.statusPending {
+  color: var(--color-intelligence);
+}
+
+.statusFailed {
+  color: var(--color-danger);
 }
 
 .secondaryButton:hover {
@@ -300,6 +319,7 @@
   .listIntro {
     align-items: stretch;
     flex-direction: column;
+    min-width: 0;
   }
 
   .listIntro .primaryButton {

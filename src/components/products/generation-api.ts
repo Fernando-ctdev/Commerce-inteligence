@@ -1,158 +1,19 @@
-export type GenerationStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
-
-export type GenerationRecord = {
-  id: string;
-  productId: string;
-  status: GenerationStatus;
-  quantity: number;
-  objective: string | null;
-  previousRunId: string | null;
-  queuedAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  attemptCount: number;
-  error: string | null;
-  strategy: Record<string, unknown> | null;
-  plan: Record<string, unknown> | null;
-  contents: Array<Record<string, unknown>>;
-  provenance: Record<string, unknown> | null;
-};
-
-export class GenerationApiError extends Error {
-  constructor(readonly status: number, message: string, readonly code?: string, readonly fieldErrors: Record<string, string> = {}) {
-    super(message);
-    this.name = "GenerationApiError";
-  }
-}
-
-function sanitizeGenerationError(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const sanitized = value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 500);
-  return sanitized || null;
-}
-
-function isGenerationStatus(value: unknown): value is GenerationStatus {
-  switch (value) {
-    case "queued":
-    case "running":
-    case "succeeded":
-    case "failed":
-    case "cancelled":
-      return true;
-    default:
-      return false;
-  }
-}
-
-export function isCompleteGenerationResult(value: Pick<GenerationRecord, "status" | "quantity" | "strategy" | "plan" | "contents">): boolean {
-  return value.status !== "succeeded" || (value.strategy !== null && value.plan !== null && value.contents.length === value.quantity);
-}
-
-function key() {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
-}
-
-export function createGenerationIdempotencyKey() {
-  return key();
-}
-
-const generationStoragePrefix = "commerce-intelligence:generation-run:";
-
-function generationStorageKey(productId: string) {
-  return `${generationStoragePrefix}${productId}`;
-}
-
-export function rememberGeneration(productId: string, generationId: string) {
-  try {
-    window.localStorage.setItem(generationStorageKey(productId), generationId);
-  } catch {
-    // A run continua autoritativa no servidor; armazenamento indisponível só impede o ponteiro local.
-  }
-}
-
-function forgetGeneration(productId: string) {
-  try {
-    window.localStorage.removeItem(generationStorageKey(productId));
-  } catch {
-    // A ausência de armazenamento não altera a run no servidor.
-  }
-}
-
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json", "Content-Type": "application/json", ...init?.headers }, ...init }).catch(() => null);
-  const data: unknown = response ? await response.json().catch(() => null) : null;
-  if (!response) throw new GenerationApiError(0, "Não foi possível conectar agora. Tente novamente.");
-  if (!response.ok) {
-    const body = typeof data === "object" && data !== null ? data as Record<string, unknown> : {};
-    throw new GenerationApiError(response.status, typeof body.error === "string" ? body.error : "Não foi possível concluir a geração.", typeof body.code === "string" ? body.code : undefined, typeof body.fieldErrors === "object" && body.fieldErrors !== null ? body.fieldErrors as Record<string, string> : {});
-  }
-  return data as T;
-}
-
-export function normalizeGeneration(value: unknown): GenerationRecord {
-  if (typeof value !== "object" || value === null) throw new GenerationApiError(0, "Resposta de Generation inválida.");
-  const record = value as Record<string, unknown>;
-  const status = record.status;
-  if (!isGenerationStatus(status)) throw new GenerationApiError(0, "Resposta de Generation inválida.");
-  const normalized = {
-    id: String(record.id ?? ""),
-    productId: String(record.productId ?? ""),
-    status,
-    quantity: typeof record.quantity === "number" ? record.quantity : 0,
-    objective: typeof record.objective === "string" ? record.objective : null,
-    previousRunId: typeof record.previousRunId === "string" ? record.previousRunId : null,
-    queuedAt: String(record.queuedAt ?? ""),
-    startedAt: typeof record.startedAt === "string" ? record.startedAt : null,
-    finishedAt: typeof record.finishedAt === "string" ? record.finishedAt : null,
-    attemptCount: typeof record.attemptCount === "number" ? record.attemptCount : 0,
-    error: sanitizeGenerationError(record.error),
-    strategy: typeof record.strategy === "object" && record.strategy !== null ? record.strategy as Record<string, unknown> : null,
-    plan: typeof record.plan === "object" && record.plan !== null ? record.plan as Record<string, unknown> : null,
-    contents: Array.isArray(record.contents) ? record.contents.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null) : [],
-    provenance: typeof record.provenance === "object" && record.provenance !== null ? record.provenance as Record<string, unknown> : null,
-  };
-  if (!isCompleteGenerationResult(normalized)) throw new GenerationApiError(0, "O resultado da geração está incompleto.", "generation_incomplete");
-  return normalized;
-}
-
-export async function startGeneration(productId: string, quantity: number, objective: string, idempotencyKey: string) {
-  return normalizeGeneration(await request<unknown>("/api/generations", { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: JSON.stringify({ productId, quantity, objective: objective || undefined }) }));
-}
-
-export async function getGeneration(id: string) {
-  return normalizeGeneration(await request<unknown>(`/api/generations/${encodeURIComponent(id)}`, { method: "GET" }));
-}
-
-export async function getLatestGeneration(productId: string): Promise<GenerationRecord | null> {
-  let generationId: string | null;
-  try {
-    generationId = window.localStorage.getItem(generationStorageKey(productId));
-  } catch (caught) {
-    throw new GenerationApiError(0, "Não foi possível restaurar a geração deste produto.", "generation_restore_unavailable");
-  }
-  if (!generationId) return null;
-  try {
-    const generation = await getGeneration(generationId);
-    if (generation.productId !== productId) {
-      forgetGeneration(productId);
-      return null;
-    }
-    return generation;
-  } catch (caught) {
-    if (caught instanceof GenerationApiError && caught.status === 404) {
-      forgetGeneration(productId);
-      return null;
-    }
-    throw caught;
-  }
-}
-
-export async function cancelGeneration(id: string) {
-  return normalizeGeneration(await request<unknown>(`/api/generations/${encodeURIComponent(id)}/cancel`, { method: "POST", body: "{}" }));
-}
-
-export async function retryGeneration(id: string, idempotencyKey: string) {
-  return normalizeGeneration(await request<unknown>(`/api/generations/${encodeURIComponent(id)}/retry`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: "{}" }));
-}
+export type CommerceJobStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED";
+export type CommerceJobStage = "UNDERSTANDING_PRODUCT" | "MAPPING_COMMERCIAL_OPPORTUNITIES" | "BUILDING_STRATEGY" | "BUILDING_CONTENT_PLAN" | "GENERATING_BRIEFS" | "FINALIZING";
+export type GenerationRecord = { id: string; productId: string; status: CommerceJobStatus; stage: CommerceJobStage | null; targetContentCount: number; error: string | null; strategy: Record<string, unknown> | null; plan: Record<string, unknown> | null; contents: Array<Record<string, unknown>>; readiness: "PENDING" | "ANALYZING" | "READY" | "FAILED"; previousRunId?: string | null; };
+export class GenerationApiError extends Error { constructor(readonly status: number, message: string, readonly code?: string) { super(message); this.name = "GenerationApiError"; } }
+const validStages: Record<CommerceJobStage, true> = { UNDERSTANDING_PRODUCT: true, MAPPING_COMMERCIAL_OPPORTUNITIES: true, BUILDING_STRATEGY: true, BUILDING_CONTENT_PLAN: true, GENERATING_BRIEFS: true, FINALIZING: true };
+function object(value: unknown) { return typeof value === "object" && value !== null ? value as Record<string, unknown> : null; }
+function sanitize(value: unknown) { return typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 500) || null : null; }
+function invalid(message: string, code = "GEN-SCHEMA"): never { throw new GenerationApiError(0, message, code); }
+export function normalizeGeneration(value: unknown): GenerationRecord { const record = object(value); if (!record) invalid("Resposta da análise inválida."); const id = typeof record.id === "string" ? record.id.trim() : ""; const productId = typeof record.productId === "string" ? record.productId.trim() : typeof record.product_id === "string" ? record.product_id.trim() : ""; const status = String(record.status ?? "").toUpperCase() as CommerceJobStatus; const count = (typeof record.targetContentCount === "number" ? record.targetContentCount : record.quantity) as number; if (!id || !productId || !Number.isInteger(count) || count < 1 || count > 30) invalid("Resposta da análise inválida."); if (!(status in { QUEUED: 1, RUNNING: 1, SUCCEEDED: 1, FAILED: 1, CANCELLED: 1 })) invalid("Resposta da análise inválida."); const stage = typeof record.stage === "string" && record.stage in validStages ? record.stage as CommerceJobStage : null; const contents = Array.isArray(record.contents) ? record.contents.filter((item): item is Record<string, unknown> => !!object(item)) : []; if (status === "SUCCEEDED") { if (!object(record.strategy) || !object(record.plan) || contents.length !== count) invalid("O resultado da análise está incompleto.", "GEN-SCHEMA"); for (const content of contents) { if (![ "angle", "hook", "script", "cta" ].every((field) => typeof content[field] === "string" && String(content[field]).trim()) || !Array.isArray(content.scenes) || content.scenes.length < 2 || content.scenes.length > 8 || content.scenes.some((scene) => typeof scene !== "string" || !scene.trim())) invalid("O resultado da análise está incompleto.", "GEN-SCHEMA"); } } return { id, productId, status, stage, targetContentCount: count, error: sanitize(record.error ?? record.publicError), strategy: object(record.strategy), plan: object(record.plan), contents, readiness: record.readiness === "PENDING" || record.readiness === "ANALYZING" || record.readiness === "READY" || record.readiness === "FAILED" ? record.readiness : status === "SUCCEEDED" ? "READY" : status === "FAILED" || status === "CANCELLED" ? "FAILED" : "ANALYZING", previousRunId: typeof record.previousRunId === "string" ? record.previousRunId : null }; }
+async function request<T>(url: string, init?: RequestInit): Promise<T> { const response = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json", "Content-Type": "application/json", ...init?.headers }, ...init }).catch(() => null); const data: unknown = response ? await response.json().catch(() => null) : null; if (!response) throw new GenerationApiError(0, "Não foi possível conectar agora. Tente novamente."); if (!response.ok) { const body = object(data); throw new GenerationApiError(response.status, typeof body?.error === "string" ? body.error : "Não foi possível concluir a análise.", typeof body?.code === "string" ? body.code : undefined); } return data as T; }
+export function createGenerationIdempotencyKey() { const bytes = new Uint8Array(16); crypto.getRandomValues(bytes); return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, ""); }
+export function startGeneration(productId: string, idempotencyKeyOrQuantity: string | number, objectiveOrKey?: string, keyArg?: string, _targetContentCount = 1) { const idempotencyKey = keyArg ?? (typeof idempotencyKeyOrQuantity === "string" ? idempotencyKeyOrQuantity : objectiveOrKey ?? createGenerationIdempotencyKey()); return request<{ id?: unknown }>( "/api/generations", { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: JSON.stringify({ productId }) }).then((value) => { const id = typeof value.id === "string" ? value.id.trim() : ""; if (!id) invalid("Resposta da análise inválida."); return getGeneration(id); }); }
+export function getGeneration(id: string) { return request<unknown>(`/api/generations/${encodeURIComponent(id)}`).then(normalizeGeneration); }
+export function getCurrentGeneration() { return request<unknown>("/api/generations/current").then((value) => value ? normalizeGeneration(value) : null); }
+export function getLatestGeneration(productId: string) { return getCurrentGeneration().then((job) => job?.productId === productId ? job : null); }
+export function retryGeneration(id: string, idempotencyKey: string) { return request<unknown>(`/api/generations/${encodeURIComponent(id)}/retry`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: "{}" }).then(normalizeGeneration); }
+export function cancelGeneration(id: string) { return request<unknown>(`/api/generations/${encodeURIComponent(id)}/cancel`, { method: "POST", body: "{}" }).then(normalizeGeneration); }
+export const isActiveGeneration = (status?: CommerceJobStatus | string | null) => status === "QUEUED" || status === "RUNNING" || status === "queued" || status === "running";
+export const isRetryableGeneration = (status?: CommerceJobStatus | string | null) => status === "FAILED" || status === "CANCELLED" || status === "failed" || status === "cancelled";

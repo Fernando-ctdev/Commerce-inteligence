@@ -12,7 +12,7 @@ import {
 
 export const SESSION_COOKIE = "ci_session";
 
-const APP_ORIGIN = process.env.APP_ORIGIN ?? "";
+const APP_ORIGINS = new Set((process.env.APP_ORIGIN ?? "").split(",").map((s) => s.trim()).filter(Boolean));
 const SECURE = process.env.NODE_ENV === "production" ? " Secure;" : "";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -48,7 +48,9 @@ function clearedCookie(): string {
 
 export function originOk(req: Request): boolean {
   // Origin ausente, nulo ou divergente é rejeitado antes de qualquer mutação (SPEC §CSRF/origem)
-  return APP_ORIGIN !== "" && req.headers.get("origin") === APP_ORIGIN;
+  // APP_ORIGIN pode ser lista separada por vírgula (fail-closed se vazia).
+  const origin = req.headers.get("origin");
+  return origin !== null && APP_ORIGINS.has(origin);
 }
 
 export function sameOriginRequest(req: Request): boolean {

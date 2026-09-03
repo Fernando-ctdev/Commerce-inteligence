@@ -1,5 +1,7 @@
 import type { ProductFieldErrors, ProductPayload } from "./product-form-model";
 
+export type ProductReadiness = "PENDING" | "ANALYZING" | "READY" | "FAILED";
+
 export type ProductRecord = {
   id: string;
   version: number;
@@ -15,6 +17,7 @@ export type ProductRecord = {
   targetContentCount: number;
   creatorPresence: "on_camera" | "hands_only_product" | "either";
   active: boolean;
+  readiness: ProductReadiness;
 };
 
 export type ProductMutation = {
@@ -152,6 +155,10 @@ export function normalizeProduct(value: unknown): ProductRecord {
         ? record.creatorPresence
         : "either",
     active: record.active !== false,
+    readiness:
+      record.readiness === "ANALYZING" || record.readiness === "READY" || record.readiness === "FAILED"
+        ? record.readiness
+        : "PENDING",
   };
 }
 

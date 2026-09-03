@@ -5,6 +5,7 @@
 import { Prisma, type Product } from "@prisma/client";
 
 import { prisma } from "../db";
+import { provisionDefaultEntitlement } from "../entitlements/products";
 
 export type ManualProductInput = Record<string, unknown>;
 
@@ -31,6 +32,12 @@ export class ProductVersionConflictError extends Error {
   constructor() {
     super("VERSION_CONFLICT");
     this.name = "ProductVersionConflictError";
+  }
+}
+export class ProductDeleteRejectedError extends Error {
+  constructor(public readonly code: "PRODUCT_HAS_HISTORY" | "PRODUCT_DELETE_UNSUPPORTED") {
+    super(code);
+    this.name = "ProductDeleteRejectedError";
   }
 }
 
@@ -560,50 +567,51 @@ async function transitionTenantProduct(
   id: string,
   target: "ACTIVE" | "ARCHIVED",
 ): Promise<Product> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const existing = await getTenantProduct(tenantId, id);
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "tenantId" FROM "tenant_entitlements" WHERE "tenantId" = ${tenantId} FOR UPDATE`;
+    const existing = await tx.product.findFirst({ where: { tenantId, id } });
     if (!existing) throw new ProductNotFoundError();
     if (existing.lifecycle === target) return existing;
-    try {
-      return await prisma.product.update({
-        // Versão no where: editor concorrente com expectedVersion desatualizado recebe 409.
-        where: { id, tenantId, version: existing.version },
-        data: { lifecycle: target, version: { increment: 1 } },
-      });
-    } catch (error) {
-      // P2025: a versão mudou no meio (PATCH/transição concorrente) ou a linha sumiu.
-      // A releitura do próximo loop decide: alvo → replay, outro → retry, sem linha → 404.
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2025"
-      )
-        continue;
-      throw error;
+    // ADR-006: entitlement default idempotente; linhas históricas pré-backfill se auto-provisionam
+    // aqui (nunca sobrescreve limite já resolvido). Sem limite configurado, fail-closed abaixo.
+    const entitlement = await provisionDefaultEntitlement(tenantId, tx);
+    const activeCount = await tx.product.count({ where: { tenantId, lifecycle: "ACTIVE" } });
+    if (target === "ACTIVE") {
+      if (!Number.isInteger(entitlement.activeProductsLimit) || entitlement.activeProductsLimit! < 0) throw new ProductValidationError({ lifecycle: "Limite de produtos não configurado." }, "GEN-PRODUCT-CAPACITY");
+      if (activeCount >= entitlement.activeProductsLimit!) throw new ProductValidationError({ lifecycle: "Limite de produtos ativos atingido." }, "GEN-PRODUCT-CAPACITY");
     }
-  }
-  // Disputa persistente com outros escritores: conflito explícito, não erro interno.
-  throw new ProductVersionConflictError();
+    const changed = await tx.product.updateMany({ where: { id, tenantId, version: existing.version }, data: { lifecycle: target, version: { increment: 1 } } });
+    if (changed.count !== 1) throw new ProductVersionConflictError();
+    const updated = await tx.product.findFirst({ where: { tenantId, id } });
+    if (!updated) throw new ProductNotFoundError();
+    if (entitlement) await tx.tenantEntitlement.update({ where: { tenantId }, data: { activeProductsUsed: target === "ACTIVE" ? activeCount + 1 : Math.max(0, activeCount - 1) } });
+    return updated;
+  });
 }
 
-export function archiveTenantProduct(
-  tenantId: string,
-  id: string,
-): Promise<Product> {
-  return transitionTenantProduct(tenantId, id, "ARCHIVED");
+export async function archiveTenantProduct(tenantId: string, id: string): Promise<Product> {
+  try { return await transitionTenantProduct(tenantId, id, "ARCHIVED"); }
+  catch (error) { if (error instanceof ProductVersionConflictError) return transitionTenantProduct(tenantId, id, "ARCHIVED"); throw error; }
 }
 
 /** Desarquivar/reativar: volta o Product para ACTIVE, idempotente como archive. */
-export function reactivateTenantProduct(
-  tenantId: string,
-  id: string,
-): Promise<Product> {
-  return transitionTenantProduct(tenantId, id, "ACTIVE");
+export async function reactivateTenantProduct(tenantId: string, id: string): Promise<Product> {
+  try { return await transitionTenantProduct(tenantId, id, "ACTIVE"); }
+  catch (error) { if (error instanceof ProductVersionConflictError) return transitionTenantProduct(tenantId, id, "ACTIVE"); throw error; }
 }
-
-export async function deleteTenantProduct(
-  tenantId: string,
-  id: string,
-): Promise<boolean> {
-  const result = await prisma.product.deleteMany({ where: { id, tenantId } });
-  return result.count === 1;
+export async function deleteTenantProduct(tenantId: string, id: string): Promise<never> {
+  const product = await prisma.product.findFirst({ where: { tenantId, id }, select: { id: true } });
+  if (!product) throw new ProductNotFoundError();
+  const [jobs, runs, strategies, plans, opportunities, contents, briefs, memory] = await Promise.all([
+    prisma.commerceIntelligenceJob.count({ where: { tenantId, productId: id } }),
+    prisma.intelligenceRun.count({ where: { tenantId, productId: id } }),
+    prisma.productStrategy.count({ where: { tenantId, productId: id } }),
+    prisma.contentPlan.count({ where: { tenantId, productId: id } }),
+    prisma.contentOpportunity.count({ where: { tenantId, productId: id } }),
+    prisma.content.count({ where: { tenantId, productId: id } }),
+    prisma.contentBriefVersion.count({ where: { tenantId, productId: id } }),
+    prisma.productMemorySnapshot.count({ where: { tenantId, productId: id } }),
+  ]);
+  const hasHistory = jobs + runs + strategies + plans + opportunities + contents + briefs + memory > 0;
+  throw new ProductDeleteRejectedError(hasHistory ? "PRODUCT_HAS_HISTORY" : "PRODUCT_DELETE_UNSUPPORTED");
 }

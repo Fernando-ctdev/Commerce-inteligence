@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Archive, ArchiveRestore } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,24 +9,21 @@ import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
 import {
   archiveProduct,
-  deleteProduct,
   getProduct,
   ProductApiError,
   ProductRecord,
   reactivateProduct,
 } from "./product-api";
+import { GenerationPanel } from "./generation-panel";
 import { ProductCreateForm } from "./product-create-form";
 import styles from "./product-detail.module.css";
 
 export function ProductDetail({ id }: { id: string }) {
-  const router = useRouter();
   const [product, setProduct] = useState<ProductRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [reactivating, setReactivating] = useState(false);
-  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [archiveConfirmationOpen, setArchiveConfirmationOpen] = useState(false);
   const [reactivateConfirmationOpen, setReactivateConfirmationOpen] =
     useState(false);
@@ -85,27 +81,6 @@ export function ProductDetail({ id }: { id: string }) {
     );
   }
 
-  async function remove() {
-    if (!product) return;
-    const currentProduct = product;
-    if (deleting) return;
-    setDeleting(true);
-    setError(null);
-    try {
-      await deleteProduct(currentProduct.id);
-      setDeleteConfirmationOpen(false);
-      toast.success("Produto excluído.");
-      router.push("/products");
-    } catch (caught) {
-      const message =
-        caught instanceof ProductApiError
-          ? caught.message
-          : "Não foi possível excluir este produto agora.";
-      setError(message);
-      toast.error(message);
-      setDeleting(false);
-    }
-  }
 
   async function archive() {
     if (!product || archiving) return;
@@ -186,18 +161,6 @@ export function ProductDetail({ id }: { id: string }) {
         </div>
       </section>
       <ConfirmationDialog
-        confirmLabel="Excluir produto"
-        description={`O produto “${product.name}” será excluído permanentemente. Esta ação não pode ser desfeita.`}
-        destructive
-        error={error}
-        onConfirm={remove}
-        onOpenChange={setDeleteConfirmationOpen}
-        open={deleteConfirmationOpen}
-        pending={deleting}
-        pendingLabel="Excluindo…"
-        title="Excluir produto?"
-      />
-      <ConfirmationDialog
         confirmLabel="Arquivar produto"
         description={`O produto “${product.name}” será arquivado e deixará de aparecer entre os produtos ativos. Os dados serão preservados.`}
         error={error}
@@ -219,13 +182,16 @@ export function ProductDetail({ id }: { id: string }) {
         pendingLabel="Reativando…"
         title="Reativar produto?"
       />
+      {product.active && (
+        <GenerationPanel
+          productId={product.id}
+          productName={product.name}
+          readiness={product.readiness}
+          targetContentCount={product.targetContentCount}
+        />
+      )}
       <ProductCreateForm
-        deleting={deleting}
         mode="edit"
-        onDeleteRequest={() => {
-          setError(null);
-          setDeleteConfirmationOpen(true);
-        }}
         onSaved={setProduct}
         product={product}
       />

@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "../db";
 import { hashPassword, verifyPassword } from "./password";
+import { provisionDefaultEntitlement } from "../entitlements/products";
 
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -43,6 +44,8 @@ export async function registerUser(email: string, password: string, previousToke
     await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({ data: { email, passwordHash } });
       const tenant = await tx.tenant.create({ data: { userId: user.id } });
+      // ADR-006: entitlement inicial default, idempotente, no provisionamento do Tenant.
+      await provisionDefaultEntitlement(tenant.id, tx);
       await tx.session.create({
         data: {
           userId: user.id,

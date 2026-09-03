@@ -1,0 +1,6 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { validateBriefSet, repairBriefs } from "./gates";
+import { ContractError } from "./contract";
+const brief = (id: string, angle = "angle", hook = "hook", cta = "cta") => ({ contentId: id, briefVersionId: `${id}-v1`, version: 1 as const, angle, hook, script: `Fale sobre ${id}`, scenes: ["a", "b"], cta });
+test("detects normalized duplicate and fails closed via typed repair exhaustion", () => { const briefs = [brief("a", "angle-a"), brief("b", "angle-b", "other", "other-cta")]; const reports = validateBriefSet(briefs); assert.equal(reports[0].decision, "PASS"); assert.equal(reports[1].decision, "PASS"); const duplicate = [brief("a", "angle-a"), { ...brief("b", "angle-b"), script: "Fale sobre a" }]; const detected = validateBriefSet(duplicate); assert.equal(detected[1].decision, "REPAIR"); assert.throws(() => repairBriefs(duplicate, detected, 1), (error: unknown) => error instanceof ContractError && error.code === "GEN-REPAIR-EXHAUSTED"); });

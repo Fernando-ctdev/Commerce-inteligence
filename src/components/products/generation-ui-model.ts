@@ -1,56 +1,12 @@
-import type { GenerationStatus } from "./generation-api";
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function dimensionLabel(dimensions: Record<string, unknown>, collection: string, id: unknown): string {
-  if (typeof id !== "string" || id === "") return "Não informado";
-  const values = Array.isArray(dimensions[collection]) ? dimensions[collection] : [];
-  const match = values.find((value) => typeof value === "object" && value !== null && (value as Record<string, unknown>).id === id);
-  return match ? text((match as Record<string, unknown>).label) || "Dimensão indisponível" : "Dimensão indisponível";
-}
-
-export function contentDimensionLabels(strategy: Record<string, unknown> | null, content: Record<string, unknown>) {
-  const dimensions = strategy && typeof strategy.dimensions === "object" && strategy.dimensions !== null ? strategy.dimensions as Record<string, unknown> : {};
-  return {
-    audience: dimensionLabel(dimensions, "audiences", content.audience_id),
-    pain: dimensionLabel(dimensions, "pains", content.pain_id),
-    desire: dimensionLabel(dimensions, "desires", content.desire_id),
-    benefit: dimensionLabel(dimensions, "benefits", content.benefit_id),
-    objection: typeof content.objection_id === "string" && content.objection_id !== "" ? dimensionLabel(dimensions, "objections", content.objection_id) : null,
-    angle: dimensionLabel(dimensions, "angles", content.angle_id),
-  };
-}
-
-export function isActiveGeneration(status: GenerationStatus | undefined): boolean {
-  return status === "queued" || status === "running";
-}
-
-export function isRetryableGeneration(status: GenerationStatus | undefined): boolean {
-  return status === "failed" || status === "cancelled";
-}
-
-export function generationStatusLabel(status: GenerationStatus): string {
-  return status === "queued" ? "Na fila" : status === "running" ? "Gerando" : status === "succeeded" ? "Concluída" : status === "failed" ? "Falha recuperável" : "Cancelada";
-}
-
-export function generationStatusMessage(status: GenerationStatus, quantity: number): string {
-  return status === "queued"
-    ? `O pedido foi recebido para ${quantity} conteúdos.`
-    : status === "running"
-      ? "A geração está em andamento. Nenhum conteúdo parcial será exibido."
-      : status === "succeeded"
-        ? "Estratégia, plano e conteúdos completos estão disponíveis."
-        : status === "failed"
-          ? "A geração não publicou resultado parcial. Você pode tentar novamente."
-          : "Nenhum conteúdo parcial foi criado. Você pode tentar novamente.";
-}
-
-export function isLimitError(code: string | null): boolean {
-  return code === "generation_capacity";
-}
-
-export function isCapacityUnavailableError(code: string | null): boolean {
-  return code === "capacity_unavailable";
-}
+import type { CommerceJobStage, CommerceJobStatus } from "./generation-api";
+export const stageMessages: Record<CommerceJobStage, string> = { UNDERSTANDING_PRODUCT: "Entendendo o produto...", MAPPING_COMMERCIAL_OPPORTUNITIES: "Mapeando oportunidades comerciais...", BUILDING_STRATEGY: "Definindo a melhor estratégia para este produto...", BUILDING_CONTENT_PLAN: "Organizando as oportunidades de conteúdo...", GENERATING_BRIEFS: "Preparando os Briefings do Conteúdo...", FINALIZING: "Finalizando..." };
+export const statusLabels: Record<CommerceJobStatus, string> = { QUEUED: "Na fila", RUNNING: "Analisando", SUCCEEDED: "Pronto", FAILED: "Falhou", CANCELLED: "Cancelada" };
+export function stageMessage(stage: CommerceJobStage | null) { return stage ? stageMessages[stage] : "Preparando a análise..."; }
+export function statusMessage(status: CommerceJobStatus, productName?: string) { if (status === "QUEUED") return `${productName ? `${productName} foi confirmado. ` : ""}A análise começará em breve.`; if (status === "RUNNING") return "A análise continua em segundo plano. Você pode continuar usando a aplicação."; if (status === "SUCCEEDED") return "Seu produto está pronto para revisão."; if (status === "CANCELLED") return "A análise foi cancelada. Você pode tentar novamente."; return "Não foi possível concluir a análise. Seus fatos foram preservados e você pode tentar novamente."; }
+export const generationStatusLabel = (status: CommerceJobStatus | string) => statusLabels[status as CommerceJobStatus] ?? "Estado desconhecido";
+export const generationStatusMessage = (status: CommerceJobStatus | string, _count?: number) => { const normalized: Record<string, CommerceJobStatus> = { queued: "QUEUED", running: "RUNNING", succeeded: "SUCCEEDED", failed: "FAILED", cancelled: "CANCELLED" }; return statusMessage(normalized[status] ?? status as CommerceJobStatus); };
+export const isActiveGeneration = (status?: CommerceJobStatus | string | null) => status === "QUEUED" || status === "RUNNING" || status === "queued" || status === "running";
+export const isRetryableGeneration = (status?: CommerceJobStatus | string | null) => status === "FAILED" || status === "CANCELLED" || status === "failed" || status === "cancelled";
+export const isLimitError = (code?: string | null) => code === "GEN-ACTIVE" || code === "generation_capacity";
+export const isCapacityUnavailableError = (code?: string | null) => code === "GEN-CAPACITY" || code === "capacity_unavailable";
+export function contentDimensionLabels(strategy: unknown, content: Record<string, unknown>) { const dimensions = ((strategy as Record<string, unknown> | null)?.dimensions as Record<string, unknown> | undefined) ?? {}; const label = (key: string) => { const id = content[key]; const values = dimensions[key.replace(/_id$/, "s")]; const list = Array.isArray(values) ? values as Array<Record<string, unknown>> : []; return String(list.find((item) => item.id === id)?.label ?? id ?? "Não informado"); }; return { audience: label("audience_id"), pain: label("pain_id"), desire: label("desire_id"), benefit: label("benefit_id"), objection: label("objection_id"), angle: label("angle_id") }; }

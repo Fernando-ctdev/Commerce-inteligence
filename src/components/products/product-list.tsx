@@ -14,7 +14,7 @@ export function ProductList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "active" | "archived">("all");
+  const [filter, setFilter] = useState<"all" | "active" | "pending" | "archived">("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,7 +42,11 @@ export function ProductList() {
     return products.filter((product) => {
       const matchesFilter =
         filter === "all" ||
-        (filter === "active" ? product.active : !product.active);
+        (filter === "active"
+          ? product.active
+          : filter === "pending"
+            ? product.readiness !== "READY" && product.active
+            : !product.active);
       const matchesQuery =
         !normalizedQuery ||
         `${product.name} ${product.category} ${product.description}`
@@ -85,6 +89,7 @@ export function ProductList() {
           <TabsList className={styles.filters} variant="line">
             <TabsTrigger value="all">Todos</TabsTrigger>
             <TabsTrigger value="active">Ativos</TabsTrigger>
+            <TabsTrigger value="pending">Pendentes</TabsTrigger>
             <TabsTrigger value="archived">Arquivados</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -187,12 +192,26 @@ export function ProductList() {
                     </p>
                     <span
                       className={
-                        product.active
-                          ? styles.statusActive
-                          : styles.statusArchived
+                        product.readiness === "ANALYZING"
+                          ? styles.statusPending
+                          : product.readiness === "READY"
+                            ? styles.statusReady
+                            : product.readiness === "FAILED"
+                              ? styles.statusFailed
+                              : product.active
+                                ? styles.statusActive
+                                : styles.statusArchived
                       }
                     >
-                      {product.active ? "Ativo" : "Arquivado"}
+                      {product.readiness === "ANALYZING"
+                        ? "Analisando"
+                        : product.readiness === "READY"
+                          ? "Pronto"
+                          : product.readiness === "FAILED"
+                            ? "Falhou"
+                            : product.active
+                              ? "Pendente"
+                              : "Arquivado"}
                     </span>
                   </div>
                   <h3>{product.name}</h3>

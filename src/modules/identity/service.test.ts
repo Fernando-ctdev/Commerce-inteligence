@@ -15,7 +15,8 @@ import {
   registerUser,
 } from "./service.js";
 
-const ORIGIN = process.env.APP_ORIGIN ?? "http://localhost:3000";
+// APP_ORIGIN pode ser lista separada por vírgula; o runtime valida contra o conjunto.
+const ORIGIN = (process.env.APP_ORIGIN ?? "http://localhost:3000").split(",")[0].trim();
 const prisma = new PrismaClient();
 let dbUp = false;
 

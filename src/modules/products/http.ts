@@ -3,6 +3,7 @@
 // Sessão/Tenant resolvidos server-side (RI-005); POST exige Idempotency-Key válida (RI-007);
 // PATCH edita fatos com controle otimista de versão; erros sanitizados, sem detalhes internos.
 import type { Product } from "@prisma/client";
+import { prisma } from "../db";
 
 import {
   SESSION_COOKIE,
@@ -13,6 +14,7 @@ import {
 } from "../identity/http";
 import { resolveSession } from "../identity/service";
 import {
+  ProductDeleteRejectedError,
   ProductNotFoundError,
   ProductValidationError,
   ProductVersionConflictError,
@@ -41,6 +43,7 @@ export type ProductView = {
   targetContentCount: number;
   creatorPresence: "on_camera" | "hands_only_product" | "either";
   active: boolean;
+  readiness: "PENDING" | "ANALYZING" | "READY" | "FAILED";
 };
 
 function jsonBody(status: number, body: unknown): Response {
@@ -86,24 +89,17 @@ function constraintsCreatorPresence(
     : "either";
 }
 
-/** Linha → contrato da API. `notes` vem das restrições da primeira geração; manual não tem URL. */
-function toProductView(product: Product): ProductView {
-  return {
-    id: product.id,
-    version: product.version,
-    name: product.name,
-    description: product.description ?? "",
-    category: product.category ?? "",
-    price: product.priceAmount ? product.priceAmount.toString() : "",
-    priceCurrency: product.priceCurrency ?? "",
-    features: stringList(product.features),
-    imageRefs: stringList(product.images),
-    notes: constraintsNotes(product.generationConstraints),
-    url: product.sourceUrl ?? product.submittedUrl ?? "",
-    targetContentCount: product.targetContentCount,
-    creatorPresence: constraintsCreatorPresence(product.generationConstraints),
-    active: product.lifecycle === "ACTIVE",
-  };
+async function productReadiness(tenantId: string, productId: string): Promise<ProductView["readiness"]> {
+  const active = await prisma.commerceIntelligenceJob.findFirst({ where: { tenantId, productId, status: { in: ["QUEUED", "RUNNING"] } } });
+  if (active) return "ANALYZING";
+  const succeeded = await prisma.commerceIntelligenceJob.findFirst({ where: { tenantId, productId, status: "SUCCEEDED" }, orderBy: { createdAt: "desc" } });
+  if (succeeded) return "READY";
+  const failed = await prisma.commerceIntelligenceJob.findFirst({ where: { tenantId, productId, status: { in: ["FAILED", "CANCELLED"] } }, orderBy: { createdAt: "desc" } });
+  return failed ? "FAILED" : "PENDING";
+}
+
+function toProductView(product: Product, readiness: ProductView["readiness"] = "PENDING"): ProductView {
+  return { id: product.id, version: product.version, name: product.name, description: product.description ?? "", category: product.category ?? "", price: product.priceAmount ? product.priceAmount.toString() : "", priceCurrency: product.priceCurrency ?? "", features: stringList(product.features), imageRefs: stringList(product.images), notes: constraintsNotes(product.generationConstraints), url: product.sourceUrl ?? product.submittedUrl ?? "", targetContentCount: product.targetContentCount, creatorPresence: constraintsCreatorPresence(product.generationConstraints), active: product.lifecycle === "ACTIVE", readiness };
 }
 
 export async function handleListProducts(req: Request): Promise<Response> {
@@ -115,7 +111,7 @@ export async function handleListProducts(req: Request): Promise<Response> {
     });
 
   const products = await listTenantProducts(session.tenantId);
-  return jsonBody(200, { products: products.map(toProductView) });
+  return jsonBody(200, { products: await Promise.all(products.map(async (product) => toProductView(product, await productReadiness(session.tenantId, product.id)))) });
 }
 
 export async function handleGetProduct(
@@ -130,7 +126,7 @@ export async function handleGetProduct(
     });
   const product = await getTenantProduct(session.tenantId, id);
   return product
-    ? jsonBody(200, toProductView(product))
+    ? jsonBody(200, toProductView(product, await productReadiness(session.tenantId, product.id)))
     : json(404, {
         error: "Product não encontrado.",
         code: "PRODUCT-NOT-FOUND",
@@ -248,6 +244,8 @@ export async function handleReactivateProduct(
         error: "Este Product foi alterado. Tente reativar novamente.",
         code: "VERSION-CONFLICT",
       });
+    if (error instanceof ProductValidationError)
+      return json(409, { error: error.message, code: error.code, fieldErrors: error.fieldErrors });
     console.error("[products] falha ao reativar Product", error);
     return json(500, {
       error: "Não foi possível reativar o Product agora.",
@@ -256,25 +254,22 @@ export async function handleReactivateProduct(
   }
 }
 
-export async function handleDeleteProduct(
-  req: Request,
-  id: string,
-): Promise<Response> {
-  if (!sameOriginRequest(req))
-    return json(403, { error: "Origem não permitida." });
+export async function handleDeleteProduct(req: Request, id: string): Promise<Response> {
+  if (!sameOriginRequest(req)) return json(403, { error: "Origem não permitida." });
   const session = await sessionOf(req);
-  if (!session)
-    return json(401, {
-      error: "Sessão necessária para excluir o Product.",
-      code: "AUTH-SESSION",
-    });
-  const deleted = await deleteTenantProduct(session.tenantId, id);
-  return deleted
-    ? jsonBody(200, { id })
-    : json(404, {
-        error: "Product não encontrado.",
-        code: "PRODUCT-NOT-FOUND",
-      });
+  if (!session) return json(401, { error: "Sessão necessária para excluir o Product.", code: "AUTH-SESSION" });
+  try {
+    await deleteTenantProduct(session.tenantId, id);
+  } catch (error) {
+    if (error instanceof ProductDeleteRejectedError) return json(409, { error: "A exclusão física não é permitida. Arquive o produto.", code: error.code });
+    if (error instanceof ProductNotFoundError) return json(404, { error: "Product não encontrado.", code: "PRODUCT-NOT-FOUND" });
+    console.error("[products] falha ao rejeitar exclusão física", error);
+    return json(500, { error: "Não foi possível processar a exclusão do Product.", code: "DELETE-FAILED" });
+  }
+  return json(409, {
+    error: "A exclusão física não é permitida. Arquive o produto.",
+    code: "PRODUCT_DELETE_UNSUPPORTED",
+  });
 }
 
 export async function handleCreateProduct(req: Request): Promise<Response> {
