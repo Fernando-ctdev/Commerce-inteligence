@@ -10,7 +10,10 @@ export function normalizeGenerationAction(value: unknown): GenerationActionProje
   if (typeof value !== "object" || value === null) return undefined;
   const record = value as Record<string, unknown>;
   if (record.state === "AVAILABLE" && record.reason === null && record.nextAction === null) return { state: "AVAILABLE", reason: null, nextAction: null };
-  if (record.state === "BLOCKED" && (record.reason === "GEN-ACTIVE" || record.reason === "GEN-CAPACITY") && (record.nextAction === "VIEW_ACTIVE_ANALYSIS" || record.nextAction === "WAIT_FOR_CAPACITY")) {
+  if (record.state === "BLOCKED" && record.reason === "GEN-ACTIVE" && record.nextAction === "VIEW_ACTIVE_ANALYSIS") {
+    return { state: "BLOCKED", reason: record.reason, nextAction: record.nextAction };
+  }
+  if (record.state === "BLOCKED" && record.reason === "GEN-CAPACITY" && record.nextAction === "WAIT_FOR_CAPACITY") {
     return { state: "BLOCKED", reason: record.reason, nextAction: record.nextAction };
   }
   return undefined;

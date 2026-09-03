@@ -54,6 +54,37 @@ test("normaliza a projecao ADR-016 e tolera payload sem o campo", () => {
   assert.equal(normalizeGenerationAction({ state: "BLOCKED", reason: "GEN-READY", nextAction: "VIEW_ACTIVE_ANALYSIS" }), undefined);
 });
 
+test("rejeita todo par reason/nextAction incompativel com o estado", () => {
+  assert.equal(
+    normalizeGenerationAction({ state: "BLOCKED", reason: "GEN-ACTIVE", nextAction: "WAIT_FOR_CAPACITY" }),
+    undefined,
+  );
+  assert.equal(
+    normalizeGenerationAction({ state: "BLOCKED", reason: "GEN-CAPACITY", nextAction: "VIEW_ACTIVE_ANALYSIS" }),
+    undefined,
+  );
+  assert.equal(
+    normalizeGenerationAction({ state: "BLOCKED", reason: null, nextAction: "VIEW_ACTIVE_ANALYSIS" }),
+    undefined,
+  );
+  assert.equal(
+    normalizeGenerationAction({ state: "BLOCKED", reason: "GEN-ACTIVE", nextAction: null }),
+    undefined,
+  );
+  assert.equal(
+    normalizeGenerationAction({ state: "AVAILABLE", reason: "GEN-ACTIVE", nextAction: null }),
+    undefined,
+  );
+  assert.equal(
+    normalizeGenerationAction({ state: "AVAILABLE", reason: null, nextAction: "WAIT_FOR_CAPACITY" }),
+    undefined,
+  );
+  assert.equal(
+    normalizeGenerationAction({ state: "BLOCKED", reason: "GEN-CAPACITY", nextAction: null }),
+    undefined,
+  );
+});
+
 test("mapeia reason da projecao para a copy aprovada de bloqueio", () => {
   assert.equal(blockedActionCopy({ state: "AVAILABLE", reason: null, nextAction: null }), null);
   assert.equal(
