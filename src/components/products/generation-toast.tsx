@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   createGenerationIdempotencyKey,
   getCurrentGeneration,
@@ -12,11 +12,17 @@ import {
 import { isToastDismissed, stageMessage, statusMessage } from "./generation-ui-model";
 import styles from "./generation-toast.module.css";
 
+/**
+ * Em memória (sem localStorage): o dismiss sobrevive à remontagem do
+ * GenerationToast ao trocar de rota — cada página renderiza seu próprio
+ * <ProductShell> — e reapresenta quando Job/estado mudarem.
+ */
+let dismissedSnapshotModule: string | null = null;
+
 export function GenerationToast() {
   const [job, setJob] = useState<GenerationRecord | null>(null);
   const [busy, setBusy] = useState(false);
-  const [dismissedSnapshot, setDismissedSnapshot] = useState<string | null>(null);
-  const loadRef = useRef<(() => Promise<void>) | null>(null);
+  const [, setDismissTick] = useState(0);
 
   useEffect(() => {
     let disposed = false;
@@ -31,11 +37,9 @@ export function GenerationToast() {
         if (!disposed) timer = window.setTimeout(() => void load(), 15000);
       }
     };
-    loadRef.current = load;
     void load();
     return () => {
       disposed = true;
-      loadRef.current = null;
       if (timer) window.clearTimeout(timer);
     };
   }, []);
@@ -46,19 +50,19 @@ export function GenerationToast() {
     try {
       const next = await retryGeneration(job.id, createGenerationIdempotencyKey());
       setJob(next);
-      void loadRef.current?.();
     } catch {
       /* falha é reapresentada pelo polling com o estado real do backend */
-      void loadRef.current?.();
     } finally {
       setBusy(false);
     }
   };
 
-  /* Dismiss persiste enquanto o Job/estado for o mesmo — inclusive entre
-     páginas (mesma árvore React). Job ou estado diferente reapresenta. */
-  const dismiss = () => setDismissedSnapshot(job ? `${job.id}:${job.status}` : null);
-  if (!job || isToastDismissed(dismissedSnapshot, job)) return null;
+  const dismiss = () => {
+    dismissedSnapshotModule = job ? `${job.id}:${job.status}` : null;
+    setDismissTick((tick) => tick + 1);
+  };
+
+  if (!job || isToastDismissed(dismissedSnapshotModule, job)) return null;
   const active = isActiveGeneration(job.status);
   const failed = job.status === "FAILED" || job.status === "CANCELLED";
   const href = `/products/${encodeURIComponent(job.productId)}#generated-contents`;

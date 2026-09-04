@@ -139,19 +139,21 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
         </div>
       )}
       {error && <p className={styles.error} role="alert">{error}</p>}
-      <ConfirmationDialog
-        confirmLabel="Cancelar análise"
-        description="A análise na fila será cancelada. Os dados do produto permanecem preservados e você pode tentar novamente depois."
-        error={error}
-        onConfirm={async () => {
-          if (await cancel()) setCancelOpen(false);
-        }}
-        onOpenChange={setCancelOpen}
-        open={cancelOpen}
-        pending={busy}
-        pendingLabel="Cancelando…"
-        title="Cancelar análise?"
-      />
+      {cancelOpen && (
+        <ConfirmationDialog
+          confirmLabel="Cancelar análise"
+          description="A análise na fila será cancelada. Os dados do produto permanecem preservados e você pode tentar novamente depois."
+          error={error}
+          onConfirm={async () => {
+            if (await cancel()) setCancelOpen(false);
+          }}
+          onOpenChange={setCancelOpen}
+          open
+          pending={busy}
+          pendingLabel="Cancelando…"
+          title="Cancelar análise?"
+        />
+      )}
     </section>
   );
 }

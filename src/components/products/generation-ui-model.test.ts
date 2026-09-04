@@ -107,3 +107,4 @@ test("dismiss do toast persiste por job/estado e reapresenta em mudanca", () => 
   assert.equal(isToastDismissed("job-1:QUEUED", null), true);
   assert.equal(isToastDismissed(null, null), true);
 });
+
