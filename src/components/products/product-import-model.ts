@@ -38,7 +38,7 @@ export type ContentPreparationPreferences = {
 export function contentPreparationPreferencesAreValid(preferences: ContentPreparationPreferences) {
   return Number.isInteger(preferences.targetContentCount)
     && preferences.targetContentCount >= 1
-    && preferences.targetContentCount <= 50
+    && preferences.targetContentCount <= 10
     && ["on_camera", "hands_only_product", "either"].includes(preferences.creatorPresence)
     && (preferences.constraints === undefined || Array.from(preferences.constraints).length <= 300);
 }

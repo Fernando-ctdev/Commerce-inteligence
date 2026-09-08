@@ -4,7 +4,7 @@ export class GenerationError extends Error {
 
 export const publicGenerationError = (code: string): string => ({
   "GEN-COUNT-REQUIRED": "Informe a quantidade de conteúdos.",
-  "GEN-COUNT-RANGE": "A quantidade deve estar entre 1 e 30.",
+  "GEN-COUNT-RANGE": "A quantidade deve estar entre 1 e 10.",
   "GEN-ACTIVE": "Já existe uma análise em andamento.",
   "GEN-PRODUCT-CAPACITY": "O limite de Products ativos foi atingido. Arquive um Product para liberar espaço.",
   "GEN-CAPACITY": "A capacidade mensal de conteúdos foi atingida.",

@@ -144,7 +144,7 @@ Este slice não altera estado de geração e não antecipa o comportamento de qu
 | `VAL-FEATURES-REQUIRED`    | Nenhuma característica não vazia                           | Bloquear salvamento e orientar o preenchimento de ao menos uma linha.                          |
 | `VAL-NOTES-REQUIRED`       | Observações/restrições ausentes ou vazias                  | Bloquear salvamento e exibir erro associado ao campo.                                          |
 | `VAL-PRICE-FORMAT`         | Preço negativo, formato inválido ou com mais de duas casas | Bloquear salvamento e explicar o formato esperado.                                             |
-| `VAL-QUANTITY-RANGE`       | Quantidade não inteira ou fora de `1–30`                   | Bloquear salvamento e manter o valor editável.                                                 |
+| `VAL-QUANTITY-RANGE`       | Quantidade não inteira ou fora de `1–10`                   | Bloquear salvamento e manter o valor editável.                                                 |
 | `VAL-CREATOR-FORMAT`       | Formato fora das opções permitidas                         | Bloquear salvamento e manter a seleção válida anterior.                                        |
 | `VAL-NOTES-LENGTH`         | Notas/restrições acima de `300` caracteres                 | Impedir excedente ou bloquear salvamento com mensagem associada ao campo.                      |
 | `AUTH-SESSION`             | Usuário não autenticado                                    | Não permitir a operação e aplicar o fluxo de autenticação vigente.                             |
@@ -224,7 +224,7 @@ Requisitos visuais e de acessibilidade:
 - O formulário mantém exatamente os campos e a seção do modal manual existente.
 - Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições são obrigatórios.
 - Preço e Moeda devem ser informados; preço não negativo, válido e com no máximo duas casas decimais.
-- Quantidade e Formato mantêm defaults `20`, `1–30` e `Tanto faz`, aparecem com `*`; Observações/restrições também aparece com `*`, é obrigatória e limitada a `300` caracteres.
+- Quantidade e Formato mantêm defaults `5`, `1–10` e `Tanto faz`, aparecem com `*`; Observações/restrições também aparece com `*`, é obrigatória e limitada a `300` caracteres.
 - O asterisco é apenas indicação visual; HTML/cliente e servidor validam.
 - As preferências são persistidas como restrições da primeira geração, sem criar job ou iniciar geração.
 - O Tenant é resolvido server-side pela sessão e é o único escopo de autorização da criação.

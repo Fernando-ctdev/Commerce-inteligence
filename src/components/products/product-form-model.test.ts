@@ -167,10 +167,10 @@ test("valida cadastro manual: todos os campos obrigatórios e formatos", () => {
   );
 });
 
-test("preparação aceita default 20 e rejeita fora de 1–30 ou notas acima de 300", () => {
+test("preparação aceita default 5 e rejeita fora de 1–10 ou notas acima de 300", () => {
   assert.equal(
     preparationIsWithinLimits({
-      targetContentCount: 20,
+      targetContentCount: 5,
       creatorPresence: "either",
     }),
     true,
@@ -192,14 +192,14 @@ test("preparação aceita default 20 e rejeita fora de 1–30 ou notas acima de 
   );
   assert.equal(
     preparationIsWithinLimits({
-      targetContentCount: 31,
+      targetContentCount: 11,
       creatorPresence: "either",
     }),
     false,
   );
   assert.equal(
     preparationIsWithinLimits({
-      targetContentCount: 20,
+      targetContentCount: 5,
       creatorPresence: "hands_only_product",
       constraints: "a".repeat(301),
     }),
@@ -228,7 +228,7 @@ test("monta payload manual com fatos normalizados, preparação e chave", () => 
         url: " https://example.com/product ",
       },
       {
-        targetContentCount: 20,
+        targetContentCount: 5,
         creatorPresence: "either",
         constraints: " Sem gírias ",
       },
@@ -243,7 +243,7 @@ test("monta payload manual com fatos normalizados, preparação e chave", () => 
       features: ["cerdas macias", "cabo leve"],
       imageRefs: ["https://example.com/image.jpg"],
       url: "https://example.com/product",
-      targetContentCount: 20,
+      targetContentCount: 5,
       creatorPresence: "either",
       constraints: "Sem gírias",
       idempotency_key: "idempotency-key",
@@ -288,7 +288,7 @@ test("preço manual 23,44 com moeda padrão R$ é válido", () => {
   assert.deepEqual(validateProductManualDraft(draft, "notas"), {});
   assert.equal(
     buildManualProductPayload(draft, {
-      targetContentCount: 20,
+      targetContentCount: 5,
       creatorPresence: "either",
     }).priceCurrency,
     "R$",

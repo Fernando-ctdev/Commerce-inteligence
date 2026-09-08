@@ -163,7 +163,7 @@ export function normalizeProduct(value: unknown): ProductRecord {
     targetContentCount:
       typeof record.targetContentCount === "number"
         ? record.targetContentCount
-        : 20,
+        : 5,
     creatorPresence:
       record.creatorPresence === "on_camera" ||
       record.creatorPresence === "hands_only_product"

@@ -77,7 +77,7 @@ Cada linha não vazia de Características representa uma característica.
 
 O formulário mantém a seção `Preparação dos conteúdos` do modal manual, sem iniciar geração ao salvar:
 
-- `Quantidade inicial de conteúdos *`: default `20`, inteiro entre `1` e `30`.
+- `Quantidade inicial de conteúdos *`: default `5`, inteiro entre `1` e `10`.
 - `Formato do creator *`: default `Tanto faz`; opções `Em câmera`, `mão e produto` e `Tanto faz`.
 - `Observações ou restrições *`: obrigatórias; não podem ser vazias após remover espaços e têm até `300` caracteres.
 
@@ -144,7 +144,7 @@ Esta frente não inclui:
 2. A tela apresenta os campos Nome, Descrição, Categoria, Preço, Moeda e Características, além da seção Preparação dos conteúdos do modal manual existente.
 3. Nome, Descrição, Categoria, Preço, Moeda, Características (com ao menos uma linha não vazia) e Observações ou restrições impedem o salvamento quando ausentes, vazios ou inválidos.
 4. Preço e Moeda são obrigatórios; ambos devem ser informados e o preço deve ser válido, não negativo e ter no máximo duas casas decimais.
-5. A preparação inicia com quantidade `20`, aceita somente valores inteiros de `1` a `30`, inicia com formato `Tanto faz` e limita notas a `300` caracteres; esses campos aparecem com `*`.
+5. A preparação inicia com quantidade `5`, aceita somente valores inteiros de `1` a `10`, inicia com formato `Tanto faz` e limita notas a `300` caracteres; esses campos aparecem com `*`.
 6. O asterisco é apenas indicação visual; HTML/cliente e servidor validam todos os campos obrigatórios.
 7. O salvamento persiste os fatos preenchidos e as preferências de preparação como restrições da primeira geração.
 8. Salvar não inicia geração, não cria job e não produz Strategy, Plan, Content ou Briefing.

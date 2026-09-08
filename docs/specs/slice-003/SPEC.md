@@ -100,7 +100,7 @@ A confirmação do Product precisa levar diretamente ao primeiro valor do produt
 | --- | --- | --- | --- |
 | Origem que inicia este slice | Confirmação do ProductCandidate ou caso de uso equivalente para Product já confirmado; o salvamento manual isolado de `/products/new` não inicia job | Preserva a fronteira explícita do Slice 002 e o core loop dos PRDs | Sim, pelas fontes canônicas |
 | Autoridade da quantidade inicial | Usar `Product.targetContentCount` validado e as restrições persistidas pelo Slice 002; ausência, não inteiro ou fora do limite é rejeitada server-side | Evita segunda tela e impede que o cliente altere a quantidade depois da confirmação | Sim, por Slice 002 e PRD de análise |
-| Limite numérico da quantidade | `1–30`, sujeito à capacidade do Entitlement | Slice 002 define esse intervalo; a capacidade comercial continua server-side | Sim, por Slice 002/ADR-006 |
+| Limite numérico da quantidade | `1–10`, sujeito à capacidade do Entitlement | Slice 002 define esse intervalo; a capacidade comercial continua server-side | Sim, por Slice 002/ADR-006 |
 | Mensagens de stage | Usar uma mensagem humana estável por stage, em `pt-BR`, refletindo a etapa real; detalhes de copy podem ser refinados sem mudar o contrato | DESIGN e PRDs proíbem simulação por animação e percentual inventado | Não; contrato comportamental |
 | Limite de repair | Usar limite finito, positivo e configurável pelo sistema; o comportamento ao atingir o limite permanece conforme configuração aprovada | As fontes exigem limite, mas não aprovam um número específico; a SPEC não inventa um valor | Não; configuração em aberto |
 | Cancelamento pelo creator | Manter `CANCELLED` no contrato; oferecer ação somente se a infraestrutura suportar cancelamento seguro, em progressive disclosure | PRD suporta o estado, mas não exige cancelamento como ação primária no MVP | Não; configuração em aberto |
@@ -345,7 +345,7 @@ Todo Product `ACTIVE` retornado em leitura autenticada inclui `generationAction`
 | Código | Condição | Comportamento esperado |
 | --- | --- | --- |
 | `GEN-COUNT-REQUIRED` | `targetContentCount` ausente | Rejeitar antes do job, explicar que a quantidade precisa ser resolvida e não criar reserva/job. |
-| `GEN-COUNT-RANGE` | Quantidade não inteira ou fora de `1–30` | Rejeitar server-side, manter a entrada corrigível e não criar reserva/job. |
+| `GEN-COUNT-RANGE` | Quantidade não inteira ou fora de `1–10` | Rejeitar server-side, manter a entrada corrigível e não criar reserva/job. |
 | `GEN-CAPACITY` | Entitlement mensal sem capacidade para a quantidade solicitada | Rejeitar com mensagem acionável, sem criar job nem consumo confirmado. |
 | `GEN-PRODUCT-CAPACITY` | Limite transacional de `active_products` atingido ao ativar Product novo | Rejeitar a operação sem criar Product, job ou reserva mensal e explicar que o limite de Products ativos foi atingido. |
 | `GEN-ACTIVE` | Usuário possui job `QUEUED`/`RUNNING` | Bloquear nova análise, manter `Analisar produto` visível e explicar que existe análise em andamento. |
