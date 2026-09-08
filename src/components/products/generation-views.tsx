@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Hourglass, X } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { Button } from "@/components/ui/button";
 
 import type { GenerationRecord } from "./generation-api";
 import {
@@ -199,7 +200,12 @@ export function OperationalSummaryCard({ className, job, readiness }: {
             {phases.map((phase) => (
               <li className={styles.phaseItem} data-state={phase.state} key={phase.stage}>
                 <span className={styles.phaseName}>{stageMessage(phase.stage)}</span>
-                <span className={styles.phaseStatus}>{phaseStateLabels[phase.state]}</span>
+                <span aria-label={phaseStateLabels[phase.state]} className={styles.phaseStatus} role="img">
+                  {phase.state === "pending" && <Hourglass aria-hidden="true" />}
+                  {phase.state === "skipped" && <X aria-hidden="true" />}
+                  {(phase.state === "done" || phase.state === "active" || phase.state === "failed") &&
+                    phaseStateLabels[phase.state]}
+                </span>
               </li>
             ))}
           </ol>
