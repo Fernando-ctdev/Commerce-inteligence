@@ -11,8 +11,9 @@ import {
   isCapacityUnavailableError,
   isRetryableGeneration,
   isToastDismissed,
-  phaseStates,
   normalizeGenerationAction,
+  phaseStateLabels,
+  phaseStates,
   stageMessage,
 } from "./generation-ui-model";
 
@@ -110,13 +111,15 @@ test("dismiss do toast persiste por job/estado e reapresenta em mudanca", () => 
 });
 
 test("deriva o log de fases apenas dos stages públicos", () => {
-  const stages = phaseStates("RUNNING", "BUILDING_STRATEGY").map((p) => p.state);
-  assert.deepEqual(stages, ["done", "done", "active", "pending", "pending", "pending"]);
+  assert.deepEqual(phaseStates("RUNNING", "BUILDING_STRATEGY").map((p) => p.state), [
+    "done", "done", "active", "pending", "pending", "pending",
+  ]);
   assert.deepEqual(phaseStates("QUEUED", null).map((p) => p.state), Array(6).fill("pending"));
   assert.deepEqual(phaseStates("SUCCEEDED", "FINALIZING").map((p) => p.state), Array(6).fill("done"));
   assert.deepEqual(phaseStates("FAILED", "GENERATING_BRIEFS").map((p) => p.state), [
-    "done", "done", "done", "done", "failed", "pending",
+    "done", "done", "done", "done", "failed", "skipped",
   ]);
   assert.equal(phaseStates("FAILED", "GENERATING_BRIEFS")[4].stage, "GENERATING_BRIEFS");
+  assert.equal(phaseStateLabels.skipped, "Cancelada");
 });
 

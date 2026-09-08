@@ -26,12 +26,12 @@ export function blockedActionCopy(action: GenerationActionProjection): string | 
 }
 
 export const stageMessages: Record<CommerceJobStage, string> = {
-  UNDERSTANDING_PRODUCT: "Entendendo o produto...",
-  MAPPING_COMMERCIAL_OPPORTUNITIES: "Mapeando oportunidades comerciais...",
-  BUILDING_STRATEGY: "Definindo a melhor estratégia para este produto...",
-  BUILDING_CONTENT_PLAN: "Organizando as oportunidades de conteúdo...",
-  GENERATING_BRIEFS: "Preparando os Briefings do Conteúdo...",
-  FINALIZING: "Finalizando...",
+  UNDERSTANDING_PRODUCT: "Entendendo o produto",
+  MAPPING_COMMERCIAL_OPPORTUNITIES: "Mapeando oportunidades",
+  BUILDING_STRATEGY: "Definindo estratégias",
+  BUILDING_CONTENT_PLAN: "Organizando os conteúdos",
+  GENERATING_BRIEFS: "Preparando os Briefings",
+  FINALIZING: "Finalizando",
 };
 
 export const statusLabels: Record<CommerceJobStatus, string> = {
@@ -90,13 +90,14 @@ export function isToastDismissed(dismissedSnapshot: string | null, job: { id: st
 }
 
 /** Estado de cada fase pública do job, derivado apenas de status + stage. */
-export type PhaseState = "done" | "active" | "failed" | "pending";
+export type PhaseState = "done" | "active" | "failed" | "pending" | "skipped";
 
 export const phaseStateLabels: Record<PhaseState, string> = {
   active: "Em andamento",
   done: "Concluída",
   failed: "Falhou",
   pending: "Aguardando",
+  skipped: "Cancelada",
 };
 
 const stageOrder = Object.keys(stageMessages) as CommerceJobStage[];
@@ -119,6 +120,6 @@ export function phaseStates(
     if (index === currentIndex) {
       return { stage: current, state: status === "FAILED" || status === "CANCELLED" ? "failed" : "active" };
     }
-    return { stage: current, state: "pending" };
+    return { stage: current, state: "skipped" };
   });
 }
