@@ -35,8 +35,11 @@ import {
 import { createIdempotencyKey } from "./product-create-model";
 import {
   buildManualProductPayload,
+  buildProductPayload,
+  COMMISSION_TYPES,
   DEFAULT_PRODUCT_CURRENCY,
   digitsToPrice,
+  formatCommission,
   formatPriceDisplay,
   preparationIsWithinLimits,
   validateProductManualDraft,
@@ -52,6 +55,8 @@ const emptyDraft: ProductManualDraft = {
   category: "",
   price: "",
   currency: DEFAULT_PRODUCT_CURRENCY,
+  commissionType: "",
+  commission: "",
   characteristics: "",
   imageReferences: "",
   url: "",
@@ -64,10 +69,15 @@ type ProductCreateFormProps = {
 };
 
 const currencyOptions = [
-  { value: "BRL", label: "R$ Real" },
+  { value: "R$", label: "R$ Real" },
   { value: "USD", label: "$ Dólar" },
   { value: "EUR", label: "€ Euro" },
 ];
+
+const commissionTypeOptions = [
+  { value: "PERCENT", label: "% Porcentagem" },
+  { value: "AMOUNT", label: "R$ Valor fixo" },
+] satisfies Array<{ value: (typeof COMMISSION_TYPES)[number]; label: string }>;
 
 const productCategories = [
   "Moda e acessórios",
@@ -126,6 +136,8 @@ function draftFromProduct(product?: ProductRecord): ProductManualDraft {
     category: product.category,
     price: product.price.replace(",", "."),
     currency: product.priceCurrency,
+    commissionType: product.commissionType,
+    commission: product.commission,
     characteristics: product.characteristics.join("\n"),
     imageReferences: product.imageReferences.join("\n"),
     url: product.url,
@@ -147,6 +159,8 @@ const errorFieldOrder: Array<keyof ProductManualFieldErrors> = [
   "category",
   "price",
   "currency",
+  "commissionType",
+  "commission",
   "characteristics",
   "imageReferences",
   "url",
@@ -311,6 +325,87 @@ function CurrencyField({
         <p className={styles.fieldError} id={errorId} role="alert">
           {error}
         </p>
+      )}
+    </div>
+  );
+}
+
+function CommissionField({
+  price,
+  currency,
+  value,
+  type,
+  onChangeType,
+  onChangeValue,
+  typeError,
+  valueError,
+}: {
+  price: string;
+  currency: string;
+  value: string;
+  type: string;
+  onChangeType: (value: string) => void;
+  onChangeValue: (value: string) => void;
+  typeError?: string;
+  valueError?: string;
+}) {
+  const typeErrorId = `${fieldId("commissionType")}-error`;
+  const valueErrorId = `${fieldId("commission")}-error`;
+  const describedBy =
+    [typeError ? typeErrorId : undefined, valueError ? valueErrorId : undefined]
+      .filter(Boolean)
+      .join(" ") || undefined;
+  const preview = formatCommission(type, value, price, currency);
+  return (
+    <div className={styles.field}>
+      <label htmlFor={fieldId("commission")}>Comissão (opcional)</label>
+      <div className={styles.commissionRow}>
+        <Select
+          items={commissionTypeOptions}
+          onValueChange={(next) => onChangeType(next ?? "")}
+          value={type || null}
+        >
+          <SelectTrigger
+            aria-describedby={describedBy}
+            aria-invalid={Boolean(typeError)}
+            aria-label="Tipo de comissão"
+            className={styles.commissionTypeTrigger}
+            id={fieldId("commissionType")}
+          >
+            <SelectValue placeholder="Tipo" />
+          </SelectTrigger>
+          <SelectContent className={styles.currencyContent}>
+            {commissionTypeOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <input
+          aria-describedby={describedBy}
+          aria-invalid={Boolean(typeError || valueError)}
+          className={styles.commissionInput}
+          id={fieldId("commission")}
+          inputMode="decimal"
+          name={fieldId("commission")}
+          onChange={(event) => onChangeValue(event.target.value)}
+          placeholder={type === "PERCENT" ? "Ex.: 10" : "Ex.: 5,00"}
+          value={value}
+        />
+      </div>
+      {typeError && (
+        <p className={styles.fieldError} id={typeErrorId} role="alert">
+          {typeError}
+        </p>
+      )}
+      {valueError && (
+        <p className={styles.fieldError} id={valueErrorId} role="alert">
+          {valueError}
+        </p>
+      )}
+      {!typeError && !valueError && preview && (
+        <p className={styles.commissionPreview}>= {preview}</p>
       )}
     </div>
   );
@@ -680,6 +775,7 @@ export function ProductCreateForm({
     <form
       aria-busy={saving}
       className={styles.form}
+      id={isEdit ? "product-edit-form" : undefined}
       noValidate
       onSubmit={submit}
     >
@@ -708,14 +804,12 @@ export function ProductCreateForm({
           className={styles.section}
         >
           <div className={styles.sectionHeading}>
-            <p className={styles.eyebrow}>
-              {isEdit ? "Editar produto" : "Novo produto"}
-            </p>
             <h2 id="new-product-facts-title">
-              Informe os dados que você conhece
+              {isEdit? "Dados do produto" : "Informe os dados do produto"}
             </h2>
             <p className={styles.sectionDescription}>
-              Essas informações ajudam a inteligência do sistema a criar a melhor estratégia de conteúdo.
+              Essas informações ajudam a inteligência do sistema a criar a
+              melhor estratégia de conteúdo.
             </p>
           </div>
           <TextField
@@ -758,6 +852,16 @@ export function ProductCreateForm({
               error={combinedErrors.currency}
               onChange={(value) => update("currency", value)}
               value={draft.currency}
+            />
+            <CommissionField
+              currency={draft.currency}
+              onChangeType={(value) => update("commissionType", value)}
+              onChangeValue={(value) => update("commission", value)}
+              price={draft.price}
+              type={draft.commissionType ?? ""}
+              typeError={combinedErrors.commissionType}
+              value={draft.commission ?? ""}
+              valueError={combinedErrors.commission}
             />
           </div>
           <TextField
@@ -1086,25 +1190,25 @@ export function ProductCreateForm({
             Voltar
           </Button>
         )}
-        {(isEdit || formStep === "preparation") && (
-          <Button disabled={saving} type="submit">
-            {saving
-              ? `${isEdit ? "Salvar alterações" : "Salvar produto"} — salvando`
-              : isEdit
-                ? "Salvar alterações"
-                : "Salvar produto"}
-          </Button>
-        )}
-        {/* Cancelar bloqueado durante o salvamento: navegar com POST em
-            voo poderia persistir um Product após o cancelamento (B-006). */}
-        {saving ? (
-          <Button disabled type="button" variant="outline">
-            Cancelar
-          </Button>
-        ) : (
-          <Link className={styles.cancelLink} href="/products">
-            Cancelar
-          </Link>
+        {!isEdit && (
+          <>
+            {(formStep === "preparation") && (
+              <Button disabled={saving} type="submit">
+                {saving ? "Salvar produto — salvando" : "Salvar produto"}
+              </Button>
+            )}
+            {/* Cancelar bloqueado durante o salvamento: navegar com POST em
+                voo poderia persistir um Product após o cancelamento (B-006). */}
+            {saving ? (
+              <Button disabled type="button" variant="outline">
+                Cancelar
+              </Button>
+            ) : (
+              <Link className={styles.cancelLink} href="/products">
+                Cancelar
+              </Link>
+            )}
+          </>
         )}
       </div>
     </form>

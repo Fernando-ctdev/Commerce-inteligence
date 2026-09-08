@@ -293,6 +293,16 @@ export function ProductDetail({ id }: { id: string }) {
                     <Archive aria-hidden="true" />
                     <h2 id="product-actions-card-title">Ações</h2>
                   </div>
+                  <Button form="product-edit-form" type="submit" variant="ghost">
+                    Salvar alterações
+                  </Button>
+                  <Button
+                    onClick={() => router.push("/products")}
+                    type="button"
+                    variant="ghost"
+                  >
+                    Cancelar
+                  </Button>
                   <Button
                     className={styles.archiveAction}
                     onClick={() => {

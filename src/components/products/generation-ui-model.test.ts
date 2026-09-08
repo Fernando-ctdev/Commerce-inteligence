@@ -18,7 +18,7 @@ import {
 
 test("mapeia estados e stages públicos para mensagens humanas", () => {
   assert.equal(generationStatusLabel("RUNNING"), "Analisando");
-  assert.equal(stageMessage("GENERATING_BRIEFS"), "Preparando os Briefings do Conteúdo...");
+  assert.equal(stageMessage("GENERATING_BRIEFS"), "Preparando os Briefings");
   assert.equal(isActiveGeneration("QUEUED"), true);
   assert.equal(isRetryableGeneration("FAILED"), true);
 });
