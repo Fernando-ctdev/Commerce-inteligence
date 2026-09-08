@@ -120,6 +120,9 @@ export function phaseStates(
     if (index === currentIndex) {
       return { stage: current, state: status === "FAILED" || status === "CANCELLED" ? "failed" : "active" };
     }
-    return { stage: current, state: "skipped" };
+    return {
+      stage: current,
+      state: status === "FAILED" || status === "CANCELLED" ? "skipped" : "pending",
+    };
   });
 }
