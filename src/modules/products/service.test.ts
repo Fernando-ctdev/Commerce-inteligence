@@ -215,15 +215,15 @@ test("validação: normaliza milhar pt-BR sem casas decimais", () => {
   assert.equal(milharMaior.priceAmount, "1234567");
 });
 
-test("validação: preparação com defaults 20/Tanto faz e limites 1–30/300", () => {
+test("validação: preparação com defaults 5/Tanto faz e limites 1–10/300", () => {
   const defaults = validateManualProductInput(validInput);
-  assert.equal(defaults.targetContentCount, 20);
+  assert.equal(defaults.targetContentCount, 5);
   assert.deepEqual(defaults.generationConstraints, {
     creatorPresence: "either",
     constraints: "sem gírias",
   });
 
-  for (const quantity of [0, 31, 2.5]) {
+  for (const quantity of [0, 11, 2.5]) {
     assert.throws(
       () =>
         validateManualProductInput({
@@ -261,14 +261,14 @@ test("validação: preparação com defaults 20/Tanto faz e limites 1–30/300",
 
   const preparado = validateManualProductInput({
     ...validInput,
-    targetContentCount: 30,
+    targetContentCount: 10,
     creatorPresence: "on_camera",
     constraints: "sem gírias",
     imageRefs: ["https://cdn.exemplo.com/produto.png"],
     url: "https://exemplo.com/produto",
     features: ["  50 aulas ", "", "certificado"],
   });
-  assert.equal(preparado.targetContentCount, 30);
+  assert.equal(preparado.targetContentCount, 10);
   assert.deepEqual(preparado.generationConstraints, {
     creatorPresence: "on_camera",
     constraints: "sem gírias",
@@ -574,7 +574,7 @@ const updateFacts = {
   features: ["120 aulas"],
   imageRefs: ["https://cdn.exemplo.com/nova.png", PNG],
   url: "https://exemplo.com/produto-atualizado",
-  targetContentCount: 12,
+  targetContentCount: 5,
   creatorPresence: "hands_only_product",
   constraints: "mostrar detalhes",
 };
@@ -693,7 +693,7 @@ test("PATCH atualiza fatos, persiste imagens por URL/data URL e bumpeia version"
   assert.equal(row.priceAmount?.toString(), "199.9");
   assert.deepEqual(row.images, ["https://cdn.exemplo.com/nova.png", PNG]);
   assert.equal(row.submittedUrl, "https://exemplo.com/produto-atualizado");
-  assert.equal(row.targetContentCount, 20);
+  assert.equal(row.targetContentCount, 5);
   assert.deepEqual(row.generationConstraints, {
     creatorPresence: "either",
     constraints: "sem gírias",
