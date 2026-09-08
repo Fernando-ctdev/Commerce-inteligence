@@ -305,6 +305,16 @@
   border-left-color: var(--color-danger);
 }
 
+.phaseItem[data-state="pending"] {
+  border-left-color: transparent;
+  opacity: .5;
+}
+
+.phaseItem[data-state="pending"] .phaseName,
+.phaseItem[data-state="pending"] .phaseStatus {
+  color: var(--color-text-muted);
+}
+
 .phaseItem[data-state="failed"] .phaseStatus {
   color: var(--color-danger);
 }
