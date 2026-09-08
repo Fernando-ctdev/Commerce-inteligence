@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { Archive, ArchiveRestore, CircleAlert, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, CircleAlert, Save, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -294,6 +294,7 @@ export function ProductDetail({ id }: { id: string }) {
                     <h2 id="product-actions-card-title">Ações</h2>
                   </div>
                   <Button className={styles.saveAction} form="product-edit-form" type="submit" variant="ghost">
+                    <Save aria-hidden="true" />
                     Salvar alterações
                   </Button>
                   <Button
@@ -302,7 +303,8 @@ export function ProductDetail({ id }: { id: string }) {
                     type="button"
                     variant="ghost"
                   >
-                    Cancelar alterações
+                    <X aria-hidden="true" />
+                    Cancelar alte
                   </Button>
                   <Button
                     className={styles.archiveAction}
