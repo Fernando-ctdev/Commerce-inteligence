@@ -26,6 +26,21 @@ export function buildEvidenceCatalog(input: { name?: string; description?: strin
   }
   return { facts, refs };
 }
+const COMMISSION_KEYS: Record<string, true> = {
+  commissionType: true,
+  commissionValue: true,
+  commissionRate: true,
+  commissionAmount: true,
+};
+function stripCommission(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripCommission);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => !COMMISSION_KEYS[key])
+      .map(([key, nested]) => [key, stripCommission(nested)]),
+  );
+}
 // Projeções allowlistadas por capability: contexto confirmado separado de dados externos.
 // O sistema (instruction server-side) é confiável por construção; a capability recebe só o necessário.
 function project(task: string, confirmed: unknown, external: unknown): Parameters<ModelRouter["complete"]>[1] {
@@ -58,7 +73,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
   const skill = loadPlatformSkill();
   if (!input.router && !input.allowDeterministicTestFallback) throw new GenerationError("GEN-PROVIDER", "Provider não configurado");
   const emit: (stage: GenerationStage) => Promise<void> = async (stage) => { emitJobEvent("stage.started", { jobId: input.jobId, attempt, stage }); if (input.onStage) await input.onStage(stage); emitJobEvent("stage.completed", { jobId: input.jobId, attempt, stage }); };
-  const facts = input.facts ?? {};
+  const facts = stripCommission(input.facts ?? {}) as Record<string, unknown>;
   const instructionVersion = input.router?.describe().instructionVersion;
   const capabilities: CapabilityEvent[] = [];
   const attempt = input.attempt ?? 1;
@@ -91,7 +106,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
   const commercialOpportunities: Record<string, unknown>[] = [];
 
   if (input.router) {
-    const baseEvidence = buildEvidenceCatalog(input);
+    const baseEvidence = buildEvidenceCatalog({ ...input, facts });
     const understandingContext = { productId: input.productId, facts, evidenceRefsCatalog: baseEvidence.refs };
     await emit("UNDERSTANDING_PRODUCT");
     understanding = validateProductUnderstanding(await track("PRODUCT_UNDERSTANDING", understandingContext, (onMetrics) => callCapability(input.router!, "PRODUCT_UNDERSTANDING", project("PRODUCT_UNDERSTANDING", understandingContext, {}), input.signal, onMetrics)));
@@ -163,10 +178,10 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
   interface BriefCandidate { brief: ContentBriefVersion; opportunity: ContentOpportunity; }
   const candidates: BriefCandidate[] = [];
   const size = batchSize();
-  const evidence = buildEvidenceCatalog(input);
+  const evidence = buildEvidenceCatalog({ ...input, facts });
   await emit("GENERATING_BRIEFS");
   const generateBatch = async (entries: Array<{ opportunity: ContentOpportunity; causes?: string[]; position: number }>): Promise<BriefCandidate[]> => {
-    const batchContext = { productId: input.productId, strategy, opportunities: entries.map((e) => e.opportunity), creatorContext: input.creatorContext ?? {}, skill: skill.validationRules, causes: entries.map((e) => e.causes ?? []), evidenceRefsCatalog: evidence.refs };
+    const batchContext = { productId: input.productId, strategy, opportunities: entries.map((e) => e.opportunity), creatorContext: stripCommission(input.creatorContext ?? {}), skill: skill.validationRules, causes: entries.map((e) => e.causes ?? []), evidenceRefsCatalog: evidence.refs };
     let rawBatch: unknown[];
     if (input.router) {
       const batchCall = (onMetrics?: (metrics: ProviderCallMetrics) => void) => callCapability(input.router!, "CONTENT_BRIEF_GENERATION", project("CONTENT_BRIEF_GENERATION", batchContext, {}), input.signal, onMetrics);

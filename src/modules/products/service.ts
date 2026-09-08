@@ -35,7 +35,9 @@ export class ProductVersionConflictError extends Error {
   }
 }
 export class ProductDeleteRejectedError extends Error {
-  constructor(public readonly code: "PRODUCT_HAS_HISTORY" | "PRODUCT_DELETE_UNSUPPORTED") {
+  constructor(
+    public readonly code: "PRODUCT_HAS_HISTORY" | "PRODUCT_DELETE_UNSUPPORTED",
+  ) {
     super(code);
     this.name = "ProductDeleteRejectedError";
   }
@@ -48,6 +50,8 @@ const FIELD_CODE_PRIORITY = [
   "category",
   "price",
   "priceCurrency",
+  "commissionType",
+  "commissionValue",
   "features",
   "imageRefs",
   "url",
@@ -61,6 +65,8 @@ export const CREATOR_PRESENCE_OPTIONS = [
   "either",
 ] as const;
 export type CreatorPresence = (typeof CREATOR_PRESENCE_OPTIONS)[number];
+export const COMMISSION_TYPES = ["PERCENT", "AMOUNT"] as const;
+export type CommissionType = (typeof COMMISSION_TYPES)[number];
 
 // Defaults e limites da SPEC (RI-002/RI-003).
 export const DEFAULT_TARGET_CONTENT_COUNT = 20;
@@ -68,7 +74,7 @@ export const DEFAULT_CREATOR_PRESENCE: CreatorPresence = "either";
 const QUANTITY_MIN = 1;
 const QUANTITY_MAX = 30;
 const NOTES_MAX = 300;
-const CURRENCIES = ["BRL", "USD", "EUR"];
+const CURRENCIES = ["R$", "USD", "EUR"];
 // Formato monetário não negativo: decimal canônico com ponto ou pt-BR com vírgula e milhar.
 const PRICE_PATTERN = /^(?:\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+\.\d{1,2})$/;
 // Imagens: refs http(s) ou data URL de imagem em base64 — o projeto não tem storage de arquivos.
@@ -181,6 +187,29 @@ function normalizePriceAmount(price: string): string {
   if (/^\d{1,3}(?:\.\d{3})+$/.test(price)) return price.replace(/\./g, "");
   return price;
 }
+function validateCommission(
+  input: ManualProductInput,
+  fail: Fail,
+): { commissionType: CommissionType | null; commissionValue: string | null } {
+  const rawType = asTrimmedString(input.commissionType)?.toUpperCase() ?? "";
+  const rawValue = asTrimmedString(input.commissionValue) ?? "";
+  if (!rawType && !rawValue) return { commissionType: null, commissionValue: null };
+  let commissionType: CommissionType | null = null;
+  if ((COMMISSION_TYPES as readonly string[]).includes(rawType)) {
+    commissionType = rawType as CommissionType;
+  } else {
+    fail("commissionType", "Informe um tipo de comissão válido.", "VAL-COMMISSION-TYPE");
+  }
+  if (!rawValue || !PRICE_PATTERN.test(rawValue)) {
+    fail("commissionValue", "Informe uma comissão válida e não negativa, com até duas casas decimais.", "VAL-COMMISSION-VALUE");
+    return { commissionType, commissionValue: null };
+  }
+  const commissionValue = normalizePriceAmount(rawValue);
+  if (commissionType === "PERCENT" && Number(commissionValue) > 100) {
+    fail("commissionValue", "A comissão percentual deve estar entre 0 e 100.", "VAL-COMMISSION-RANGE");
+  }
+  return { commissionType, commissionValue };
+}
 
 type ValidatedFacts = {
   name: string;
@@ -188,6 +217,8 @@ type ValidatedFacts = {
   category: string;
   priceAmount: string;
   priceCurrency: string;
+  commissionType: CommissionType | null;
+  commissionValue: string | null;
   features: string[];
   imageRefs: string[];
 };
@@ -269,7 +300,7 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
   } else if (!CURRENCIES.includes(priceCurrency)) {
     fail(
       "priceCurrency",
-      "Moeda não suportada. Use BRL, USD ou EUR.",
+      "Moeda não suportada. Use R$, USD ou EUR.",
       "VAL-PRICE-FORMAT",
     );
   }
@@ -316,6 +347,7 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
   }
 
   const imageRefs = validateImageRefs(input.imageRefs, fail);
+  const commission = validateCommission(input, fail);
 
   return {
     name,
@@ -323,6 +355,7 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
     category,
     priceAmount: normalizePriceAmount(price),
     priceCurrency,
+    ...commission,
     features,
     imageRefs,
   };
@@ -467,6 +500,8 @@ export async function createManualProduct(
         category: data.category,
         priceAmount: data.priceAmount,
         priceCurrency: data.priceCurrency,
+        commissionType: data.commissionType,
+        commissionValue: data.commissionValue,
         features: data.features,
         images: data.imageRefs,
         submittedUrl: data.submittedUrl,
@@ -535,6 +570,8 @@ export async function updateTenantProduct(
         category: facts.category,
         priceAmount: facts.priceAmount,
         priceCurrency: facts.priceCurrency,
+        commissionType: facts.commissionType,
+        commissionValue: facts.commissionValue,
         features: facts.features,
         images: facts.imageRefs,
         submittedUrl: facts.submittedUrl,
@@ -575,43 +612,128 @@ async function transitionTenantProduct(
     // ADR-006: entitlement default idempotente; linhas históricas pré-backfill se auto-provisionam
     // aqui (nunca sobrescreve limite já resolvido). Sem limite configurado, fail-closed abaixo.
     const entitlement = await provisionDefaultEntitlement(tenantId, tx);
-    const activeCount = await tx.product.count({ where: { tenantId, lifecycle: "ACTIVE" } });
+    const activeCount = await tx.product.count({
+      where: { tenantId, lifecycle: "ACTIVE" },
+    });
     if (target === "ACTIVE") {
-      if (!Number.isInteger(entitlement.activeProductsLimit) || entitlement.activeProductsLimit! < 0) throw new ProductValidationError({ lifecycle: "Limite de produtos não configurado." }, "GEN-PRODUCT-CAPACITY");
-      if (activeCount >= entitlement.activeProductsLimit!) throw new ProductValidationError({ lifecycle: "Limite de produtos ativos atingido." }, "GEN-PRODUCT-CAPACITY");
+      if (
+        !Number.isInteger(entitlement.activeProductsLimit) ||
+        entitlement.activeProductsLimit! < 0
+      )
+        throw new ProductValidationError(
+          { lifecycle: "Limite de produtos não configurado." },
+          "GEN-PRODUCT-CAPACITY",
+        );
+      if (activeCount >= entitlement.activeProductsLimit!)
+        throw new ProductValidationError(
+          { lifecycle: "Limite de produtos ativos atingido." },
+          "GEN-PRODUCT-CAPACITY",
+        );
     }
-    const changed = await tx.product.updateMany({ where: { id, tenantId, version: existing.version }, data: { lifecycle: target, version: { increment: 1 } } });
+    const changed = await tx.product.updateMany({
+      where: { id, tenantId, version: existing.version },
+      data: { lifecycle: target, version: { increment: 1 } },
+    });
     if (changed.count !== 1) throw new ProductVersionConflictError();
     const updated = await tx.product.findFirst({ where: { tenantId, id } });
     if (!updated) throw new ProductNotFoundError();
-    if (entitlement) await tx.tenantEntitlement.update({ where: { tenantId }, data: { activeProductsUsed: target === "ACTIVE" ? activeCount + 1 : Math.max(0, activeCount - 1) } });
+    if (entitlement)
+      await tx.tenantEntitlement.update({
+        where: { tenantId },
+        data: {
+          activeProductsUsed:
+            target === "ACTIVE"
+              ? activeCount + 1
+              : Math.max(0, activeCount - 1),
+        },
+      });
     return updated;
   });
 }
 
-export async function archiveTenantProduct(tenantId: string, id: string): Promise<Product> {
-  try { return await transitionTenantProduct(tenantId, id, "ARCHIVED"); }
-  catch (error) { if (error instanceof ProductVersionConflictError) return transitionTenantProduct(tenantId, id, "ARCHIVED"); throw error; }
+export async function archiveTenantProduct(
+  tenantId: string,
+  id: string,
+): Promise<Product> {
+  try {
+    return await transitionTenantProduct(tenantId, id, "ARCHIVED");
+  } catch (error) {
+    if (error instanceof ProductVersionConflictError)
+      return transitionTenantProduct(tenantId, id, "ARCHIVED");
+    throw error;
+  }
 }
 
 /** Desarquivar/reativar: volta o Product para ACTIVE, idempotente como archive. */
-export async function reactivateTenantProduct(tenantId: string, id: string): Promise<Product> {
-  try { return await transitionTenantProduct(tenantId, id, "ACTIVE"); }
-  catch (error) { if (error instanceof ProductVersionConflictError) return transitionTenantProduct(tenantId, id, "ACTIVE"); throw error; }
+export async function reactivateTenantProduct(
+  tenantId: string,
+  id: string,
+): Promise<Product> {
+  try {
+    return await transitionTenantProduct(tenantId, id, "ACTIVE");
+  } catch (error) {
+    if (error instanceof ProductVersionConflictError)
+      return transitionTenantProduct(tenantId, id, "ACTIVE");
+    throw error;
+  }
 }
-export async function deleteTenantProduct(tenantId: string, id: string): Promise<never> {
-  const product = await prisma.product.findFirst({ where: { tenantId, id }, select: { id: true } });
+export async function deleteTenantProduct(
+  tenantId: string,
+  id: string,
+): Promise<void> {
+  const product = await prisma.product.findFirst({
+    where: { tenantId, id },
+    select: { id: true },
+  });
   if (!product) throw new ProductNotFoundError();
-  const [jobs, runs, strategies, plans, opportunities, contents, briefs, memory] = await Promise.all([
-    prisma.commerceIntelligenceJob.count({ where: { tenantId, productId: id } }),
+  const [
+    jobs,
+    runs,
+    understandings,
+    strategies,
+    plans,
+    opportunities,
+    contents,
+    briefs,
+    reports,
+    memory,
+  ] = await Promise.all([
+    prisma.commerceIntelligenceJob.count({
+      where: { tenantId, productId: id },
+    }),
     prisma.intelligenceRun.count({ where: { tenantId, productId: id } }),
+    prisma.productUnderstanding.count({
+      where: { tenantId, productId: id },
+    }),
     prisma.productStrategy.count({ where: { tenantId, productId: id } }),
     prisma.contentPlan.count({ where: { tenantId, productId: id } }),
-    prisma.contentOpportunity.count({ where: { tenantId, productId: id } }),
+    prisma.contentOpportunity.count({
+      where: { tenantId, productId: id },
+    }),
     prisma.content.count({ where: { tenantId, productId: id } }),
-    prisma.contentBriefVersion.count({ where: { tenantId, productId: id } }),
-    prisma.productMemorySnapshot.count({ where: { tenantId, productId: id } }),
+    prisma.contentBriefVersion.count({
+      where: { tenantId, productId: id },
+    }),
+    prisma.briefValidationReport.count({
+      where: { tenantId, productId: id },
+    }),
+    prisma.productMemorySnapshot.count({
+      where: { tenantId, productId: id },
+    }),
   ]);
-  const hasHistory = jobs + runs + strategies + plans + opportunities + contents + briefs + memory > 0;
-  throw new ProductDeleteRejectedError(hasHistory ? "PRODUCT_HAS_HISTORY" : "PRODUCT_DELETE_UNSUPPORTED");
+  const hasHistory =
+    jobs +
+      runs +
+      understandings +
+      strategies +
+      plans +
+      opportunities +
+      contents +
+      briefs +
+      reports +
+      memory >
+    0;
+  if (hasHistory)
+    throw new ProductDeleteRejectedError("PRODUCT_HAS_HISTORY");
+  await prisma.product.delete({ where: { id } });
 }

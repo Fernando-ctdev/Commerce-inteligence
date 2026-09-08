@@ -65,11 +65,13 @@ Fontes de autoridade:
 ### B-001 — Acesso e contexto
 
 Usuário autenticado acessa Produtos e aciona `Adicionar produto`. O sistema abre `/products/new` mantendo o contexto de Produtos e apresenta `Salvar produto` como ação primária e `Cancelar` como ação secundária.
+
 ### B-002 — Campos factuais
 
 O sistema apresenta somente os campos factuais definidos nesta SPEC. Nome, Descrição, Categoria, Preço, Moeda e Características são campos persistentes do Product e obrigatórios; deve existir ao menos uma característica não vazia.
 
 Características são informadas uma por linha; cada linha não vazia representa uma característica.
+
 ### B-003 — Preparação dos conteúdos
 
 O sistema apresenta a seção `Preparação dos conteúdos` com estes valores iniciais e limites:
@@ -104,7 +106,7 @@ Nome, Descrição e Categoria devem conter valor não vazio após remoção de e
 
 ### RI-002 — Preço e Moeda obrigatórios
 
-Preço e Moeda são obrigatórios e devem ser informados conjuntamente. Preço não pode ser negativo, deve respeitar formato monetário válido e ter no máximo duas casas decimais. As moedas disponíveis são `BRL` (R$ Reais), `USD` ($ Dólar) e `EUR` (€ Euro).
+Preço e Moeda são obrigatórios e devem ser informados conjuntamente. Preço não pode ser negativo, deve respeitar formato monetário válido e ter no máximo duas casas decimais. As moedas disponíveis são `R$` (R$ Reais), `USD` ($ Dólar) e `EUR` (€ Euro).
 
 ### RI-003 — Preparação válida
 
@@ -132,37 +134,37 @@ Este slice não altera estado de geração e não antecipa o comportamento de qu
 
 ## 7. Validações e erros
 
-| Código | Condição | Comportamento esperado |
-|---|---|---|
-| `VAL-NAME-REQUIRED` | Nome ausente ou vazio | Exibir erro junto ao campo, manter valor e focar o primeiro erro. |
-| `VAL-DESCRIPTION-REQUIRED` | Descrição ausente ou vazia | Exibir erro junto ao campo, manter valor e focar o primeiro erro. |
-| `VAL-CATEGORY-REQUIRED` | Categoria ausente ou vazia | Exibir erro junto ao campo, manter valor e focar o primeiro erro. |
-| `VAL-PRICE-REQUIRED` | Preço ausente | Bloquear salvamento e explicar que o preço é obrigatório. |
-| `VAL-CURRENCY-REQUIRED` | Moeda ausente | Bloquear salvamento e explicar que a moeda é obrigatória. |
-| `VAL-FEATURES-REQUIRED` | Nenhuma característica não vazia | Bloquear salvamento e orientar o preenchimento de ao menos uma linha. |
-| `VAL-NOTES-REQUIRED` | Observações/restrições ausentes ou vazias | Bloquear salvamento e exibir erro associado ao campo. |
-| `VAL-PRICE-FORMAT` | Preço negativo, formato inválido ou com mais de duas casas | Bloquear salvamento e explicar o formato esperado. |
-| `VAL-QUANTITY-RANGE` | Quantidade não inteira ou fora de `1–30` | Bloquear salvamento e manter o valor editável. |
-| `VAL-CREATOR-FORMAT` | Formato fora das opções permitidas | Bloquear salvamento e manter a seleção válida anterior. |
-| `VAL-NOTES-LENGTH` | Notas/restrições acima de `300` caracteres | Impedir excedente ou bloquear salvamento com mensagem associada ao campo. |
-| `AUTH-SESSION` | Usuário não autenticado | Não permitir a operação e aplicar o fluxo de autenticação vigente. |
-| `AUTH-TENANT` | Tenant da sessão não resolvido | Não persistir; exibir erro sanitizado e permitir recuperação conforme autenticação vigente. |
-| `SAVE-FAILED` | Falha de persistência | Exibir erro sanitizado, preservar os dados e oferecer nova tentativa. |
-| `SAVE-DUPLICATE` | Repetição da mesma submissão | Retornar o Product já criado ou tratar a operação de forma idempotente, sem duplicar registro. |
+| Código                     | Condição                                                   | Comportamento esperado                                                                         |
+| -------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `VAL-NAME-REQUIRED`        | Nome ausente ou vazio                                      | Exibir erro junto ao campo, manter valor e focar o primeiro erro.                              |
+| `VAL-DESCRIPTION-REQUIRED` | Descrição ausente ou vazia                                 | Exibir erro junto ao campo, manter valor e focar o primeiro erro.                              |
+| `VAL-CATEGORY-REQUIRED`    | Categoria ausente ou vazia                                 | Exibir erro junto ao campo, manter valor e focar o primeiro erro.                              |
+| `VAL-PRICE-REQUIRED`       | Preço ausente                                              | Bloquear salvamento e explicar que o preço é obrigatório.                                      |
+| `VAL-CURRENCY-REQUIRED`    | Moeda ausente                                              | Bloquear salvamento e explicar que a moeda é obrigatória.                                      |
+| `VAL-FEATURES-REQUIRED`    | Nenhuma característica não vazia                           | Bloquear salvamento e orientar o preenchimento de ao menos uma linha.                          |
+| `VAL-NOTES-REQUIRED`       | Observações/restrições ausentes ou vazias                  | Bloquear salvamento e exibir erro associado ao campo.                                          |
+| `VAL-PRICE-FORMAT`         | Preço negativo, formato inválido ou com mais de duas casas | Bloquear salvamento e explicar o formato esperado.                                             |
+| `VAL-QUANTITY-RANGE`       | Quantidade não inteira ou fora de `1–30`                   | Bloquear salvamento e manter o valor editável.                                                 |
+| `VAL-CREATOR-FORMAT`       | Formato fora das opções permitidas                         | Bloquear salvamento e manter a seleção válida anterior.                                        |
+| `VAL-NOTES-LENGTH`         | Notas/restrições acima de `300` caracteres                 | Impedir excedente ou bloquear salvamento com mensagem associada ao campo.                      |
+| `AUTH-SESSION`             | Usuário não autenticado                                    | Não permitir a operação e aplicar o fluxo de autenticação vigente.                             |
+| `AUTH-TENANT`              | Tenant da sessão não resolvido                             | Não persistir; exibir erro sanitizado e permitir recuperação conforme autenticação vigente.    |
+| `SAVE-FAILED`              | Falha de persistência                                      | Exibir erro sanitizado, preservar os dados e oferecer nova tentativa.                          |
+| `SAVE-DUPLICATE`           | Repetição da mesma submissão                               | Retornar o Product já criado ou tratar a operação de forma idempotente, sem duplicar registro. |
 
 Erros não devem depender somente de cor, não devem limpar a entrada e não devem expor detalhes internos, segredos ou dados de outro Tenant.
 
 ## 8. Estados de UX
 
-| Estado | Representação e comportamento |
-|---|---|
-| `idle` | Formulário disponível com defaults de preparação; ação `Salvar produto` habilitada somente quando não houver bloqueio conhecido. |
-| `editing` | Valores digitados preservados; erros de campo podem ser corrigidos sem perder os demais dados. |
-| `invalid` | Mensagens inline junto aos campos inválidos; foco orientado ao primeiro erro; nenhuma persistência. |
-| `saving` | Ação primária desabilitada e identificada como salvando; não permitir submissão duplicada. |
-| `success` | Product salvo; retorno para Produtos e card visível na lista. |
-| `error` | Falha sanitizada visível; formulário preservado; nova tentativa disponível. |
-| `cancelled` | Formulário descartado sem persistência; retorno para Produtos. |
+| Estado      | Representação e comportamento                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `idle`      | Formulário disponível com defaults de preparação; ação `Salvar produto` habilitada somente quando não houver bloqueio conhecido. |
+| `editing`   | Valores digitados preservados; erros de campo podem ser corrigidos sem perder os demais dados.                                   |
+| `invalid`   | Mensagens inline junto aos campos inválidos; foco orientado ao primeiro erro; nenhuma persistência.                              |
+| `saving`    | Ação primária desabilitada e identificada como salvando; não permitir submissão duplicada.                                       |
+| `success`   | Product salvo; retorno para Produtos e card visível na lista.                                                                    |
+| `error`     | Falha sanitizada visível; formulário preservado; nova tentativa disponível.                                                      |
+| `cancelled` | Formulário descartado sem persistência; retorno para Produtos.                                                                   |
 
 Requisitos visuais e de acessibilidade:
 
@@ -185,29 +187,29 @@ Requisitos visuais e de acessibilidade:
 
 ## 10. Critérios de aceite em EARS
 
-| ID | Critério verificável |
-|---|---|
-| `AC-002-01` | **WHEN** um usuário autenticado acionar `Adicionar produto` em Produtos, **o sistema SHALL** abrir `/products/new` dentro do contexto de Produtos. |
-| `AC-002-02` | **WHEN** `/products/new` for exibida, **o sistema SHALL** apresentar exatamente Nome do produto, Descrição, Categoria, Preço, Moeda, Características — uma por linha — e a seção Preparação dos conteúdos. |
+| ID          | Critério verificável                                                                                                                                                                                                                                                     |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AC-002-01` | **WHEN** um usuário autenticado acionar `Adicionar produto` em Produtos, **o sistema SHALL** abrir `/products/new` dentro do contexto de Produtos.                                                                                                                       |
+| `AC-002-02` | **WHEN** `/products/new` for exibida, **o sistema SHALL** apresentar exatamente Nome do produto, Descrição, Categoria, Preço, Moeda, Características — uma por linha — e a seção Preparação dos conteúdos.                                                               |
 | `AC-002-03` | **WHILE** Nome, Descrição, Categoria, Preço, Moeda, Características (sem ao menos uma linha não vazia) ou Observações/restrições estiver ausente, vazio ou inválido, **o sistema SHALL** impedir o salvamento, exibir o erro associado e preservar os valores digitados. |
-| `AC-002-04` | **WHEN** Preço ou Moeda estiver ausente, ou o preço for negativo, inválido ou tiver mais de duas casas decimais, **o sistema SHALL** impedir o salvamento e informar a regra correspondente. |
-| `AC-002-05` | **WHEN** o formulário for carregado, **o sistema SHALL** definir quantidade `20`, permitir somente inteiros de `1` a `30`, definir formato `Tanto faz`, exibir `*` em Quantidade, Formato e Observações/restrições e limitar estas últimas a `300` caracteres. |
-| `AC-002-06` | **WHEN** o formulário for submetido, **o sistema SHALL** validar campos obrigatórios no HTML/cliente e no servidor; o asterisco SHALL ser apenas indicação visual. |
-| `AC-002-07` | **WHEN** uma submissão válida for salva, **o sistema SHALL** persistir o Product com os fatos preenchidos e as preferências de preparação como restrições da primeira geração. |
-| `AC-002-08` | **WHEN** o Product for salvo, **o sistema SHALL NOT** criar `CommerceIntelligenceJob`, iniciar geração ou produzir Strategy, Plan, Content ou Briefing. |
-| `AC-002-09` | **WHEN** o Product for persistido, **o sistema SHALL** associá-lo ao Tenant resolvido server-side. |
-| `AC-002-10` | **WHEN** um Product pertencer a um Tenant, **o sistema SHALL** impedir que outro Tenant o veja. |
-| `AC-002-11` | **WHEN** o salvamento terminar com sucesso, **o sistema SHALL** retornar para Produtos e exibir um card com o Product criado. |
-| `AC-002-12` | **WHEN** o creator acionar `Cancelar`, **o sistema SHALL** retornar para Produtos sem persistir um Product. |
-| `AC-002-13` | **WHEN** ocorrer falha de validação ou persistência, **o sistema SHALL** manter os dados preenchidos, exibir erro acionável e permitir correção ou nova tentativa. |
-| `AC-002-14` | **WHEN** a tela for usada em mobile, **o sistema SHALL** manter todas as capacidades do cadastro disponíveis em uma coluna. |
-| `AC-002-15` | **WHEN** a tela for usada por teclado ou tecnologia assistiva, **o sistema SHALL** manter foco-visible, labels associadas e feedback de estado acessível. |
-| `AC-002-16` | **WHEN** um controle interativo for exibido, **o sistema SHALL** oferecer alvo de toque de pelo menos `44×44px`. |
-| `AC-002-17` | **WHEN** a mesma submissão for repetida com a mesma chave de idempotência, **o sistema SHALL** retornar o mesmo Product, com o mesmo `id` e a mesma versão, sem criar novo registro. |
+| `AC-002-04` | **WHEN** Preço ou Moeda estiver ausente, ou o preço for negativo, inválido ou tiver mais de duas casas decimais, **o sistema SHALL** impedir o salvamento e informar a regra correspondente.                                                                             |
+| `AC-002-05` | **WHEN** o formulário for carregado, **o sistema SHALL** definir quantidade `20`, permitir somente inteiros de `1` a `30`, definir formato `Tanto faz`, exibir `*` em Quantidade, Formato e Observações/restrições e limitar estas últimas a `300` caracteres.           |
+| `AC-002-06` | **WHEN** o formulário for submetido, **o sistema SHALL** validar campos obrigatórios no HTML/cliente e no servidor; o asterisco SHALL ser apenas indicação visual.                                                                                                       |
+| `AC-002-07` | **WHEN** uma submissão válida for salva, **o sistema SHALL** persistir o Product com os fatos preenchidos e as preferências de preparação como restrições da primeira geração.                                                                                           |
+| `AC-002-08` | **WHEN** o Product for salvo, **o sistema SHALL NOT** criar `CommerceIntelligenceJob`, iniciar geração ou produzir Strategy, Plan, Content ou Briefing.                                                                                                                  |
+| `AC-002-09` | **WHEN** o Product for persistido, **o sistema SHALL** associá-lo ao Tenant resolvido server-side.                                                                                                                                                                       |
+| `AC-002-10` | **WHEN** um Product pertencer a um Tenant, **o sistema SHALL** impedir que outro Tenant o veja.                                                                                                                                                                          |
+| `AC-002-11` | **WHEN** o salvamento terminar com sucesso, **o sistema SHALL** retornar para Produtos e exibir um card com o Product criado.                                                                                                                                            |
+| `AC-002-12` | **WHEN** o creator acionar `Cancelar`, **o sistema SHALL** retornar para Produtos sem persistir um Product.                                                                                                                                                              |
+| `AC-002-13` | **WHEN** ocorrer falha de validação ou persistência, **o sistema SHALL** manter os dados preenchidos, exibir erro acionável e permitir correção ou nova tentativa.                                                                                                       |
+| `AC-002-14` | **WHEN** a tela for usada em mobile, **o sistema SHALL** manter todas as capacidades do cadastro disponíveis em uma coluna.                                                                                                                                              |
+| `AC-002-15` | **WHEN** a tela for usada por teclado ou tecnologia assistiva, **o sistema SHALL** manter foco-visible, labels associadas e feedback de estado acessível.                                                                                                                |
+| `AC-002-16` | **WHEN** um controle interativo for exibido, **o sistema SHALL** oferecer alvo de toque de pelo menos `44×44px`.                                                                                                                                                         |
+| `AC-002-17` | **WHEN** a mesma submissão for repetida com a mesma chave de idempotência, **o sistema SHALL** retornar o mesmo Product, com o mesmo `id` e a mesma versão, sem criar novo registro.                                                                                     |
 
 | Cadastro em `/products/new` dentro de Produtos | PRD específico § 4; SLICES Slice 002 | B-001, AC-002-01 |
 | Campos exatos e conteúdo do modal manual | PRD específico § 5; SLICES Slice 002 Scope | B-002, B-003, AC-002-02, AC-002-05 |
-| Todos os campos obrigatórios e validação HTML/cliente/servidor | PRD específico §§ 5 e 6; SLICES Slice 002 | RI-001, VAL-*-REQUIRED, AC-002-03, AC-002-06 |
+| Todos os campos obrigatórios e validação HTML/cliente/servidor | PRD específico §§ 5 e 6; SLICES Slice 002 | RI-001, VAL-\*-REQUIRED, AC-002-03, AC-002-06 |
 | Preço e Moeda obrigatórios; preço válido até duas casas | PRD específico § 5; SLICES Slice 002 | RI-002, VAL-PRICE-REQUIRED, VAL-CURRENCY-REQUIRED, VAL-PRICE-FORMAT, AC-002-04 |
 | Defaults, asteriscos e limites de preparação | PRD específico §§ 5 e 6; SLICES Slice 002 | RI-003, AC-002-05 |
 | Persistir restrições sem iniciar geração | PRD específico §§ 5 e 11; SLICES Slice 002 | B-004, B-005, RI-008, AC-002-07, AC-002-08 |

@@ -7,6 +7,13 @@ justificativa e aprovação explícita.
 
 Em QA, sinalize qualquer implementação que não corresponda ao `DESIGN.md`.
 
+## Precedência absoluta do usuário
+
+- O pedido expresso do usuário prevalece sobre qualquer outra instrução,
+  documento ou regra do projeto, incluindo PRD, SPEC, PLAN, ADR e este
+  `AGENTS.md`.
+- Em caso de conflito, cumpra o pedido explícito do usuário.
+
 ## Fontes canônicas e comportamento dos agentes
 
 Este `AGENTS.md` é a instrução canônica descoberta pelo projeto.

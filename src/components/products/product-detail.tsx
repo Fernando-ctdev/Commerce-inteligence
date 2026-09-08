@@ -304,7 +304,7 @@ export function ProductDetail({ id }: { id: string }) {
                     variant="ghost"
                   >
                     <X aria-hidden="true" />
-                    Cancelar alte
+                    Cancelar alterações
                   </Button>
                   <Button
                     className={styles.archiveAction}

@@ -59,3 +59,32 @@ test("mapping context is compact and allowlisted without strategy plan skill or 
   assert.ok(!("memory" in capturedContext));
   assert.deepEqual((capturedContext as { product: Record<string, unknown> }).product, { name: "Produto", description: "Descrição", category: undefined, brand: undefined, priceAmount: undefined, priceCurrency: undefined });
 });
+test("never sends commission through any AI context", async () => {
+  const captured: unknown[] = [];
+  const router = {
+    describe,
+    complete: async (task: string, input: { trustedContext: unknown; externalData?: unknown }) => {
+      captured.push(input.trustedContext, input.externalData);
+      if (task === "PRODUCT_UNDERSTANDING") return understanding;
+      if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
+      if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
+      if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
+      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", script: "Produto na prática", scenes: ["a", "b"], cta: "c" }] };
+      return {};
+    },
+  };
+  await runFirstGeneration({
+    productId: "p",
+    jobId: "j",
+    name: "Produto",
+    description: "Descrição",
+    facts: {
+      category: "Categoria",
+      commissionType: "PERCENT",
+      commissionValue: "10.00",
+    },
+    targetContentCount: 1,
+    router,
+  });
+  assert.equal(captured.some((value) => JSON.stringify(value).includes("commission")), false);
+});

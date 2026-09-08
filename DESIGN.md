@@ -1,7 +1,7 @@
 # Design System — Commerce Intelligence
 
 **Status:** fonte de verdade visual do produto  
-**Versão:** 1.5
+**Versão:** 1.6
 **Locale do MVP:** `pt-BR`  
 **Escopo:** decisões de produto visual, tokens, comportamento responsivo, estados e contratos de componentes. Este documento **não implementa telas, componentes ou dependências**.
 
@@ -61,6 +61,7 @@ macOS/iPadOS, Things e Linear são referências de sensação, clareza e discipl
 10. **Cor tem semântica.** `color.action.filled` sinaliza ações preenchidas; `color.brand.accent` sinaliza marca, seleção e acentos secundários. `color.intelligence` sinaliza inteligência ou geração. Tags, ângulos e categorias são neutros.
 11. **Light é o padrão.** Dark usa os mesmos nomes de tokens semânticos e muda somente seus valores de tema definidos aqui.
 12. **Acessibilidade é parte do visual.** Foco, erro, contraste, teclado, toque e redução de movimento não são estados posteriores.
+13. **Componentes servem à jornada; não limitam o design.** Os componentes já existentes, incluindo shadcn/ui, são primitives reutilizáveis e não fronteiras da solução. A cada jornada, escolher o padrão que melhor resolve hierarquia, densidade, compreensão, responsividade, acessibilidade e qualidade percebida; criar componentes novos quando os existentes não atenderem a esses critérios. Não forçar `Tabs`, cards, accordions ou qualquer outro padrão somente porque já existe no projeto. Componentes novos devem reutilizar os tokens, contratos de acessibilidade e comportamento responsivo deste documento, sem duplicar uma capacidade que o componente existente já resolve adequadamente.
 
 ### Riscos deliberados e por que valem a pena
 
@@ -112,12 +113,12 @@ Como minha conta e a plataforma estão configuradas?
 
 ### Shell por superfície
 
-| Superfície | Regra de layout | Prioridade de uso |
-|---|---|---|
-| Mobile, até `767px` | uma coluna; header contextual; Sidebar shadcn/ui em modo drawer (off-canvas) | experiência completa, com execução prioritária |
-| Tablet, `768–1199px` | rail lateral compacta de `72px` + região principal | experiência completa, revisão e organização com mais contexto |
-| Desktop, a partir de `1200px` | sidebar fixa de `240px` + região principal com toolbar | experiência expandida, planejamento em escala e operações densas |
-| Wide, a partir de `1440px` | mesmo shell; somente a coluna de conteúdo é limitada | mais densidade e comparação, sem capacidade exclusiva |
+| Superfície                    | Regra de layout                                                              | Prioridade de uso                                                |
+| ----------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Mobile, até `767px`           | uma coluna; header contextual; Sidebar shadcn/ui em modo drawer (off-canvas) | experiência completa, com execução prioritária                   |
+| Tablet, `768–1199px`          | rail lateral compacta de `72px` + região principal                           | experiência completa, revisão e organização com mais contexto    |
+| Desktop, a partir de `1200px` | sidebar fixa de `240px` + região principal com toolbar                       | experiência expandida, planejamento em escala e operações densas |
+| Wide, a partir de `1440px`    | mesmo shell; somente a coluna de conteúdo é limitada                         | mais densidade e comparação, sem capacidade exclusiva            |
 
 **Resumo:** Mobile = experiência completa + execução prioritária; Desktop = experiência expandida + planejamento em escala.
 
@@ -133,6 +134,15 @@ A mudança de breakpoint altera composição, densidade e prioridade, não o mod
 - entre `1200px` e `1439px`, a coluna usa toda a largura disponível após a sidebar e o padding, sem overflow horizontal e sem tentar atingir `1440px`;
 - em `1440px` ou mais, o limite de `1440px` aplica-se somente à coluna de conteúdo; fundo e toolbar continuam ocupando a região principal;
 - nenhum breakpoint Wide cria terceira coluna, segunda sidebar ou painel decorativo.
+
+### Padrão de largura de conteúdo por página
+
+O limite de `1440px` do shell é o teto da região principal, não a largura que cada tela deve usar internamente. Para evitar páginas com proporções inconsistentes entre si, toda tela operacional segue uma de duas categorias, sem valores intermediários ad hoc:
+
+- **Full-width operacional:** telas cujo conteúdo principal é o objeto de trabalho — Home operacional, Produtos (grade/lista), Product detail, Estúdio e Agenda — ocupam toda a largura útil da coluna de conteúdo (até o teto de `1440px` do shell). Grades de cards usam colunas responsivas (`auto-fill`/`minmax`) para não formar cards artificialmente largos nem vazio estrutural quando a coluna crescer.
+- **Coluna de leitura:** reservada exclusivamente a mensagens de estado — vazio, erro, loading textual e confirmação — que não representam a grade/lista principal da tela. Usa `max-width` entre `560px` e `640px`, centralizada, para manter a leitura curta legível.
+
+Nenhuma tela usa uma coluna de leitura para sua composição operacional principal (header do objeto, grade de cards, tabs ou lista de itens); a coluna estreita é exclusiva de estados de mensagem.
 
 ### Regras mobile
 
@@ -195,6 +205,7 @@ A listagem principal pode possuir:
 - filtro `Arquivados`;
 
 `Pendente` é uma projeção operacional da readiness da inteligência, derivada do processamento/resultado disponível. Não deve ser confundida com o lifecycle persistente do Produto, como `Ativo` ou `Arquivado`.
+
 - ação `Adicionar produto`.
 
 Cada Product card mostra somente informações úteis para decidir a próxima ação, como:
@@ -337,24 +348,24 @@ Não criar cores ad hoc para telas, categorias, ângulos, tipos de Content ou pl
 
 ### Tokens canônicos por tema
 
-| ID canônico | Light | Dark | Uso |
-|---|---:|---:|---|
-| `color.brand.accent` | `#5B6CFF` | `#7885FF` | marca, acento secundário, seleção e estados não preenchidos |
-| `color.action.filled` | `#3D4CC6` | `#7885FF` | ações preenchidas com texto normal acessível |
-| `color.intelligence` | `#8A63D2` | `#8A63D2` | inteligência explícita, geração e explicabilidade |
-| `color.canvas` | `#F7F7F8` | `#0F1115` | fundo geral |
-| `color.surface.default` | `#FFFFFF` | `#161A20` | conteúdo principal sólido |
-| `color.surface.secondary` | `#F1F2F4` | `#1D222A` | agrupamentos e campos neutros |
-| `color.border.default` | `#E4E6E8` | `#2A3039` | divisores e contornos |
-| `color.text.primary` | `#17191C` | `#F4F6F8` | títulos, corpo e instruções |
-| `color.text.secondary` | `#666B73` | `#A7ADB7` | contexto e metadados |
-| `color.text.muted` | `#969CA5` | `#6F7782` | informação auxiliar não essencial |
-| `color.content.on-surface` | `#17191C` | `#F4F6F8` | conteúdo normal sobre superfície |
-| `color.content.on-action` | `#FFFFFF` | `#0F1115` | texto normal sobre ação preenchida |
-| `color.focus.ring` | `#5B6CFF` | `#7885FF` | foco-visible e indicação de seleção |
-| `color.feedback.success` | `#2E9B66` | `#2E9B66` | confirmação e avanço concluído |
-| `color.feedback.warning` | `#C9892B` | `#C9892B` | atenção e ação pendente |
-| `color.feedback.danger` | `#C94B50` | `#C94B50` | erro, destruição e falha recuperável |
+| ID canônico                |     Light |      Dark | Uso                                                         |
+| -------------------------- | --------: | --------: | ----------------------------------------------------------- |
+| `color.brand.accent`       | `#5B6CFF` | `#7885FF` | marca, acento secundário, seleção e estados não preenchidos |
+| `color.action.filled`      | `#3D4CC6` | `#7885FF` | ações preenchidas com texto normal acessível                |
+| `color.intelligence`       | `#8A63D2` | `#8A63D2` | inteligência explícita, geração e explicabilidade           |
+| `color.canvas`             | `#F7F7F8` | `#0F1115` | fundo geral                                                 |
+| `color.surface.default`    | `#FFFFFF` | `#161A20` | conteúdo principal sólido                                   |
+| `color.surface.secondary`  | `#F1F2F4` | `#1D222A` | agrupamentos e campos neutros                               |
+| `color.border.default`     | `#E4E6E8` | `#2A3039` | divisores e contornos                                       |
+| `color.text.primary`       | `#17191C` | `#F4F6F8` | títulos, corpo e instruções                                 |
+| `color.text.secondary`     | `#666B73` | `#A7ADB7` | contexto e metadados                                        |
+| `color.text.muted`         | `#969CA5` | `#6F7782` | informação auxiliar não essencial                           |
+| `color.content.on-surface` | `#17191C` | `#F4F6F8` | conteúdo normal sobre superfície                            |
+| `color.content.on-action`  | `#FFFFFF` | `#0F1115` | texto normal sobre ação preenchida                          |
+| `color.focus.ring`         | `#5B6CFF` | `#7885FF` | foco-visible e indicação de seleção                         |
+| `color.feedback.success`   | `#2E9B66` | `#2E9B66` | confirmação e avanço concluído                              |
+| `color.feedback.warning`   | `#C9892B` | `#C9892B` | atenção e ação pendente                                     |
+| `color.feedback.danger`    | `#C94B50` | `#C94B50` | erro, destruição e falha recuperável                        |
 
 `#3D4CC6` é a única adição cromática: uma variação mais escura do azul de marca, reservada a preenchimentos de ação no Light. Seu contraste é `6.89:1` com `#FFFFFF` e `6.36:1` com `#F4F6F8`, permitindo texto normal. Os demais hexes oficiais permanecem inalterados.
 
@@ -362,26 +373,26 @@ Não criar cores ad hoc para telas, categorias, ângulos, tipos de Content ou pl
 
 Critério usado: texto normal exige contraste mínimo de `4.5:1`; texto grande e gráficos/contornos não textuais exigem `3:1`. Um par não listado como permitido é proibido por padrão. Os valores abaixo são contraste WCAG arredondado para duas casas.
 
-| Tema | Foreground | Background | Contraste | Texto normal | Grande/gráfico | Política |
-|---|---|---|---:|---:|---:|---|
-| Light | `color.text.primary` | `color.surface.default` | `17.61:1` | Sim | Sim | corpo e títulos |
-| Light | `color.text.secondary` | `color.surface.default` | `5.36:1` | Sim | Sim | contexto legível |
-| Light | `color.text.muted` | `color.surface.default` | `2.76:1` | Não | Não | somente auxiliar não textual |
-| Light | `color.brand.accent` | `color.surface.default` | `4.17:1` | Não | Sim | borda, foco, ícone ou texto grande |
-| Light | `color.content.on-action` | `color.action.filled` | `6.89:1` | Sim | Sim | ação preenchida segura |
-| Light | `color.intelligence` | `color.surface.default` | `4.38:1` | Não | Sim | ícone, borda ou texto grande |
-| Light | `color.feedback.success` | `color.surface.default` | `3.50:1` | Não | Sim | sempre acompanhado de texto |
-| Light | `color.feedback.warning` | `color.surface.default` | `2.96:1` | Não | Não | nunca como único sinal visual |
-| Light | `color.feedback.danger` | `color.surface.default` | `4.56:1` | Sim | Sim | mensagem pode usar o token |
-| Dark | `color.text.primary` | `color.canvas` | `17.44:1` | Sim | Sim | corpo e títulos |
-| Dark | `color.text.secondary` | `color.surface.default` | `7.74:1` | Sim | Sim | contexto legível |
-| Dark | `color.text.muted` | `color.surface.default` | `3.86:1` | Não | Sim | auxiliar ou texto grande |
-| Dark | `color.brand.accent` | `color.surface.default` | `5.49:1` | Sim | Sim | acento textual em superfície |
-| Dark | `color.content.on-action` | `color.action.filled` | `5.94:1` | Sim | Sim | ação preenchida segura |
-| Dark | `color.intelligence` | `color.surface.default` | `3.99:1` | Não | Sim | ícone, borda ou texto grande |
-| Dark | `color.feedback.success` | `color.surface.default` | `4.99:1` | Sim | Sim | mensagem semântica |
-| Dark | `color.feedback.warning` | `color.surface.default` | `5.90:1` | Sim | Sim | mensagem semântica |
-| Dark | `color.feedback.danger` | `color.surface.default` | `3.83:1` | Não | Sim | texto explicativo em `color.text.primary` |
+| Tema  | Foreground                | Background              | Contraste | Texto normal | Grande/gráfico | Política                                  |
+| ----- | ------------------------- | ----------------------- | --------: | -----------: | -------------: | ----------------------------------------- |
+| Light | `color.text.primary`      | `color.surface.default` | `17.61:1` |          Sim |            Sim | corpo e títulos                           |
+| Light | `color.text.secondary`    | `color.surface.default` |  `5.36:1` |          Sim |            Sim | contexto legível                          |
+| Light | `color.text.muted`        | `color.surface.default` |  `2.76:1` |          Não |            Não | somente auxiliar não textual              |
+| Light | `color.brand.accent`      | `color.surface.default` |  `4.17:1` |          Não |            Sim | borda, foco, ícone ou texto grande        |
+| Light | `color.content.on-action` | `color.action.filled`   |  `6.89:1` |          Sim |            Sim | ação preenchida segura                    |
+| Light | `color.intelligence`      | `color.surface.default` |  `4.38:1` |          Não |            Sim | ícone, borda ou texto grande              |
+| Light | `color.feedback.success`  | `color.surface.default` |  `3.50:1` |          Não |            Sim | sempre acompanhado de texto               |
+| Light | `color.feedback.warning`  | `color.surface.default` |  `2.96:1` |          Não |            Não | nunca como único sinal visual             |
+| Light | `color.feedback.danger`   | `color.surface.default` |  `4.56:1` |          Sim |            Sim | mensagem pode usar o token                |
+| Dark  | `color.text.primary`      | `color.canvas`          | `17.44:1` |          Sim |            Sim | corpo e títulos                           |
+| Dark  | `color.text.secondary`    | `color.surface.default` |  `7.74:1` |          Sim |            Sim | contexto legível                          |
+| Dark  | `color.text.muted`        | `color.surface.default` |  `3.86:1` |          Não |            Sim | auxiliar ou texto grande                  |
+| Dark  | `color.brand.accent`      | `color.surface.default` |  `5.49:1` |          Sim |            Sim | acento textual em superfície              |
+| Dark  | `color.content.on-action` | `color.action.filled`   |  `5.94:1` |          Sim |            Sim | ação preenchida segura                    |
+| Dark  | `color.intelligence`      | `color.surface.default` |  `3.99:1` |          Não |            Sim | ícone, borda ou texto grande              |
+| Dark  | `color.feedback.success`  | `color.surface.default` |  `4.99:1` |          Sim |            Sim | mensagem semântica                        |
+| Dark  | `color.feedback.warning`  | `color.surface.default` |  `5.90:1` |          Sim |            Sim | mensagem semântica                        |
+| Dark  | `color.feedback.danger`   | `color.surface.default` |  `3.83:1` |          Não |            Sim | texto explicativo em `color.text.primary` |
 
 Regras de aplicação:
 
@@ -407,10 +418,10 @@ Não aplicar glass a Product, Content, estratégia, scripts, filas, tabelas ou t
 
 ### Escolhas
 
-| Papel | Família | Pesos normativos | Fallback aprovado | Rationale |
-|---|---|---|---|---|
-| Headings, body, UI e números | **Instrument Sans** | 400, 500, 600, 700 | `Instrument Sans, sans-serif` | uma voz única mantém leitura, hierarquia e densidade coerentes em toda a experiência |
-| Código e proveniência técnica | **Geist Mono** | 400, 500 | `Geist Mono, monospace` | separa identificadores técnicos sem criar uma segunda voz para a interface |
+| Papel                         | Família             | Pesos normativos   | Fallback aprovado             | Rationale                                                                            |
+| ----------------------------- | ------------------- | ------------------ | ----------------------------- | ------------------------------------------------------------------------------------ |
+| Headings, body, UI e números  | **Instrument Sans** | 400, 500, 600, 700 | `Instrument Sans, sans-serif` | uma voz única mantém leitura, hierarquia e densidade coerentes em toda a experiência |
+| Código e proveniência técnica | **Geist Mono**      | 400, 500           | `Geist Mono, monospace`       | separa identificadores técnicos sem criar uma segunda voz para a interface           |
 
 Instrument Sans é a família principal para todos os elementos visuais de produto, incluindo números com `tabular-nums`. Geist Mono só aparece em código, IDs, hashes ou proveniência técnica explicitamente exposta.
 
@@ -422,18 +433,18 @@ Usar exatamente as stacks aprovadas acima quando a família principal ou um peso
 
 A escala usa passos compactos para não transformar um aplicativo operacional em landing page. Valores são referência de design; line-height inclui espaço para leitura e toque.
 
-| Token | Tamanho / line-height | Peso | Uso |
-|---|---:|---:|---|
-| `type.display` | `32px / 36px` | 700 | título principal de contexto, usado com parcimônia |
-| `type.heading-1` | `24px / 30px` | 600 | título de página ou objeto |
-| `type.heading-2` | `20px / 26px` | 600 | seção e agrupamento real |
-| `type.title` | `17px / 22px` | 600 | título de Product, Content ou item de fila |
-| `type.body` | `15px / 22px` | 400 | leitura principal |
-| `type.body-medium` | `15px / 22px` | 500 | ênfase em instruções e valores |
-| `type.body-small` | `13px / 18px` | 400 | metadados e descrições secundárias |
-| `type.label` | `12px / 16px` | 600 | labels, status e controles; sem excesso de caixa alta |
-| `type.numeric` | `24px / 28px` | 600 | contagem ligada a objeto real, nunca métrica decorativa |
-| `type.code` | `12px / 18px` | 400 | identificadores e proveniência técnica em Geist Mono |
+| Token              | Tamanho / line-height | Peso | Uso                                                     |
+| ------------------ | --------------------: | ---: | ------------------------------------------------------- |
+| `type.display`     |         `32px / 36px` |  700 | título principal de contexto, usado com parcimônia      |
+| `type.heading-1`   |         `24px / 30px` |  600 | título de página ou objeto                              |
+| `type.heading-2`   |         `20px / 26px` |  600 | seção e agrupamento real                                |
+| `type.title`       |         `17px / 22px` |  600 | título de Product, Content ou item de fila              |
+| `type.body`        |         `15px / 22px` |  400 | leitura principal                                       |
+| `type.body-medium` |         `15px / 22px` |  500 | ênfase em instruções e valores                          |
+| `type.body-small`  |         `13px / 18px` |  400 | metadados e descrições secundárias                      |
+| `type.label`       |         `12px / 16px` |  600 | labels, status e controles; sem excesso de caixa alta   |
+| `type.numeric`     |         `24px / 28px` |  600 | contagem ligada a objeto real, nunca métrica decorativa |
+| `type.code`        |         `12px / 18px` |  400 | identificadores e proveniência técnica em Geist Mono    |
 
 Regras de composição:
 
@@ -451,47 +462,48 @@ Regras de composição:
 **Unidade base:** `4px`.  
 **Densidade:** confortável, com compressão controlada em filas e tabelas desktop.
 
-| Token | Valor | Uso típico |
-|---|---:|---|
-| `space.0` | `0px` | ausência intencional |
-| `space.hairline` | `1px` | borda/divisor |
-| `space.2xs` | `2px` | relação de ícone com texto muito curto |
-| `space.xs` | `4px` | label e valor próximo |
-| `space.sm` | `8px` | gap interno compacto |
-| `space.sm-plus` | `12px` | controles e metadados |
-| `space.md` | `16px` | padding padrão e distância entre campos |
-| `space.md-plus` | `20px` | separação de blocos relacionados |
-| `space.lg` | `24px` | seção e card |
-| `space.xl` | `32px` | distância entre grupos |
-| `space.2xl` | `40px` | respiro de contexto |
-| `space.3xl` | `48px` | abertura de seção |
-| `space.4xl` | `64px` | início/fim de região ampla |
-| `space.5xl` | `80px` | somente composição excepcional |
+| Token            |  Valor | Uso típico                              |
+| ---------------- | -----: | --------------------------------------- |
+| `space.0`        |  `0px` | ausência intencional                    |
+| `space.hairline` |  `1px` | borda/divisor                           |
+| `space.2xs`      |  `2px` | relação de ícone com texto muito curto  |
+| `space.xs`       |  `4px` | label e valor próximo                   |
+| `space.sm`       |  `8px` | gap interno compacto                    |
+| `space.sm-plus`  | `12px` | controles e metadados                   |
+| `space.md`       | `16px` | padding padrão e distância entre campos |
+| `space.md-plus`  | `20px` | separação de blocos relacionados        |
+| `space.lg`       | `24px` | seção e card                            |
+| `space.xl`       | `32px` | distância entre grupos                  |
+| `space.2xl`      | `40px` | respiro de contexto                     |
+| `space.3xl`      | `48px` | abertura de seção                       |
+| `space.4xl`      | `64px` | início/fim de região ampla              |
+| `space.5xl`      | `80px` | somente composição excepcional          |
 
 Não usar espaçamento para criar caixas decorativas. Primeiro definir a relação semântica, depois o gap menor que preserve leitura.
 
 ### Grid
 
-| Breakpoint | Colunas | Gutter | Padding lateral |
-|---|---:|---:|---:|
-| Mobile `<768px` | 4 | `16px` | `16px` |
-| Tablet `768–1199px` | 8 | `24px` | `24px` |
-| Desktop `≥1200px` | 12 | `24px` | `32px` |
-| Wide `≥1440px` | 12 | `24px` | conteúdo limitado pela coluna principal |
+| Breakpoint          | Colunas | Gutter |                         Padding lateral |
+| ------------------- | ------: | -----: | --------------------------------------: |
+| Mobile `<768px`     |       4 | `16px` |                                  `16px` |
+| Tablet `768–1199px` |       8 | `24px` |                                  `24px` |
+| Desktop `≥1200px`   |      12 | `24px` |                                  `32px` |
+| Wide `≥1440px`      |      12 | `24px` | conteúdo limitado pela coluna principal |
 
 O max-width de `1440px` pertence apenas à coluna de conteúdo descrita no shell desktop. Sidebar, região principal, toolbar e fundo não são limitados por esse valor. `space.hairline` e `space.2xs` são exceções restritas a borda e micro-relação; o ritmo estrutural continua baseado em 4px.
+
 ### Raios
 
 Raios são hierárquicos, não universais:
 
-| Token | Valor | Uso |
-|---|---:|---|
-| `radius.none` | `0px` | divisores, regiões sem contêiner |
-| `radius.xs` | `4px` | pequenos indicadores e campos muito compactos |
-| `radius.control` | `8px` | inputs, botões, selects e menus |
-| `radius.card` | `12px` | Product, Content e lote de produção |
-| `radius.sheet` | `16px` | sheet, modal e superfície flutuante grande |
-| `radius.pill` | `9999px` | status/tags neutros e somente quando o conteúdo for curto |
+| Token            |    Valor | Uso                                                       |
+| ---------------- | -------: | --------------------------------------------------------- |
+| `radius.none`    |    `0px` | divisores, regiões sem contêiner                          |
+| `radius.xs`      |    `4px` | pequenos indicadores e campos muito compactos             |
+| `radius.control` |    `8px` | inputs, botões, selects e menus                           |
+| `radius.card`    |   `12px` | Product, Content e lote de produção                       |
+| `radius.sheet`   |   `16px` | sheet, modal e superfície flutuante grande                |
+| `radius.pill`    | `9999px` | status/tags neutros e somente quando o conteúdo for curto |
 
 Não arredondar todas as superfícies. Cards sem objeto real não existem; logo, não recebem `radius.card`.
 
@@ -507,12 +519,12 @@ Não arredondar todas as superfícies. Cards sem objeto real não existem; logo,
 
 **Abordagem:** minimal-functional. Movimento explica causa e efeito; não entretém.
 
-| Token | Duração | Uso |
-|---|---:|---|
-| `motion.micro` | `80ms` | foco, cor de controle e feedback imediato |
-| `motion.short` | `160ms` | seleção, hover, expansão pequena |
+| Token           | Duração | Uso                                             |
+| --------------- | ------: | ----------------------------------------------- |
+| `motion.micro`  |  `80ms` | foco, cor de controle e feedback imediato       |
+| `motion.short`  | `160ms` | seleção, hover, expansão pequena                |
 | `motion.medium` | `240ms` | disclosure, troca de estado e reordenação local |
-| `motion.long` | `360ms` | sheet, modal e transição de região |
+| `motion.long`   | `360ms` | sheet, modal e transição de região              |
 
 - entrada: `ease-out`;
 - saída: `ease-in`;
@@ -528,14 +540,14 @@ Não arredondar todas as superfícies. Cards sem objeto real não existem; logo,
 
 A máquina abaixo descreve estados visíveis de um Conteúdo dentro de um lote do Estúdio. O autoavanço é **desligado por padrão**.
 
-| Estado de interface | Entrada | Ações permitidas | Saída e foco |
-|---|---|---|---|
-| `ready` / Aguardando conclusão | abrir Conteúdo ainda não concluído | `Concluir conteúdo`, `Próximo`, `Anterior` | `Concluir conteúdo` inicia `marking`; `Próximo` não conclui implicitamente |
-| `next-confirmation` | tocar `Próximo` antes de concluir | `Continuar sem concluir`, `Ficar neste conteúdo` | continuar mantém o item pendente e move para o próximo; ficar retorna foco ao CTA |
-| `marking` | tocar `Concluir conteúdo` | nenhuma ação duplicada | botão fica loading e bloqueado; não há duplo toque |
-| `completed` / Concluído | confirmação da conclusão | `Próximo`, `Anterior`, editar quando permitido | mantém o Conteúdo visível, atualiza o lote e move foco para `Próximo`; não avança sozinho |
-| `mark-error` | falha ao concluir | `Tentar novamente`, `Ficar neste conteúdo` | preserva hook, roteiro/cenas e CTA; foco vai para o erro inline e depois para Retry |
-| `already-completed` | abrir Conteúdo já concluído | `Próximo`, `Anterior`, editar quando permitido | não oferece segunda conclusão; foco começa no estado e segue para `Próximo` |
+| Estado de interface            | Entrada                            | Ações permitidas                                 | Saída e foco                                                                              |
+| ------------------------------ | ---------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `ready` / Aguardando conclusão | abrir Conteúdo ainda não concluído | `Concluir conteúdo`, `Próximo`, `Anterior`       | `Concluir conteúdo` inicia `marking`; `Próximo` não conclui implicitamente                |
+| `next-confirmation`            | tocar `Próximo` antes de concluir  | `Continuar sem concluir`, `Ficar neste conteúdo` | continuar mantém o item pendente e move para o próximo; ficar retorna foco ao CTA         |
+| `marking`                      | tocar `Concluir conteúdo`          | nenhuma ação duplicada                           | botão fica loading e bloqueado; não há duplo toque                                        |
+| `completed` / Concluído        | confirmação da conclusão           | `Próximo`, `Anterior`, editar quando permitido   | mantém o Conteúdo visível, atualiza o lote e move foco para `Próximo`; não avança sozinho |
+| `mark-error`                   | falha ao concluir                  | `Tentar novamente`, `Ficar neste conteúdo`       | preserva hook, roteiro/cenas e CTA; foco vai para o erro inline e depois para Retry       |
+| `already-completed`            | abrir Conteúdo já concluído        | `Próximo`, `Anterior`, editar quando permitido   | não oferece segunda conclusão; foco começa no estado e segue para `Próximo`               |
 
 Regras de transição:
 
@@ -751,13 +763,13 @@ Ao abrir um evento, oferecer `Abrir no Estúdio` e `Reagendar`. A Agenda do MVP 
 
 Esta matriz descreve somente a experiência visível de geração.
 
-| Estado | Representação | Ações do usuário | Feedback |
-|---|---|---|---|
-| `queued` | Na fila, com contexto do pedido | `Cancelar`, consultar status | confirmação de que o pedido foi recebido; nenhum Content parcial |
-| `running` | Gerando, com atividade sem percentual inventado | consultar status; `Cancelar` quando disponível | atividade visível; nenhum Content parcial |
-| `succeeded` | Concluído | consultar resultado, editar, iniciar novo lote | resultado completo disponível |
-| `failed` | Falhou | `Tentar novamente`, consultar detalhes | erro compreensível e recuperação clara |
-| `cancelled` | Cancelado | consultar histórico, `Gerar novamente` | cancelamento confirmado; nenhum resultado parcial |
+| Estado      | Representação                                   | Ações do usuário                               | Feedback                                                         |
+| ----------- | ----------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------- |
+| `queued`    | Na fila, com contexto do pedido                 | `Cancelar`, consultar status                   | confirmação de que o pedido foi recebido; nenhum Content parcial |
+| `running`   | Gerando, com atividade sem percentual inventado | consultar status; `Cancelar` quando disponível | atividade visível; nenhum Content parcial                        |
+| `succeeded` | Concluído                                       | consultar resultado, editar, iniciar novo lote | resultado completo disponível                                    |
+| `failed`    | Falhou                                          | `Tentar novamente`, consultar detalhes         | erro compreensível e recuperação clara                           |
+| `cancelled` | Cancelado                                       | consultar histórico, `Gerar novamente`         | cancelamento confirmado; nenhum resultado parcial                |
 
 `Retry` é uma ação de recuperação disponível após `failed` ou `cancelled`; a interface volta a exibir `queued` enquanto aguarda o resultado. `Cancel` é uma ação explícita em `queued` e, quando disponível, em `running`; a confirmação evita cancelamento acidental.
 
@@ -862,27 +874,27 @@ A **Agenda interna de gravação** faz parte do MVP e não deve ser confundida c
 
 ## 14. Registro de decisões
 
-| Data | Decisão | Rationale |
-|---|---|---|
-| 2026-08-24 | Light mode é o tema de referência e padrão | A interface precisa ser legível e familiar como ferramenta de produtividade; Dark é uma variação dos mesmos tokens, não um redesign. |
-| 2026-08-24 | Mobile é a superfície principal completa, com execução prioritária | O creator precisa adicionar Produto, revisar/editar Content, montar lote e gravar sem depender do desktop. |
-| 2026-08-24 | Desktop é experiência expandida para planejamento em escala | Mais espaço suporta organização, comparação e operações densas, mas não cria capacidades exclusivas. |
-| 2026-08-24 | Instrument Sans é a família principal; Geist Mono é técnico | Uma família única mantém coerência entre headings, body, UI e números; a mono fica restrita à proveniência técnica. |
-| 2026-08-24 | `#5B6CFF` é brand/accent e `#3D4CC6` é ação preenchida Light | O azul original permanece na identidade; a variação mais escura garante texto normal acessível em ações preenchidas. |
-| 2026-08-24 | Grid de 4px, layout híbrido e raios hierárquicos | Mantém disciplina e densidade confortável sem arredondar ou decorar tudo. |
-| 2026-08-24 | Cards restritos a objetos reais e glass restrito à periferia | Protege a diferença entre interface operacional e dashboard SaaS decorativo. |
-| 2026-08-24 | Motion minimal-functional | Movimento deve explicar seleção, disclosure, fila e feedback, respeitando redução de movimento. |
-| 2026-08-26 | Home volta a ser a entrada principal | O creator entende `Home` imediatamente; a tela permanece operacional e minimalista, sem virar dashboard analítico. |
-| 2026-08-26 | Navegação principal passa a ser Home, Produtos, Estúdio, Agenda e Configurações | Os destinos passam a representar tarefas naturais do creator em vez de conceitos internos de domínio. |
-| 2026-08-26 | Conteúdos e Vault deixam de ser destinos globais | Conteúdos pertencem ao Produto e aos lotes; histórico/memória aparece no contexto do Produto, reduzindo duplicação de navegação. |
-| 2026-08-26 | Produção passa a ser apresentada como Estúdio | `Estúdio` comunica execução e gravação de forma mais natural para creators sem alterar o domínio interno de produção. |
-| 2026-08-26 | Estúdio usa lotes com estados Aguardando, Gravando e Concluído | O status é consequência do número real de Conteúdos concluídos e não exige gerenciamento manual. |
-| 2026-08-26 | Progresso percentual de lote é permitido | Percentual representa conclusão operacional real do lote, não analytics ou performance comercial. |
-| 2026-08-26 | Agenda interna de gravação entra no MVP | O creator escolhe quando pretende gravar um lote; isso fecha o intervalo entre aprovação e execução sem introduzir social scheduling. |
-| 2026-08-26 | Integrações de calendário permanecem futuras | Google Calendar e outros calendários poderão receber eventos/lembretes depois, mas não fazem parte do MVP. |
-| 2026-08-26 | Home não mostra `Ainda sem data` | A entrada deve mostrar somente ação útil, gravações de hoje e próximas gravações já planejadas. |
-| 2026-08-26 | Job assíncrono usa indicador global no App Shell | A análise continua durante a navegação; o usuário precisa ver Produto, etapa, sucesso/falha e próxima ação sem entrar numa página técnica de análise. |
-| 2026-08-26 | `Pendente` é readiness operacional, não lifecycle do Produto | Evita misturar análise em andamento com estados persistentes como Ativo/Arquivado. |
-| 2026-08-27 | Realinhamento aos PRDs vigentes (engine, job assíncrono, briefing/lotes, model router) | O design v1.3 já refletia o core loop e o indicador global; a revisão atualizou as fontes canônicas, incluiu a resolução da quantidade inicial na confirmação e manteu tokens, estética e navegação vigentes. |
-| 2026-08-28 | Navegação mobile substitui a bottom nav pela Sidebar shadcn/ui (drawer off-canvas) | Com cinco destinos, a barra inferior empilha botões e prejudica a navegação; a Sidebar uniformiza o shell nas três superfícies e aproveita componente de biblioteca em vez de navegação custom. |
-| 2026-08-28 | Componentes de UI nascem de shadcn/ui: buscar componente pronto e adaptá-lo antes de criar algo próprio | Reuso de biblioteca reduz código custom, mantém acessibilidade e consistência; componente custom é exceção com motivo registrado. |
+| Data       | Decisão                                                                                                 | Rationale                                                                                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-24 | Light mode é o tema de referência e padrão                                                              | A interface precisa ser legível e familiar como ferramenta de produtividade; Dark é uma variação dos mesmos tokens, não um redesign.                                                                          |
+| 2026-08-24 | Mobile é a superfície principal completa, com execução prioritária                                      | O creator precisa adicionar Produto, revisar/editar Content, montar lote e gravar sem depender do desktop.                                                                                                    |
+| 2026-08-24 | Desktop é experiência expandida para planejamento em escala                                             | Mais espaço suporta organização, comparação e operações densas, mas não cria capacidades exclusivas.                                                                                                          |
+| 2026-08-24 | Instrument Sans é a família principal; Geist Mono é técnico                                             | Uma família única mantém coerência entre headings, body, UI e números; a mono fica restrita à proveniência técnica.                                                                                           |
+| 2026-08-24 | `#5B6CFF` é brand/accent e `#3D4CC6` é ação preenchida Light                                            | O azul original permanece na identidade; a variação mais escura garante texto normal acessível em ações preenchidas.                                                                                          |
+| 2026-08-24 | Grid de 4px, layout híbrido e raios hierárquicos                                                        | Mantém disciplina e densidade confortável sem arredondar ou decorar tudo.                                                                                                                                     |
+| 2026-08-24 | Cards restritos a objetos reais e glass restrito à periferia                                            | Protege a diferença entre interface operacional e dashboard SaaS decorativo.                                                                                                                                  |
+| 2026-08-24 | Motion minimal-functional                                                                               | Movimento deve explicar seleção, disclosure, fila e feedback, respeitando redução de movimento.                                                                                                               |
+| 2026-08-26 | Home volta a ser a entrada principal                                                                    | O creator entende `Home` imediatamente; a tela permanece operacional e minimalista, sem virar dashboard analítico.                                                                                            |
+| 2026-08-26 | Navegação principal passa a ser Home, Produtos, Estúdio, Agenda e Configurações                         | Os destinos passam a representar tarefas naturais do creator em vez de conceitos internos de domínio.                                                                                                         |
+| 2026-08-26 | Conteúdos e Vault deixam de ser destinos globais                                                        | Conteúdos pertencem ao Produto e aos lotes; histórico/memória aparece no contexto do Produto, reduzindo duplicação de navegação.                                                                              |
+| 2026-08-26 | Produção passa a ser apresentada como Estúdio                                                           | `Estúdio` comunica execução e gravação de forma mais natural para creators sem alterar o domínio interno de produção.                                                                                         |
+| 2026-08-26 | Estúdio usa lotes com estados Aguardando, Gravando e Concluído                                          | O status é consequência do número real de Conteúdos concluídos e não exige gerenciamento manual.                                                                                                              |
+| 2026-08-26 | Progresso percentual de lote é permitido                                                                | Percentual representa conclusão operacional real do lote, não analytics ou performance comercial.                                                                                                             |
+| 2026-08-26 | Agenda interna de gravação entra no MVP                                                                 | O creator escolhe quando pretende gravar um lote; isso fecha o intervalo entre aprovação e execução sem introduzir social scheduling.                                                                         |
+| 2026-08-26 | Integrações de calendário permanecem futuras                                                            | Google Calendar e outros calendários poderão receber eventos/lembretes depois, mas não fazem parte do MVP.                                                                                                    |
+| 2026-08-26 | Home não mostra `Ainda sem data`                                                                        | A entrada deve mostrar somente ação útil, gravações de hoje e próximas gravações já planejadas.                                                                                                               |
+| 2026-08-26 | Job assíncrono usa indicador global no App Shell                                                        | A análise continua durante a navegação; o usuário precisa ver Produto, etapa, sucesso/falha e próxima ação sem entrar numa página técnica de análise.                                                         |
+| 2026-08-26 | `Pendente` é readiness operacional, não lifecycle do Produto                                            | Evita misturar análise em andamento com estados persistentes como Ativo/Arquivado.                                                                                                                            |
+| 2026-08-27 | Realinhamento aos PRDs vigentes (engine, job assíncrono, briefing/lotes, model router)                  | O design v1.3 já refletia o core loop e o indicador global; a revisão atualizou as fontes canônicas, incluiu a resolução da quantidade inicial na confirmação e manteu tokens, estética e navegação vigentes. |
+| 2026-08-28 | Navegação mobile substitui a bottom nav pela Sidebar shadcn/ui (drawer off-canvas)                      | Com cinco destinos, a barra inferior empilha botões e prejudica a navegação; a Sidebar uniformiza o shell nas três superfícies e aproveita componente de biblioteca em vez de navegação custom.               |
+| 2026-08-28 | Componentes de UI nascem de shadcn/ui: buscar componente pronto e adaptá-lo antes de criar algo próprio | Reuso de biblioteca reduz código custom, mantém acessibilidade e consistência; componente custom é exceção com motivo registrado.                                                                             |

@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
-  createGenerationIdempotencyKey,
   getCurrentGeneration,
   isActiveGeneration,
-  retryGeneration,
   type GenerationRecord,
 } from "./generation-api";
 import { isToastDismissed, stageMessage, statusMessage } from "./generation-ui-model";
@@ -21,7 +19,6 @@ let dismissedSnapshotModule: string | null = null;
 
 export function GenerationToast() {
   const [job, setJob] = useState<GenerationRecord | null>(null);
-  const [busy, setBusy] = useState(false);
   const [, setDismissTick] = useState(0);
 
   useEffect(() => {
@@ -44,18 +41,16 @@ export function GenerationToast() {
     };
   }, []);
 
-  const retry = async () => {
-    if (!job || busy) return;
-    setBusy(true);
-    try {
-      const next = await retryGeneration(job.id, createGenerationIdempotencyKey());
-      setJob(next);
-    } catch {
-      /* falha é reapresentada pelo polling com o estado real do backend */
-    } finally {
-      setBusy(false);
-    }
-  };
+  /* Alerta comum: expira sozinho; job/estado novo reapresenta com timer novo. */
+  const snapshot = job ? `${job.id}:${job.status}` : null;
+  useEffect(() => {
+    if (!snapshot || snapshot === dismissedSnapshotModule) return;
+    const expiry = window.setTimeout(() => {
+      dismissedSnapshotModule = snapshot;
+      setDismissTick((tick) => tick + 1);
+    }, 5000);
+    return () => window.clearTimeout(expiry);
+  }, [snapshot]);
 
   const dismiss = () => {
     dismissedSnapshotModule = job ? `${job.id}:${job.status}` : null;
@@ -64,24 +59,27 @@ export function GenerationToast() {
 
   if (!job || isToastDismissed(dismissedSnapshotModule, job)) return null;
   const active = isActiveGeneration(job.status);
-  const failed = job.status === "FAILED" || job.status === "CANCELLED";
-  const href = `/products/${encodeURIComponent(job.productId)}#generated-contents`;
+  const failed = job.status === "FAILED";
+  const succeeded = job.status === "SUCCEEDED";
+  const cancelled = job.status === "CANCELLED";
+  const href = `/products/${encodeURIComponent(job.productId)}`;
   return (
-    <aside aria-atomic="true" aria-busy={active || busy} aria-live={failed ? "assertive" : "polite"} className={styles.toast} role={failed ? "alert" : "status"}>
+    <aside aria-atomic="true" aria-busy={active} aria-live={failed ? "assertive" : "polite"} className={styles.toast} role={failed ? "alert" : "status"}>
       <div className={styles.copy}>
-        <strong>{active ? "Análise em andamento" : job.status === "SUCCEEDED" ? "Produto pronto para revisão" : "A análise precisa de atenção"}</strong>
-        <span>{active ? stageMessage(job.stage) : statusMessage(job.status)}</span>
+        <strong>{cancelled ? "A análise foi cancelada." : active ? "Análise em andamento" : succeeded ? "Produto pronto para revisão" : "A análise falhou"}</strong>
+        {!cancelled && <span>{active ? stageMessage(job.stage) : statusMessage(job.status)}</span>}
       </div>
       <div className={styles.actions}>
         {failed ? (
-          <button className={styles.action} disabled={busy} onClick={() => void retry()} type="button">
-            {busy ? "Tentando novamente…" : "Tentar novamente"}
-          </button>
-        ) : (
-          <Link className={styles.action} href={href}>{job.status === "SUCCEEDED" ? "Revisar conteúdos" : "Abrir produto"}</Link>
-        )}
-        <button aria-label="Dispensar aviso de geração" className={styles.dismiss} disabled={busy} onClick={dismiss} type="button">×</button>
+          <Link className={styles.action} href={href} onClick={dismiss}>Abrir produto</Link>
+        ) : succeeded ? (
+          <button className={styles.action} onClick={dismiss} type="button">Pronto</button>
+        ) : active ? (
+          <Link className={styles.action} href={`${href}#generated-contents`} onClick={dismiss}>Abrir produto</Link>
+        ) : null}
+        <button aria-label="Dispensar aviso de geração" className={styles.dismiss} onClick={dismiss} type="button">×</button>
       </div>
     </aside>
   );
 }
+

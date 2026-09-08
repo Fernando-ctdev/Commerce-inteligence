@@ -5,6 +5,9 @@ import {
   buildManualProductPayload,
   buildProductPayload,
   digitsToPrice,
+  commissionAmountCents,
+  formatCommission,
+  formatPriceWithCurrency,
   emptyProductDraft,
   preparationIsWithinLimits,
   validateProductManualDraft,
@@ -127,7 +130,7 @@ test("valida cadastro manual: todos os campos obrigatórios e formatos", () => {
         description: "Cabelos",
         category: "Beleza",
         price: "-1",
-        currency: "BRL",
+        currency: "R$",
         characteristics: "cerdas",
       },
       "notas",
@@ -141,7 +144,7 @@ test("valida cadastro manual: todos os campos obrigatórios e formatos", () => {
         description: "Cabelos",
         category: "Beleza",
         price: "39.90",
-        currency: "BRLX",
+        currency: "R$X",
         characteristics: "cerdas",
       },
       "notas",
@@ -155,7 +158,7 @@ test("valida cadastro manual: todos os campos obrigatórios e formatos", () => {
         description: "Cabelos",
         category: "Beleza",
         price: "39.90",
-        currency: "BRL",
+        currency: "R$",
         characteristics: "cerdas",
       },
       "sem gírias",
@@ -219,7 +222,7 @@ test("monta payload manual com fatos normalizados, preparação e chave", () => 
         description: " Para cabelos ",
         category: " Beleza ",
         price: " 39.90 ",
-        currency: " BRL ",
+        currency: " R$ ",
         characteristics: "cerdas macias\n\n cabo leve",
         imageReferences: "https://example.com/image.jpg",
         url: " https://example.com/product ",
@@ -236,7 +239,7 @@ test("monta payload manual com fatos normalizados, preparação e chave", () => 
       description: "Para cabelos",
       category: "Beleza",
       price: "39,90",
-      priceCurrency: "BRL",
+      priceCurrency: "R$",
       features: ["cerdas macias", "cabo leve"],
       imageRefs: ["https://example.com/image.jpg"],
       url: "https://example.com/product",
@@ -272,13 +275,13 @@ test("par preço/moeda vazio fica nulo e constraints omitidas somem do payload",
   });
 });
 
-test("preço manual 23,44 com moeda padrão BRL é válido", () => {
+test("preço manual 23,44 com moeda padrão R$ é válido", () => {
   const draft = {
     name: "Escova",
     description: "Cabelos",
     category: "Beleza",
     price: "23,44",
-    currency: "BRL",
+    currency: "R$",
     characteristics: "cerdas",
   };
 
@@ -288,11 +291,11 @@ test("preço manual 23,44 com moeda padrão BRL é válido", () => {
       targetContentCount: 20,
       creatorPresence: "either",
     }).priceCurrency,
-    "BRL",
+    "R$",
   );
 });
 
-test("preço vazio com moeda padrão BRL é rejeitado como obrigatório", () => {
+test("preço vazio com moeda padrão R$ é rejeitado como obrigatório", () => {
   assert.deepEqual(
     validateProductManualDraft(
       {
@@ -300,7 +303,7 @@ test("preço vazio com moeda padrão BRL é rejeitado como obrigatório", () => 
         description: "Cabelos",
         category: "Beleza",
         price: "",
-        currency: "BRL",
+        currency: "R$",
         characteristics: "cerdas",
       },
       "notas",
@@ -328,11 +331,92 @@ test("preço vazio com moeda padrão BRL é rejeitado como obrigatório", () => 
         description: "Cabelos",
         category: "Beleza",
         price: "23,44",
-        currency: "BRL",
+        currency: "R$",
         characteristics: "cerdas",
       },
       " ",
     ),
     {},
   );
+});
+
+test("exibe preço com símbolo da moeda, não o código", () => {
+  assert.equal(formatPriceWithCurrency("29.9", "R$"), "R$ 29,90");
+  assert.equal(formatPriceWithCurrency("23.44", "USD"), "$ 23,44");
+  assert.equal(formatPriceWithCurrency("12", "EUR"), "€ 12,00");
+  assert.equal(formatPriceWithCurrency("10,00", "BRL"), "R$ 10,00");
+  assert.equal(formatPriceWithCurrency("5", null), "5,00");
+  assert.equal(formatPriceWithCurrency("", "R$"), null);
+  assert.equal(formatPriceWithCurrency(null, "USD"), null);
+});
+
+test("comissão: calcula % sobre o preço e valor fixo; sem preço % fica só percentual", () => {
+  assert.equal(commissionAmountCents("PERCENT", "10", "89,90"), 899);
+  assert.equal(commissionAmountCents("AMOUNT", "4,50", "89,90"), 450);
+  assert.equal(commissionAmountCents("PERCENT", "7,5", "200"), 1500);
+  assert.equal(commissionAmountCents("PERCENT", "10", ""), null);
+  assert.equal(commissionAmountCents("PERCENT", "", "89,90"), null);
+  assert.equal(commissionAmountCents("", "10", "89,90"), null);
+  assert.equal(commissionAmountCents("PERCENT", "0", "89,90"), null);
+  assert.equal(formatCommission("PERCENT", "10", "89,90", "R$"), "R$ 8,99");
+  assert.equal(formatCommission("AMOUNT", "4,50", "89,90", "USD"), "$ 4,50");
+  assert.equal(formatCommission("PERCENT", "10", "", "R$"), "10%");
+  assert.equal(formatCommission("", "10", "89,90", "R$"), null);
+});
+
+test("comissão: validação exige par, formato e faixa percentual", () => {
+  const base = {
+    ...emptyProductDraft(),
+    name: "Produto",
+    description: "Descrição",
+    category: "Categoria",
+    price: "89.90",
+    currency: "USD",
+    characteristics: "característica",
+    commissionType: "",
+    commission: "",
+  };
+  assert.deepEqual(
+    validateProductManualDraft({ ...base, commission: "10" }, ""),
+    { commissionType: "Escolha se a comissão é % ou valor." },
+  );
+  assert.deepEqual(
+    validateProductManualDraft({ ...base, commissionType: "PERCENT" }, ""),
+    { commission: "Informe o valor da comissão." },
+  );
+  assert.deepEqual(
+    validateProductManualDraft({ ...base, commissionType: "PERCENT", commission: "100,01" }, ""),
+    { commission: "A comissão percentual deve estar entre 0 e 100." },
+  );
+  assert.deepEqual(
+    validateProductManualDraft({ ...base, commissionType: "FIXA", commission: "1" }, ""),
+    { commissionType: "Informe um tipo de comissão válido." },
+  );
+  const valido = validateProductManualDraft({ ...base, commissionType: "AMOUNT", commission: "4,50" }, "");
+  assert.equal(valido.commission, undefined);
+  assert.equal(valido.commissionType, undefined);
+});
+
+test("comissão: payload envia tipo e valor normalizado apenas quando o par está completo", () => {
+  const preparation = { targetContentCount: 1, creatorPresence: "either" } as const;
+  const comComissao = buildManualProductPayload(
+    { ...emptyProductDraft(), name: "P", description: "D", category: "C", price: "89.90", currency: "R$", characteristics: "x", commissionType: "PERCENT", commission: "10,5" },
+    preparation,
+  );
+  assert.equal(comComissao.commissionType, "PERCENT");
+  assert.equal(comComissao.commissionValue, "10,50");
+
+  const semComissao = buildManualProductPayload(
+    { ...emptyProductDraft(), name: "P", description: "D", category: "C", price: "89.90", currency: "R$", characteristics: "x" },
+    preparation,
+  );
+  assert.equal(semComissao.commissionType, undefined);
+  assert.equal(semComissao.commissionValue, undefined);
+
+  const edicao = buildProductPayload({
+    ...emptyProductDraft(),
+    commissionType: "AMOUNT",
+    commission: "5",
+  });
+  assert.equal(edicao.commissionValue, "5,00");
 });

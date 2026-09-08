@@ -98,6 +98,8 @@ model Product {
   brand              String?
   priceAmount        Decimal?
   priceCurrency      String?
+  commissionType     String?
+  commissionValue    Decimal?
   features           Json
   variants           Json?
   images             Json

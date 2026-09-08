@@ -60,14 +60,14 @@ O formulário deve preservar os campos e o conteúdo do modal manual existente:
 
 ### Fatos do produto
 
-| Campo | Regra |
-|---|---|
-| Nome do produto | Obrigatório; não pode ser vazio após remover espaços. |
-| Descrição | Obrigatória; não pode ser vazia após remover espaços. Campo multilinha. |
-| Categoria | Obrigatória; não pode ser vazia após remover espaços. |
-| Preço | Obrigatório; deve ser válido, não negativo e ter no máximo duas casas decimais. |
-| Moeda | Obrigatória; opções preservadas: `BRL` (R$ Reais), `USD` ($ Dólar) e `EUR` (€ Euro). |
-| Características — uma por linha | Obrigatórias; deve haver ao menos uma linha não vazia. |
+| Campo                           | Regra                                                                               |
+| ------------------------------- | ----------------------------------------------------------------------------------- |
+| Nome do produto                 | Obrigatório; não pode ser vazio após remover espaços.                               |
+| Descrição                       | Obrigatória; não pode ser vazia após remover espaços. Campo multilinha.             |
+| Categoria                       | Obrigatória; não pode ser vazia após remover espaços.                               |
+| Preço                           | Obrigatório; deve ser válido, não negativo e ter no máximo duas casas decimais.     |
+| Moeda                           | Obrigatória; opções preservadas: `R$` (R$ Reais), `USD` ($ Dólar) e `EUR` (€ Euro). |
+| Características — uma por linha | Obrigatórias; deve haver ao menos uma linha não vazia.                              |
 
 Preço e moeda são fatos obrigatórios e devem ser informados conjuntamente; não há par opcional.
 
@@ -84,7 +84,6 @@ O formulário mantém a seção `Preparação dos conteúdos` do modal manual, s
 O asterisco é apenas indicação visual de obrigatoriedade; a validação deve ocorrer no HTML/cliente e novamente no servidor.
 
 Essas preferências são persistidas como restrições da primeira geração do Product. Elas não criam `CommerceIntelligenceJob`, não geram Strategy, Plan, Content ou Briefing e não alteram o escopo desta etapa.
-
 
 Informações estratégicas não pertencem ao cadastro factual do Product. O formulário não deve solicitar público, dores, desejos, objeções, benefícios, argumentos, posicionamento, ângulos, hooks, scripts ou CTA.
 

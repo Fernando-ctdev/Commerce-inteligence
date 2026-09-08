@@ -41,6 +41,8 @@ export type ProductView = {
   category: string;
   price: string;
   priceCurrency: string;
+  commissionType: string | null;
+  commissionValue: string | null;
   features: string[];
   imageRefs: string[];
   notes: string;
@@ -105,9 +107,8 @@ async function productReadiness(tenantId: string, productId: string): Promise<Pr
   const failed = await prisma.commerceIntelligenceJob.findFirst({ where: { tenantId, productId, status: { in: ["FAILED", "CANCELLED"] } }, orderBy: { createdAt: "desc" } });
   return failed ? "FAILED" : "PENDING";
 }
-
 function toProductView(product: Product, readiness: ProductView["readiness"] = "PENDING"): ProductView {
-  return { id: product.id, version: product.version, name: product.name, description: product.description ?? "", category: product.category ?? "", price: product.priceAmount ? product.priceAmount.toString() : "", priceCurrency: product.priceCurrency ?? "", features: stringList(product.features), imageRefs: stringList(product.images), notes: constraintsNotes(product.generationConstraints), url: product.sourceUrl ?? product.submittedUrl ?? "", targetContentCount: product.targetContentCount, creatorPresence: constraintsCreatorPresence(product.generationConstraints), active: product.lifecycle === "ACTIVE", readiness };
+  return { id: product.id, version: product.version, name: product.name, description: product.description ?? "", category: product.category ?? "", price: product.priceAmount ? product.priceAmount.toString() : "", priceCurrency: product.priceCurrency ?? "", commissionType: product.commissionType, commissionValue: product.commissionValue?.toString() ?? null, features: stringList(product.features), imageRefs: stringList(product.images), notes: constraintsNotes(product.generationConstraints), url: product.sourceUrl ?? product.submittedUrl ?? "", targetContentCount: product.targetContentCount, creatorPresence: constraintsCreatorPresence(product.generationConstraints), active: product.lifecycle === "ACTIVE", readiness };
 }
 
 export async function handleListProducts(req: Request): Promise<Response> {
@@ -279,15 +280,16 @@ export async function handleDeleteProduct(req: Request, id: string): Promise<Res
   try {
     await deleteTenantProduct(session.tenantId, id);
   } catch (error) {
-    if (error instanceof ProductDeleteRejectedError) return json(409, { error: "A exclusão física não é permitida. Arquive o produto.", code: error.code });
+    if (error instanceof ProductDeleteRejectedError)
+      return json(409, {
+        error: "Este produto tem análises ou conteúdos e não pode ser excluído. Arquive o produto.",
+        code: error.code,
+      });
     if (error instanceof ProductNotFoundError) return json(404, { error: "Product não encontrado.", code: "PRODUCT-NOT-FOUND" });
-    console.error("[products] falha ao rejeitar exclusão física", error);
+    console.error("[products] falha ao excluir Product", error);
     return json(500, { error: "Não foi possível processar a exclusão do Product.", code: "DELETE-FAILED" });
   }
-  return json(409, {
-    error: "A exclusão física não é permitida. Arquive o produto.",
-    code: "PRODUCT_DELETE_UNSUPPORTED",
-  });
+  return new Response(null, { status: 204 });
 }
 
 export async function handleCreateProduct(req: Request): Promise<Response> {

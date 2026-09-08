@@ -27,7 +27,9 @@ import {
 import { monthUtc } from "../entitlements/generation.js";
 
 // APP_ORIGIN pode ser lista separada por vírgula; o runtime valida contra o conjunto.
-const ORIGIN = (process.env.APP_ORIGIN ?? "http://localhost:3000").split(",")[0].trim();
+const ORIGIN = (process.env.APP_ORIGIN ?? "http://localhost:3000")
+  .split(",")[0]
+  .trim();
 const prisma = new PrismaClient();
 let dbUp = false;
 
@@ -47,7 +49,7 @@ const validInput = {
   description: "Curso completo de planilhas",
   category: "Educação",
   price: "29,90",
-  priceCurrency: "BRL",
+  priceCurrency: "R$",
   features: ["50 aulas", "certificado"],
   constraints: "sem gírias",
 };
@@ -116,7 +118,7 @@ test("validação: preço não negativo, moeda válida e normalização preserva
       validateManualProductInput({
         ...validInput,
         price: "-5",
-        priceCurrency: "BRL",
+        priceCurrency: "R$",
       }),
     (error: unknown) => {
       assert.ok(error instanceof ProductValidationError);
@@ -129,7 +131,7 @@ test("validação: preço não negativo, moeda válida e normalização preserva
       validateManualProductInput({
         ...validInput,
         price: "23.4567",
-        priceCurrency: "BRL",
+        priceCurrency: "R$",
       }),
     (error: unknown) => {
       assert.ok(error instanceof ProductValidationError);
@@ -141,10 +143,10 @@ test("validação: preço não negativo, moeda válida e normalização preserva
   const comPar = validateManualProductInput({
     ...validInput,
     price: "1.234,56",
-    priceCurrency: "brl",
+    priceCurrency: "R$",
   });
   assert.equal(comPar.priceAmount, "1234.56"); // pt-BR: ponto de milhar sai, vírgula vira ponto decimal
-  assert.equal(comPar.priceCurrency, "BRL");
+  assert.equal(comPar.priceCurrency, "R$");
 
   const simples = validateManualProductInput({
     ...validInput,
@@ -154,12 +156,50 @@ test("validação: preço não negativo, moeda válida e normalização preserva
   assert.equal(simples.priceAmount, "29.90");
   assert.equal(simples.priceCurrency, "USD");
 });
+test("validação: comissão opcional aceita percentual ou valor financeiro", () => {
+  const percent = validateManualProductInput({
+    ...validInput,
+    commissionType: "PERCENT",
+    commissionValue: "10,50",
+  });
+  assert.equal(percent.commissionType, "PERCENT");
+  assert.equal(percent.commissionValue, "10.50");
+
+  const amount = validateManualProductInput({
+    ...validInput,
+    commissionType: "AMOUNT",
+    commissionValue: "4,50",
+  });
+  assert.equal(amount.commissionType, "AMOUNT");
+  assert.equal(amount.commissionValue, "4.50");
+  assert.equal(validateManualProductInput(validInput).commissionType, null);
+  assert.equal(validateManualProductInput(validInput).commissionValue, null);
+});
+
+test("validação: comissão rejeita valor negativo, percentual fora de 0–100 e tipo inválido", () => {
+  for (const input of [
+    { commissionType: "PERCENT", commissionValue: "-1" },
+    { commissionType: "PERCENT", commissionValue: "100,01" },
+    { commissionType: "AMOUNT", commissionValue: "-0,01" },
+    { commissionType: "OTHER", commissionValue: "1" },
+    { commissionType: "PERCENT", commissionValue: "" },
+  ]) {
+    assert.throws(
+      () => validateManualProductInput({ ...validInput, ...input }),
+      (error: unknown) => {
+        assert.ok(error instanceof ProductValidationError);
+        assert.ok(error.fieldErrors.commissionType || error.fieldErrors.commissionValue);
+        return true;
+      },
+    );
+  }
+});
 
 test("validação: aceita preço decimal com ponto", () => {
   const result = validateManualProductInput({
     ...validInput,
     price: "23.44",
-    priceCurrency: "BRL",
+    priceCurrency: "R$",
   });
   assert.equal(result.priceAmount, "23.44");
 });
@@ -302,7 +342,10 @@ async function tenantOf() {
   // O provisioning do entitlement default é produção (registerUser/ADR-006); o teste só
   // garante o limite de configuração do runtime no tenant, como o .env faz em produção.
   const limit = Number(process.env.ENTITLEMENT_ACTIVE_PRODUCTS ?? 5);
-  await prisma.tenantEntitlement.update({ where: { tenantId: session.tenantId }, data: { activeProductsLimit: limit } });
+  await prisma.tenantEntitlement.update({
+    where: { tenantId: session.tenantId },
+    data: { activeProductsLimit: limit },
+  });
   return { token, tenantId: session.tenantId, userId: session.userId };
 }
 
@@ -342,7 +385,7 @@ test("POST válido persiste Product no tenant da sessão e POST repetido com a m
     ...validInput,
     category: "Educação",
     price: "29,90",
-    priceCurrency: "BRL",
+    priceCurrency: "R$",
     features: ["50 aulas", "certificado"],
     targetContentCount: 7,
     creatorPresence: "on_camera",
@@ -377,7 +420,7 @@ test("POST válido persiste Product no tenant da sessão e POST repetido com a m
     creatorPresence: "on_camera",
     constraints: "sem gírias",
   });
-  assert.equal(row.priceCurrency, "BRL");
+  assert.equal(row.priceCurrency, "R$");
   assert.deepEqual(row.images, ["https://cdn.exemplo.com/produto.png"]);
   assert.equal(row.submittedUrl, "https://exemplo.com/produto");
 
@@ -555,7 +598,7 @@ test("GET por id retorna o Product do tenant com moeda; inexistente responde 404
   assert.equal(view.id, created.id);
   assert.equal(view.version, 1);
   assert.equal(view.price, "29.9");
-  assert.equal(view.priceCurrency, "BRL");
+  assert.equal(view.priceCurrency, "R$");
   assert.deepEqual(view.features, ["50 aulas", "certificado"]);
 
   const missing = await handleGetProduct(
@@ -709,14 +752,40 @@ test("PATCH com expectedVersion desatualizada responde 409 VERSION-CONFLICT", as
   );
 });
 
-test("DELETE sempre rejeita exclusão física e preserva o Product", async (t) => {
+test("DELETE exclui Product sem histórico; com histórico responde 409 e preserva", async (t) => {
   if (!dbUp) return t.skip();
-  const { token, tenantId } = await tenantOf();
-  const created = await criarProduct(token);
-  const res = await handleDeleteProduct(del(token, created.id), created.id);
-  assert.equal(res.status, 409);
-  assert.equal(((await res.json()) as { code?: string }).code, "PRODUCT_DELETE_UNSUPPORTED");
-  assert.equal(await prisma.product.count({ where: { tenantId, id: created.id } }), 1);
+  const { token, tenantId, userId } = await tenantOf();
+  const semHistorico = await criarProduct(token);
+  const res = await handleDeleteProduct(del(token, semHistorico.id), semHistorico.id);
+  assert.equal(res.status, 204);
+  assert.equal(
+    await prisma.product.count({ where: { tenantId, id: semHistorico.id } }),
+    0,
+  );
+
+  const comHistorico = await criarProduct(token);
+  await prisma.commerceIntelligenceJob.create({
+    data: {
+      tenantId,
+      userId,
+      productId: comHistorico.id,
+      idempotencyKey: randomBytes(16).toString("base64url"),
+      fingerprint: "delete-hist",
+      targetContentCount: 1,
+      generatedContentsMonth: monthUtc(),
+      status: "FAILED",
+    },
+  });
+  const resHistorico = await handleDeleteProduct(del(token, comHistorico.id), comHistorico.id);
+  assert.equal(resHistorico.status, 409);
+  assert.equal(
+    ((await resHistorico.json()) as { code?: string }).code,
+    "PRODUCT_HAS_HISTORY",
+  );
+  assert.equal(
+    await prisma.product.count({ where: { tenantId, id: comHistorico.id } }),
+    1,
+  );
 });
 
 test("POST archive arquiva sem apagar dados; repetição é replay e preserva version", async (t) => {
@@ -724,10 +793,16 @@ test("POST archive arquiva sem apagar dados; repetição é replay e preserva ve
   const { token, tenantId } = await tenantOf();
   const created = await criarProduct(token);
 
-  const res = await handleArchiveProduct(archive(token, created.id), created.id);
+  const res = await handleArchiveProduct(
+    archive(token, created.id),
+    created.id,
+  );
   assert.equal(res.status, 200);
   // ADR-016: contrato mínimo de mutação { id, version } — sem projeção de leitura.
-  assert.deepEqual(await res.json(), { id: created.id, version: created.version + 1 });
+  assert.deepEqual(await res.json(), {
+    id: created.id,
+    version: created.version + 1,
+  });
 
   // Sem delete: a linha persiste com lifecycle ARCHIVED.
   const row = await prisma.product.findUniqueOrThrow({
@@ -749,7 +824,10 @@ test("POST archive arquiva sem apagar dados; repetição é replay e preserva ve
   );
   assert.equal(replay.status, 200);
   const viewReplay = (await replay.json()) as Record<string, unknown>;
-  assert.deepEqual(viewReplay, { id: created.id, version: created.version + 1 });
+  assert.deepEqual(viewReplay, {
+    id: created.id,
+    version: created.version + 1,
+  });
 });
 
 test("archives concorrentes resolvem em replay único, com um só bump de version", async (t) => {
@@ -803,7 +881,10 @@ test("POST reactivate reverte archive; repetição é replay e outro tenant resp
   );
   assert.equal(res.status, 200);
   // ADR-016: reactivate também responde só { id, version }; a projeção volta pelo GET.
-  assert.deepEqual(await res.json(), { id: created.id, version: created.version + 2 });
+  assert.deepEqual(await res.json(), {
+    id: created.id,
+    version: created.version + 2,
+  });
 
   const row = await prisma.product.findUniqueOrThrow({
     where: { id: created.id },
@@ -818,7 +899,10 @@ test("POST reactivate reverte archive; repetição é replay e outro tenant resp
   );
   assert.equal(replay.status, 200);
   const viewReplay = (await replay.json()) as Record<string, unknown>;
-  assert.deepEqual(viewReplay, { id: created.id, version: created.version + 2 });
+  assert.deepEqual(viewReplay, {
+    id: created.id,
+    version: created.version + 2,
+  });
 
   // Tenant estrangeiro não reativa: 404 sem vazar existência.
   const proibido = await handleReactivateProduct(
@@ -856,7 +940,10 @@ test("reactivates concorrentes resolvem em replay único, com um só bump de ver
 
 // —— ADR-016: projection server-authoritative da ação de geração nas leituras autenticadas ——
 
-async function withEnv<T>(vars: Record<string, string>, run: () => Promise<T>): Promise<T> {
+async function withEnv<T>(
+  vars: Record<string, string>,
+  run: () => Promise<T>,
+): Promise<T> {
   const saved: Record<string, string | undefined> = {};
   for (const key of Object.keys(vars)) saved[key] = process.env[key];
   Object.assign(process.env, vars);
@@ -877,20 +964,40 @@ test("ActiveProductView traz generationAction AVAILABLE completo; ArchivedProduc
   const { token } = await tenantOf();
   const created = await criarProduct(token);
   await withEnv({ GENERATED_CONTENTS_MONTH_LIMIT: "100" }, async () => {
-    const view = (await (await handleGetProduct(getById(token, created.id), created.id)).json()) as Record<string, unknown>;
+    const view = (await (
+      await handleGetProduct(getById(token, created.id), created.id)
+    ).json()) as Record<string, unknown>;
     assert.deepEqual(view.generationAction, AVAILABLE);
-    assert.deepEqual(Object.keys(view.generationAction as object).sort(), ["nextAction", "reason", "state"]);
+    assert.deepEqual(Object.keys(view.generationAction as object).sort(), [
+      "nextAction",
+      "reason",
+      "state",
+    ]);
 
     // Mutação: contrato mínimo { id, version }, sem projeção (UI refaz GET após commit).
-    const arq = await handleArchiveProduct(archive(token, created.id), created.id);
+    const arq = await handleArchiveProduct(
+      archive(token, created.id),
+      created.id,
+    );
     assert.equal(arq.status, 200);
-    assert.deepEqual(await arq.json(), { id: created.id, version: created.version + 1 });
+    assert.deepEqual(await arq.json(), {
+      id: created.id,
+      version: created.version + 1,
+    });
 
-    const archived = (await (await handleGetProduct(getById(token, created.id), created.id)).json()) as Record<string, unknown>;
-    assert.equal("generationAction" in archived, false, "ArchivedProductView omite o campo");
+    const archived = (await (
+      await handleGetProduct(getById(token, created.id), created.id)
+    ).json()) as Record<string, unknown>;
+    assert.equal(
+      "generationAction" in archived,
+      false,
+      "ArchivedProductView omite o campo",
+    );
 
     const b = await criarProduct(token);
-    const list = (await (await handleListProducts(get(token))).json()) as { products: Array<Record<string, unknown>> };
+    const list = (await (await handleListProducts(get(token))).json()) as {
+      products: Array<Record<string, unknown>>;
+    };
     const inList = (id: string) => list.products.find((p) => p.id === id);
     assert.deepEqual(inList(b.id)?.generationAction, AVAILABLE);
     assert.equal("generationAction" in (inList(created.id) ?? {}), false);
@@ -904,14 +1011,35 @@ test("Job QUEUED do usuário bloqueia a leitura com GEN-ACTIVE/VIEW_ACTIVE_ANALY
   const b = await criarProduct(token);
   await withEnv({ GENERATED_CONTENTS_MONTH_LIMIT: "100" }, async () => {
     const job = await prisma.commerceIntelligenceJob.create({
-      data: { tenantId, userId, productId: a.id, idempotencyKey: randomBytes(16).toString("base64url"), fingerprint: "adr016", targetContentCount: 1, generatedContentsMonth: monthUtc(), status: "QUEUED" },
+      data: {
+        tenantId,
+        userId,
+        productId: a.id,
+        idempotencyKey: randomBytes(16).toString("base64url"),
+        fingerprint: "adr016",
+        targetContentCount: 1,
+        generatedContentsMonth: monthUtc(),
+        status: "QUEUED",
+      },
     });
     for (const id of [a.id, b.id]) {
-      const view = (await (await handleGetProduct(getById(token, id), id)).json()) as Record<string, unknown>;
-      assert.deepEqual(view.generationAction, { state: "BLOCKED", reason: "GEN-ACTIVE", nextAction: "VIEW_ACTIVE_ANALYSIS" });
+      const view = (await (
+        await handleGetProduct(getById(token, id), id)
+      ).json()) as Record<string, unknown>;
+      assert.deepEqual(view.generationAction, {
+        state: "BLOCKED",
+        reason: "GEN-ACTIVE",
+        nextAction: "VIEW_ACTIVE_ANALYSIS",
+      });
     }
-    const serialized = JSON.stringify(await (await handleListProducts(get(token))).json());
-    assert.equal(serialized.includes(job.id), false, "nenhum ID de Job no payload");
+    const serialized = JSON.stringify(
+      await (await handleListProducts(get(token))).json(),
+    );
+    assert.equal(
+      serialized.includes(job.id),
+      false,
+      "nenhum ID de Job no payload",
+    );
   });
 });
 
@@ -921,21 +1049,59 @@ test("reserva do mês consome a projeção: GEN-CAPACITY/WAIT_FOR_CAPACITY sem f
   const created = await criarProduct(token);
   const month = monthUtc();
   const job = await prisma.commerceIntelligenceJob.create({
-    data: { tenantId, userId, productId: created.id, idempotencyKey: randomBytes(16).toString("base64url"), fingerprint: "adr016-cap", targetContentCount: 30, generatedContentsMonth: month, status: "FAILED" },
+    data: {
+      tenantId,
+      userId,
+      productId: created.id,
+      idempotencyKey: randomBytes(16).toString("base64url"),
+      fingerprint: "adr016-cap",
+      targetContentCount: 30,
+      generatedContentsMonth: month,
+      status: "FAILED",
+    },
   });
   await prisma.generationUsageReservation.create({
-    data: { tenantId, jobId: job.id, generatedContentsMonth: month, quantity: 100, status: "CONFIRMED" },
+    data: {
+      tenantId,
+      jobId: job.id,
+      generatedContentsMonth: month,
+      quantity: 100,
+      status: "CONFIRMED",
+    },
   });
-  const read = async () => ((await (await handleGetProduct(getById(token, created.id), created.id)).json()) as Record<string, unknown>).generationAction;
+  const read = async () =>
+    (
+      (await (
+        await handleGetProduct(getById(token, created.id), created.id)
+      ).json()) as Record<string, unknown>
+    ).generationAction;
   await withEnv({ GENERATED_CONTENTS_MONTH_LIMIT: "100" }, async () => {
-    assert.deepEqual(await read(), { state: "BLOCKED", reason: "GEN-CAPACITY", nextAction: "WAIT_FOR_CAPACITY" });
-    const serialized = JSON.stringify(await (await handleListProducts(get(token))).json());
-    for (const leak of ["generatedContentsMonth", "quantity", "activeProducts", "limit"]) {
-      assert.equal(serialized.includes(leak), false, `payload não deve conter ${leak}`);
+    assert.deepEqual(await read(), {
+      state: "BLOCKED",
+      reason: "GEN-CAPACITY",
+      nextAction: "WAIT_FOR_CAPACITY",
+    });
+    const serialized = JSON.stringify(
+      await (await handleListProducts(get(token))).json(),
+    );
+    for (const leak of [
+      "generatedContentsMonth",
+      "quantity",
+      "activeProducts",
+      "limit",
+    ]) {
+      assert.equal(
+        serialized.includes(leak),
+        false,
+        `payload não deve conter ${leak}`,
+      );
     }
   });
   // Limiar da projeção: com exatamente 1 de folga mensal ela ainda é AVAILABLE.
-  await prisma.generationUsageReservation.update({ where: { jobId: job.id }, data: { quantity: 99 } });
+  await prisma.generationUsageReservation.update({
+    where: { jobId: job.id },
+    data: { quantity: 99 },
+  });
   await withEnv({ GENERATED_CONTENTS_MONTH_LIMIT: "100" }, async () => {
     assert.deepEqual(await read(), AVAILABLE);
   });

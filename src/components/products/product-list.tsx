@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SectionSwitcher, SectionSwitcherList, SectionSwitcherTrigger } from "@/components/ui/section-switcher";
 
 import { listProducts, ProductApiError, ProductRecord } from "./product-api";
+import { formatCommission, formatPriceWithCurrency } from "./product-form-model";
 import styles from "./product-list.module.css";
 
 export function ProductList() {
@@ -220,7 +221,12 @@ export function ProductList() {
                   </div>
                   <h3>{product.name}</h3>
                   <p className={styles.cardFacts}>
-                    {[product.category, product.price ? `${product.price} ${product.priceCurrency}`.trim() : null].filter(Boolean).join(" · ")}
+                    {[
+                      formatPriceWithCurrency(product.price, product.priceCurrency),
+                      formatCommission(product.commissionType, product.commission, product.price, product.priceCurrency),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </p>
                 </div>
                 <Link

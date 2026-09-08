@@ -59,7 +59,8 @@ export function validateCandidateDraft(draft: ProductCandidateDraft): ProductCan
   if (draft.price.trim() && (!/^\d+(?:[.,]\d{1,2})?$/.test(draft.price.trim()) || Number(draft.price.replace(",", ".")) < 0)) {
     errors.price = "Informe um preço não negativo com até duas casas.";
   }
-  if (draft.price.trim() && !/^[A-Za-z]{3}$/.test(draft.currency.trim())) errors.currency = "Informe uma moeda válida.";
+  if (draft.price.trim() && !["R$", "USD", "EUR"].includes(draft.currency.trim().toUpperCase()))
+    errors.currency = "Informe uma moeda válida.";
   return errors;
 }
 

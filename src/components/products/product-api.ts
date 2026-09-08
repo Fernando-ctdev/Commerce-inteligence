@@ -1,5 +1,8 @@
 import type { ProductFieldErrors, ProductPayload } from "./product-form-model";
-import { normalizeGenerationAction, type GenerationActionProjection } from "./generation-ui-model";
+import {
+  normalizeGenerationAction,
+  type GenerationActionProjection,
+} from "./generation-ui-model";
 
 export type ProductReadiness = "PENDING" | "ANALYZING" | "READY" | "FAILED";
 
@@ -11,6 +14,8 @@ export type ProductRecord = {
   category: string;
   price: string;
   priceCurrency: string;
+  commissionType: string;
+  commission: string;
   characteristics: string[];
   imageReferences: string[];
   observations: string;
@@ -97,6 +102,8 @@ const serverFieldNames: Record<string, string> = {
   url: "url",
   currency: "currency",
   priceCurrency: "currency",
+  commissionType: "commissionType",
+  commissionValue: "commission",
   targetContentCount: "targetContentCount",
   creatorPresence: "creatorPresence",
   constraints: "constraints",
@@ -128,7 +135,7 @@ export function normalizeProduct(value: unknown): ProductRecord {
       : typeof rawCents === "string" && /^\d+$/.test(rawCents)
         ? Number(rawCents)
         : null;
-  const rawPrice = record.price ?? record.price_brl;
+  const rawPrice = record.price ?? record.price_R$;
   const price =
     cents !== null
       ? (cents / 100).toFixed(2).replace(".", ",")
@@ -141,7 +148,12 @@ export function normalizeProduct(value: unknown): ProductRecord {
     category: nullableString(record.category),
     price,
     priceCurrency:
-      nullableString(record.priceCurrency ?? record.price_currency) || "BRL",
+      nullableString(record.priceCurrency ?? record.price_currency) || "R$",
+    commissionType:
+      record.commissionType === "PERCENT" || record.commissionType === "AMOUNT"
+        ? record.commissionType
+        : "",
+    commission: nullableString(record.commissionValue ?? record.commission),
     characteristics: listValue(record.features ?? record.characteristics),
     imageReferences: listValue(
       record.imageRefs ?? record.imageReferences ?? record.image_references,
@@ -159,7 +171,9 @@ export function normalizeProduct(value: unknown): ProductRecord {
         : "either",
     active: record.active !== false,
     readiness:
-      record.readiness === "ANALYZING" || record.readiness === "READY" || record.readiness === "FAILED"
+      record.readiness === "ANALYZING" ||
+      record.readiness === "READY" ||
+      record.readiness === "FAILED"
         ? record.readiness
         : "PENDING",
     generationAction: normalizeGenerationAction(record.generationAction),
@@ -302,10 +316,9 @@ export async function updateProduct(id: string, payload: ProductPayload) {
 // A UI refaz GET autenticado após o commit para ler ActiveProductView/ArchivedProductView.
 export async function archiveProduct(id: string) {
   return mutationFromResponse(
-    await request<unknown>(
-      `/api/products/${encodeURIComponent(id)}/archive`,
-      { method: "POST" },
-    ),
+    await request<unknown>(`/api/products/${encodeURIComponent(id)}/archive`, {
+      method: "POST",
+    }),
   );
 }
 
@@ -316,4 +329,10 @@ export async function reactivateProduct(id: string) {
       { method: "POST" },
     ),
   );
+}
+
+export async function deleteProduct(id: string) {
+  await request<unknown>(`/api/products/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }

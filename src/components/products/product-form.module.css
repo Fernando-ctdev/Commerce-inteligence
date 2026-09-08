@@ -517,6 +517,31 @@
   cursor: pointer;
 }
 
+.commissionRow {
+  display: flex;
+  gap: 8px;
+}
+
+.commissionRow input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+.commissionTypeTrigger {
+  flex: 0 0 auto;
+  height: 44px;
+  inline-size: 140px;
+  justify-content: space-between;
+}
+
+.commissionPreview {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  margin: 4px 0 0;
+}
+
 .currencyContent [data-slot="select-item"]:focus,
 .currencyContent [data-slot="select-item"][data-highlighted] {
   color: var(--color-on-action);

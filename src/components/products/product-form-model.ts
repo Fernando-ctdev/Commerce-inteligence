@@ -11,11 +11,16 @@ export type ProductDraft = {
   imageReferences: string;
   observations: string;
   url: string;
+  commissionType?: string;
+  commission?: string;
 };
 
 export type ProductFieldErrors = Partial<Record<keyof ProductDraft, string>>;
 
-export const DEFAULT_PRODUCT_CURRENCY = "BRL";
+export const DEFAULT_PRODUCT_CURRENCY = "R$";
+/** Contrato do backend (service.ts CURRENCIES): símbolos, não códigos ISO. */
+export const SUPPORTED_CURRENCIES = ["R$", "USD", "EUR"] as const;
+
 
 export type ProductPayload = {
   name: string;
@@ -34,6 +39,8 @@ export type ProductPayload = {
   creatorPresence?: ContentPreparationPreferences["creatorPresence"];
   constraints?: string;
   expectedVersion?: number;
+  commissionType?: string;
+  commissionValue?: string;
 };
 
 /* Máscara do Preço: o input exibe pt-BR (10,50) e o draft guarda o
@@ -57,6 +64,39 @@ export function formatPriceDisplay(price: string) {
   });
 }
 
+/* Exibição: símbolo antes do valor (R$ 23,44); BRL é legado de importação. */
+const CURRENCY_SYMBOLS: Record<string, string> = { "R$": "R$", BRL: "R$", USD: "$", EUR: "€" };
+
+export function formatPriceWithCurrency(price: string | null, currency: string | null | undefined) {
+  if (!price) return null;
+  const amount = formatPriceDisplay(price);
+  const symbol = CURRENCY_SYMBOLS[(currency ?? "").trim().toUpperCase()] ?? (currency ?? "").trim();
+  return symbol ? `${symbol} ${amount}` : amount;
+}
+
+/* Contrato do backend (service.ts): PERCENT (0–100) ou AMOUNT; valor canônico com ponto.
+   A comissão exibida é derivada do preço no cliente — a persistência guarda só tipo+valor. */
+export const COMMISSION_TYPES = ["PERCENT", "AMOUNT"] as const;
+export type CommissionType = (typeof COMMISSION_TYPES)[number];
+
+export function commissionAmountCents(commissionType: string, commission: string, price: string): number | null {
+  const value = Number(commission.replace(",", "."));
+  if (!commissionType || !commission || !Number.isFinite(value) || value <= 0) return null;
+  if (commissionType === "AMOUNT") return Math.round(value * 100);
+  const priceNumber = Number(price.replace(",", "."));
+  if (!Number.isFinite(priceNumber) || priceNumber <= 0) return null;
+  return Math.round((Math.round(priceNumber * 100) * value) / 100);
+}
+
+export function formatCommission(commissionType: string, commission: string, price: string, currency?: string | null): string | null {
+  const cents = commissionAmountCents(commissionType, commission, price);
+  if (cents !== null) return formatPriceWithCurrency((cents / 100).toFixed(2), currency);
+  const value = Number(commission.replace(",", "."));
+  if (commissionType === "PERCENT" && Number.isFinite(value) && value > 0)
+    return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
+  return null;
+}
+
 export type ProductManualDraft = {
   name: string;
   description: string;
@@ -66,6 +106,8 @@ export type ProductManualDraft = {
   characteristics: string;
   imageReferences?: string;
   url?: string;
+  commissionType?: string;
+  commission?: string;
 };
 
 export type ProductManualFieldErrorKey =
@@ -131,6 +173,9 @@ export function buildProductPayload(
     imageRefs: lines(draft.imageReferences),
     notes: cleanNullable(draft.observations),
     url: cleanNullable(draft.url),
+    ...(draft.commissionType && draft.commission
+      ? { commissionType: draft.commissionType, commissionValue: formatPriceDisplay(draft.commission) }
+      : {}),
     ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
     ...(version === undefined ? {} : { expectedVersion: version }),
   };
@@ -159,6 +204,9 @@ export function buildManualProductPayload(
     features: lines(draft.characteristics),
     ...(imageRefs.length > 0 ? { imageRefs } : {}),
     ...(url ? { url } : {}),
+    ...(cleanNullable(draft.commission ?? "") && draft.commissionType
+      ? { commissionType: draft.commissionType, commissionValue: formatPriceDisplay(draft.commission ?? "") }
+      : {}),
     targetContentCount: preparation.targetContentCount,
     creatorPresence: preparation.creatorPresence,
     ...(constraints ? { constraints } : {}),
@@ -186,10 +234,22 @@ export function validateProductManualDraft(
   ) {
     errors.price = "Informe um preço não negativo com até duas casas.";
   }
-  const currency = draft.currency.trim();
+  const currency = draft.currency.trim().toUpperCase();
   if (!currency) errors.currency = "Informe a moeda do produto.";
-  else if (!/^[A-Za-z]{3}$/.test(currency))
+  else if (!SUPPORTED_CURRENCIES.includes(currency as (typeof SUPPORTED_CURRENCIES)[number]))
     errors.currency = "Informe uma moeda válida.";
+  const commissionType = draft.commissionType?.trim() ?? "";
+  const commission = draft.commission?.trim() ?? "";
+  if (commission && !commissionType)
+    errors.commissionType = "Escolha se a comissão é % ou valor.";
+  if (commissionType && !COMMISSION_TYPES.includes(commissionType as CommissionType))
+    errors.commissionType = "Informe um tipo de comissão válido.";
+  if (commissionType && !commission)
+    errors.commission = "Informe o valor da comissão.";
+  else if (commission && !/^\d+(?:[.,]\d{1,2})?$/.test(commission))
+    errors.commission = "Informe um valor não negativo com até duas casas.";
+  else if (commissionType === "PERCENT" && Number(commission.replace(",", ".")) > 100)
+    errors.commission = "A comissão percentual deve estar entre 0 e 100.";
   if (lines(draft.characteristics).length === 0)
     errors.characteristics = "Informe ao menos uma característica.";
   const url = draft.url?.trim();

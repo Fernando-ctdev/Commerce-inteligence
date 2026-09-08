@@ -24,7 +24,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const archived = product?.lifecycle === "ARCHIVED";
   return (
     <ProductShell
-      title={archived ? "Produto arquivado" : "Revisar fatos"}
+      title={archived ? "Produto arquivado" : "Revisar produto"}
       user={{ email: session.email }}
     >
       <Breadcrumb className="mb-6">

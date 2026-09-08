@@ -266,6 +266,7 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto, reports
 
 - Remover o formulário antigo de quantidade/objetivo `1–50`, o `localStorage` como ponteiro, o gating `readyForStrategy` e o vocabulário de `Generation`; esses arquivos são dead code no estado atual e podem ser substituídos/removidos sem quebrar call site existente. Usar `CommerceIntelligenceJob`, `targetContentCount` do Product e API server-authoritative.
 - Em Product ativo sem resultado publicado e sem Job, mostrar uma única ação `Analisar produto`; iniciar Job e mostrar `QUEUED`. Product `READY` oferece somente `Revisar conteúdos`; nova geração/recorrência pertence ao Slice 008. Product salvo manualmente não dispara geração no POST de cadastro.
+- Nas leituras autenticadas de Product, todo `ActiveProductView` inclui `generationAction`: `{ state: "AVAILABLE", reason: null, nextAction: null }`, ou `BLOCKED` com `{ reason: "GEN-ACTIVE", nextAction: "VIEW_ACTIVE_ANALYSIS" }` ou `{ reason: "GEN-CAPACITY", nextAction: "WAIT_FOR_CAPACITY" }`. Não omitir campos nem serializar este objeto como `null`. `ArchivedProductView` não contém `generationAction`; não criar estado/código adicional. Archive/reactivate preservam a resposta mínima `{ id, version }`, seguida de refetch autenticado. A projeção é calculada server-side para a sessão, não contém plano, saldo, limite, reserva ou ID de outro Job/Tenant e só controla o feedback visual; o `POST /api/generations` preserva a revalidação transacional. Não criar endpoint de preflight separado. Ver ADR-016.
 - Em `QUEUED`/`RUNNING`, mostrar Product e stage real, polling/backoff sem percentual/ETA e sem Briefing parcial; permitir uso das demais rotas e não redirecionar à força.
 - Em `SUCCEEDED`, derivar `READY`, mostrar Strategy/Plan consultáveis e Briefings completos em `DRAFT`, com ação `Revisar conteúdos`; não oferecer edição/aprovação/lote neste slice.
 - Em `FAILED`/`CANCELLED`, derivar `FAILED`, preservar Product/fatos e Job terminal e oferecer `Tentar novamente` como novo Job.
@@ -273,7 +274,7 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto, reports
 - Compor o indicador global no `ProductShell` abaixo da toolbar em desktop/tablet e abaixo do header contextual no mobile; consultar backend após navegação/reload e não depender de aba iniciadora ou `localStorage`.
 - Aplicar `DESIGN.md`: `pt-BR`, labels persistentes, foco-visible, `aria-live`/`aria-busy`, erros textuais associados, alvos mínimos `44×44px`, sem cor única, sem spinner isolado, `prefers-reduced-motion`, layout mobile completo e glass somente em shell, toolbar ou sheet.
 
-**Gate:** testes de normalização/status e smoke em navegador comprovam início somente sem resultado publicado, bloqueio `READY`/recorrência, polling, reload/reentrada, sucesso/falha/retry, estado `blocked`, indicador global, badges, filtro `Pendente`, archive-only e ausência de conteúdo parcial.
+**Gate:** testes de normalização/status e smoke em navegador comprovam início somente sem resultado publicado, projeção `AVAILABLE`/`BLOCKED` antes do clique, bloqueio `READY`/recorrência, polling, reload/reentrada, sucesso/falha/retry, estado `blocked`, indicador global, badges, filtro `Pendente`, archive-only e ausência de conteúdo parcial. Uma corrida após `AVAILABLE` ainda deve receber o erro sanitizado do `POST` e recarregar a projeção.
 
 ### Tarefa 9 — Integrar testes, scripts e validação operacional
 
@@ -328,8 +329,8 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto, reports
 | Preservação Product | DELETE com/sem histórico rejeitado, archive decrementa contador uma vez | perda de histórico, DELETE físico ou contador negativo |
 | Falhas terminais | provider HTTP 200 atrasado, timeout, Skill/schema/factualidade/variedade/repair/persistência/cancelamento, com códigos específicos | Job sem `FAILED`/`CANCELLED`, erro mal classificado, reservation não liberada ou liberação duplicada |
 | Autorização | Product/Job/resultado/reservation cross-tenant | vazamento por ID ou Tenant enviado pelo cliente |
-| API/CSRF | sessão, origem, payload adulterado, erro sanitizado | mutação sem intenção ou stack/secret exposto |
-| UI/reentrada | `idle`, `queued`, `running`, `succeeded`, `failed`, `cancelled`, `blocked`, navegação, reload, mobile e teclado | estado dependente de aba/localStorage ou ação inacessível |
+| API/CSRF | sessão, origem, payload adulterado, erro sanitizado e `generationAction` sem dados de quota | mutação sem intenção, stack/secret exposto ou vazamento de plano/uso |
+| UI/reentrada | `idle`, `queued`, `running`, `succeeded`, `failed`, `cancelled`, `blocked` derivado da projeção, navegação, reload, mobile e teclado | estado dependente de aba/localStorage, capacidade inferida no cliente ou ação inacessível |
 
 Contract tests usam provider in-memory apenas como adaptador de teste. Testes de qualidade estratégica com provider real exigem Golden Dataset aprovado; sem artefato/hash/limiares aprovados, o gate permanece `BLOCKED`, sem declarar aceitação plena da Engine.
 
@@ -345,7 +346,7 @@ Executar, após todas as tarefas e somente no estado final:
 4. `npm run test`.
 5. Testes de integração PostgreSQL/migration com `DATABASE_URL` configurado, incluindo concorrência, índice de Job ativo, reservation UTC, FKs/uniques compostos tenant/product, `currentBriefVersionId` nullable + preenchimento atômico, unique de memória, rollback integral, DELETE archive-only, archive/decremento do contador, worker obsoleto e health/liveness.
 6. `npm run build`.
-7. Smoke autenticado com `count=1` e `count=16`: Product confirmado → `QUEUED` → worker → stages reais → quatro chamadas fundacionais → batches 4–8 → gates → `SUCCEEDED`, Strategy/Plan/Contents/BriefVersions; repetir via reload.
+7. Smoke autenticado com `count=1` e `count=16`: Product confirmado → projeção `AVAILABLE` → `Analisar produto` → `QUEUED` → worker → stages reais → quatro chamadas fundacionais → batches 4–8 → gates → `SUCCEEDED`, Strategy/Plan/Contents/BriefVersions; repetir via reload. Exercitar também `GEN-ACTIVE` e `GEN-CAPACITY`: a projeção deve desabilitar a ação antes do clique e o `POST` deve continuar revalidando em corrida.
 8. Exercitar provider HTTP 200 com corpo atrasado, timeout, perda de lease, heartbeat, reclaim, fencing e retry técnico; verificar que não há publicação/uso duplicado e que a chamada antiga é abortada quando suportado.
 9. Verificar falhas de schema, factualidade, variedade, repair e persistência; confirmar códigos internos específicos, mensagem pública sanitizada, rollback integral e liberação CAS única.
 10. Verificar projeções de contexto, separação entre instruções/fatos/dados externos e ausência de IDs persistentes/ownership/status/quota vindos do provider.
@@ -381,3 +382,164 @@ O resultado de cada validação deve ser registrado no handoff da implementaçã
 Todos os 31 requisitos rastreáveis e os 53 critérios de aceite da SPEC têm uma tarefa, teste ou validação final correspondente. Nenhum requisito de Slice 004+ ou 008 é usado como dependência de implementação.
 
 **Status:** REVISIONADO — atualização da SPEC e do PLAN para batching, contexto mínimo, stages reais, resiliência, gates completos e observabilidade; execução delegada após esta revisão.
+## 10. Plano visual integral — Products e Product detail
+
+> Esta seção é exclusiva da implementação frontend/UI. Não alterar PRD, DESIGN, SPEC de domínio, backend, provider, worker, Golden Dataset ou ADR-017.
+
+### Objetivo
+
+Recriar Products e Product detail conforme a referência visual aprovada, preservando a identidade do `DESIGN.md` v1.6 e tornando a interface uma superfície operacional clara: identificar o Produto, entender o estado, executar a próxima ação e revisar Strategy/Contents/History.
+
+### Arquivos e responsabilidades
+
+**Modificar**
+
+- `src/components/products/product-list.tsx`: composição de Products, toolbar, estados e Product cards.
+- `src/components/products/product-list.module.css`: grid/lista, metadata e responsividade.
+- `src/components/products/product-detail.tsx`: composição do detail, header rico, navegação interna e conteúdo das quatro regiões.
+- `src/components/products/product-detail.module.css`: header, tabs, composição editorial, tabela/lista e breakpoints.
+- `src/components/products/product-shell.tsx`: shell visual, drawer/rail/sidebar e montagem do toast sem faixa global.
+- `src/components/products/product-shell.module.css`: shell e posicionamento responsivo.
+- `src/components/products/product-shell-nav.tsx`: cinco destinos e estados futuros acessíveis.
+- `src/components/products/generation-panel.tsx`: apresentação dos estados de geração como toast acionável, sem faixa no header.
+- `src/components/products/generation-ui-model.ts`: normalização dos estados para a apresentação do toast e ações permitidas.
+- `src/components/products/generation-api.ts`: somente se necessário para preservar o contrato server-authoritative existente; não alterar endpoints.
+- `src/components/ui/section-switcher.tsx`: tabs com alvo, teclado e semântica aprovados.
+- estilos dos componentes acima: somente tokens existentes e regras desta seção.
+
+**Criar somente se a implementação existente não comportar a separação**
+
+- `src/components/products/product-header.tsx`: header visual do Product.
+- `src/components/products/product-card.tsx`: card reutilizável de Product.
+- `src/components/products/briefing-list.tsx`: tabela/lista desktop e cards mobile.
+- `src/components/products/generation-toast.tsx`: toast de atividade global acessível.
+
+Não criar novas entidades, endpoints, modelos ou dependências.
+
+### Tarefa 1 — Fixar contrato visual e fixtures de estados
+
+- [ ] Mapear as propriedades já entregues por Product, readiness, generationAction, Strategy, Plan, Content e History.
+- [ ] Definir view models locais apenas para apresentação, sem receber `tenantId`, quota, provider, tier ou estado autoritativo do cliente.
+- [ ] Cobrir fixtures de `PENDING`, `QUEUED`, `RUNNING`, `READY`, `FAILED`, `CANCELLED`, `BLOCKED`, loading, empty e reentry.
+- [ ] Garantir que Product `READY` exponha somente `Revisar conteúdos` neste slice.
+- [ ] Garantir que ações futuras de Slice 004+ não sejam renderizadas.
+
+### Tarefa 2 — Recriar shell e navegação
+
+- [ ] Implementar sidebar fixa de `240px` em desktop.
+- [ ] Implementar rail de `72px` em tablet.
+- [ ] Implementar header de `56px` + drawer em mobile.
+- [ ] Manter somente Home, Produtos, Estúdio, Agenda e Configurações.
+- [ ] Para Estúdio/Agenda sem rota funcional, renderizar item não acionável com `aria-disabled`, explicação acessível e sem href falso.
+- [ ] Garantir foco no drawer, fechamento por scrim/Escape e retorno ao gatilho.
+- [ ] Eliminar qualquer faixa `GlobalActivityIndicator` persistente abaixo do header/toolbar.
+
+### Tarefa 3 — Implementar toast global de geração
+
+- [ ] Reusar a consulta server-authoritative atual e manter polling/reentrada sem localStorage.
+- [ ] Renderizar toast flutuante discreto na região principal, sem deslocar header ou conteúdo.
+- [ ] Manter o toast enquanto o job estiver acionável; dismiss oculta apenas a apresentação local.
+- [ ] Reapresentar o toast quando reentrada ou mudança de rota encontrar estado acionável no backend.
+- [ ] Mostrar somente Product, stage humano, sucesso/falha e uma ação seguinte.
+- [ ] Usar `role="status"`/`aria-live="polite"` para atividade e `role="alert"` para falha acionável.
+- [ ] Fornecer `Dispensar` com target mínimo de `44×44px`, foco-visible e sem cancelamento implícito.
+- [ ] Não mostrar percentual, ETA, provider, modelo, tier, prompt, log ou token.
+- [ ] Respeitar `prefers-reduced-motion` sem deslocamento.
+
+### Tarefa 4 — Recriar Products
+
+- [ ] Construir header de área com título, descrição, busca e `Adicionar produto`.
+- [ ] Construir toolbar/filtros `Todos`, `Ativos`, `Pendentes`, `Arquivados`.
+- [ ] Construir Product card com imagem/alt, nome, marketplace, categoria, preço/moeda, data factual, readiness e próxima ação.
+- [ ] Melhorar badge de readiness usando texto explícito, estrutura/ícone e tokens semânticos; não depender de cor.
+- [ ] Diferenciar visualmente `Pendente`, `Analisando`, `Pronto` e `Falhou` sem criar urgência falsa ou métrica decorativa.
+- [ ] Implementar loading estrutural, empty geral, filtro vazio e erro acionável sem mensagens duplicadas.
+- [ ] Aproveitar largura desktop; usar duas colunas no tablet quando couber; uma coluna no mobile.
+
+### Tarefa 5 — Recriar header e Visão geral do Product
+
+- [ ] Adicionar breadcrumb e header de objeto real.
+- [ ] Exibir imagem, nome, status, marketplace, categoria, preço/moeda e data somente quando fornecidos.
+- [ ] Exibir ação principal derivada do estado e `Arquivar produto` como ação secundária.
+- [ ] Evitar que formulário de edição domine a primeira viewport.
+- [ ] Manter fatos editáveis e mensagens de erro associadas sem alterar o contrato de persistência.
+- [ ] Eliminar vazio estrutural causado por coluna fixa estreita no desktop.
+
+### Tarefa 6 — Recriar Strategy, Contents e History
+
+- [ ] Strategy: composição editorial para posicionamento, audiências, dores, desejos, benefícios, objeções, argumentos, ângulos e riscos.
+- [ ] Contents desktop: lista/tabela operacional com posição, hook, ângulo, status e abertura.
+- [ ] Contents mobile: cards verticais com disclosure.
+- [ ] Briefing expandido: Hook, Ângulo, objetivo quando disponível, Roteiro, Cenas e CTA.
+- [ ] Renderizar exatamente os Contents retornados após `SUCCEEDED`; não simular conteúdo.
+- [ ] History: tentativas, readiness, status, timestamp, resultado e retry baseados em dados reais.
+- [ ] Não adicionar editar, regenerar, aprovar, descartar, lote, Agenda, Estúdio ou memória futura.
+
+### Tarefa 7 — Estados, responsividade e acessibilidade
+
+- [ ] Validar `375×812`, `390×844`, `768×900`, `1200×900` e `1440×900`.
+- [ ] Medir zero overflow horizontal acidental em Products e Product detail.
+- [ ] Medir target mínimo de `44×44px` para tabs, botões, dismiss, drawer e ações.
+- [ ] Testar teclado: Tab, ArrowLeft/Right, Home, End, Enter, Space e Escape.
+- [ ] Testar foco-visible, retorno de foco do drawer e foco sem captura indevida pelo toast.
+- [ ] Testar `aria-selected`, `aria-controls`, labels, live regions, erros associados e `aria-disabled` dos itens futuros.
+- [ ] Testar reduced-motion em abertura/fechamento de drawer, tabs, disclosure e toast.
+- [ ] Confirmar que toast não cobre CTA, conteúdo ou controles essenciais.
+
+### Tarefa 8 — Validação visual comparativa
+
+- [ ] Capturar Products e Product detail nos cinco breakpoints.
+- [ ] Comparar hierarquia do shell, header rico, metadata, cards, tabs, Strategy, Contents, Briefings e History com a imagem aprovada.
+- [ ] Confirmar que a fidelidade estrutural foi preservada sem violar tokens, contraste, mobile completo ou restrições de escopo.
+- [ ] Confirmar ausência da faixa persistente do GlobalActivityIndicator.
+- [ ] Confirmar toast discreto, persistente até dismiss opcional e reexibido na reentrada.
+- [ ] Registrar divergências intencionais como adaptação ao `DESIGN.md`, não como falhas visuais.
+
+### Tarefa 9 — Gate de aceite frontend
+
+- [ ] Products e Product detail apresentam hierarquia operacional, não formulário genérico.
+- [ ] Header do Product contém metadata factual disponível e próxima ação clara.
+- [ ] Cards mostram imagem, preço, marketplace, categoria, readiness, data real quando disponível e ação.
+- [ ] Strategy, Contents e History possuem composições distintas.
+- [ ] Briefings renderizam Hook, Ângulo, Roteiro, Cenas e CTA.
+- [ ] Toast substitui integralmente a faixa global sem perder estado, ação, reentrada ou acessibilidade.
+- [ ] Badges de análise usam tokens semânticos e texto; cor não é o único indicador.
+- [ ] Loading, empty, queued, running, succeeded, failed, cancelled e blocked não duplicam mensagens.
+- [ ] Mobile mantém experiência completa; tablet usa rail; desktop usa sidebar.
+- [ ] Cinco breakpoints passam sem overflow.
+- [ ] Teclado, foco, Escape, ARIA e reduced-motion passam na interface renderizada.
+- [ ] Nenhuma funcionalidade fora do Slice 003 foi adicionada.
+
+### Rastreabilidade do plano visual
+
+| Requisito | Fonte | Tarefas | Evidência |
+| --- | --- | --- | --- |
+| UI-003-01 Shell responsivo | DESIGN §§2–3, 8 | 2, 7 | screenshots + DOM nos cinco breakpoints |
+| UI-003-02 Toast não bloqueante | atualização aprovada do usuário; SPEC §12.3 | 1, 3, 7, 8 | queued/running/succeeded/failed + dismiss + reentry |
+| UI-003-03 Cards e badges semânticos | DESIGN §§4, 8, 10; SPEC §12.4 | 1, 4, 7 | Product cards + contraste + estados |
+| UI-003-04 Header rico do Product | imagem aprovada; SPEC §12.5 | 5, 8 | comparação visual e dados reais |
+| UI-003-05 Strategy editorial | DESIGN §§8–9; SPEC §12.5 | 6, 8 | Strategy desktop/mobile |
+| UI-003-06 Briefings compostos | SPEC B-003-08; DESIGN §8 | 6, 8 | Contents exact-N e disclosure |
+| UI-003-07 Estados e reentrada | SPEC B-003-12/13; DESIGN §8 | 1, 3, 7 | backend state + screenshots |
+| UI-003-08 Acessibilidade | DESIGN §10; SPEC §12.7 | 2, 3, 7, 9 | teclado, ARIA, foco, Escape, reduced-motion |
+| UI-003-09 Limites de slice | SLICES Slice 003; SPEC §12.9 | 1, 6, 9 | inspeção de ações e diff |
+
+### Impacto do override do toast
+
+O estado global de geração, polling, reentrada e contrato server-authoritative permanecem inalterados. Apenas a superfície de apresentação deixa de ser uma faixa persistente e passa a ser um toast dismissível. O teste adicional obrigatório é garantir que dismiss não cancele nem apague o estado e que uma reentrada reapresente informação acionável.
+
+### Validações finais do plano visual
+
+Executar somente no frontend final:
+
+1. `npm run typecheck`.
+2. `npm run lint`.
+3. `npm run test`.
+4. `npm run build`.
+5. Smoke visual autenticado em Products e Product detail nos cinco breakpoints.
+6. Matriz de estados com toast, dismiss, reentrada e recuperação.
+7. Matriz de teclado/ARIA/foco/Escape/reduced-motion.
+
+Não executar nem modificar backend/provider/worker/Golden Dataset/ADR-017 neste plano. Qualquer validação não executada deve ser declarada no handoff.
+
+**Status:** APROVADO PARA IMPLEMENTAÇÃO após aprovação integral do usuário; FrontDev pode executar somente as tarefas visuais desta seção.

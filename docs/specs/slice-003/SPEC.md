@@ -235,10 +235,10 @@ Enquanto o job estiver `QUEUED` ou `RUNNING`, o App Shell mostra o nome do Produ
 | Stage | Mensagem humana em `pt-BR` |
 | --- | --- |
 | `UNDERSTANDING_PRODUCT` | `Entendendo o produto...` |
-| `MAPPING_COMMERCIAL_OPPORTUNITIES` | `Mapeando oportunidades comerciais...` |
-| `BUILDING_STRATEGY` | `Definindo a melhor estratégia para este produto...` |
+| `MAPPING_COMMERCIAL_OPPORTUNITIES` | `Mapeando oportunidades` |
+| `BUILDING_STRATEGY` | `Definindo a melhor estratégia` |
 | `BUILDING_CONTENT_PLAN` | `Organizando as oportunidades de conteúdo...` |
-| `GENERATING_BRIEFS` | `Preparando os Briefings do Conteúdo...` |
+| `GENERATING_BRIEFS` | `Preparando os Briefings` |
 | `FINALIZING` | `Finalizando...` |
 
 Stages são persistidos antes do trabalho correspondente. A UI não apresenta subetapas internas como concluídas quando foram executadas dentro de uma chamada agrupada.
@@ -335,6 +335,10 @@ O snapshot de entrada da primeira geração é vazio e não consulta histórico 
 ### RI-003-18 — Preservação do Product e chave de relatório
 
 Product nunca é fisicamente excluído neste slice. O `BriefValidationReport` usa `briefId` como nome canônico, derivado de `contentId + briefVersionId` para manter a identidade da versão imutável.
+### RI-003-19 — Projeção da ação de geração
+
+Todo Product `ACTIVE` retornado em leitura autenticada inclui `generationAction`, objeto server-authoritative completo: `{ state: "AVAILABLE", reason: null, nextAction: null }`, `{ state: "BLOCKED", reason: "GEN-ACTIVE", nextAction: "VIEW_ACTIVE_ANALYSIS" }` ou `{ state: "BLOCKED", reason: "GEN-CAPACITY", nextAction: "WAIT_FOR_CAPACITY" }`. `reason` e `nextAction` nunca são omitidos e o objeto nunca é `null`. Product `ARCHIVED` é `ArchivedProductView` e não serializa `generationAction`; não recebe novo código ou estado de bloqueio. Archive/reactivate retornam apenas `{ id, version }`; a UI recarrega o Product autenticado após o commit. A projeção é avaliada para o `tenantId` e `userId` da sessão, orienta apenas a UI e nunca autoriza a mutação; `POST /api/generations` revalida sessão, origem, escopo, job ativo e reserva na transação. A projeção não expõe plano, limite, uso, reserva, IDs ou dados de outro Tenant. `GEN-PRODUCT-CAPACITY` pertence à ativação de Product novo e não bloqueia a análise de Product já ativo.
+
 
 ## 7. Validações e erros
 
@@ -374,8 +378,8 @@ Erros exibidos ao creator devem usar linguagem humana em `pt-BR`, preservar valo
 | `succeeded` | Job `SUCCEEDED` com Strategy, Plan e Contents completos: readiness `READY`; indicador oferece `Revisar conteúdos` e libera nova análise. |
 | `failed` | Último job `FAILED` sem resultado final: readiness `FAILED`; indicador apresenta erro sanitizado, preserva Product/fatos e oferece `Tentar novamente`. |
 | `cancelled` | Último job `CANCELLED` sem resultado final: readiness `FAILED`; cancelamento confirmado, sem resultado parcial, com possibilidade de nova tentativa. |
-| `blocked` | `Analisar produto` permanece visível porém desabilitado quando há job ativo ou falta capacidade, com explicação e próxima ação. |
-| `reentry` | Ao abrir/recarregar, o App Shell restaura o estado consultado no servidor; local storage não é fonte de verdade. |
+| `blocked` | `Analisar produto` permanece visível porém desabilitado quando `generationAction.state` é `BLOCKED`; a UI apresenta explicação e próxima ação a partir do par canônico `reason`/`nextAction`. |
+| `reentry` | Ao abrir/recarregar, o App Shell e a tela do Product recarregam a projeção do servidor; local storage não é fonte de verdade. |
 
 Requisitos de responsividade e acessibilidade:
 
@@ -569,3 +573,165 @@ Requisitos de responsividade e acessibilidade:
 - `structure` é campo opcional canônico da `ContentBriefVersion` v1; cenas válidas e hash estrutural fazem parte das validações determinísticas.
 - `briefId` do `BriefValidationReport` é o identificador canônico derivado de `contentId + briefVersionId`.
 - Esta revisão atualiza a SPEC aprovada para refletir batching, contexto mínimo, stages reais, resiliência e observabilidade; a implementação permanece pendente até os gates de validação.
+## 12. Especificação visual integral — Products e Product detail
+
+### 12.1 Objetivo e fronteira
+
+Esta seção formaliza a superfície visual do Slice 003 para Products e Product detail. Ela cobre hierarquia, composição, componentes, estados, responsividade, acessibilidade e reentrada. Não altera o domínio, APIs, persistência, provider, worker, Golden Dataset ou os limites de slices posteriores.
+
+O objetivo é substituir a composição genérica de formulário por uma superfície operacional orientada ao Produto: identificar o objeto, entender seu estado, executar a próxima ação e revisar Strategy, Contents e History sem transformar a tela em dashboard analítico.
+
+### 12.2 Direção visual e adaptação da referência
+
+Fidelidade à imagem de referência:
+
+- shell com sidebar e região principal claramente separadas;
+- header contextual rico e ancorado no Produto;
+- metadata factual visível (imagem, preço, marketplace, categoria e data quando disponível);
+- cards/listas com densidade operacional;
+- navegação interna evidente;
+- Briefings como conteúdo principal, não como resumo oculto;
+- maior uso da largura disponível no desktop;
+- hierarquia explícita entre contexto, próxima ação e conteúdo.
+
+Adaptação obrigatória ao `DESIGN.md` v1.6:
+
+- Light como padrão, Instrument Sans e tokens semânticos canônicos;
+- conteúdo principal sólido; glass somente em shell, toolbar, toast, sheet ou menu flutuante;
+- cards somente para Product, Content e objetos operacionais reais;
+- sem KPI, gráfico, scorecard, percentual decorativo ou cor própria por categoria/Produto;
+- targets mínimos de `44×44px`, foco-visible, teclado, contraste e `prefers-reduced-motion`;
+- mobile mantém todas as capacidades essenciais;
+- disclosure não esconde erro, estado de geração ou próxima ação.
+
+O `Global Activity Indicator` continua sendo uma capacidade do App Shell e uma fonte server-authoritative de estado, mas sua apresentação visual neste redesign é um **toast de atividade**. Não existe faixa persistente abaixo do header/toolbar.
+
+### 12.3 Shell, navegação e toast de atividade
+
+Desktop usa sidebar fixa de `240px`; tablet usa rail de `72px`; mobile usa header contextual de `56px` e drawer. A navegação contém somente Home, Produtos, Estúdio, Agenda e Configurações. Itens futuros sem rota são explicitamente indisponíveis, com nome acessível, `aria-disabled` e explicação.
+
+O toast de atividade:
+
+- aparece como superfície flutuante discreta, ancorada no canto seguro da região principal;
+- não ocupa a composição do header nem cria faixa de conteúdo;
+- não bloqueia navegação, foco ou ações da tela;
+- permanece visível enquanto houver job `QUEUED`/`RUNNING`, resultado `SUCCEEDED` acionável ou falha recuperável, até dismiss opcional do usuário;
+- ao ser dispensado, não cancela o job; reentrada e mudança de rota consultam o backend e podem reapresentá-lo quando houver informação acionável;
+- informa Product, stage real em `pt-BR`, sucesso ou falha e uma única ação seguinte (`Revisar conteúdos` ou `Tentar novamente`);
+- não mostra percentual inventado, ETA, provider, modelo, tier, prompt, log ou token;
+- usa `role="status"`/`aria-live="polite"` para atividade não urgente e `role="alert"` somente para falha que exige atenção;
+- possui botão `Dispensar` com nome acessível, foco-visible e alvo mínimo de `44×44px`;
+- entrada/saída usa movimento curto; com `prefers-reduced-motion`, muda sem deslocamento;
+- mantém ordem de foco natural e nunca captura foco automaticamente durante navegação.
+
+### 12.4 Products
+
+O cabeçalho da área contém `Produtos`, descrição orientada à tarefa, busca e `Adicionar produto`. A toolbar agrupa busca, filtros `Todos`, `Ativos`, `Pendentes` e `Arquivados`, sem duplicar o toast.
+
+Cada Product card mostra, quando disponível:
+
+- imagem com alt derivado do Produto;
+- nome;
+- marketplace/origem, incluindo `TikTok Shop` quando factual;
+- categoria neutra;
+- preço e moeda;
+- data factual contextual, como cadastro ou última análise;
+- badge de readiness (`Pendente`, `Analisando`, `Pronto`, `Falhou`);
+- próxima ação contextual (`Abrir produto`, `Analisar produto`, `Revisar conteúdos` ou `Tentar novamente`).
+
+O badge de análise usa hierarquia semântica: texto explícito + estrutura/ícone, token de feedback ou accent apropriado e contraste validado. Nunca comunica o estado somente por cor, não usa bolha decorativa nem aparência de métrica. `Analisando` deve ser visualmente mais informativo que `Pendente`, sem simular progresso.
+
+Desktop pode usar grade ou lista de cards em largura aproveitada; tablet usa duas colunas quando houver espaço; mobile usa uma coluna. Filtro vazio, loading e erro têm mensagens próprias e uma próxima ação clara.
+
+### 12.5 Product detail e header do Produto
+
+O detail começa com breadcrumb e header do objeto real contendo:
+
+- imagem ou placeholder semântico;
+- nome do Produto;
+- readiness/status;
+- marketplace e categoria quando disponíveis;
+- preço e moeda;
+- data factual disponível;
+- quantidade inicial de Briefings quando vinculada ao Produto;
+- ação secundária `Arquivar produto`;
+- ação principal derivada do estado (`Analisar produto`, `Revisar conteúdos` ou `Tentar novamente`).
+
+Não inventar metadata ausente. O header ocupa a largura útil da região principal; não criar coluna estreita que produza vazio estrutural em desktop.
+
+As regiões internas são `Visão geral`, `Estratégia`, `Conteúdos` e `Histórico`. Tabs têm alvo mínimo de `44×44px`, estado ativo por cor e indicador estrutural, sem depender somente de cor, e suporte a setas, Home/End, Enter e Space.
+
+`Visão geral` prioriza fatos e próxima ação. O formulário de edição é secundário e não domina a primeira viewport de revisão.
+
+`Estratégia` usa composição editorial para posicionamento, audiências, dores, desejos, benefícios, objeções, argumentos, ângulos e riscos. Não usar KPI cards.
+
+`Conteúdos` usa lista/tabela operacional no desktop com posição, hook, ângulo, status e ação de abrir. No mobile usa cards verticais. Cada briefing aberto mostra Hook, Ângulo, objetivo quando disponível, Roteiro, Cenas e CTA, com disclosure progressivo. Contents iniciais permanecem `DRAFT`; este slice não adiciona editar, regenerar, aprovar, descartar ou montar lote.
+
+`Histórico` mostra somente tentativas, readiness, status, timestamp, resultado completo e recuperação derivados de dados reais. Não expõe logs técnicos, provider, modelo, tier, prompt ou memória futura.
+
+### 12.6 Estados da interface
+
+| Estado | Composição obrigatória |
+| --- | --- |
+| Loading | skeleton preservando header, cards/lista e detail; sem estratégia ou briefing simulado |
+| Empty Products | explicação curta, `Adicionar produto` e fluxo URL/manual conforme disponível |
+| Empty Contents | explica que Briefings aparecerão após a análise; não apresenta conteúdo parcial |
+| `PENDING` | badge `Pendente`, ação `Analisar produto` e expectativa clara |
+| `QUEUED`/`RUNNING` | toast persistente até dismiss opcional, Product + stage real, sem ETA/percentual; navegação livre |
+| `SUCCEEDED`/`READY` | toast de sucesso acionável, header pronto, `Revisar conteúdos`, Strategy/Plan consultáveis e Briefings completos |
+| `FAILED`/`CANCELLED` | mensagem única sanitizada, Product/fatos preservados, `Tentar novamente`, sem resultado parcial |
+| `BLOCKED` | ação visível desabilitada, razão textual e próxima ação derivada de `generationAction` |
+| Reentrada | backend é fonte de verdade; toast acionável pode reaparecer, sem localStorage como autoridade |
+
+### 12.7 Responsividade e acessibilidade
+
+Validar em `375×812`, `390×844`, `768×900`, `1200×900` e `1440×900`. Não pode existir overflow horizontal acidental.
+
+- Mobile: experiência completa, cards verticais, filtros em sheet quando complexos, drawer com foco controlado, toast sem cobrir CTA.
+- Tablet: rail de `72px`, grid de oito colunas, gutter de `24px`, todas as capacidades preservadas.
+- Desktop: sidebar de `240px`, toolbar contextual, conteúdo aproveitando a região principal, sem painel decorativo.
+- Todos os controles possuem alvo mínimo de `44×44px`, foco-visible com offset e ordem de foco coerente.
+- Tabs, drawer, toast, disclosure e ações funcionam com teclado.
+- Mudanças assíncronas usam `aria-live`/`role` adequado; `aria-busy` aparece durante carregamento quando aplicável.
+- Erros permanecem associados ao contexto e não dependem de cor.
+- Texto truncado oferece acesso ao valor completo.
+- Dismiss do toast é opcional e não remove o estado do backend.
+- `Escape` fecha drawer, sheet e toast dispensável sem executar ações destrutivas; foco retorna ao gatilho quando aplicável.
+- `prefers-reduced-motion` remove deslocamento e reduz transições.
+
+### 12.8 Rastreabilidade visual
+
+| ID | Fonte | Contrato desta SPEC | Verificação |
+| --- | --- | --- | --- |
+| UI-003-01 | DESIGN §§2–3, 8 | Shell responsivo, sidebar/rail/drawer e cinco destinos | inspeção visual nos cinco breakpoints |
+| UI-003-02 | DESIGN §§3, 8, 10 | Toast sem faixa persistente, não bloqueante, acessível e recuperável | estados queued/running/succeeded/failed + reentrada |
+| UI-003-03 | DESIGN §§8, 10; PRD §§8, 39–45 | Product cards com metadata factual, readiness e próxima ação | Products com dados e estados reais |
+| UI-003-04 | DESIGN §§2, 5–6; referência visual | Header rico do Product e aproveitamento da largura | comparação visual desktop/mobile |
+| UI-003-05 | DESIGN §§8–9; SPEC B-003-08 | Strategy editorial e Briefings com disclosure | tabs Strategy/Contents/History |
+| UI-003-06 | DESIGN §§3, 8, 10 | Loading, empty, error, blocked, reduced-motion e foco | matriz de estados + teclado |
+| UI-003-07 | DESIGN §§3, 8, 10 | Targets `44×44px`, sem overflow e navegação assistiva | DOM/ARIA e medição nos cinco breakpoints |
+| UI-003-08 | SLICES Slice 003; SPEC B-003-12/13 | Sem ações de Slice 004+; READY sem reanálise | inspeção de ações e smoke de reentrada |
+
+### 12.9 Critérios de aceite visual
+
+1. Products e Product detail seguem a hierarquia da referência, sem a composição genérica atual.
+2. Products apresenta cards/lista com imagem, nome, marketplace, preço, categoria, readiness, data real quando disponível e próxima ação.
+3. Product detail apresenta header rico e usa a largura útil da região principal.
+4. O header contextual não contém `GlobalActivityIndicator` como faixa persistente.
+5. Estados de geração aparecem em toast discreto, persistente até dismiss opcional, sem bloquear navegação e com reentrada server-authoritative.
+6. Toast de atividade mantém `aria-live`, foco, dismiss acessível, sem ETA/percentual inventado e com reduced-motion.
+7. Badges de readiness têm texto e estrutura semântica; cor nunca é o único sinal.
+8. Strategy, Contents e History têm composição distinta e legível.
+9. Contents exibe exatamente os Briefings disponíveis após `SUCCEEDED`, com Hook, Ângulo, Roteiro, Cenas e CTA.
+10. Nenhum controle de edição, aprovação, descarte, lote, Agenda ou Estúdio é introduzido neste slice.
+11. Loading, empty, queued, running, succeeded, failed, cancelled, blocked e reentry possuem representação coerente e não duplicada.
+12. A experiência é completa em mobile, usa rail no tablet e sidebar no desktop.
+13. Os cinco breakpoints passam sem overflow horizontal acidental.
+14. Todos os controles principais têm target mínimo de `44×44px`, teclado, foco-visible, Escape e semântica ARIA correta.
+15. A implementação usa tokens e tipografia do `DESIGN.md`, sem gradientes, cores ad hoc, glass no conteúdo ou métricas decorativas.
+
+### 12.10 Impacto da decisão do toast
+
+A remoção da faixa persistente altera somente a apresentação frontend do estado global. O backend, polling, estados, reentrada, retry, autorização e contrato de `generationAction` permanecem inalterados. O toast torna o estado menos intrusivo e preserva continuidade de trabalho; em contrapartida, exige aria-live, reexibição em reentrada, dismiss reversível e teste para garantir que o usuário não perca uma ação de recuperação.
+
+Esta decisão é um override visual explícito para o Slice 003 sobre a disposição descrita no contrato de shell do `DESIGN.md`; não altera os tokens, a semântica nem a existência do estado global.

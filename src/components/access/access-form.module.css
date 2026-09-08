@@ -1,38 +1,56 @@
 .page {
   align-items: center;
+  background: #f7f8fb;
   display: grid;
   min-height: 100dvh;
-  padding: 24px 16px;
+  padding: clamp(16px, 3dvh, 28px) 20px;
 }
 
 .surface {
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  border: 1px solid #dfe2e8;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgb(24 32 56 / 8%);
   display: grid;
-  gap: 32px;
+  gap: clamp(20px, 3dvh, 26px);
   margin: auto;
-  max-width: 440px;
-  padding: 40px;
+  max-width: 560px;
+  padding: clamp(34px, 5dvh, 42px) 44px;
   width: 100%;
 }
 
-.productName {
+.brand {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 56px;
+}
+
+.logo {
+  height: 56px;
+  object-fit: contain;
+  width: 146px;
+}
+
+.brand span {
   color: var(--color-text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  margin: 0;
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  margin-inline-start: -2px;
 }
 
 .intro {
   display: grid;
-  gap: 8px;
+  gap: 12px;
+  text-align: center;
 }
 
 .intro h1 {
-  font-size: 32px;
-  letter-spacing: -0.035em;
-  line-height: 36px;
+  color: #171a22;
+  font-size: 36px;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
   margin: 0;
 }
 
@@ -40,18 +58,25 @@
 .help,
 .notice {
   color: var(--color-text-secondary);
-  font-size: 15px;
-  line-height: 22px;
+  font-size: 17px;
+  line-height: 1.45;
   margin: 0;
+}
+
+.intro p {
+  max-width: 430px;
+  margin-inline: auto;
 }
 
 .notice {
   border-inline-start: 3px solid var(--color-focus);
   padding-inline-start: 12px;
+  text-align: start;
 }
 
 .modeSwitch {
-  background: var(--color-surface-secondary);
+  background: #f0f1f4;
+  border-radius: 10px;
   display: grid;
   gap: 4px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -62,22 +87,24 @@
 .modeActive {
   background: transparent;
   border: 0;
+  border-radius: 8px;
   color: var(--color-text-secondary);
   cursor: pointer;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 500;
-  min-height: 44px;
+  min-height: 48px;
   padding: 8px 12px;
 }
 
 .modeActive {
   background: var(--color-surface);
-  color: var(--color-text);
-  font-weight: 600;
+  box-shadow: 0 1px 4px rgb(24 32 56 / 10%);
+  color: #2944ae;
+  font-weight: 700;
 }
 
 .modeButton:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-surface) 60%, transparent);
+  background: rgb(255 255 255 / 55%);
 }
 
 .form,
@@ -86,7 +113,7 @@
 }
 
 .form {
-  gap: 20px;
+  gap: 18px;
 }
 
 .field {
@@ -94,28 +121,74 @@
 }
 
 .field label {
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 16px;
+  color: #171a22;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 22px;
+}
+
+.inputWrap {
+  align-items: center;
+  border: 1px solid #d7dbe3;
+  border-radius: 10px;
+  display: flex;
+  min-height: 54px;
+  padding-inline: 16px;
+  transition:
+    border-color 80ms ease,
+    box-shadow 80ms ease;
+}
+
+.inputWrap:focus-within {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 3px rgb(49 72 190 / 14%);
+}
+
+.inputIcon {
+  color: #7f8794;
+  flex: 0 0 auto;
 }
 
 .field input {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  background: transparent;
+  border: 0;
   color: var(--color-text);
-  min-height: 44px;
-  padding: 10px 12px;
+  flex: 1;
+  font-size: 17px;
+  min-width: 0;
+  outline: 0;
+  padding: 12px;
+}
+
+.field input::placeholder {
+  color: #8a909b;
 }
 
 .field input[aria-invalid="true"] {
-  border-color: var(--color-danger);
+  border-color: transparent;
+}
+
+.passwordToggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #7f8794;
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px;
+}
+
+.passwordToggle:hover {
+  color: var(--color-text);
 }
 
 .help,
 .fieldError {
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .fieldError,
@@ -132,15 +205,18 @@
 }
 
 .submit {
-  background: var(--color-action);
-  border: 1px solid var(--color-action);
-  border-radius: 8px;
+  background: #3d4bd1;
+  border: 1px solid #3d4bd1;
+  border-radius: 10px;
   color: #fff;
   cursor: pointer;
-  font-size: 15px;
-  font-weight: 600;
-  min-height: 48px;
-  padding: 12px 16px;
+  font-size: 18px;
+  font-weight: 700;
+  min-height: 54px;
+  padding: 12px 18px;
+  transition:
+    filter 160ms ease,
+    transform 80ms ease;
 }
 
 .submit:hover:not(:disabled) {
@@ -148,7 +224,15 @@
 }
 
 .submit:active:not(:disabled) {
-  filter: brightness(0.88);
+  transform: translateY(1px);
+}
+
+.modeButton:focus-visible,
+.modeActive:focus-visible,
+.passwordToggle:focus-visible,
+.submit:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 .modeButton:disabled,
@@ -158,14 +242,28 @@
   opacity: 0.65;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .inputWrap,
+  .submit {
+    transition: none;
+  }
+}
+
 @media (max-width: 767px) {
+  .page {
+    padding: 16px;
+  }
+
   .surface {
-    border-inline: 0;
-    padding: 32px 0;
+    gap: 22px;
+    padding: 32px 24px 28px;
   }
 
   .intro h1 {
-    font-size: 24px;
-    line-height: 30px;
+    font-size: 32px;
+  }
+
+  .intro p {
+    font-size: 16px;
   }
 }

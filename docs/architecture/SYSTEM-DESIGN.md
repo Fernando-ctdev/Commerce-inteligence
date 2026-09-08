@@ -122,6 +122,7 @@ Product Importer┘             │                      │
 - Schemas canônicos versionados: `ProductUnderstanding`, `CommercialOpportunity`, `ProductStrategy`, `ContentPlan`, `ContentOpportunity`, `Content`, `ContentBriefVersion`, `ProductMemorySnapshot`, `BriefValidationReport`, `IntelligenceRun`.
 - Job público: `status` (QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED) + `stage` (UNDERSTANDING_PRODUCT → … → FINALIZING) com mensagens humanas mapeadas 1:1 para etapas reais. Sem percentual ou ETA inventados.
 - `IntelligenceRun` registra engine version, skill version, modelo/provider por capability, custo, latência, retries — interno, nunca na UI.
+- Todo Product `ACTIVE` retornado por leitura autenticada inclui `generationAction`: `AVAILABLE` com `reason`/`nextAction` nulos, ou `BLOCKED` com o par `GEN-ACTIVE`/`VIEW_ACTIVE_ANALYSIS` ou `GEN-CAPACITY`/`WAIT_FOR_CAPACITY`. Product `ARCHIVED` não serializa o campo; archive/reactivate retornam mutação mínima e a UI recarrega o Product. Não há novo código de bloqueio. O `POST` revalida e reserva transacionalmente. Ver ADR-016.
 - Capacities seguem `Input Schema → Capability → Output Schema`. LLM nunca decide regra de sistema (estado de job, quota, persistência, versões).
 - Fato ≠ inferência: a engine pode inferir por que alguém compraria; não pode inventar o que o Produto é. Fact Validator classifica claims (`SUPPORTED`, `INFERRED_BUT_SAFE`, `UNSUPPORTED`, `CONTRADICTED`).
 - Gates: Quality Gate por briefing (estrutural + factual + semântica quando necessária); Variety Gate no conjunto (subordinado à relevância); Repair Loop com causa da rejeição e limite de tentativas; briefings aprovados no gate são preservados durante repair dos demais.
@@ -170,7 +171,7 @@ Prompt orienta, validação obriga. Nenhuma regra crítica vive só em prompt. C
 
 - **Durabilidade:** job persistente, retomável, sobrevive a deploy e reconnect; lease/timeout no worker.
 - **Idempotência:** retry técnico e reentrada não duplicam resultado, consumo nem memória.
-- **Observabilidade interna:** etapa/capability que falhou, skill/strategy/modelo usados, briefings rejeitados e motivos, repairs, custo e latência por capability. Nada disso vira UI.
+- **Observabilidade interna:** etapa/capability que falhou, skill/strategy/modelo usados, briefings rejeitados e motivos, repairs, custo e latência por capability; em falha de provider, identificador opaco e validado da chamada com origem (`header`/`body.id`), quando disponível. Nada disso vira UI, nem inclui payload bruto.
 - **Segurança:** segredos fora de código e logs; erros sanitizados; sem payload bruto de provider persistido por padrão.
 - **Testes:** unitários determinísticos (schema, estado, variedade, idempotência), contract tests por capability, evaluation tests com Golden Dataset de produtos reais (8+ categorias) e regressão entre versões de engine/Skill/prompt/modelo.
 - **Custo:** metadados de tokens/custo por run; `IntelligenceRun` permite comparar qualidade/custo por tarefa (base dos evals do Model Router).
@@ -199,6 +200,7 @@ Fila visual de análises e central de atividades (após validação); notificaç
 | [ADR-014](./adr-014-platform-skill-versionada.md) | Platform Skill versionada (TikTok Commerce Creative Skill) |
 | [ADR-016](./adr-016-projecao-de-acao-de-geracao.md) | projeção server-authoritative de `generationAction` para Product ativo |
 | [ADR-015](./adr-015-content-operations-e-recording-batch.md) | Content Operations: versões de briefing, aprovação, `RecordingBatch`, estados derivados |
+| [ADR-017](./adr-017-correlacao-sanitizada-de-provider.md) | correlação sanitizada de chamadas ao provider |
 
 Se a implementação contrariar um ADR, o ADR é revisado antes. Se apenas conectar decisões já aceitas, este documento pode ser atualizado sem novo ADR.
 

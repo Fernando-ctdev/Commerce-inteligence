@@ -12,17 +12,17 @@ O fluxo não terá URL, descoberta automática, Product Importer, LLM, Agent Run
 
 ## 2. Estado real e áreas afetadas
 
-| Área | Estado atual | Plano mínimo |
-|---|---|---|
-| Shell de Produtos | `ProductShell` já usa a navegação e tokens do projeto; Produtos usa `ProductList`. | Reutilizar `ProductShell` e adicionar Breadcrumb shadcn na subpágina. |
-| Rota de criação | Não existe `src/app/products/new/page.tsx`. | Criar página server-side protegida por `requireSession`. |
-| Lista | `ProductList` já busca `/api/products` e renderiza cards, mas o botão atual abre modal. | Trocar a ação de criação por link para `/products/new`; preservar renderização do card e estados de lista. |
-| Formulários | `product-candidate-modal.tsx` contém os campos e a seção de preparação; `product-form-model.ts` normaliza fatos, mas inclui campos fora deste slice. | Extrair/reutilizar somente o comportamento manual necessário em um formulário da nova página; não usar preview ou fluxo automatizado. |
-| Cliente HTTP | `product-api.ts` já define `listProducts`, `createProduct`, erros de campo e header `Idempotency-Key`. | Ajustar o payload para preço/moeda e restrições da preparação; manter erros sanitizados e resposta de mutação determinística. |
-| API server-side | Não existem rotas `/api/products`. | Criar `GET` e `POST` em `src/app/api/products/route.ts`, delegando a validação/persistência ao limite Product. |
-| Product application/domain | Não há módulo Product server-side identificado. | Criar o menor caso de uso local para validar, escopar Tenant, persistir e listar; não criar camada genérica de repository/service. |
-| Prisma | `Product` já existe com fatos, `targetContentCount`, `provenance` e `tenantId`; não há restrições completas nem chave de criação. | Alteração aditiva do schema e uma migration para restrições e idempotência. |
-| Breadcrumb | Não há componente Breadcrumb em `src/components/ui`. | Adicionar o primitivo Breadcrumb shadcn necessário, sem nova dependência. |
+| Área                       | Estado atual                                                                                                                                         | Plano mínimo                                                                                                                          |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Shell de Produtos          | `ProductShell` já usa a navegação e tokens do projeto; Produtos usa `ProductList`.                                                                   | Reutilizar `ProductShell` e adicionar Breadcrumb shadcn na subpágina.                                                                 |
+| Rota de criação            | Não existe `src/app/products/new/page.tsx`.                                                                                                          | Criar página server-side protegida por `requireSession`.                                                                              |
+| Lista                      | `ProductList` já busca `/api/products` e renderiza cards, mas o botão atual abre modal.                                                              | Trocar a ação de criação por link para `/products/new`; preservar renderização do card e estados de lista.                            |
+| Formulários                | `product-candidate-modal.tsx` contém os campos e a seção de preparação; `product-form-model.ts` normaliza fatos, mas inclui campos fora deste slice. | Extrair/reutilizar somente o comportamento manual necessário em um formulário da nova página; não usar preview ou fluxo automatizado. |
+| Cliente HTTP               | `product-api.ts` já define `listProducts`, `createProduct`, erros de campo e header `Idempotency-Key`.                                               | Ajustar o payload para preço/moeda e restrições da preparação; manter erros sanitizados e resposta de mutação determinística.         |
+| API server-side            | Não existem rotas `/api/products`.                                                                                                                   | Criar `GET` e `POST` em `src/app/api/products/route.ts`, delegando a validação/persistência ao limite Product.                        |
+| Product application/domain | Não há módulo Product server-side identificado.                                                                                                      | Criar o menor caso de uso local para validar, escopar Tenant, persistir e listar; não criar camada genérica de repository/service.    |
+| Prisma                     | `Product` já existe com fatos, `targetContentCount`, `provenance` e `tenantId`; não há restrições completas nem chave de criação.                    | Alteração aditiva do schema e uma migration para restrições e idempotência.                                                           |
+| Breadcrumb                 | Não há componente Breadcrumb em `src/components/ui`.                                                                                                 | Adicionar o primitivo Breadcrumb shadcn necessário, sem nova dependência.                                                             |
 
 ## 3. Contrato de dados e migration
 
@@ -81,7 +81,7 @@ Criar migration aditiva, por exemplo `prisma/migrations/<timestamp>_slice002_man
    - seção `Preparação dos conteúdos` com quantidade, formato e observações/restrições;
    - marcar com `*` Quantidade, Formato e Observações/restrições; o asterisco é apenas indicação visual;
    - validar todos os campos obrigatórios no HTML/cliente e servidor;
-   - preço em formato pt-BR, não negativo, com no máximo duas casas decimais, e moeda `BRL`, `USD` ou `EUR`, ambos obrigatórios;
+   - preço em formato pt-BR, não negativo, com no máximo duas casas decimais, e moeda `R$`, `USD` ou `EUR`, ambos obrigatórios;
    - defaults `20`, `Tanto faz` e notas obrigatórias, com limite de `300`;
    - ação `Salvar produto` e cancelamento para `/products`;
    - gerar uma única `Idempotency-Key` quando começar a tentativa lógica daquele formulário, guardar a chave durante a tentativa e reutilizá-la em todo retry após falha; não gerar nova chave a cada novo submit da mesma tentativa; limpar a chave somente após sucesso, cancelamento ou início de um novo formulário;
