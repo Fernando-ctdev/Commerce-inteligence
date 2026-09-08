@@ -265,14 +265,14 @@ export function validateProductManualDraft(
   return errors;
 }
 
-/* Preparação: quantidade 1–30, formato conhecido e notas até 300 caracteres. */
+/* Preparação: quantidade 1–10, formato conhecido e notas até 300 caracteres. */
 export function preparationIsWithinLimits(
   preparation: ContentPreparationPreferences,
 ) {
   return (
     Number.isInteger(preparation.targetContentCount) &&
     preparation.targetContentCount >= 1 &&
-    preparation.targetContentCount <= 30 &&
+    preparation.targetContentCount <= 10 &&
     ["on_camera", "hands_only_product", "either"].includes(
       preparation.creatorPresence,
     ) &&

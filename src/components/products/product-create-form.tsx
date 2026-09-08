@@ -487,7 +487,7 @@ export function ProductCreateForm({
     draftFromProduct(product),
   );
   const [version, setVersion] = useState(product?.version ?? 0);
-  const [quantity, setQuantity] = useState(product?.targetContentCount ?? 20);
+  const [quantity, setQuantity] = useState(product?.targetContentCount ?? 5);
   const [creatorPresence, setCreatorPresence] = useState<
     ContentPreparationPreferences["creatorPresence"]
   >(product?.creatorPresence ?? "either");
@@ -1072,7 +1072,7 @@ export function ProductCreateForm({
                   aria-label="Quantidade inicial de conteúdos"
                   className={styles.quantitySlider}
                   id={fieldId("targetContentCount")}
-                  max={30}
+                  max={10}
                   min={1}
                   onValueChange={(value) =>
                     setQuantity(
@@ -1084,7 +1084,7 @@ export function ProductCreateForm({
                 />
                 <div aria-hidden="true" className={styles.quantityBounds}>
                   <span>1</span>
-                  <span>30</span>
+                  <span>10</span>
                 </div>
               </div>
               <p

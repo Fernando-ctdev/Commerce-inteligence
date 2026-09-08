@@ -243,7 +243,7 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 - Exigir Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições.
 - Validar Preço como valor não negativo, válido e com no máximo duas casas decimais; Preço e Moeda são ambos obrigatórios.
 - Exibir `*` em Quantidade inicial de conteúdos, Formato do creator e Observações ou restrições; o asterisco é apenas indicação visual.
-- Iniciar Preparação dos conteúdos com quantidade default `20`, intervalo inteiro `1–30`, formato default `Tanto faz` e notas/restrições obrigatórias até `300` caracteres.
+- Iniciar Preparação dos conteúdos com quantidade default `5`, intervalo inteiro `1–10`, formato default `Tanto faz` e notas/restrições obrigatórias até `300` caracteres.
 - Validar todos os campos obrigatórios no HTML/cliente e no servidor.
 - Persistir as preferências de preparação como restrições da primeira geração, sem iniciar geração nesta etapa.
 - Salvar um `Product` com os fatos preenchidos, escopado ao `Tenant` resolvido pela sessão server-side.
@@ -259,7 +259,7 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 2. O formulário apresenta os campos e a seção de preparação do modal manual existente.
 3. Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições obrigatoriamente preenchidos bloqueiam o salvamento quando ausentes, vazios ou inválidos.
 4. Preço deve ser não negativo, válido e ter no máximo duas casas decimais; Moeda deve ser informada.
-5. A preparação usa defaults `20`, `1–30` e `Tanto faz`; Quantidade e Formato aparecem com `*`, e Observações ou restrições são obrigatórias e limitadas a `300` caracteres.
+5. A preparação usa defaults `5`, `1–10` e `Tanto faz`; Quantidade e Formato aparecem com `*`, e Observações ou restrições são obrigatórias e limitadas a `300` caracteres.
 6. O asterisco é apenas indicação visual; HTML/cliente e servidor validam os campos obrigatórios.
 7. O salvamento persiste os fatos preenchidos e as restrições da primeira geração sem iniciar geração ou criar job.
 8. O Product é escopado ao Tenant da sessão e não é visível para outro Tenant.

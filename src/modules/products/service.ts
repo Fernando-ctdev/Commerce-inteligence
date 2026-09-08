@@ -69,10 +69,10 @@ export const COMMISSION_TYPES = ["PERCENT", "AMOUNT"] as const;
 export type CommissionType = (typeof COMMISSION_TYPES)[number];
 
 // Defaults e limites da SPEC (RI-002/RI-003).
-export const DEFAULT_TARGET_CONTENT_COUNT = 20;
+export const DEFAULT_TARGET_CONTENT_COUNT = 5;
 export const DEFAULT_CREATOR_PRESENCE: CreatorPresence = "either";
 const QUANTITY_MIN = 1;
-const QUANTITY_MAX = 30;
+const QUANTITY_MAX = 10;
 const NOTES_MAX = 300;
 const CURRENCIES = ["R$", "USD", "EUR"];
 // Formato monetário não negativo: decimal canônico com ponto ou pt-BR com vírgula e milhar.
