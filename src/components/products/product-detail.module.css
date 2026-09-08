@@ -237,6 +237,7 @@
 }
 
 
+.saveAction,
 .archiveAction,
 .deleteAction {
   justify-content: flex-start;
