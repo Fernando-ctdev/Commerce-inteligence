@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Archive, ArchiveRestore } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { Archive, ArchiveRestore, CircleAlert, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -10,6 +11,7 @@ import { SectionSwitcher, SectionSwitcherContent, SectionSwitcherList, SectionSw
 
 import {
   archiveProduct,
+  deleteProduct,
   getProduct,
   ProductApiError,
   ProductRecord,
@@ -19,8 +21,10 @@ import {
   ContentsView,
   GenerationStatusCard,
   HistoryView,
+  OperationalSummaryCard,
   StrategyView,
 } from "./generation-views";
+import { formatCommission, formatPriceWithCurrency } from "./product-form-model";
 import { ProductCreateForm } from "./product-create-form";
 import { useGenerationJob } from "./use-generation-job";
 import styles from "./product-detail.module.css";
@@ -43,6 +47,9 @@ export function ProductDetail({ id }: { id: string }) {
   const [archiveConfirmationOpen, setArchiveConfirmationOpen] = useState(false);
   const [reactivateConfirmationOpen, setReactivateConfirmationOpen] =
     useState(false);
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -165,6 +172,26 @@ export function ProductDetail({ id }: { id: string }) {
     }
   }
 
+  async function remove() {
+    if (!product || deleting) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteProduct(product.id);
+      toast.success("Produto excluído.");
+      router.push("/products");
+    } catch (caught) {
+      const message =
+        caught instanceof ProductApiError
+          ? caught.message
+          : "Não foi possível excluir este produto agora.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <>
       {error && (
@@ -176,64 +203,14 @@ export function ProductDetail({ id }: { id: string }) {
         aria-labelledby="product-actions-title"
         className={styles.objectHeader}
       >
-        {product.imageReferences[0] &&
-        /^(?:https?:\/\/|data:image\/[a-z0-9.+-]+;base64,)/i.test(
-          product.imageReferences[0],
-        ) ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            alt={`Imagem de ${product.name}`}
-            className={styles.objectImage}
-            src={product.imageReferences[0]}
-          />
-        ) : null}
         <div className={styles.objectIdentity}>
           <p className={styles.eyebrow}>Produto</p>
           <h2 id="product-actions-title">{product.name}</h2>
           <p className={styles.objectFacts}>
-            {[
-              product.category,
-              product.price
-                ? `${product.price} ${product.priceCurrency}`.trim()
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
+            {formatPriceWithCurrency(product.price, product.priceCurrency)}
+            <span aria-hidden="true"> · </span>
+            ID {product.id}
           </p>
-          <span
-            aria-label={`Estado: ${product.readiness === "ANALYZING" ? "Analisando" : product.readiness === "READY" ? "Pronto" : product.readiness === "FAILED" ? "Falhou" : "Pendente"}`}
-            className={styles.objectStatus}
-            data-readiness={product.readiness}
-            role="status"
-          >
-            <span aria-hidden="true" className={styles.statusDot} />
-            {product.readiness === "ANALYZING"
-              ? "Analisando"
-              : product.readiness === "READY"
-                ? "Pronto"
-                : product.readiness === "FAILED"
-                  ? "Falhou"
-                  : "Pendente"}
-          </span>
-        </div>
-        <div className={styles.actionActions}>
-          <Button
-            aria-label={product.active ? "Arquivar produto" : "Reativar produto"}
-            onClick={() => {
-              setError(null);
-              if (product.active) setArchiveConfirmationOpen(true);
-              else setReactivateConfirmationOpen(true);
-            }}
-            size="icon"
-            title={product.active ? "Arquivar produto" : "Reativar produto"}
-            variant="outline"
-          >
-            {product.active ? (
-              <Archive aria-hidden="true" />
-            ) : (
-              <ArchiveRestore aria-hidden="true" />
-            )}
-          </Button>
         </div>
       </section>
       <ConfirmationDialog
@@ -258,6 +235,17 @@ export function ProductDetail({ id }: { id: string }) {
         pendingLabel="Reativando…"
         title="Reativar produto?"
       />
+      <ConfirmationDialog
+        confirmLabel="Excluir produto"
+        description={`O produto “${product.name}” será excluído permanentemente. Produtos com análises ou conteúdos não podem ser excluídos — nesses casos, use Arquivar.`}
+        error={error}
+        onConfirm={remove}
+        onOpenChange={setDeleteConfirmationOpen}
+        open={deleteConfirmationOpen}
+        pending={deleting}
+        pendingLabel="Excluindo…"
+        title="Excluir produto?"
+      />
       {product.active ? (
         <SectionSwitcher
           className={styles.tabs}
@@ -271,21 +259,67 @@ export function ProductDetail({ id }: { id: string }) {
             <SectionSwitcherTrigger value="history">Histórico</SectionSwitcherTrigger>
           </SectionSwitcherList>
           <SectionSwitcherContent className={styles.overviewContent} value="overview">
-            <GenerationStatusCard
-              className={styles.nextActionCard}
-              generationAction={product.generationAction}
-              onOpenContents={() => changeTab("contents")}
-              productName={product.name}
-              readiness={generation.readiness}
-              state={generation}
-              targetContentCount={product.targetContentCount}
-            />
-            <div className={styles.editSection}>
-              <ProductCreateForm
-                mode="edit"
-                onSaved={setProduct}
-                product={product}
-              />
+            {generation.failed && generation.job && (
+              <div className={styles.failureBanner} role="alert">
+                <CircleAlert aria-hidden="true" />
+                <p>A análise foi cancelada. Você pode tentar novamente.</p>
+              </div>
+            )}
+            <div className={styles.overviewLayout}>
+              <div className={styles.editCard}>
+                <ProductCreateForm
+                  mode="edit"
+                  onSaved={setProduct}
+                  product={product}
+                />
+              </div>
+              <aside className={styles.sideRail}>
+                <GenerationStatusCard
+                  className={styles.statusCard}
+                  generationAction={product.generationAction}
+                  onOpenContents={() => changeTab("contents")}
+                  productName={product.name}
+                  readiness={generation.readiness}
+                  state={generation}
+                  targetContentCount={product.targetContentCount}
+                />
+                <OperationalSummaryCard
+                  className={styles.statusCard}
+                  job={generation.job}
+                  readiness={generation.readiness}
+                />
+                <section aria-labelledby="product-actions-card-title" className={styles.sideCard}>
+                  <div className={styles.sideCardHeading}>
+                    <Archive aria-hidden="true" />
+                    <h2 id="product-actions-card-title">Ações</h2>
+                  </div>
+                  <Button
+                    className={styles.archiveAction}
+                    onClick={() => {
+                      setError(null);
+                      if (product.active) setArchiveConfirmationOpen(true);
+                      else setReactivateConfirmationOpen(true);
+                    }}
+                    type="button"
+                    variant="ghost"
+                  >
+                    {product.active ? <Archive aria-hidden="true" /> : <ArchiveRestore aria-hidden="true" />}
+                    {product.active ? "Arquivar produto" : "Reativar produto"}
+                  </Button>
+                  <Button
+                    className={styles.deleteAction}
+                    onClick={() => {
+                      setError(null);
+                      setDeleteConfirmationOpen(true);
+                    }}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Trash2 aria-hidden="true" />
+                    Excluir produto
+                  </Button>
+                </section>
+              </aside>
             </div>
           </SectionSwitcherContent>
           <SectionSwitcherContent value="strategy">
@@ -302,11 +336,20 @@ export function ProductDetail({ id }: { id: string }) {
           </SectionSwitcherContent>
         </SectionSwitcher>
       ) : (
-        <ProductCreateForm
-          mode="edit"
-          onSaved={setProduct}
-          product={product}
-        />
+        <div className={styles.archivedLayout}>
+          <ProductCreateForm
+            mode="edit"
+            onSaved={setProduct}
+            product={product}
+          />
+          <section aria-labelledby="product-actions-card-title" className={styles.sideCard}>
+            <div className={styles.sideCardHeading}>
+              <ArchiveRestore aria-hidden="true" />
+              <h2 id="product-actions-card-title">Produto arquivado</h2>
+            </div>
+            <p>Este produto não aparece entre os produtos ativos.</p>
+          </section>
+        </div>
       )}
     </>
   );

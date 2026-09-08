@@ -50,7 +50,7 @@ export function statusMessage(status: CommerceJobStatus, productName?: string) {
   if (status === "QUEUED") return `${productName ? `${productName} foi confirmado. ` : ""}A análise começará em breve.`;
   if (status === "RUNNING") return "A análise continua em segundo plano. Você pode continuar usando a aplicação.";
   if (status === "SUCCEEDED") return "Seu produto está pronto para revisão.";
-  if (status === "CANCELLED") return "A análise foi cancelada. Você pode tentar novamente.";
+  if (status === "CANCELLED") return "A análise foi cancelada.";
   return "Não foi possível concluir a análise. Seus dados permanecem preservados.";
 }
 
@@ -87,4 +87,38 @@ export function isToastDismissed(dismissedSnapshot: string | null, job: { id: st
   if (!job) return true;
   if (!dismissedSnapshot) return false;
   return dismissedSnapshot === `${job.id}:${job.status}`;
+}
+
+/** Estado de cada fase pública do job, derivado apenas de status + stage. */
+export type PhaseState = "done" | "active" | "failed" | "pending";
+
+export const phaseStateLabels: Record<PhaseState, string> = {
+  active: "Em andamento",
+  done: "Concluída",
+  failed: "Falhou",
+  pending: "Aguardando",
+};
+
+const stageOrder = Object.keys(stageMessages) as CommerceJobStage[];
+
+/**
+ * Log operacional das fases públicas (B-003-05): o worker persiste cada stage
+ * antes do trabalho, então o stage atual é a fase em execução — ou, em job
+ * terminal malsucedido, a fase onde a falha ocorreu. Nenhuma fase inventada.
+ */
+export function phaseStates(
+  status: CommerceJobStatus,
+  stage: CommerceJobStage | null,
+): Array<{ stage: CommerceJobStage; state: PhaseState }> {
+  const currentIndex = stage ? stageOrder.indexOf(stage) : -1;
+  return stageOrder.map((current) => {
+    if (status === "SUCCEEDED") return { stage: current, state: "done" };
+    if (currentIndex < 0) return { stage: current, state: "pending" };
+    const index = stageOrder.indexOf(current);
+    if (index < currentIndex) return { stage: current, state: "done" };
+    if (index === currentIndex) {
+      return { stage: current, state: status === "FAILED" || status === "CANCELLED" ? "failed" : "active" };
+    }
+    return { stage: current, state: "pending" };
+  });
 }

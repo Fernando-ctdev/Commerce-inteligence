@@ -258,6 +258,57 @@
   margin: 0;
 }
 
+.phaseList {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.phaseItem {
+  align-items: baseline;
+  border-left: 2px solid var(--color-border);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding-left: 10px;
+}
+
+.phaseName {
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.phaseStatus {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.phaseItem[data-state="done"] .phaseStatus {
+  color: var(--color-success);
+}
+
+.phaseItem[data-state="active"] {
+  border-left-color: var(--color-brand);
+}
+
+.phaseItem[data-state="active"] .phaseStatus {
+  color: var(--color-brand);
+}
+
+.phaseItem[data-state="failed"] {
+  border-left-color: var(--color-danger);
+}
+
+.phaseItem[data-state="failed"] .phaseStatus {
+  color: var(--color-danger);
+}
+
 .dimensions {
   border-block: 1px solid var(--color-border);
   display: grid;

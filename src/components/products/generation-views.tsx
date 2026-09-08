@@ -10,6 +10,9 @@ import {
   blockedActionCopy,
   canCancelGeneration,
   generationStatusLabel,
+  isActiveGeneration,
+  phaseStateLabels,
+  phaseStates,
   stageMessage,
   statusLabels,
   statusMessage,
@@ -153,6 +156,54 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
           pendingLabel="Cancelando…"
           title="Cancelar análise?"
         />
+      )}
+    </section>
+  );
+}
+
+/**
+ * Visão geral: resumo operacional da Commerce Intelligence — log das fases
+ * públicas do job (stages reais, sem percentual/ETA), atualizado pelo polling.
+ * Substitui o antigo card "Resumo do produto" baseado em cadastro.
+ */
+export function OperationalSummaryCard({ className, job, readiness }: {
+  className?: string;
+  job: GenerationRecord | null;
+  readiness: GenerationRecord["readiness"];
+}) {
+  const phases = job ? phaseStates(job.status, job.stage) : null;
+  const failed = !!job && !isActiveGeneration(job.status) && job.status !== "SUCCEEDED";
+  return (
+    <section aria-labelledby="operational-summary-title" className={[styles.panel, className].filter(Boolean).join(" ")}>
+      <div className={styles.heading}>
+        <p className={styles.eyebrow}>Commerce Intelligence</p>
+        <h2 id="operational-summary-title">Resumo operacional</h2>
+        {!job && readiness === "PENDING" && (
+          <p>Nenhuma análise ainda. Use “Analisar produto” para gerar a estratégia e os Briefings deste produto.</p>
+        )}
+        {!job && readiness !== "PENDING" && <p aria-busy="true">Recuperando o estado da análise...</p>}
+      </div>
+      {job && phases && (
+        <>
+          <div
+            aria-live={failed ? "assertive" : "polite"}
+            className={styles.state}
+            role={failed ? "alert" : "status"}
+          >
+            <p className={styles.stateLine}>
+              <strong>{statusLabels[job.status]}</strong>
+              {failed && job.error ? ` · ${job.error}` : ""}
+            </p>
+          </div>
+          <ol className={styles.phaseList}>
+            {phases.map((phase) => (
+              <li className={styles.phaseItem} data-state={phase.state} key={phase.stage}>
+                <span className={styles.phaseName}>{stageMessage(phase.stage)}</span>
+                <span className={styles.phaseStatus}>{phaseStateLabels[phase.state]}</span>
+              </li>
+            ))}
+          </ol>
+        </>
       )}
     </section>
   );
