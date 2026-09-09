@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import styles from "./today-empty.module.css";
@@ -13,6 +14,7 @@ export function TodayEmpty() {
         claro de gravação.
       </p>
       <Button className="w-fit" nativeButton={false} render={<Link href="/products/new" />} size="lg">
+        <Plus aria-hidden="true" />
         Adicionar produto
       </Button>
     </section>

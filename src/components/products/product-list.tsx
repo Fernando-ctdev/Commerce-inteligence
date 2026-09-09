@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowRight, Plus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionSwitcher, SectionSwitcherList, SectionSwitcherTrigger } from "@/components/ui/section-switcher";
 
@@ -67,6 +68,7 @@ export function ProductList() {
           </p>
         </div>
         <Link className={styles.primaryButton} href="/products/new">
+          <Plus aria-hidden="true" />
           Adicionar produto
         </Link>
       </div>
@@ -116,7 +118,7 @@ export function ProductList() {
               </div>
               <Skeleton
                 className={styles.cardAction}
-                style={{ blockSize: 16, inlineSize: 96 }}
+                style={{ blockSize: 44, inlineSize: "100%" }}
               />
             </li>
           ))}
@@ -233,6 +235,7 @@ export function ProductList() {
                   className={styles.cardAction}
                   href={`/products/${encodeURIComponent(product.id)}`}
                 >
+                  <ArrowRight aria-hidden="true" />
                   {product.active ? "Abrir produto" : "Consultar produto"}
                 </Link>
               </li>

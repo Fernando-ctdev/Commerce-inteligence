@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { ProductShell } from "@/components/products/product-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import listStyles from "@/components/products/product-list.module.css";
@@ -20,6 +21,7 @@ export default function ProductsLoading() {
             className={listStyles.primaryButton}
             style={{ pointerEvents: "none" }}
           >
+            <Plus aria-hidden="true" />
             Adicionar produto
           </span>
         </div>
@@ -78,7 +80,7 @@ export default function ProductsLoading() {
               </div>
               <Skeleton
                 className={listStyles.cardAction}
-                style={{ blockSize: 16, inlineSize: 96 }}
+                style={{ blockSize: 44, inlineSize: "100%" }}
               />
             </li>
           ))}

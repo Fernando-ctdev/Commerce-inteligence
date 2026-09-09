@@ -253,12 +253,21 @@
   display: flex;
   font-size: 14px;
   font-weight: 700;
+  gap: 8px;
   justify-content: center;
   margin-top: auto;
   min-height: 44px;
   padding: 12px 14px;
   text-align: center;
   text-decoration: none;
+}
+
+/* Links no padrão botão: ícone de traço 16px, como nos Buttons. */
+.primaryButton > svg,
+.cardAction > svg {
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
 }
 
 .card > a.cardAction {
@@ -351,6 +360,7 @@
   display: inline-flex;
   font-size: 15px;
   font-weight: 700;
+  gap: 8px;
   justify-content: center;
   min-height: 44px;
   padding: 10px 16px;
