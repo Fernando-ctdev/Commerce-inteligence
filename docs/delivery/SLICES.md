@@ -309,7 +309,7 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 
 **Scope:**
 
-- Revisar Briefings no contexto do Produto, com navegação fluida entre 10, 20 ou mais contents (lista lateral, não dezenas de abas).
+- Revisar Briefings no contexto do Produto, com navegação fluida entre os contents.
 - Editar qualquer briefing (hook, script, cenas, CTA, título interno, observações) criando nova `ContentBriefVersion`.
 - Aprovar fixando a versão exata (`approvedBriefVersionId`); edição posterior a aprovado exige nova aprovação para futuras execuções.
 - Descartar (`DISCARDED`) preservando o Content e suas versões como memória — nunca exclusão destrutiva.

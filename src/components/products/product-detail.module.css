@@ -71,9 +71,9 @@
 
 .objectIdentity h2 {
   color: var(--color-text);
-  font-size: 34px;
+  font-size: 32px;
   letter-spacing: -0.04em;
-  line-height: 1.1;
+  line-height: 36px;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -154,8 +154,13 @@
 
 .failureBanner {
   align-items: center;
-  background: #fffbf1;
-  border: 1px solid #eadfbd;
+  background: color-mix(
+    in srgb,
+    var(--color-warning) 10%,
+    var(--color-surface)
+  );
+  border: 1px solid
+    color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
   border-radius: 10px;
   color: var(--color-text);
   display: flex;
@@ -165,7 +170,7 @@
 }
 
 .failureBanner > svg {
-  color: #d99600;
+  color: var(--color-warning);
   flex: 0 0 auto;
 }
 
@@ -234,7 +239,6 @@
   line-height: 22px;
   margin: 0;
 }
-
 
 .saveAction,
 .archiveAction,

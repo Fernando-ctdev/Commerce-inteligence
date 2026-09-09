@@ -1,6 +1,6 @@
 .page {
   align-items: center;
-  background: #f7f8fb;
+  background: var(--color-canvas);
   display: grid;
   min-height: 100dvh;
   padding: clamp(16px, 3dvh, 28px) 20px;
@@ -8,7 +8,7 @@
 
 .surface {
   background: var(--color-surface);
-  border: 1px solid #dfe2e8;
+  border: 1px solid var(--color-border);
   border-radius: 16px;
   box-shadow: 0 16px 40px rgb(24 32 56 / 8%);
   display: grid;
@@ -47,7 +47,7 @@
 }
 
 .intro h1 {
-  color: #171a22;
+  color: var(--color-text);
   font-size: 36px;
   letter-spacing: -0.04em;
   line-height: 1.08;
@@ -75,7 +75,7 @@
 }
 
 .modeSwitch {
-  background: #f0f1f4;
+  background: var(--color-surface-secondary);
   border-radius: 10px;
   display: grid;
   gap: 4px;
@@ -99,7 +99,7 @@
 .modeActive {
   background: var(--color-surface);
   box-shadow: 0 1px 4px rgb(24 32 56 / 10%);
-  color: #2944ae;
+  color: var(--color-action);
   font-weight: 700;
 }
 
@@ -121,7 +121,7 @@
 }
 
 .field label {
-  color: #171a22;
+  color: var(--color-text);
   font-size: 16px;
   font-weight: 700;
   line-height: 22px;
@@ -129,7 +129,7 @@
 
 .inputWrap {
   align-items: center;
-  border: 1px solid #d7dbe3;
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   display: flex;
   min-height: 54px;
@@ -145,7 +145,7 @@
 }
 
 .inputIcon {
-  color: #7f8794;
+  color: var(--color-text-secondary);
   flex: 0 0 auto;
 }
 
@@ -161,7 +161,7 @@
 }
 
 .field input::placeholder {
-  color: #8a909b;
+  color: var(--color-text-muted);
 }
 
 .field input[aria-invalid="true"] {
@@ -172,7 +172,7 @@
   align-items: center;
   background: transparent;
   border: 0;
-  color: #7f8794;
+  color: var(--color-text-secondary);
   cursor: pointer;
   display: inline-flex;
   justify-content: center;
@@ -205,10 +205,10 @@
 }
 
 .submit {
-  background: #3d4bd1;
-  border: 1px solid #3d4bd1;
+  background: var(--color-action);
+  border: 1px solid var(--color-action);
   border-radius: 10px;
-  color: #fff;
+  color: var(--color-on-action);
   cursor: pointer;
   font-size: 18px;
   font-weight: 700;
