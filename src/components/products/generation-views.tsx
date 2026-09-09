@@ -457,13 +457,6 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
       </div>
       {(strategy.active || contentsReady) && (
         <aside className={styles.strategyAside}>
-          {strategy.active && (
-            <section className={styles.asideCard}>
-              <h2>Estratégia</h2>
-              <p className={styles.asideStatus}>Ativa</p>
-              <p>Esta estratégia orienta os conteúdos deste produto.</p>
-            </section>
-          )}
           {contentsReady && (
             <section className={styles.asideCard}>
               <h2>Conteúdos</h2>
@@ -471,8 +464,18 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
                 {job.targetContentCount} {job.targetContentCount === 1 ? "conteúdo preparado" : "conteúdos preparados"} com esta estratégia
               </p>
               {onOpenContents && (
-                <Button onClick={onOpenContents} type="button" variant="outline">Ver conteúdos</Button>
+                <Button className={styles.asideAction} onClick={onOpenContents} type="button">
+                  <Clapperboard aria-hidden="true" />
+                  Ver conteúdos
+                </Button>
               )}
+            </section>
+          )}
+          {strategy.active && (
+            <section className={styles.asideCard}>
+              <h2>Estratégia</h2>
+              <p className={styles.asideStatus}>Ativa</p>
+              <p>Esta estratégia orienta os conteúdos deste produto.</p>
             </section>
           )}
         </aside>
