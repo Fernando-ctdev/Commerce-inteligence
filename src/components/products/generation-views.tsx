@@ -157,14 +157,14 @@ function EmptyRegion({ children }: { children: React.ReactNode }) {
 }
 
 /** Aba Visão geral: estado do job, ação primária, bloqueio preventivo e cancelamento (só QUEUED). */
-export function GenerationStatusCard({ className, productName, targetContentCount, readiness, state, generationAction, onOpenContents }: {
+export function GenerationStatusCard({ className, productName, targetContentCount, readiness, state, generationAction, onOpenStrategy }: {
   className?: string;
   productName: string;
   targetContentCount: number;
   readiness: GenerationRecord["readiness"];
   state: GenerationState;
   generationAction?: GenerationActionProjection;
-  onOpenContents: () => void;
+  onOpenStrategy: () => void;
 }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const { job, busy, error, active, failed, blockedByOther, start, retry, cancel } = state;
@@ -181,7 +181,7 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
     : failed && job
       ? "Análise interrompida"
       : job?.status === "SUCCEEDED"
-        ? "Revisão de conteúdos"
+        ? "Revisar estratégia"
         : "Analisar produto";
   const idleHeading = !active && !failed && job?.status !== "SUCCEEDED";
   return (
@@ -223,7 +223,7 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
             <strong>{statusLabels[job.status]}</strong> · {statusMessage(job.status, productName)}
           </p>
           <div className={styles.actions}>
-            <Button onClick={onOpenContents} type="button">Revisar conteúdos</Button>
+            <Button onClick={onOpenStrategy} type="button">Revisar estratégia</Button>
           </div>
         </div>
       ) : (

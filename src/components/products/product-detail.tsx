@@ -388,7 +388,7 @@ export function ProductDetail({ id }: { id: string }) {
                 <GenerationStatusCard
                   className={styles.statusCard}
                   generationAction={product.generationAction}
-                  onOpenContents={() => changeTab("contents")}
+                  onOpenStrategy={() => changeTab("strategy")}
                   productName={product.name}
                   readiness={generation.readiness}
                   state={generation}
