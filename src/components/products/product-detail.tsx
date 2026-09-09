@@ -108,7 +108,7 @@ function ProductSummaryPanel({ product }: { product: ProductRecord }) {
       {product.url && (
         <dl className={styles.summaryFacts}>
           <div className={styles.summaryFact}>
-            <dt>URL do produto</dt>
+            <dt>Link do produto</dt>
             <dd>
               <a
                 className={styles.summaryLink}
@@ -318,21 +318,6 @@ export function ProductDetail({ id }: { id: string }) {
             ID {product.id}
           </p>
         </div>
-        {product.active && (
-          <div className={styles.actionActions}>
-            {editing ? (
-              <Button onClick={stopEdit} type="button" variant="outline">
-                <X aria-hidden="true" />
-                Cancelar alterações
-              </Button>
-            ) : (
-              <Button onClick={startEdit} ref={editButtonRef} type="button">
-                <Pencil aria-hidden="true" />
-                Editar produto
-              </Button>
-            )}
-          </div>
-        )}
       </section>
       <ConfirmationDialog
         confirmLabel="Arquivar produto"
@@ -423,6 +408,30 @@ export function ProductDetail({ id }: { id: string }) {
                     <Button className={styles.saveAction} form="product-edit-form" type="submit" variant="ghost">
                       <Save aria-hidden="true" />
                       Salvar alterações
+                    </Button>
+                  )}
+                  {/* Alternância editar/cancelar no mesmo slot: o foco nunca
+                      se perde e o rótulo comunica o próximo passo. */}
+                  {editing ? (
+                    <Button
+                      className={styles.saveAction}
+                      onClick={stopEdit}
+                      type="button"
+                      variant="ghost"
+                    >
+                      <X aria-hidden="true" />
+                      Cancelar alterações
+                    </Button>
+                  ) : (
+                    <Button
+                      className={styles.saveAction}
+                      onClick={startEdit}
+                      ref={editButtonRef}
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Pencil aria-hidden="true" />
+                      Editar produto
                     </Button>
                   )}
                   <Button

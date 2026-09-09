@@ -87,13 +87,6 @@
   margin: 0;
 }
 
-.actionActions {
-  align-items: center;
-  display: flex;
-  flex-shrink: 0;
-  gap: 8px;
-}
-
 .archiveButton {
   min-height: 44px;
 }
@@ -405,9 +398,6 @@
     font-size: 28px;
   }
 
-  .actionActions {
-    justify-content: flex-start;
-  }
 
   .failureBanner {
     align-items: start;
