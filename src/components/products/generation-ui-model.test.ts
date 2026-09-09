@@ -15,6 +15,7 @@ import {
   phaseStateLabels,
   phaseStates,
   stageMessage,
+  strategyModel,
 } from "./generation-ui-model";
 
 test("mapeia estados e stages públicos para mensagens humanas", () => {
@@ -120,6 +121,45 @@ test("deriva o log de fases apenas dos stages públicos", () => {
     "done", "done", "done", "done", "failed", "skipped",
   ]);
   assert.equal(phaseStates("FAILED", "GENERATING_BRIEFS")[4].stage, "GENERATING_BRIEFS");
-  assert.equal(phaseStateLabels.skipped, "Cancelada");
+  assert.equal(phaseStateLabels.skipped, "Cancelado");
+});
+
+test("modelo da Strategy expõe só campos presentes e deriva vínculos por match exato", () => {
+  const model = strategyModel({
+    primaryPositioning: " Posicionamento ",
+    status: "ACTIVE",
+    audiences: ["Público A", "Público B"],
+    priorityBenefits: ["Benefício 1"],
+    priorityObjections: ["Objeção 1"],
+    priorityArguments: ["Argumento 1"],
+    priorityAngles: ["Ângulo 1"],
+    communicationPrinciples: ["Princípio 1"],
+    communicationRisks: ["Risco 1"],
+    opportunities: [
+      { audience: "Público A", situation: "Situação A", pain: "Dor 1", desire: "Desejo 1", objection: "Objeção 1", sellingArgument: "Argumento vinculado" },
+      { audience: "Público A", situation: "Situação duplicada", pain: "Dor 1", desire: "Desejo 2" },
+    ],
+  });
+  assert.equal(model.positioning, "Posicionamento");
+  assert.equal(model.active, true);
+  assert.deepEqual(model.pains, ["Dor 1"]);
+  assert.deepEqual(model.desires, ["Desejo 1", "Desejo 2"]);
+  // Primeiro match exato apenas; relações inexistentes não são criadas.
+  assert.equal(model.audienceSituations.get("Público A"), "Situação A");
+  assert.equal(model.audienceSituations.get("Público B"), undefined);
+  assert.equal(model.objectionArguments.get("Objeção 1"), "Argumento vinculado");
+  assert.equal(model.objectionArguments.get("Inexistente"), undefined);
+});
+
+test("modelo da Strategy tolera payload vazio ou malformado", () => {
+  const empty = strategyModel(null);
+  assert.equal(empty.positioning, "");
+  assert.equal(empty.active, false);
+  assert.deepEqual(empty.audiences, []);
+  assert.deepEqual(empty.pains, []);
+  assert.equal(empty.audienceSituations.size, 0);
+  const partial = strategyModel({ audiences: "não-lista", opportunities: [null, 42, { pain: " " }] });
+  assert.deepEqual(partial.audiences, []);
+  assert.deepEqual(partial.pains, []);
 });
 

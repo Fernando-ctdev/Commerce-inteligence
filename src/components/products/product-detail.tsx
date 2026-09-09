@@ -336,7 +336,7 @@ export function ProductDetail({ id }: { id: string }) {
             </div>
           </SectionSwitcherContent>
           <SectionSwitcherContent value="strategy">
-            <StrategyView job={generation.job} />
+            <StrategyView job={generation.job} onOpenContents={() => changeTab("contents")} />
           </SectionSwitcherContent>
           <SectionSwitcherContent value="contents">
             <ContentsView
