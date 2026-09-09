@@ -110,10 +110,9 @@
   margin: 0;
 }
 
-.confirmActions {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
+/* Ação destrutiva: danger como semântica no gatilho, como .deleteAction. */
+.logoutAction {
+  color: var(--color-danger);
 }
 
 .field {

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import styles from "./settings-view.module.css";
@@ -132,29 +132,25 @@ export function SettingsView({ email }: SettingsViewProps) {
             {error}
           </p>
         )}
-        <Dialog
-          onOpenChange={(next) => {
-            if (!pending) setConfirmOpen(next);
-          }}
-          open={confirmOpen}
+        <Button
+          className={styles.logoutAction}
+          disabled={pending}
+          onClick={() => setConfirmOpen(true)}
+          variant="outline"
         >
-          <Button disabled={pending} onClick={() => setConfirmOpen(true)} variant="outline">
-            Sair{pending && " — saindo"}
-          </Button>
-          <DialogContent>
-            <DialogTitle>Sair da conta?</DialogTitle>
-            <DialogDescription>
-              Isso encerra a sessão deste navegador. Seus dados permanecem
-              preservados no workspace.
-            </DialogDescription>
-            <div className={styles.confirmActions}>
-              <Button onClick={() => setConfirmOpen(false)} variant="outline">
-                Cancelar
-              </Button>
-              <Button onClick={() => void logout()}>Sair</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+          Sair
+        </Button>
+        <ConfirmationDialog
+          confirmLabel="Sair"
+          destructive
+          description="Isso encerra a sessão deste navegador. Seus dados permanecem preservados no workspace."
+          onConfirm={logout}
+          onOpenChange={setConfirmOpen}
+          open={confirmOpen}
+          pending={pending}
+          pendingLabel="Saindo…"
+          title="Sair da conta?"
+        />
       </section>
     </div>
   );
