@@ -152,6 +152,61 @@ export function strategyModel(strategy: Record<string, unknown> | null): Strateg
   };
 }
 
+/**
+ * Revisão de Briefings (aba Conteúdos): projeção somente leitura dos campos
+ * reais do payload; campos estratégicos opcionais do PRD ficam vazios quando
+ * ausentes — nada é inventado na UI.
+ */
+export type BriefingItem = {
+  id: string;
+  position: number;
+  status: string;
+  angle: string;
+  hook: string;
+  script: string;
+  scenes: string[];
+  cta: string;
+  objective: string;
+  targetAudience: string;
+  pain: string;
+  desire: string;
+  benefit: string;
+  objection: string;
+};
+
+/** Estados de revisão do Content; nunca misturar com estados do Estúdio. */
+export const contentStatusLabels: Record<string, string> = {
+  DRAFT: "Rascunho",
+  APPROVED: "Aprovado",
+  DISCARDED: "Descartado",
+};
+
+export const contentStatusLabel = (status: string) => contentStatusLabels[status] ?? status;
+
+export const contentsSummaryLabel = (total: number, approved: number) =>
+  approved > 0 ? `${total} conteúdos · ${approved} aprovados` : `${total} conteúdos`;
+
+export function briefingItems(contents: Array<Record<string, unknown>>): BriefingItem[] {
+  return contents
+    .map((content, index): BriefingItem => ({
+      id: text(content.id) || `conteudo-${index + 1}`,
+      position: typeof content.position === "number" ? content.position : index + 1,
+      status: text(content.status) || "DRAFT",
+      angle: text(content.angle),
+      hook: text(content.hook),
+      script: text(content.script),
+      scenes: strings(content.scenes),
+      cta: text(content.cta),
+      objective: text(content.objective),
+      targetAudience: text(content.targetAudience),
+      pain: text(content.pain),
+      desire: text(content.desire),
+      benefit: text(content.benefit),
+      objection: text(content.objection),
+    }))
+    .sort((a, b) => a.position - b.position);
+}
+
 /** Estado de cada fase pública do job, derivado apenas de status + stage. */
 export type PhaseState = "done" | "active" | "failed" | "pending" | "skipped";
 

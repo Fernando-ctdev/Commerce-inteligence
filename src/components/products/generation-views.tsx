@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, CircleAlert, Hourglass, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleAlert, Hourglass, X } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Button } from "@/components/ui/button";
 
@@ -17,7 +17,11 @@ import {
   stageMessage,
   statusLabels,
   statusMessage,
+  briefingItems,
+  contentStatusLabel,
+  contentsSummaryLabel,
   strategyModel,
+  type BriefingItem,
   type GenerationActionProjection,
 } from "./generation-ui-model";
 import styles from "./generation-panel.module.css";
@@ -34,40 +38,70 @@ export type GenerationState = {
   retry: () => Promise<void>;
 };
 
-function text(value: unknown) { return typeof value === "string" ? value : ""; }
-function strings(value: unknown) { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : []; }
+const pad2 = (value: number) => String(value).padStart(2, "0");
 
-type BriefingItem = { id: string; position: number; status: string; angle: string; hook: string; script: string; scenes: string[]; cta: string };
-const briefingStatusLabels: Record<string, string> = { DRAFT: "Rascunho" };
-function briefings(contents: Array<Record<string, unknown>>): BriefingItem[] {
-  return contents.map((content, index): BriefingItem => ({
-    id: text(content.id) || `conteudo-${index + 1}`,
-    position: typeof content.position === "number" ? content.position : index + 1,
-    status: text(content.status) || "DRAFT",
-    angle: text(content.angle),
-    hook: text(content.hook),
-    script: text(content.script),
-    scenes: strings(content.scenes),
-    cta: text(content.cta),
-  })).sort((a, b) => a.position - b.position);
-}
-
-function BriefingList({ items }: { items: BriefingItem[] }) {
-  return <ol className={styles.list}>
-    {items.map((item) => <li className={styles.contentItem} key={item.id}>
-      <p><strong>{`Conteúdo ${item.position}`}</strong> · {briefingStatusLabels[item.status] ?? item.status}</p>
-      <p className={styles.hook}>{item.hook}</p>
-      <p>{item.angle}</p>
-      <details className={styles.disclosure}>
-        <summary>Roteiro</summary>
-        <div className={styles.detailBlock}>
-          <p>{item.script}</p>
-          <ol>{item.scenes.map((scene, index) => <li key={index}>{scene}</li>)}</ol>
-          <p><strong>CTA:</strong> {item.cta}</p>
-        </div>
-      </details>
-    </li>)}
-  </ol>;
+/**
+ * Painel do Briefing selecionado: hook dominante, roteiro/cenas/CTA sempre
+ * visíveis e estratégia profunda em progressive disclosure ("Por que este
+ * conteúdo?"). Somente leitura — ações de Edição/Aprovação dependem de
+ * capability de backend ainda não exposta.
+ */
+function BriefingDetail({ index, item, onBack, onNavigate, total }: {
+  index: number;
+  item: BriefingItem;
+  onBack: () => void;
+  onNavigate: (nextIndex: number) => void;
+  total: number;
+}) {
+  /* Disclosure só existe quando há dado real do PRD; nada inventado. */
+  const deep = [
+    ["Público", item.targetAudience],
+    ["Dor", item.pain],
+    ["Desejo", item.desire],
+    ["Benefício", item.benefit],
+    ["Objeção", item.objection],
+  ].filter((pair): pair is [string, string] => !!pair[1]);
+  return (
+    <article className={styles.detail}>
+      <Button className={styles.mobileBack} onClick={onBack} type="button" variant="outline">
+        <ArrowLeft aria-hidden="true" />
+        Conteúdos
+      </Button>
+      <header className={styles.detailHeader}>
+        <h3 className={styles.detailTitle}>{`Conteúdo ${pad2(item.position)}`}</h3>
+        <p className={styles.detailStatus}>{contentStatusLabel(item.status)}</p>
+      </header>
+      <p className={styles.briefingHook}>{item.hook}</p>
+      {item.objective && <p><strong>Objetivo:</strong> {item.objective}</p>}
+      {item.angle && <p><strong>Ângulo:</strong> {item.angle}</p>}
+      <div className={styles.detailBlock}>
+        <p className={styles.sectionLead}>Roteiro</p>
+        <p>{item.script}</p>
+        <p className={styles.sectionLead}>Cenas</p>
+        <ol>{item.scenes.map((scene, sceneIndex) => <li key={sceneIndex}>{scene}</li>)}</ol>
+        <p><strong>CTA:</strong> {item.cta}</p>
+      </div>
+      {deep.length > 0 && (
+        <details className={styles.disclosure}>
+          <summary>Por que este conteúdo?</summary>
+          <div className={styles.detailBlock}>
+            {deep.map(([label, value]) => <p key={label}><strong>{label}:</strong> {value}</p>)}
+          </div>
+        </details>
+      )}
+      <nav aria-label={`Navegação entre conteúdos: conteúdo ${index + 1} de ${total}`} className={styles.contentsNav}>
+        <Button disabled={index <= 0} onClick={() => onNavigate(index - 1)} type="button" variant="outline">
+          <ChevronLeft aria-hidden="true" />
+          Anterior
+        </Button>
+        <span>{`${index + 1} de ${total}`}</span>
+        <Button disabled={index >= total - 1} onClick={() => onNavigate(index + 1)} type="button" variant="outline">
+          Próximo
+          <ChevronRight aria-hidden="true" />
+        </Button>
+      </nav>
+    </article>
+  );
 }
 
 function EmptyRegion({ children }: { children: React.ReactNode }) {
@@ -362,22 +396,78 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
   );
 }
 
-/** Aba Conteúdos: Briefings em DRAFT por posição; nunca exibe resultado parcial. */
+/**
+ * Aba Conteúdos: estação de revisão de Briefings em master-detail — lista
+ * compacta para navegar (escala para 20+), painel do Briefing selecionado.
+ * Mobile usa fluxo lista → detalhe; nunca exibe resultado parcial.
+ */
 export function ContentsView({ job, active }: { job: GenerationRecord | null; active: boolean }) {
-  return (
-    <section className={styles.panel} id="generated-contents">
-      {active ? (
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  if (active) {
+    return (
+      <section className={styles.panel} id="generated-contents">
         <p>A análise está em andamento. Os Briefings aparecem aqui quando concluir — nenhum conteúdo parcial é exibido.</p>
-      ) : !job || job.status !== "SUCCEEDED" ? (
+      </section>
+    );
+  }
+  if (!job || job.status !== "SUCCEEDED") {
+    return (
+      <section className={styles.panel} id="generated-contents">
         <p>Os Briefings aparecem aqui quando a análise concluir.</p>
-      ) : job.contents.length !== job.targetContentCount ? (
+      </section>
+    );
+  }
+  if (job.contents.length !== job.targetContentCount) {
+    return (
+      <section className={styles.panel} id="generated-contents">
         <p role="alert">Os conteúdos ainda não estão prontos. Nenhum resultado parcial será apresentado. Tente novamente em instantes.</p>
-      ) : (
-        <>
-          <h3 className={styles.listTitle}>Conteúdos para revisão</h3>
-          <BriefingList items={briefings(job.contents)} />
-        </>
-      )}
+      </section>
+    );
+  }
+  const items = briefingItems(job.contents);
+  const approved = items.filter((item) => item.status === "APPROVED").length;
+  const selectedIndex = items.findIndex((item) => item.id === selectedId);
+  const selected = selectedIndex >= 0 ? items[selectedIndex] : null;
+  return (
+    <section aria-labelledby="contents-title" className={styles.panel} id="generated-contents">
+      <header className={styles.contentsHeader}>
+        <h2 id="contents-title">Conteúdos</h2>
+        <p>{contentsSummaryLabel(items.length, approved)}</p>
+      </header>
+      <div className={styles.contentsLayout} data-selected={selected ? "true" : "false"}>
+        <ol aria-label="Lista de conteúdos" className={styles.contentsList}>
+          {items.map((item) => (
+            <li key={item.id}>
+              <button
+                aria-current={item.id === selected?.id ? "true" : undefined}
+                className={styles.contentRow}
+                data-selected={item.id === selected?.id ? "true" : undefined}
+                onClick={() => setSelectedId(item.id)}
+                type="button"
+              >
+                <span className={styles.contentRowPosition}>{pad2(item.position)}</span>
+                <span className={styles.contentRowHook}>{item.hook}</span>
+                <span className={styles.contentRowMeta}>
+                  {[item.angle, contentStatusLabel(item.status)].filter(Boolean).join(" · ")}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+        <div className={styles.detailPane}>
+          {selected ? (
+            <BriefingDetail
+              index={selectedIndex}
+              item={selected}
+              onBack={() => setSelectedId(null)}
+              onNavigate={(nextIndex) => setSelectedId(items[nextIndex]?.id ?? null)}
+              total={items.length}
+            />
+          ) : (
+            <p className={styles.blockedNote}>Selecione um conteúdo para revisar o Briefing.</p>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
