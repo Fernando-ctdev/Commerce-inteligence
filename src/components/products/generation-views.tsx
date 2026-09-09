@@ -174,12 +174,24 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
   const projectedBlocked = generationAction?.state === "BLOCKED" ? generationAction : null;
   const projectedNote = projectedBlocked ? blockedActionCopy(projectedBlocked) : null;
   const fallbackNote = !generationAction && blockedByOther ? BLOCKED_ACTIVE_MESSAGE : null;
+  /* O heading segue exatamente a precedência dos ramos do corpo, para nunca
+     contradizer o estado exibido; a copy futura é exclusiva do idle. */
+  const heading = active && job
+    ? "Análise em andamento"
+    : failed && job
+      ? "Análise interrompida"
+      : job?.status === "SUCCEEDED"
+        ? "Revisão de conteúdos"
+        : "Analisar produto";
+  const idleHeading = !active && !failed && job?.status !== "SUCCEEDED";
   return (
     <section aria-busy={busy || active} aria-labelledby="generation-title" className={[styles.panel, className].filter(Boolean).join(" ")}>
       <div className={styles.heading}>
         <p className={styles.eyebrow}>Próxima ação</p>
-        <h2 id="generation-title">Analisar produto</h2>
-        <p>Geraremos uma estratégia comercial e {targetContentCount} Briefings prontos para revisão.</p>
+        <h2 id="generation-title">{heading}</h2>
+        {idleHeading && (
+          <p>Geraremos uma estratégia comercial e {targetContentCount} Briefings prontos para revisão.</p>
+        )}
       </div>
       {active && job ? (
         <div aria-live="polite" className={styles.state} role="status">
