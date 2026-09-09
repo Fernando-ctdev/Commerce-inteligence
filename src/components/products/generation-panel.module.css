@@ -162,7 +162,7 @@
 
 .button:disabled {
   cursor: wait;
-  opacity: .65;
+  opacity: 0.65;
 }
 
 .secondary,
@@ -285,24 +285,32 @@
 }
 
 .contentRowTop {
-  align-items: baseline;
+  align-items: center;
   display: flex;
   gap: 8px;
   justify-content: space-between;
 }
 
 .contentRowPosition {
+  color: var(--color-text-secondary);
   font-size: 13px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   line-height: 18px;
 }
 
-.contentRowStatus {
+/* Status como tag pill neutra (radius.pill), na lista e no Briefing. */
+.statusTag {
+  background: var(--color-surface-secondary);
+  border-radius: 9999px;
   color: var(--color-text-secondary);
   flex-shrink: 0;
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
+  margin: 0;
+  padding: 2px 10px;
+  white-space: nowrap;
 }
 
 .contentRowHook {
@@ -347,7 +355,7 @@
 .detail {
   animation: briefingOpen 160ms ease-out;
   display: grid;
-  gap: 16px;
+  gap: 24px;
   max-width: 760px;
 }
 
@@ -376,29 +384,22 @@
   margin: 0;
 }
 
-.detailStatus {
-  color: var(--color-text-secondary);
-  flex-shrink: 0;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 20px;
-  margin: 0;
-}
-
 /* Hook é o conteúdo dominante do Briefing: superfície levemente destacada,
-   sem sombra — o início do vídeo, não mais um campo do banco. */
+   assinada pela cor de inteligência (geração) — o início do vídeo. */
 .hookBlock {
   background: var(--color-surface-secondary);
+  border-left: 2px solid var(--color-intelligence);
   border-radius: 8px;
   display: grid;
   gap: 8px;
-  padding: 20px;
+  padding: 20px 24px;
 }
 
+/* type.heading-1: o hook é a frase que abre o vídeo. */
 .briefingHook {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 600;
-  line-height: 28px;
+  line-height: 30px;
   margin: 0;
 }
 
@@ -420,15 +421,28 @@
   margin: 0;
 }
 
-/* Rótulo de seção do Briefing (Hook, Roteiro, Cenas, CTA). */
+/* Rótulo de seção do Briefing (Hook, Roteiro, Cenas, CTA) com âncora visual.
+   Peso + secundário, sem caixa alta: o DESIGN veta peso+caixa alta+cor juntos. */
 .sectionLabel {
+  align-items: center;
   color: var(--color-text-secondary);
+  display: flex;
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  gap: 6px;
   line-height: 16px;
   margin: 0;
-  text-transform: uppercase;
+}
+
+.sectionIcon {
+  flex-shrink: 0;
+  height: 16px;
+  width: 16px;
+}
+
+/* Inteligência/generação/explicabilidade: único uso do token, como ícone/borda. */
+.sectionIconIntelligence {
+  color: var(--color-intelligence);
 }
 
 /* Leitura editorial: ~65–75 caracteres por linha, sem correr o painel todo. */
@@ -442,7 +456,7 @@
   border-top: 1px solid var(--color-border);
   display: grid;
   gap: 8px;
-  padding-top: 16px;
+  padding-top: 24px;
 }
 
 /* Cenas como sequência de produção: índice + descrição, não parágrafo. */
@@ -466,9 +480,17 @@
 
 .sceneIndex {
   color: var(--color-brand);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   line-height: 20px;
+}
+
+/* Explicabilidade: disclosure assinado pelo token de inteligência. */
+.whySummary {
+  align-items: center;
+  display: flex;
+  gap: 8px;
 }
 
 /* Navegação mobile (voltar à lista / anterior-próximo): só < 768px.
@@ -558,7 +580,7 @@
 .phaseItem[data-state="pending"],
 .phaseItem[data-state="skipped"] {
   border-left-color: transparent;
-  opacity: .5;
+  opacity: 0.5;
 }
 
 .phaseItem[data-state="pending"] .phaseName,
@@ -573,7 +595,6 @@
   height: 16px;
   width: 16px;
 }
-
 
 .phaseItem[data-state="failed"] .phaseStatus {
   color: var(--color-danger);
@@ -821,7 +842,7 @@
 }
 
 .argumentIndex {
-  color: var(--color-text-muted);
+  color: var(--color-brand);
   flex: 0 0 auto;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
@@ -928,8 +949,21 @@
 }
 
 .asideStatus {
-  color: var(--color-text);
+  align-items: center;
+  color: var(--color-brand);
+  display: flex;
   font-weight: 600;
+  gap: 8px;
+}
+
+/* Indicador não textual: cor carrega significado sem depender de contraste de texto. */
+.asideStatus::before {
+  background: var(--color-success);
+  border-radius: 9999px;
+  content: "";
+  flex: 0 0 auto;
+  height: 8px;
+  width: 8px;
 }
 
 .asideCard button {

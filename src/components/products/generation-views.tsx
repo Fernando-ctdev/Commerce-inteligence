@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleAlert, Hourglass, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleAlert, Clapperboard, Hourglass, Megaphone, Mic, ScrollText, Sparkles, X } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Button } from "@/components/ui/button";
 
@@ -40,6 +40,16 @@ export type GenerationState = {
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
+/** Rótulo de seção do Briefing com âncora visual de traço simples. */
+function SectionLabel({ icon: Icon, children }: { icon: typeof Mic; children: string }) {
+  return (
+    <p className={styles.sectionLabel}>
+      <Icon aria-hidden="true" className={styles.sectionIcon} />
+      {children}
+    </p>
+  );
+}
+
 /**
  * Painel do Briefing selecionado: hook dominante, roteiro/cenas/CTA sempre
  * visíveis e estratégia profunda em progressive disclosure ("Por que este
@@ -74,10 +84,13 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
       </Button>
       <header className={styles.detailHeader}>
         <h3 className={styles.detailTitle}>{`Conteúdo ${pad2(item.position)}`}</h3>
-        <p className={styles.detailStatus}>{contentStatusLabel(item.status)}</p>
+        <p className={styles.statusTag}>{contentStatusLabel(item.status)}</p>
       </header>
       <section aria-label="Hook" className={styles.hookBlock}>
-        <p className={styles.sectionLabel}>Hook</p>
+        <p className={styles.sectionLabel}>
+          <Mic aria-hidden="true" className={[styles.sectionIcon, styles.sectionIconIntelligence].join(" ")} />
+          Hook
+        </p>
         <p className={styles.briefingHook}>{item.hook}</p>
       </section>
       {context.length > 0 && (
@@ -91,12 +104,12 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
         </section>
       )}
       <section className={styles.detailSection}>
-        <p className={styles.sectionLabel}>Roteiro</p>
+        <SectionLabel icon={ScrollText}>Roteiro</SectionLabel>
         <p className={styles.readingText}>{item.script}</p>
       </section>
       {item.scenes.length > 0 && (
         <section className={styles.detailSection}>
-          <p className={styles.sectionLabel}>Cenas</p>
+          <SectionLabel icon={Clapperboard}>Cenas</SectionLabel>
           <ol className={styles.sceneList}>
             {item.scenes.map((scene, sceneIndex) => (
               <li className={styles.sceneItem} key={sceneIndex}>
@@ -108,12 +121,15 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
         </section>
       )}
       <section aria-label="CTA" className={styles.detailSection}>
-        <p className={styles.sectionLabel}>CTA</p>
+        <SectionLabel icon={Megaphone}>CTA</SectionLabel>
         <p className={styles.readingText}>{item.cta}</p>
       </section>
       {deep.length > 0 && (
         <details className={styles.disclosure}>
-          <summary>Por que este conteúdo?</summary>
+          <summary className={styles.whySummary}>
+            <Sparkles aria-hidden="true" className={[styles.sectionIcon, styles.sectionIconIntelligence].join(" ")} />
+            Por que este conteúdo?
+          </summary>
           <div className={styles.detailBlock}>
             {deep.map(([label, value]) => <p key={label}><strong>{label}:</strong> {value}</p>)}
           </div>
@@ -477,7 +493,7 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
               >
                 <span className={styles.contentRowTop}>
                   <span className={styles.contentRowPosition}>{pad2(item.position)}</span>
-                  <span className={styles.contentRowStatus}>{contentStatusLabel(item.status)}</span>
+                  <span className={styles.statusTag}>{contentStatusLabel(item.status)}</span>
                 </span>
                 <span className={styles.contentRowHook}>{item.hook}</span>
                 {item.angle && <span className={styles.contentRowAngle}>{item.angle}</span>}
