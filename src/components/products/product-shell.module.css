@@ -151,11 +151,16 @@
   font-size: 17px;
   line-height: 22px;
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .toolbarAction {
   align-items: center;
   display: flex;
+  flex: 0 0 auto;
   gap: 8px;
 }
 

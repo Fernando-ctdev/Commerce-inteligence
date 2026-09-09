@@ -139,4 +139,5 @@
   align-items: center;
   display: flex;
   gap: 12px;
+  min-width: 0;
 }
