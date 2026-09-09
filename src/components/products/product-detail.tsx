@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { Archive, ArchiveRestore, CircleAlert, Save, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Archive, ArchiveRestore, CircleAlert, Package, Pencil, Save, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -34,6 +35,97 @@ type ProductTab = "overview" | "strategy" | "contents" | "history";
 const hashToTab = (hash: string): ProductTab | null =>
   hash === "#generated-contents" ? "contents" : null;
 
+/* Vislumbre do produto: imagem + fatos essenciais. O form completo só
+   aparece quando o usuário pede edição — a aba abre em modo leitura. */
+function ProductSummaryPanel({ product }: { product: ProductRecord }) {
+  const imageUrl = product.imageReferences[0];
+  const commission = formatCommission(
+    product.commissionType,
+    product.commission,
+    product.price,
+    product.priceCurrency,
+  );
+  return (
+    <section aria-labelledby="product-summary-title" className={styles.summaryPanel}>
+      <div className={styles.sideCardHeading}>
+        <Package aria-hidden="true" />
+        <h2 id="product-summary-title">Resumo do produto</h2>
+      </div>
+      <div className={styles.summaryBody}>
+        {imageUrl ? (
+          <Image
+            alt={`Imagem de ${product.name}`}
+            className={styles.summaryImage}
+            height={360}
+            src={imageUrl}
+            unoptimized
+            width={640}
+          />
+        ) : (
+          <div
+            aria-label={`Produto ${product.name} sem imagem cadastrada`}
+            className={styles.summaryImageFallback}
+            role="img"
+          >
+            Sem imagem
+          </div>
+        )}
+        <dl className={styles.summaryFacts}>
+          <div className={styles.summaryFact}>
+            <dt>Preço</dt>
+            <dd>{formatPriceWithCurrency(product.price, product.priceCurrency)}</dd>
+          </div>
+          <div className={styles.summaryFact}>
+            <dt>Categoria</dt>
+            <dd>{product.category}</dd>
+          </div>
+          {commission && (
+            <div className={styles.summaryFact}>
+              <dt>Comissão</dt>
+              <dd>{commission}</dd>
+            </div>
+          )}
+          <div className={styles.summaryFact}>
+            <dt>Descrição</dt>
+            <dd>{product.description}</dd>
+          </div>
+        </dl>
+      </div>
+      {product.characteristics.length > 0 && (
+        <dl className={styles.summaryFacts}>
+          <div className={styles.summaryFact}>
+            <dt>Características</dt>
+            <dd>
+              <ul className={styles.summaryList}>
+                {product.characteristics.map((characteristic) => (
+                  <li key={characteristic}>{characteristic}</li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        </dl>
+      )}
+      {product.url && (
+        <dl className={styles.summaryFacts}>
+          <div className={styles.summaryFact}>
+            <dt>URL do produto</dt>
+            <dd>
+              <a
+                className={styles.summaryLink}
+                href={product.url}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {product.url}
+              </a>
+            </dd>
+          </div>
+        </dl>
+      )}
+    </section>
+  );
+}
+
 export function ProductDetail({ id }: { id: string }) {
   const [product, setProduct] = useState<ProductRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,7 +141,21 @@ export function ProductDetail({ id }: { id: string }) {
     useState(false);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /* A aba abre em leitura (resumo); o form completo só entra sob edição explícita. */
+  const [editing, setEditing] = useState(false);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
   const router = useRouter();
+
+  function startEdit() {
+    setEditing(true);
+  }
+
+  /* Volta ao resumo devolvendo o foco ao gatilho — o botão só existe de novo
+     após o re-render, por isso o foco vai no próximo frame. */
+  function stopEdit() {
+    setEditing(false);
+    requestAnimationFrame(() => editButtonRef.current?.focus());
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,7 +208,7 @@ export function ProductDetail({ id }: { id: string }) {
       <div aria-busy="true" className={styles.state} role="status">
         <h2>Carregando produto…</h2>
         <p>
-          O formulário será mantido no mesmo lugar quando os dados chegarem.
+          O resumo do produto aparece aqui quando os dados chegarem.
         </p>
       </div>
     );
@@ -212,6 +318,21 @@ export function ProductDetail({ id }: { id: string }) {
             ID {product.id}
           </p>
         </div>
+        {product.active && (
+          <div className={styles.actionActions}>
+            {editing ? (
+              <Button onClick={stopEdit} type="button" variant="outline">
+                <X aria-hidden="true" />
+                Cancelar alterações
+              </Button>
+            ) : (
+              <Button onClick={startEdit} ref={editButtonRef} type="button">
+                <Pencil aria-hidden="true" />
+                Editar produto
+              </Button>
+            )}
+          </div>
+        )}
       </section>
       <ConfirmationDialog
         confirmLabel="Arquivar produto"
@@ -267,11 +388,16 @@ export function ProductDetail({ id }: { id: string }) {
             )}
             <div className={styles.overviewLayout}>
               <div className={styles.editCard}>
-                <ProductCreateForm
-                  mode="edit"
-                  onSaved={setProduct}
-                  product={product}
-                />
+                {editing ? (
+                  <ProductCreateForm
+                    mode="edit"
+                    onAfterSave={stopEdit}
+                    onSaved={setProduct}
+                    product={product}
+                  />
+                ) : (
+                  <ProductSummaryPanel product={product} />
+                )}
               </div>
               <aside className={styles.sideRail}>
                 <GenerationStatusCard
@@ -293,19 +419,12 @@ export function ProductDetail({ id }: { id: string }) {
                     <Archive aria-hidden="true" />
                     <h2 id="product-actions-card-title">Ações</h2>
                   </div>
-                  <Button className={styles.saveAction} form="product-edit-form" type="submit" variant="ghost">
-                    <Save aria-hidden="true" />
-                    Salvar alterações
-                  </Button>
-                  <Button
-                    className={styles.saveAction}
-                    onClick={() => router.push("/products")}
-                    type="button"
-                    variant="ghost"
-                  >
-                    <X aria-hidden="true" />
-                    Cancelar alterações
-                  </Button>
+                  {editing && (
+                    <Button className={styles.saveAction} form="product-edit-form" type="submit" variant="ghost">
+                      <Save aria-hidden="true" />
+                      Salvar alterações
+                    </Button>
+                  )}
                   <Button
                     className={styles.archiveAction}
                     onClick={() => {

@@ -66,6 +66,8 @@ type ProductCreateFormProps = {
   mode?: "create" | "edit";
   product?: ProductRecord;
   onSaved?: (product: ProductRecord) => void;
+  /** Substitui o router.back() pós-salvamento: a edição inline volta ao resumo. */
+  onAfterSave?: () => void;
 };
 
 const currencyOptions = [
@@ -480,6 +482,7 @@ export function ProductCreateForm({
   mode = "create",
   product,
   onSaved,
+  onAfterSave,
 }: ProductCreateFormProps) {
   const router = useRouter();
   const isEdit = mode === "edit";
@@ -708,7 +711,11 @@ export function ProductCreateForm({
         const latest = await getProduct(mutation.id);
         setVersion(latest.version);
         onSaved?.(latest);
-        router.back();
+        if (onAfterSave) {
+          onAfterSave();
+        } else {
+          router.back();
+        }
       } else {
         await createProduct(payload);
       }

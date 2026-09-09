@@ -196,6 +196,105 @@
   min-width: 0;
 }
 
+/* Vislumbre em leitura: mesmo painel das abas (superfície + borda + radius 12). */
+.summaryPanel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  display: grid;
+  gap: 20px;
+  padding: 24px;
+}
+
+.summaryBody {
+  align-items: start;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(200px, 300px) minmax(0, 1fr);
+}
+
+.summaryImage,
+.summaryImageFallback {
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  display: block;
+  object-fit: cover;
+  width: 100%;
+}
+
+.summaryImage {
+  border: 1px solid var(--color-border);
+}
+
+.summaryImageFallback {
+  align-items: center;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 13px;
+  justify-content: center;
+}
+
+.summaryFacts {
+  display: grid;
+  margin: 0;
+  min-width: 0;
+}
+
+.summaryFact {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: 4px;
+  padding-block: 10px;
+}
+
+.summaryFact:first-child {
+  border-top: 0;
+  padding-block-start: 0;
+}
+
+.summaryFact dt {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.summaryFact dd {
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.summaryList {
+  display: grid;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.summaryList li {
+  font-size: 15px;
+  line-height: 22px;
+  padding-block: 8px;
+}
+
+.summaryList li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.summaryLink {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.summaryLink:hover {
+  color: var(--color-text-secondary);
+}
+
 .editCard > form {
   width: 100%;
 }
@@ -269,6 +368,10 @@
 @media (max-width: 900px) {
   .overviewLayout,
   .archivedLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .summaryBody {
     grid-template-columns: minmax(0, 1fr);
   }
 
