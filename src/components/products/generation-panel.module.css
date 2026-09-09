@@ -429,7 +429,7 @@
   display: flex;
   font-size: 12px;
   font-weight: 600;
-  gap: 6px;
+  gap: 4px;
   line-height: 16px;
   margin: 0;
 }
@@ -656,6 +656,7 @@
 }
 
 .strategyPanel {
+  animation: briefingOpen 160ms ease-out;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -685,6 +686,7 @@
 
 .positioning {
   background: var(--color-surface-secondary);
+  border-left: 2px solid var(--color-intelligence);
   border-radius: 12px;
   display: grid;
   gap: 8px;
@@ -692,18 +694,21 @@
 }
 
 .positioningLabel {
+  align-items: center;
   color: var(--color-text-secondary);
+  display: flex;
   font-size: 12px;
   font-weight: 600;
+  gap: 4px;
   line-height: 16px;
   margin: 0;
 }
 
 .positioningText {
   color: var(--color-text);
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
-  line-height: 28px;
+  line-height: 30px;
   margin: 0;
 }
 
@@ -714,9 +719,12 @@
 }
 
 .sectionTitle {
+  align-items: center;
   color: var(--color-text);
+  display: flex;
   font-size: 17px;
   font-weight: 600;
+  gap: 8px;
   line-height: 22px;
   margin: 0;
 }
@@ -820,6 +828,19 @@
   padding-bottom: 4px;
 }
 
+.objectionChevron {
+  color: var(--color-text-muted);
+  flex: 0 0 auto;
+  height: 16px;
+  margin-left: auto;
+  transition: transform 160ms ease-out;
+  width: 16px;
+}
+
+.objectionItem details[open] .objectionChevron {
+  transform: rotate(90deg);
+}
+
 .objectionArgument {
   color: var(--color-text-secondary);
   font-size: 15px;
@@ -842,11 +863,11 @@
 }
 
 .argumentIndex {
-  color: var(--color-brand);
+  color: var(--color-text-secondary);
   flex: 0 0 auto;
-  font-size: 13px;
+  font-size: 16px;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 22px;
 }
 
@@ -950,7 +971,7 @@
 
 .asideStatus {
   align-items: center;
-  color: var(--color-brand);
+  color: var(--color-text);
   display: flex;
   font-weight: 600;
   gap: 8px;
@@ -980,7 +1001,8 @@
   }
 
   /* SPEC: reduced-motion remove o movimento, não só o reduz. */
-  .detail {
+  .detail,
+  .strategyPanel {
     animation: none;
   }
 }

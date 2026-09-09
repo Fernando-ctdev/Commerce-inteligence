@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleAlert, Clapperboard, Hourglass, Megaphone, Mic, ScrollText, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleAlert, Clapperboard, Compass, Hourglass, Megaphone, Mic, ScrollText, Shield, Sparkles, Users, X } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Button } from "@/components/ui/button";
 
@@ -315,13 +315,19 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
         </header>
         {strategy.positioning && (
           <section aria-label="Posicionamento" className={styles.positioning}>
-            <p className={styles.positioningLabel}>Posicionamento</p>
+            <p className={styles.positioningLabel}>
+              <Sparkles aria-hidden="true" className={[styles.sectionIcon, styles.sectionIconIntelligence].join(" ")} />
+              Posicionamento
+            </p>
             <p className={styles.positioningText}>{strategy.positioning}</p>
           </section>
         )}
         {strategy.audiences.length > 0 && (
           <section className={styles.strategySection}>
-            <h3 className={styles.sectionTitle}>Públicos prioritários</h3>
+            <h3 className={styles.sectionTitle}>
+              <Users aria-hidden="true" className={styles.sectionIcon} />
+              Públicos prioritários
+            </h3>
             <ul className={styles.audienceList}>
               {strategy.audiences.map((audience, index) => (
                 <li className={styles.audienceItem} key={`${index}-${audience}`}>
@@ -350,7 +356,10 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
         )}
         {strategy.objections.length > 0 && (
           <section className={styles.strategySection}>
-            <h3 className={styles.sectionTitle}>Objeções que precisamos vencer</h3>
+            <h3 className={styles.sectionTitle}>
+              <Shield aria-hidden="true" className={styles.sectionIcon} />
+              Objeções que precisamos vencer
+            </h3>
             <ul className={styles.objectionList}>
               {strategy.objections.map((objection, index) => {
                 const argument = strategy.objectionArguments.get(objection);
@@ -358,7 +367,10 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
                   <li className={styles.objectionItem} key={`${index}-${objection}`}>
                     {argument ? (
                       <details>
-                        <summary>{objection}</summary>
+                        <summary>
+                          {objection}
+                          <ChevronRight aria-hidden="true" className={styles.objectionChevron} />
+                        </summary>
                         <p className={styles.objectionArgument}>{argument}</p>
                       </details>
                     ) : objection}
@@ -370,7 +382,10 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
         )}
         {strategy.arguments.length > 0 && (
           <section className={styles.strategySection}>
-            <h3 className={styles.sectionTitle}>Argumentos de venda</h3>
+            <h3 className={styles.sectionTitle}>
+              <Megaphone aria-hidden="true" className={styles.sectionIcon} />
+              Argumentos de venda
+            </h3>
             <ol className={styles.argumentList}>
               {strategy.arguments.map((argument, index) => (
                 <li className={styles.argumentItem} key={`${index}-${argument}`}>
@@ -383,7 +398,10 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
         )}
         {strategy.angles.length > 0 && (
           <section className={styles.strategySection}>
-            <h3 className={styles.sectionTitle}>Ângulos prioritários</h3>
+            <h3 className={styles.sectionTitle}>
+              <Compass aria-hidden="true" className={styles.sectionIcon} />
+              Ângulos prioritários
+            </h3>
             <ul className={styles.chipList}>
               {strategy.angles.map((angle, index) => <li className={styles.chip} key={`${index}-${angle}`}>{angle}</li>)}
             </ul>
