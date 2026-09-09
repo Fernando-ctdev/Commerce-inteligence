@@ -87,7 +87,9 @@ body {
   font-family: var(--font-instrument-sans), sans-serif;
 }
 
-button, input, textarea { font: inherit; cursor: pointer; }
+button, input, textarea { font: inherit; }
+button { cursor: pointer; }
+input, textarea { cursor: text; }
 
 :focus-visible {
   outline: 2px solid var(--color-focus);
