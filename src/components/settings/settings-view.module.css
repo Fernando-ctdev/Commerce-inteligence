@@ -1,5 +1,24 @@
 .surface {
+  animation: surfaceOpen 160ms ease-out;
   display: grid;
+}
+
+@keyframes surfaceOpen {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* SPEC: reduced-motion remove o movimento, não só o reduz. */
+@media (prefers-reduced-motion: reduce) {
+  .surface {
+    animation: none;
+  }
 }
 
 .section {
