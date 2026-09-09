@@ -1,5 +1,6 @@
 "use client";
 
+import { LogOut, SunMoon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -97,7 +98,10 @@ export function SettingsView({ email }: SettingsViewProps) {
 
       <section aria-labelledby="appearance-title" className={styles.section}>
         <p className={styles.eyebrow}>Preferências</p>
-        <h2 id="appearance-title">Aparência</h2>
+        <div className={styles.sectionHeading}>
+          <SunMoon aria-hidden="true" className={styles.sectionIcon} />
+          <h2 id="appearance-title">Aparência</h2>
+        </div>
         <div className={styles.field}>
           <label htmlFor="appearance-theme">Tema da interface</label>
           <Select onValueChange={(value) => changeTheme(value as "light" | "dark")} value={theme}>
@@ -115,7 +119,10 @@ export function SettingsView({ email }: SettingsViewProps) {
 
       <section aria-labelledby="session-title" className={styles.section}>
         <p className={styles.eyebrow}>Sessão</p>
-        <h2 id="session-title">Encerrar acesso neste dispositivo</h2>
+        <div className={styles.sectionHeading}>
+          <LogOut aria-hidden="true" className={styles.sectionIcon} />
+          <h2 id="session-title">Encerrar acesso neste dispositivo</h2>
+        </div>
         <p>
           Ao sair, a sessão deste navegador é encerrada. Seus dados permanecem
           preservados no workspace.

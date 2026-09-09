@@ -1,3 +1,5 @@
+import { LogOut, SunMoon } from "lucide-react";
+
 import { ProductShell } from "@/components/products/product-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import settingsStyles from "@/components/settings/settings-view.module.css";
@@ -36,7 +38,10 @@ export default function SettingsLoading() {
         </section>
         <section className={settingsStyles.section}>
           <p className={settingsStyles.eyebrow}>Preferências</p>
-          <h2>Aparência</h2>
+          <div className={settingsStyles.sectionHeading}>
+            <SunMoon aria-hidden="true" className={settingsStyles.sectionIcon} />
+            <h2>Aparência</h2>
+          </div>
           <div className={settingsStyles.field}>
             <label htmlFor="appearance-theme">Tema da interface</label>
             <button
@@ -54,7 +59,10 @@ export default function SettingsLoading() {
         </section>
         <section className={settingsStyles.section}>
           <p className={settingsStyles.eyebrow}>Sessão</p>
-          <h2>Encerrar acesso neste dispositivo</h2>
+          <div className={settingsStyles.sectionHeading}>
+            <LogOut aria-hidden="true" className={settingsStyles.sectionIcon} />
+            <h2>Encerrar acesso neste dispositivo</h2>
+          </div>
           <p>
             Ao sair, a sessão deste navegador é encerrada. Seus dados permanecem
             preservados no workspace.

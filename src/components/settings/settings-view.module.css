@@ -1,6 +1,7 @@
 .surface {
   animation: surfaceOpen 160ms ease-out;
   display: grid;
+  gap: 20px;
 }
 
 @keyframes surfaceOpen {
@@ -21,15 +22,15 @@
   }
 }
 
+/* Mesma assinatura de painel das abas de Produto (.panel/.sideCard):
+   superfície sólida + borda + radius 12 + padding 24. */
 .section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
   display: grid;
   gap: 16px;
-  padding-block: 28px;
-}
-
-.section + .section {
-  border-block-start: 1px solid var(--color-border);
-  padding-block-start: 32px;
+  padding: 24px;
 }
 
 .eyebrow {
@@ -42,10 +43,24 @@
 
 .section h2 {
   color: var(--color-text);
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 600;
-  line-height: 26px;
+  line-height: 22px;
   margin: 0;
+}
+
+/* Título de seção com ícone de traço 16px, como .sideCardHeading. */
+.sectionHeading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.sectionIcon {
+  color: var(--color-text);
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
 }
 
 .section > p:not(.eyebrow) {
