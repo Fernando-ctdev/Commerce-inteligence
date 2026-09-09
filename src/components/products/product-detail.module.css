@@ -218,16 +218,15 @@
 .sideCardHeading {
   align-items: center;
   display: flex;
-  gap: 12px;
+  gap: 8px;
 }
 
+/* Padrão único de ícone: traço 16px no título, sem chip de fundo. */
 .sideCardHeading > svg {
-  background: #eef2ff;
-  border-radius: 8px;
-  color: var(--color-brand);
-  padding: 7px;
-  height: 36px;
-  width: 36px;
+  color: var(--color-text);
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
 }
 
 .sideCardHeading h2 {

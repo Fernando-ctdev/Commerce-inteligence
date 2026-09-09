@@ -1,4 +1,5 @@
 .panel {
+  animation: briefingOpen 160ms ease-out;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -22,9 +23,12 @@
 }
 
 .eyebrow {
+  align-items: center;
   color: var(--color-text-secondary);
+  display: flex;
   font-size: 12px;
   font-weight: 700;
+  gap: 4px;
   line-height: 16px;
 }
 
@@ -570,7 +574,7 @@
 }
 
 .phaseItem[data-state="active"] .phaseStatus {
-  color: var(--color-brand);
+  color: var(--color-text);
 }
 
 .phaseItem[data-state="failed"] {
@@ -1010,6 +1014,7 @@
 
   /* SPEC: reduced-motion remove o movimento, não só o reduz. */
   .detail,
+  .panel,
   .strategyPanel {
     animation: none;
   }

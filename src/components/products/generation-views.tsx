@@ -260,7 +260,10 @@ export function OperationalSummaryCard({ className, job, readiness }: {
   return (
     <section aria-labelledby="operational-summary-title" className={[styles.panel, className].filter(Boolean).join(" ")}>
       <div className={styles.heading}>
-        <p className={styles.eyebrow}>Commerce Intelligence</p>
+        <p className={styles.eyebrow}>
+          <Sparkles aria-hidden="true" className={[styles.sectionIcon, styles.sectionIconIntelligence].join(" ")} />
+          Commerce Intelligence
+        </p>
         <h2 id="operational-summary-title">Resumo operacional</h2>
         {!job && readiness === "PENDING" && (
           <p>Nenhuma análise ainda. Use “Analisar produto” para gerar a estratégia e os Briefings deste produto.</p>
@@ -286,8 +289,9 @@ export function OperationalSummaryCard({ className, job, readiness }: {
                 <span aria-label={phaseStateLabels[phase.state]} className={styles.phaseStatus} role="img">
                   {phase.state === "pending" && <Hourglass aria-hidden="true" />}
                   {phase.state === "skipped" && <X aria-hidden="true" />}
-                  {(phase.state === "done" || phase.state === "active" || phase.state === "failed") &&
-                    phaseStateLabels[phase.state]}
+                  {phase.state === "done" && <Check aria-hidden="true" />}
+                  {phase.state === "failed" && <CircleAlert aria-hidden="true" />}
+                  {phase.state === "active" && phaseStateLabels[phase.state]}
                 </span>
               </li>
             ))}
