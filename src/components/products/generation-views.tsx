@@ -223,7 +223,10 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
             <strong>{statusLabels[job.status]}</strong> · {statusMessage(job.status, productName)}
           </p>
           <div className={styles.actions}>
-            <Button onClick={onOpenStrategy} type="button">Revisar estratégia</Button>
+            <Button className={styles.stateAction} onClick={onOpenStrategy} type="button">
+              <Compass aria-hidden="true" />
+              Revisar estratégia
+            </Button>
           </div>
         </div>
       ) : (

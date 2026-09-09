@@ -982,7 +982,8 @@
 }
 
 /* Ação primária do card, na largura do card como nos demais. */
-.asideAction {
+.asideAction,
+.stateAction {
   justify-content: center;
   width: 100%;
 }
