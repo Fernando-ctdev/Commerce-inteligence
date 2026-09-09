@@ -68,19 +68,43 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
         Conteúdos
       </Button>
       <header className={styles.detailHeader}>
-        <h3 className={styles.detailTitle}>{`Conteúdo ${pad2(item.position)}`}</h3>
+        <div className={styles.detailIdentity}>
+          <h3 className={styles.detailTitle}>{`Conteúdo ${pad2(item.position)}`}</h3>
+          {item.angle && <p className={styles.detailEyebrow}>{item.angle}</p>}
+        </div>
         <p className={styles.detailStatus}>{contentStatusLabel(item.status)}</p>
       </header>
-      <p className={styles.briefingHook}>{item.hook}</p>
-      {item.objective && <p><strong>Objetivo:</strong> {item.objective}</p>}
-      {item.angle && <p><strong>Ângulo:</strong> {item.angle}</p>}
-      <div className={styles.detailBlock}>
-        <p className={styles.sectionLead}>Roteiro</p>
+      <section aria-label="Hook" className={styles.hookBlock}>
+        <p className={styles.sectionLabel}>Hook</p>
+        <p className={styles.briefingHook}>{item.hook}</p>
+      </section>
+      {item.objective && (
+        <section className={styles.detailSection}>
+          <p className={styles.fieldLabel}>Objetivo</p>
+          <p>{item.objective}</p>
+        </section>
+      )}
+      <section className={styles.detailSection}>
+        <p className={styles.sectionLabel}>Roteiro</p>
         <p>{item.script}</p>
-        <p className={styles.sectionLead}>Cenas</p>
-        <ol>{item.scenes.map((scene, sceneIndex) => <li key={sceneIndex}>{scene}</li>)}</ol>
-        <p><strong>CTA:</strong> {item.cta}</p>
-      </div>
+      </section>
+      {item.scenes.length > 0 && (
+        <section className={styles.detailSection}>
+          <p className={styles.sectionLabel}>Cenas</p>
+          <ol className={styles.sceneList}>
+            {item.scenes.map((scene, sceneIndex) => (
+              <li className={styles.sceneItem} key={sceneIndex}>
+                <span aria-hidden="true" className={styles.sceneIndex}>{pad2(sceneIndex + 1)}</span>
+                <p>{scene}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+      <section aria-label="CTA" className={styles.detailSection}>
+        <p className={styles.sectionLabel}>CTA</p>
+        <p>{item.cta}</p>
+      </section>
       {deep.length > 0 && (
         <details className={styles.disclosure}>
           <summary>Por que este conteúdo?</summary>
@@ -445,11 +469,12 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
                 onClick={() => setSelectedId(item.id)}
                 type="button"
               >
-                <span className={styles.contentRowPosition}>{pad2(item.position)}</span>
-                <span className={styles.contentRowHook}>{item.hook}</span>
-                <span className={styles.contentRowMeta}>
-                  {[item.angle, contentStatusLabel(item.status)].filter(Boolean).join(" · ")}
+                <span className={styles.contentRowTop}>
+                  <span className={styles.contentRowPosition}>{pad2(item.position)}</span>
+                  <span className={styles.contentRowStatus}>{contentStatusLabel(item.status)}</span>
                 </span>
+                <span className={styles.contentRowHook}>{item.hook}</span>
+                {item.angle && <span className={styles.contentRowAngle}>{item.angle}</span>}
               </button>
             </li>
           ))}

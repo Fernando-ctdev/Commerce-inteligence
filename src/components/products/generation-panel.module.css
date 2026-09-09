@@ -264,7 +264,7 @@
   cursor: pointer;
   display: grid;
   font: inherit;
-  gap: 2px;
+  gap: 3px;
   padding: 10px 12px;
   text-align: left;
   width: 100%;
@@ -284,21 +284,37 @@
   border-left-color: var(--color-brand);
 }
 
+.contentRowTop {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
 .contentRowPosition {
   font-size: 13px;
   font-weight: 700;
   line-height: 18px;
 }
 
+.contentRowStatus {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
 .contentRowHook {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   font-size: 14px;
   line-height: 20px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.contentRowMeta {
+.contentRowAngle {
   color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 18px;
@@ -311,14 +327,24 @@
   min-width: 0;
 }
 
+/* O painel ocupa todo o espaço, mas a linha de leitura não. */
 .detail {
   display: grid;
-  gap: 12px;
+  gap: 16px;
+  max-width: 760px;
 }
 
 .detailHeader {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.detailIdentity {
   display: grid;
   gap: 2px;
+  min-width: 0;
 }
 
 .detailTitle {
@@ -327,27 +353,88 @@
   margin: 0;
 }
 
+.detailEyebrow {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  margin: 0;
+}
+
 .detailStatus {
   color: var(--color-text-secondary);
-  font-size: 14px;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 20px;
   margin: 0;
 }
 
-/* Hook é o conteúdo dominante do Briefing. */
+/* Hook é o conteúdo dominante do Briefing: superfície levemente destacada,
+   sem sombra — o início do vídeo, não mais um campo do banco. */
+.hookBlock {
+  background: var(--color-surface-secondary);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+}
+
 .briefingHook {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
-  line-height: 24px;
+  line-height: 26px;
   margin: 0;
 }
 
-.sectionLead {
-  color: var(--color-text);
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 22px;
+/* Rótulo de seção do Briefing (Hook, Roteiro, Cenas, CTA). */
+.sectionLabel {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
   margin: 0;
+}
+
+.fieldLabel {
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  margin: 0;
+}
+
+/* Seções do Briefing separadas por divisão sutil, não por cards. */
+.detailSection {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: 6px;
+  padding-top: 16px;
+}
+
+/* Cenas como sequência de produção: índice + descrição, não parágrafo. */
+.sceneList {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sceneItem {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 28px minmax(0, 1fr);
+}
+
+.sceneItem p {
+  margin: 0;
+}
+
+.sceneIndex {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 20px;
 }
 
 /* Navegação mobile (voltar à lista / anterior-próximo): só < 768px.
