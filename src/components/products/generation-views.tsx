@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleAlert, Clapperboard, Compass, Hourglass, Megaphone, Mic, ScrollText, Shield, Sparkles, Users, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleAlert, Clapperboard, Compass, Gift, Heart, HeartCrack, Hourglass, Megaphone, Mic, ScrollText, Shield, Sparkles, Users, X } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Button } from "@/components/ui/button";
 
@@ -302,9 +302,9 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
   const strategy = strategyModel(job.strategy);
   const contentsReady = job.status === "SUCCEEDED" && job.contents.length === job.targetContentCount;
   const triplet = [
-    { title: "Dores", items: strategy.pains },
-    { title: "Desejos", items: strategy.desires },
-    { title: "Benefícios", items: strategy.benefits },
+    { icon: HeartCrack, title: "Dores", items: strategy.pains },
+    { icon: Heart, title: "Desejos", items: strategy.desires },
+    { icon: Gift, title: "Benefícios", items: strategy.benefits },
   ].filter((column) => column.items.length > 0);
   return (
     <div className={styles.strategyLayout}>
@@ -345,7 +345,10 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
             <div className={styles.triplet}>
               {triplet.map((column) => (
                 <div className={styles.tripletColumn} key={column.title}>
-                  <h3 className={styles.sectionTitle}>{column.title}</h3>
+                  <h3 className={[styles.sectionTitle, styles.tripletTitle].join(" ")}>
+                    <column.icon aria-hidden="true" className={styles.sectionIcon} />
+                    {column.title}
+                  </h3>
                   <ul className={styles.bulletList}>
                     {column.items.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}
                   </ul>
