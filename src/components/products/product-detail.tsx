@@ -312,11 +312,6 @@ export function ProductDetail({ id }: { id: string }) {
         <div className={styles.objectIdentity}>
           <p className={styles.eyebrow}>Produto</p>
           <h2 id="product-actions-title">{product.name}</h2>
-          <p className={styles.objectFacts}>
-            {formatPriceWithCurrency(product.price, product.priceCurrency)}
-            <span aria-hidden="true"> · </span>
-            ID {product.id}
-          </p>
         </div>
       </section>
       <ConfirmationDialog
