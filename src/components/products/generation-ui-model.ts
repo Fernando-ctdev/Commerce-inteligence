@@ -1,8 +1,5 @@
 import type { CommerceJobStage, CommerceJobStatus } from "./generation-api";
 
-const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
-const strings = (value: unknown) => (Array.isArray(value) ? value.map(text).filter(Boolean) : []);
-
 /** Projeção server-authoritative do ADR-016 (ActiveProductView); archived omite o campo. */
 export type GenerationActionProjection =
   | { state: "AVAILABLE"; reason: null; nextAction: null }
@@ -92,75 +89,15 @@ export function isToastDismissed(dismissedSnapshot: string | null, job: { id: st
   return dismissedSnapshot === `${job.id}:${job.status}`;
 }
 
-/**
- * Modelo de leitura da aba Estratégia: campos tolerantes a payload parcial
- * (subseção ausente simplesmente não renderiza). Vínculos entre públicos/objeções
- * e oportunidades usam apenas match exato de texto — nenhuma relação inventada.
- */
-export type StrategyViewData = {
-  positioning: string;
-  audiences: string[];
-  pains: string[];
-  desires: string[];
-  benefits: string[];
-  objections: string[];
-  arguments: string[];
-  angles: string[];
-  principles: string[];
-  risks: string[];
-  active: boolean;
-  audienceSituations: ReadonlyMap<string, string>;
-  objectionArguments: ReadonlyMap<string, string>;
-};
-
-export function strategyModel(strategy: Record<string, unknown> | null): StrategyViewData {
-  const opportunities = (Array.isArray(strategy?.opportunities) ? strategy.opportunities : [])
-    .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
-    .map((item) => ({
-      audience: text(item.audience),
-      situation: text(item.situation),
-      pain: text(item.pain),
-      desire: text(item.desire),
-      objection: text(item.objection),
-      sellingArgument: text(item.sellingArgument),
-    }));
-  const unique = (values: string[]) => Array.from(new Set(values));
-  // Primeiro match exato por chave; ausência não cria vínculo.
-  const firstBy = (key: "audience" | "objection", linked: "situation" | "sellingArgument") => {
-    const map = new Map<string, string>();
-    for (const item of opportunities) {
-      const source = item[key];
-      const target = item[linked];
-      if (source && target && !map.has(source)) map.set(source, target);
-    }
-    return map;
-  };
-  return {
-    positioning: text(strategy?.primaryPositioning),
-    audiences: strings(strategy?.audiences),
-    pains: unique(opportunities.map((item) => item.pain).filter(Boolean)),
-    desires: unique(opportunities.map((item) => item.desire).filter(Boolean)),
-    benefits: strings(strategy?.priorityBenefits),
-    objections: strings(strategy?.priorityObjections),
-    arguments: strings(strategy?.priorityArguments),
-    angles: strings(strategy?.priorityAngles),
-    principles: strings(strategy?.communicationPrinciples),
-    risks: strings(strategy?.communicationRisks),
-    active: strategy?.status === "ACTIVE",
-    audienceSituations: firstBy("audience", "situation"),
-    objectionArguments: firstBy("objection", "sellingArgument"),
-  };
-}
-
 /** Estado de cada fase pública do job, derivado apenas de status + stage. */
 export type PhaseState = "done" | "active" | "failed" | "pending" | "skipped";
 
 export const phaseStateLabels: Record<PhaseState, string> = {
   active: "Em andamento",
-  done: "Concluída",
+  done: "Concluído",
   failed: "Falhou",
   pending: "Aguardando",
-  skipped: "Cancelada",
+  skipped: "Cancelado",
 };
 
 const stageOrder = Object.keys(stageMessages) as CommerceJobStage[];

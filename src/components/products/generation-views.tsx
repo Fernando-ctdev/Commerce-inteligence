@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, CircleAlert, Hourglass, X } from "lucide-react";
+import { Hourglass, X } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Button } from "@/components/ui/button";
 
@@ -17,7 +17,6 @@ import {
   stageMessage,
   statusLabels,
   statusMessage,
-  strategyModel,
   type GenerationActionProjection,
 } from "./generation-ui-model";
 import styles from "./generation-panel.module.css";
@@ -216,148 +215,35 @@ export function OperationalSummaryCard({ className, job, readiness }: {
   );
 }
 
-/** Aba Estratégia: tese comercial estruturada; Plano continua pertencendo à aba Conteúdos. */
-export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | null; onOpenContents?: () => void }) {
+/** Aba Estratégia: Strategy v1 consultável; Plano fica em disclosure dentro da aba. */
+export function StrategyView({ job }: { job: GenerationRecord | null }) {
   if (!job?.strategy) return <EmptyRegion>A estratégia aparece aqui quando a análise concluir.</EmptyRegion>;
-  const strategy = strategyModel(job.strategy);
-  const contentsReady = job.status === "SUCCEEDED" && job.contents.length === job.targetContentCount;
-  const triplet = [
-    { title: "Dores", items: strategy.pains },
-    { title: "Desejos", items: strategy.desires },
-    { title: "Benefícios", items: strategy.benefits },
-  ].filter((column) => column.items.length > 0);
+  const strategy = job.strategy;
+  const plan = job.plan ?? {};
+  const list = (label: string, items: string[]) => items.length > 0 ? <><strong>{label}</strong><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></> : null;
   return (
-    <div className={styles.strategyLayout}>
-      <div className={styles.strategyPanel}>
-        <header className={styles.strategyHeader}>
-          <h2>Estratégia comercial</h2>
-          <p>Entenda a estratégia comercial deste produto.</p>
-        </header>
-        {strategy.positioning && (
-          <section aria-label="Posicionamento" className={styles.positioning}>
-            <p className={styles.positioningLabel}>Posicionamento</p>
-            <p className={styles.positioningText}>{strategy.positioning}</p>
-          </section>
-        )}
-        {strategy.audiences.length > 0 && (
-          <section className={styles.strategySection}>
-            <h3 className={styles.sectionTitle}>Públicos prioritários</h3>
-            <ul className={styles.audienceList}>
-              {strategy.audiences.map((audience, index) => (
-                <li className={styles.audienceItem} key={`${index}-${audience}`}>
-                  <p className={styles.audienceName}>{audience}</p>
-                  {strategy.audienceSituations.get(audience) && (
-                    <p className={styles.audienceSituation}>{strategy.audienceSituations.get(audience)}</p>
-                  )}
-                </li>
+    <div className={styles.panel}>
+      <p><strong>Posicionamento:</strong> {text(strategy.primaryPositioning)}</p>
+      {list("Audiências prioritárias", strings(strategy.audiences))}
+      {list("Benefícios priorizados", strings(strategy.priorityBenefits))}
+      {list("Objeções priorizadas", strings(strategy.priorityObjections))}
+      {list("Argumentos priorizados", strings(strategy.priorityArguments))}
+      {list("Ângulos priorizados", strings(strategy.priorityAngles))}
+      {list("Princípios de comunicação", strings(strategy.communicationPrinciples))}
+      {list("Riscos de comunicação", strings(strategy.communicationRisks))}
+      <details className={styles.disclosure}>
+        <summary>Plano de conteúdo</summary>
+        <div className={styles.detailBlock}>
+          <p>{job.targetContentCount} oportunidades de conteúdo organizadas.</p>
+          {Array.isArray(plan.opportunities) && (
+            <ul>
+              {(plan.opportunities as Array<Record<string, unknown>>).map((opportunity, index) => (
+                <li key={index}>{text(opportunity.angle) || text(opportunity.coreMessage) || `Oportunidade ${index + 1}`}</li>
               ))}
             </ul>
-          </section>
-        )}
-        {triplet.length > 0 && (
-          <section className={styles.strategySection}>
-            <div className={styles.triplet}>
-              {triplet.map((column) => (
-                <div className={styles.tripletColumn} key={column.title}>
-                  <h3 className={styles.sectionTitle}>{column.title}</h3>
-                  <ul className={styles.bulletList}>
-                    {column.items.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-        {strategy.objections.length > 0 && (
-          <section className={styles.strategySection}>
-            <h3 className={styles.sectionTitle}>Objeções que precisamos vencer</h3>
-            <ul className={styles.objectionList}>
-              {strategy.objections.map((objection, index) => {
-                const argument = strategy.objectionArguments.get(objection);
-                return (
-                  <li className={styles.objectionItem} key={`${index}-${objection}`}>
-                    {argument ? (
-                      <details>
-                        <summary>{objection}</summary>
-                        <p className={styles.objectionArgument}>{argument}</p>
-                      </details>
-                    ) : objection}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-        {strategy.arguments.length > 0 && (
-          <section className={styles.strategySection}>
-            <h3 className={styles.sectionTitle}>Argumentos de venda</h3>
-            <ol className={styles.argumentList}>
-              {strategy.arguments.map((argument, index) => (
-                <li className={styles.argumentItem} key={`${index}-${argument}`}>
-                  <span aria-hidden="true" className={styles.argumentIndex}>{String(index + 1).padStart(2, "0")}</span>
-                  <p className={styles.argumentText}>{argument}</p>
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
-        {strategy.angles.length > 0 && (
-          <section className={styles.strategySection}>
-            <h3 className={styles.sectionTitle}>Ângulos prioritários</h3>
-            <ul className={styles.chipList}>
-              {strategy.angles.map((angle, index) => <li className={styles.chip} key={`${index}-${angle}`}>{angle}</li>)}
-            </ul>
-          </section>
-        )}
-        {strategy.principles.length > 0 && (
-          <section className={styles.strategySection}>
-            <h3 className={styles.sectionTitle}>Como comunicar</h3>
-            <ul className={styles.signList}>
-              {strategy.principles.map((principle, index) => (
-                <li className={styles.signItem} key={`${index}-${principle}`}>
-                  <Check aria-hidden="true" className={styles.signCheck} />
-                  <span>{principle}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-        {strategy.risks.length > 0 && (
-          <section className={styles.strategySection}>
-            <h3 className={styles.sectionTitle}>Cuidados de comunicação</h3>
-            <ul className={styles.signList}>
-              {strategy.risks.map((risk, index) => (
-                <li className={styles.signItem} key={`${index}-${risk}`}>
-                  <CircleAlert aria-hidden="true" className={styles.signWarning} />
-                  <span>{risk}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </div>
-      {(strategy.active || contentsReady) && (
-        <aside className={styles.strategyAside}>
-          {strategy.active && (
-            <section className={styles.asideCard}>
-              <h2>Estratégia</h2>
-              <p className={styles.asideStatus}>Ativa</p>
-              <p>Esta estratégia orienta os conteúdos deste produto.</p>
-            </section>
           )}
-          {contentsReady && (
-            <section className={styles.asideCard}>
-              <h2>Conteúdos</h2>
-              <p>
-                {job.targetContentCount} {job.targetContentCount === 1 ? "conteúdo preparado" : "conteúdos preparados"} com esta estratégia
-              </p>
-              {onOpenContents && (
-                <Button onClick={onOpenContents} type="button" variant="outline">Ver conteúdos</Button>
-              )}
-            </section>
-          )}
-        </aside>
-      )}
+        </div>
+      </details>
     </div>
   );
 }
