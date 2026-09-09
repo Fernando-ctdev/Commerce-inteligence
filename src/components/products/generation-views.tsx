@@ -56,6 +56,8 @@ function SectionLabel({ icon: Icon, children }: { icon: typeof Mic; children: st
  * conteúdo?"). Somente leitura — ações de Edição/Aprovação dependem de
  * capability de backend ainda não exposta.
  */
+/** Sentinela: usuário pediu explicitamente voltar à lista (mobile). Diferente de "nunca selecionou". */
+const LIST_VIEW = "__list__";
 function BriefingDetail({ index, item, onBack, onNavigate, total }: {
   index: number;
   item: BriefingItem;
@@ -493,8 +495,13 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
   }
   const items = briefingItems(job.contents);
   const approved = items.filter((item) => item.status === "APPROVED").length;
-  const selectedIndex = items.findIndex((item) => item.id === selectedId);
-  const selected = selectedIndex >= 0 ? items[selectedIndex] : null;
+  // A aba abre sempre com um Briefing ativo: sem seleção (ou id de outro job),
+  // recai sobre o primeiro conteúdo. Só o pedido explícito de voltar (LIST_VIEW)
+  // exibe a lista sem detalhe.
+  const selected = selectedId === LIST_VIEW
+    ? null
+    : items.find((item) => item.id === selectedId) ?? items[0] ?? null;
+  const selectedIndex = selected ? items.indexOf(selected) : -1;
   return (
     <section aria-labelledby="contents-title" className={styles.panel} id="generated-contents">
       <header className={styles.contentsHeader}>
@@ -528,8 +535,8 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
               index={selectedIndex}
               item={selected}
               key={selected.id}
-              onBack={() => setSelectedId(null)}
-              onNavigate={(nextIndex) => setSelectedId(items[nextIndex]?.id ?? null)}
+              onBack={() => setSelectedId(LIST_VIEW)}
+              onNavigate={(nextIndex) => setSelectedId(items[nextIndex]?.id ?? LIST_VIEW)}
               total={items.length}
             />
           ) : (
