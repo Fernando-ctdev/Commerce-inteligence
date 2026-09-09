@@ -265,7 +265,7 @@
   display: grid;
   font: inherit;
   gap: 3px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   text-align: left;
   width: 100%;
 }
@@ -318,6 +318,9 @@
   color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .detailPane {
@@ -327,11 +330,36 @@
   min-width: 0;
 }
 
+/* Desktop: navegador com largura estável + divisor vertical real entre
+   lista e Briefing — separação por composição, não só por posição. */
+@media (min-width: 768px) {
+  .contentsLayout {
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  }
+
+  .detailPane {
+    border-left: 1px solid var(--color-border);
+    padding-left: 24px;
+  }
+}
+
 /* O painel ocupa todo o espaço, mas a linha de leitura não. */
 .detail {
+  animation: briefingOpen 160ms ease-out;
   display: grid;
   gap: 16px;
   max-width: 760px;
+}
+
+@keyframes briefingOpen {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .detailHeader {
@@ -341,22 +369,10 @@
   justify-content: space-between;
 }
 
-.detailIdentity {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
 .detailTitle {
-  font-size: 20px;
-  line-height: 26px;
-  margin: 0;
-}
-
-.detailEyebrow {
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
   margin: 0;
 }
 
@@ -375,14 +391,32 @@
   background: var(--color-surface-secondary);
   border-radius: 8px;
   display: grid;
-  gap: 6px;
-  padding: 16px;
+  gap: 8px;
+  padding: 20px;
 }
 
 .briefingHook {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
-  line-height: 26px;
+  line-height: 28px;
+  margin: 0;
+}
+
+/* Linha de contexto rápida: objetivo + ângulo lado a lado. */
+.contextRow {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.contextCell {
+  display: grid;
+  gap: 2px;
+}
+
+.contextValue {
+  font-size: 14px;
+  line-height: 20px;
   margin: 0;
 }
 
@@ -391,30 +425,30 @@
   color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.06em;
   line-height: 16px;
   margin: 0;
+  text-transform: uppercase;
 }
 
-.fieldLabel {
-  color: var(--color-text);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
+/* Leitura editorial: ~65–75 caracteres por linha, sem correr o painel todo. */
+.readingText {
   margin: 0;
+  max-width: 62ch;
 }
 
 /* Seções do Briefing separadas por divisão sutil, não por cards. */
 .detailSection {
   border-top: 1px solid var(--color-border);
   display: grid;
-  gap: 6px;
+  gap: 8px;
   padding-top: 16px;
 }
 
 /* Cenas como sequência de produção: índice + descrição, não parágrafo. */
 .sceneList {
   display: grid;
-  gap: 12px;
+  gap: 16px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -423,7 +457,7 @@
 .sceneItem {
   display: grid;
   gap: 12px;
-  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-columns: 32px minmax(0, 1fr);
 }
 
 .sceneItem p {
@@ -431,8 +465,8 @@
 }
 
 .sceneIndex {
-  color: var(--color-text-secondary);
-  font-size: 13px;
+  color: var(--color-brand);
+  font-size: 14px;
   font-weight: 700;
   line-height: 20px;
 }
@@ -447,12 +481,6 @@
 .contentsNav {
   align-items: center;
   justify-content: space-between;
-}
-
-@media (min-width: 768px) {
-  .contentsLayout {
-    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
-  }
 }
 
 @media (max-width: 767px) {
@@ -915,6 +943,11 @@
     animation-iteration-count: 1;
     scroll-behavior: auto;
     transition-duration: 0.01ms;
+  }
+
+  /* SPEC: reduced-motion remove o movimento, não só o reduz. */
+  .detail {
+    animation: none;
   }
 }
 

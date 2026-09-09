@@ -61,6 +61,11 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
     ["Benefício", item.benefit],
     ["Objeção", item.objection],
   ].filter((pair): pair is [string, string] => !!pair[1]);
+  /* Linha de contexto sob o hook: leitura rápida de objetivo + ângulo. */
+  const context = [
+    ["Objetivo", item.objective],
+    ["Ângulo", item.angle],
+  ].filter((pair): pair is [string, string] => !!pair[1]);
   return (
     <article className={styles.detail}>
       <Button className={styles.mobileBack} onClick={onBack} type="button" variant="outline">
@@ -68,25 +73,26 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
         Conteúdos
       </Button>
       <header className={styles.detailHeader}>
-        <div className={styles.detailIdentity}>
-          <h3 className={styles.detailTitle}>{`Conteúdo ${pad2(item.position)}`}</h3>
-          {item.angle && <p className={styles.detailEyebrow}>{item.angle}</p>}
-        </div>
+        <h3 className={styles.detailTitle}>{`Conteúdo ${pad2(item.position)}`}</h3>
         <p className={styles.detailStatus}>{contentStatusLabel(item.status)}</p>
       </header>
       <section aria-label="Hook" className={styles.hookBlock}>
         <p className={styles.sectionLabel}>Hook</p>
         <p className={styles.briefingHook}>{item.hook}</p>
       </section>
-      {item.objective && (
-        <section className={styles.detailSection}>
-          <p className={styles.fieldLabel}>Objetivo</p>
-          <p>{item.objective}</p>
+      {context.length > 0 && (
+        <section className={styles.contextRow}>
+          {context.map(([label, value]) => (
+            <div className={styles.contextCell} key={label}>
+              <p className={styles.sectionLabel}>{label}</p>
+              <p className={styles.contextValue}>{value}</p>
+            </div>
+          ))}
         </section>
       )}
       <section className={styles.detailSection}>
         <p className={styles.sectionLabel}>Roteiro</p>
-        <p>{item.script}</p>
+        <p className={styles.readingText}>{item.script}</p>
       </section>
       {item.scenes.length > 0 && (
         <section className={styles.detailSection}>
@@ -95,7 +101,7 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
             {item.scenes.map((scene, sceneIndex) => (
               <li className={styles.sceneItem} key={sceneIndex}>
                 <span aria-hidden="true" className={styles.sceneIndex}>{pad2(sceneIndex + 1)}</span>
-                <p>{scene}</p>
+                <p className={styles.readingText}>{scene}</p>
               </li>
             ))}
           </ol>
@@ -103,7 +109,7 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
       )}
       <section aria-label="CTA" className={styles.detailSection}>
         <p className={styles.sectionLabel}>CTA</p>
-        <p>{item.cta}</p>
+        <p className={styles.readingText}>{item.cta}</p>
       </section>
       {deep.length > 0 && (
         <details className={styles.disclosure}>
@@ -484,6 +490,7 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
             <BriefingDetail
               index={selectedIndex}
               item={selected}
+              key={selected.id}
               onBack={() => setSelectedId(null)}
               onNavigate={(nextIndex) => setSelectedId(items[nextIndex]?.id ?? null)}
               total={items.length}
