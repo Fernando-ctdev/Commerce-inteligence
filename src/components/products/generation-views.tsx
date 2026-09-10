@@ -571,11 +571,22 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
 }
 
 /** Aba Histórico: registro da análise mais recente conhecida pelo backend. */
+const historyDateFormat = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
+const formatHistoryDate = (value: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : historyDateFormat.format(date);
+};
 export function HistoryView({ job }: { job: GenerationRecord | null }) {
   if (!job) return <EmptyRegion>Nenhuma análise registrada até agora.</EmptyRegion>;
+  const createdAt = formatHistoryDate(job.createdAt);
+  /* Estratégia e conteúdos passam a existir juntos, na conclusão do job. */
+  const publishedAt = job.status === "SUCCEEDED" ? formatHistoryDate(job.finishedAt ?? job.createdAt) : null;
   return (
     <section className={styles.panel}>
       <p><strong>{generationStatusLabel(job.status)}</strong> · até {job.targetContentCount} Briefings solicitados</p>
+      {createdAt && <p>Análise criada em {createdAt}.</p>}
+      {publishedAt && <p>Estratégia e conteúdos criados em {publishedAt}.</p>}
       {job.status === "SUCCEEDED" && <p>Resultado completo disponível na aba Conteúdos.</p>}
       {job.error && <p className={styles.error}>{job.error}</p>}
       {job.previousRunId && <p>Esta análise substitui uma tentativa anterior do mesmo produto.</p>}
