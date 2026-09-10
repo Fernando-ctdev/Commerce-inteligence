@@ -10,4 +10,5 @@ import { providerRuntimeConfig } from "../src/modules/commerce-intelligence/prov
 const loadedKeys = loadDotEnvFile(".env");
 console.error("[generation-worker] starting", { database: databaseIdentity(), envFileKeys: loadedKeys ?? null, llmConfigured: Boolean(process.env.LLM_BASE_URL && process.env.LLM_API_KEY && (process.env.LLM_MODEL_BALANCED || process.env.LLM_MODEL_FAST || process.env.LLM_MODEL_QUALITY || process.env.LLM_MODEL_MID || process.env.LLM_MODEL_HIGH)), provider: providerRuntimeConfig() });
 async function main() { validateGenerationConfig(); for (;;) { heartbeat(); await reclaimExpiredGenerations(); const job = await claimGeneration(); if (job) await processGeneration(job.id, job.ownerId); await new Promise((resolve) => setTimeout(resolve, 1000)); } }
-main().catch((error: unknown) => { console.error("[generation-worker] startup/runtime failure", error instanceof Error ? error.message : "unknown error"); process.exitCode = 1; });
+// Falha = sair com erro; o reinício é do orquestrador (compose `restart`), não de loop interno.
+main().catch((error: unknown) => { console.error("[generation-worker] startup/runtime failure", error instanceof Error ? error.message : "unknown error"); process.exit(1); });

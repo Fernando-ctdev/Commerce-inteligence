@@ -224,3 +224,141 @@ test("ADR-017: id raiz não-string ou ausente é omitido", async () => {
     assert.equal(captured?.providerRequestIdSource, undefined);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+// Fallback em cadeia LOW→MID→HIGH: uma vez por tier, apenas disponibilidade, com registro
+// de retry/custo nas métricas (que alimentam o CapabilityEvent; job.attempt não muda).
+type FallbackMetrics = { model: string; retry?: number; fallback?: { from: string; reason: string; providerStatus: number | null; requestBytes: number; durationMs: number } };
+function mockSequenceFetch(models: string[], responses: Array<() => Response | Promise<never>>) {
+  const originalFetch = globalThis.fetch;
+  let call = 0;
+  globalThis.fetch = (async (_url: unknown, init: { body: string }) => {
+    models.push(JSON.parse(init.body).model);
+    const respond = responses[Math.min(call, responses.length - 1)];
+    call += 1;
+    return respond();
+  }) as typeof fetch;
+  return () => { globalThis.fetch = originalFetch; };
+}
+const okResponse = () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200 });
+
+test("fallback MID→HIGH: 503 na tentativa MID re-solicita uma vez em HIGH e registra retry/custo", async () => {
+  const models: string[] = [];
+  const restore = mockSequenceFetch(models, [() => new Response("boom", { status: 503 }), okResponse]);
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
+  let captured: FallbackMetrics | undefined;
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (m) => { captured = m; });
+  } finally { restore(); }
+  assert.deepEqual(models, ["balanced-model", "quality-model"]);
+  assert.equal(captured?.retry, 1);
+  assert.equal(captured?.model, "quality-model");
+  assert.equal(captured?.fallback?.from, "balanced-model");
+  assert.equal(captured?.fallback?.reason, "http_status");
+  assert.equal(captured?.fallback?.providerStatus, 503);
+  assert.ok((captured?.fallback?.requestBytes ?? 0) > 0, "custo da tentativa sacrifada registrado");
+  assert.ok((captured?.fallback?.durationMs ?? -1) >= 0);
+});
+
+test("fallback cobre somente status de disponibilidade (408/429/502/503/504); 4xx config nunca cai", async () => {
+  for (const status of [408, 429, 502, 503, 504]) {
+    const models: string[] = [];
+    const restore = mockSequenceFetch(models, [() => new Response("err", { status }), okResponse]);
+    const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
+    try {
+      await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
+      assert.deepEqual(models, ["balanced-model", "quality-model"], `${status} deve cair em fallback`);
+    } finally { restore(); }
+  }
+  const models: string[] = [];
+  const restore = mockSequenceFetch(models, [() => new Response("bad request", { status: 400 }), okResponse]);
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
+  try {
+    await assert.rejects(provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-PROVIDER");
+    assert.deepEqual(models, ["balanced-model"], "400 (config) não re-solicita");
+  } finally { restore(); }
+});
+
+test("fallback de conexão: fetch falha uma vez e HIGH responde; retry=1 com reason connection", async () => {
+  const models: string[] = [];
+  const restore = mockSequenceFetch(models, [() => { throw new TypeError("fetch failed"); }, okResponse]);
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
+  let captured: FallbackMetrics | undefined;
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (m) => { captured = m; });
+  } finally { restore(); }
+  assert.deepEqual(models, ["balanced-model", "quality-model"]);
+  assert.equal(captured?.retry, 1);
+  assert.equal(captured?.fallback?.reason, "connection");
+});
+
+test("fallback por timeout próprio do provider: reason timeout", async () => {
+  const models: string[] = [];
+  const originalFetch = globalThis.fetch;
+  let call = 0;
+  globalThis.fetch = (async (_url: unknown, init: RequestInit) => {
+    models.push(JSON.parse((init as { body: string }).body).model);
+    if (call === 0) {
+      call += 1;
+      await new Promise((_resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("hang")), 5000);
+        init.signal?.addEventListener("abort", () => { clearTimeout(timer); reject(new DOMException("aborted", "AbortError")); }, { once: true });
+      });
+    }
+    call += 1;
+    return okResponse();
+  }) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 30 });
+  let captured: FallbackMetrics | undefined;
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (m) => { captured = m; });
+  } finally { globalThis.fetch = originalFetch; }
+  assert.deepEqual(models, ["balanced-model", "quality-model"]);
+  assert.equal(captured?.retry, 1);
+  assert.equal(captured?.fallback?.reason, "timeout");
+});
+
+test("abort externo (fencing) nunca cai em fallback", async () => {
+  const models: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: unknown, init: RequestInit) => {
+    models.push(JSON.parse((init as { body: string }).body).model);
+    await new Promise((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    });
+    return okResponse();
+  }) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 20);
+  try {
+    await assert.rejects(provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, controller.signal), (error: GenerationError) => error.code === "GEN-PROVIDER");
+    assert.deepEqual(models, ["balanced-model"], "abort externo não re-solicita");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("GEN-SCHEMA e tarefa HIGH nunca caem em fallback; modelo repetido não re-solicita", async () => {
+  // GEN-SCHEMA: conteúdo sem contrato JSON não re-solicita.
+  const schemaModels: string[] = [];
+  const restoreSchema = mockSequenceFetch(schemaModels, [() => new Response(JSON.stringify({ choices: [{ message: { content: "not-json" } }] }), { status: 200 }), okResponse]);
+  const schemaProvider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
+  try {
+    await assert.rejects(schemaProvider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-SCHEMA");
+    assert.deepEqual(schemaModels, ["balanced-model"], "schema nunca cai em fallback");
+  } finally { restoreSchema(); }
+  // Tarefa HIGH: 503 falha fechado, sem re-solicitação.
+  const highModels: string[] = [];
+  const restoreHigh = mockSequenceFetch(highModels, [() => new Response("boom", { status: 503 }), okResponse]);
+  const highProvider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
+  try {
+    await assert.rejects(highProvider.complete("STRATEGY_SYNTHESIS", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-PROVIDER");
+    assert.deepEqual(highModels, ["quality-model"], "HIGH é topo da cadeia");
+  } finally { restoreHigh(); }
+  // MID e HIGH configurados com o mesmo modelo efetivo: sem re-solicitação inútil.
+  const sameModels: string[] = [];
+  const restoreSame = mockSequenceFetch(sameModels, [() => new Response("boom", { status: 503 }), okResponse]);
+  const sameProvider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
+  try {
+    await assert.rejects(sameProvider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-PROVIDER");
+    assert.deepEqual(sameModels, ["m"], "modelo efetivo igual não re-solicita");
+  } finally { restoreSame(); }
+});

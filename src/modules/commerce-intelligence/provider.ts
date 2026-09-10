@@ -88,6 +88,19 @@ const providerCorrelationOf = (
     };
   return {};
 };
+// Fallback em cadeia LOW→MID→HIGH (decisão do usuário; um passo por tier, uma vez por tier):
+// apenas falhas de disponibilidade (timeout próprio, conexão, HTTP 408/429/502/503/504).
+// Nunca schema/gates/factualidade (GEN-SCHEMA segue fail-closed), nunca abort externo
+// (fencing/cancelamento) e nunca erro de configuração (4xx fora da lista).
+const FALLBACK_STATUSES: ReadonlySet<number> = new Set([408, 429, 502, 503, 504]);
+const TIER_CHAIN: readonly IntelligenceTier[] = ["LOW", "MID", "HIGH"];
+type FallbackFailure = {
+  kind: "timeout" | "connection" | "http_status";
+  providerStatus: number | null;
+  requestBytes: number;
+  durationMs: number;
+};
+
 export function createHttpProvider(config = configFromEnv()): ModelRouter {
   const instruction = (task: LogicalTask): string =>
     INSTRUCTION[task] ??
@@ -108,6 +121,294 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
     model: modelFor("PRODUCT_UNDERSTANDING") || "unset",
     instructionVersion: "slice-003",
   });
+  // Uma tentativa do provider com o modelo dado. Quando `failure` é fornecido, falhas
+  // elegíveis a fallback são classificadas nele antes do throw; todo o restante permanece
+  // fail-closed exatamente como antes (GEN-SCHEMA, 4xx fora da lista, abort externo).
+  const completeOnce = async (
+    task: LogicalTask,
+    input: { trustedContext: unknown; externalData?: unknown },
+    signal: AbortSignal | undefined,
+    onMetrics: ((metrics: ProviderCallMetrics) => void) | undefined,
+    model: string,
+    endpoint: string,
+    failure?: Partial<FallbackFailure>,
+  ): Promise<unknown> => {
+    const endpointOrigin = new URL(endpoint).origin;
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, config.timeoutMs);
+    const forwardAbort = () => controller.abort();
+    signal?.addEventListener("abort", forwardAbort, { once: true });
+    let providerStatus: number | null = null;
+    let providerCorrelation: ProviderRequestCorrelation = {};
+    let responseBytes: number | null = null;
+    let requestBytes = 0;
+    let trustedContextBytes = 0;
+    let externalBytes = 0;
+    const report = () =>
+      onMetrics?.({
+        model,
+        reasoning: "low",
+        providerStatus,
+        requestBytes,
+        trustedContextBytes,
+        externalBytes,
+        responseBytes,
+        durationMs: Date.now() - startedAt,
+        ...providerCorrelation,
+      });
+    try {
+      trustedContextBytes = Buffer.byteLength(
+        JSON.stringify(input.trustedContext),
+        "utf8",
+      );
+      externalBytes = Buffer.byteLength(
+        JSON.stringify(input.externalData ?? {}),
+        "utf8",
+      );
+      const promptInstruction = instruction(task);
+      const body = JSON.stringify({
+        model,
+        temperature: 0.2,
+        reasoning: { effort: "low" },
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: `Retorne somente JSON compatível com o contrato solicitado. ${promptInstruction}`,
+          },
+          {
+            role: "user",
+            content: JSON.stringify({
+              task,
+              trustedContext: input.trustedContext,
+              externalData: input.externalData ?? {},
+            }),
+          },
+        ],
+      });
+      requestBytes = Buffer.byteLength(body, "utf8");
+      const response = await fetch(endpoint, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${config.apiKey}`,
+        },
+        body,
+      });
+      providerStatus = response.status;
+      if (!response.ok) {
+        // ADR-017: extrai somente a chave raiz `id` do corpo de erro (nunca o corpo/mensagem).
+        let errorBodyRootId: unknown;
+        try {
+          errorBodyRootId = (
+            JSON.parse(await response.text()) as Record<string, unknown>
+          )?.id;
+        } catch {
+          errorBodyRootId = undefined;
+        }
+        providerCorrelation = providerCorrelationOf(
+          response.headers,
+          requestIdHeader(response.headers) === null
+            ? errorBodyRootId
+            : undefined,
+        );
+        const rate: Record<string, string> = {};
+        for (const header of [
+          "retry-after",
+          "x-ratelimit-reset",
+          "x-ratelimit-remaining",
+          "x-ratelimit-limit",
+        ]) {
+          const value = response.headers.get(header);
+          if (value) rate[header] = value;
+        }
+        // Classificação para fallback ANTES do throw (mesmo erro/telemetria de sempre).
+        if (failure && !signal?.aborted && FALLBACK_STATUSES.has(providerStatus))
+          Object.assign(failure, {
+            kind: "http_status",
+            providerStatus,
+            requestBytes,
+            durationMs: Date.now() - startedAt,
+          } satisfies FallbackFailure);
+        console.info("[generation-provider] metrics", {
+          task,
+          tier: ROUTER_MAP[task],
+          model,
+          endpoint: endpointOrigin,
+          durationMs: Date.now() - startedAt,
+          providerStatus,
+          errorKind: "http_status",
+          rate,
+          timeoutMs: config.timeoutMs,
+          ok: false,
+          errorName: "http_status",
+          ...providerCorrelation,
+        });
+        throw new GenerationError(
+          "GEN-PROVIDER",
+          "Provider indisponível",
+          true,
+          {
+            task,
+            providerStatus,
+            errorKind: "http_status",
+            model,
+            endpoint: endpointOrigin,
+            ...providerCorrelation,
+            ...(Object.keys(rate).length > 0 ? { rate } : {}),
+          },
+        );
+      }
+      const text = await response.text();
+      responseBytes = Buffer.byteLength(text, "utf8");
+      let envelope: {
+        choices?: Array<{ message?: { content?: string } }>;
+        id?: unknown;
+      } | null = null;
+      let content: unknown;
+      try {
+        envelope = JSON.parse(text) as {
+          choices?: Array<{ message?: { content?: string } }>;
+          id?: unknown;
+        };
+        content = envelope?.choices?.[0]?.message?.content;
+      } catch {
+        throw new GenerationError(
+          "GEN-SCHEMA",
+          "Resposta JSON do provider inválida",
+        );
+      }
+      if (typeof content !== "string")
+        throw new GenerationError(
+          "GEN-SCHEMA",
+          "Resposta do provider sem conteúdo",
+        );
+      providerCorrelation = providerCorrelationOf(
+        response.headers,
+        requestIdHeader(response.headers) === null ? envelope?.id : undefined,
+      );
+      let parsedContent: unknown;
+      try {
+        parsedContent = JSON.parse(content);
+      } catch {
+        throw new GenerationError(
+          "GEN-SCHEMA",
+          "Conteúdo do provider sem contrato JSON",
+        );
+      }
+      // Guard de tipo raiz ANTES da métrica: array/não-objeto é GEN-SCHEMA tipado com
+      // detail, não GEN-PROVIDER genérico pós-métrica (regressão do job count16).
+      if (
+        !parsedContent ||
+        typeof parsedContent !== "object" ||
+        Array.isArray(parsedContent)
+      ) {
+        console.info("[generation-provider] metrics", {
+          task,
+          tier: ROUTER_MAP[task],
+          model,
+          endpoint: endpointOrigin,
+          instructionHash: instructionHash(promptInstruction),
+          durationMs: Date.now() - startedAt,
+          providerStatus,
+          responseBytes,
+          timeoutMs: config.timeoutMs,
+          ok: false,
+          errorName: "GEN-SCHEMA-root-shape",
+          ...providerCorrelation,
+        });
+        throw new GenerationError(
+          "GEN-SCHEMA",
+          "Resposta do provider deve ser um objeto JSON",
+          true,
+          {
+            task,
+            providerStatus,
+            rootShape: Array.isArray(parsedContent)
+              ? "array"
+              : typeof parsedContent,
+            model,
+            endpoint: endpointOrigin,
+            ...providerCorrelation,
+          },
+        );
+      }
+      const checked = assertProviderOutput(parsedContent);
+      console.info("[generation-provider] metrics", {
+        task,
+        tier: ROUTER_MAP[task],
+        model,
+        endpoint: endpointOrigin,
+        reasoning: "low",
+        instructionHash: instructionHash(promptInstruction),
+        durationMs: Date.now() - startedAt,
+        requestBytes,
+        trustedContextBytes,
+        externalBytes,
+        responseBytes,
+        providerStatus,
+        timeoutMs: config.timeoutMs,
+        ok: true,
+        ...providerCorrelation,
+      });
+      return checked;
+    } catch (error) {
+      if (error instanceof GenerationError) throw error;
+      const name =
+        error instanceof Error
+          ? error.name
+          : typeof error === "string"
+            ? error
+            : "unknown error";
+      const message = error instanceof Error ? error.message : String(error);
+      // Timeout próprio (timer) ou falha de conexão são elegíveis; abort externo
+      // (fencing/cancelamento) nunca cai em fallback.
+      if (failure && !signal?.aborted)
+        Object.assign(failure, {
+          kind: timedOut ? "timeout" : "connection",
+          providerStatus,
+          requestBytes,
+          durationMs: Date.now() - startedAt,
+        } satisfies FallbackFailure);
+      console.info("[generation-provider] metrics", {
+        task,
+        tier: ROUTER_MAP[task],
+        model,
+        endpoint: endpointOrigin,
+        instructionHash: instructionHash(INSTRUCTION[task] ?? ""),
+        durationMs: Date.now() - startedAt,
+        providerStatus,
+        responseBytes,
+        timeoutMs: config.timeoutMs,
+        ok: false,
+        errorName: name,
+        ...providerCorrelation,
+      });
+      throw new GenerationError(
+        "GEN-PROVIDER",
+        "Provider indisponível",
+        true,
+        {
+          task,
+          providerStatus,
+          model,
+          endpoint: endpointOrigin,
+          ...providerCorrelation,
+          error: { name, message },
+        },
+      );
+    } finally {
+      report();
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", forwardAbort);
+    }
+  };
   return {
     async complete(
       task: LogicalTask,
@@ -125,264 +426,80 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
       )
         throw new GenerationError("GEN-PROVIDER", "Provider não configurado");
       // Gate interno: evidência de modelo/endpoint efetivos em toda falha persistida.
-      const endpointOrigin = new URL(base).origin;
       guard(task);
       const endpoint = base.replace(/\/$/, "").endsWith("/chat/completions")
         ? base
         : `${base.replace(/\/$/, "")}/chat/completions`;
-      const startedAt = Date.now();
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), config.timeoutMs);
-      const forwardAbort = () => controller.abort();
-      signal?.addEventListener("abort", forwardAbort, { once: true });
-      let providerStatus: number | null = null;
-      let providerCorrelation: ProviderRequestCorrelation = {};
-      let responseBytes: number | null = null;
-      let requestBytes = 0;
-      let trustedContextBytes = 0;
-      let externalBytes = 0;
-      const report = () =>
-        onMetrics?.({
-          model: modelFor(task),
-          reasoning: "low",
-          providerStatus,
-          requestBytes,
-          trustedContextBytes,
-          externalBytes,
-          responseBytes,
-          durationMs: Date.now() - startedAt,
-          ...providerCorrelation,
-        });
-      try {
-        trustedContextBytes = Buffer.byteLength(
-          JSON.stringify(input.trustedContext),
-          "utf8",
-        );
-        externalBytes = Buffer.byteLength(
-          JSON.stringify(input.externalData ?? {}),
-          "utf8",
-        );
-        const promptInstruction = instruction(task);
-        const body = JSON.stringify({
-          model: modelFor(task),
-          temperature: 0.2,
-          reasoning: { effort: "low" },
-          response_format: { type: "json_object" },
-          messages: [
-            {
-              role: "system",
-              content: `Retorne somente JSON compatível com o contrato solicitado. ${promptInstruction}`,
-            },
-            {
-              role: "user",
-              content: JSON.stringify({
-                task,
-                trustedContext: input.trustedContext,
-                externalData: input.externalData ?? {},
-              }),
-            },
-          ],
-        });
-        requestBytes = Buffer.byteLength(body, "utf8");
-        const response = await fetch(endpoint, {
-          method: "POST",
-          signal: controller.signal,
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${config.apiKey}`,
-          },
-          body,
-        });
-        providerStatus = response.status;
-        if (!response.ok) {
-          // ADR-017: extrai somente a chave raiz `id` do corpo de erro (nunca o corpo/mensagem).
-          let errorBodyRootId: unknown;
-          try {
-            errorBodyRootId = (
-              JSON.parse(await response.text()) as Record<string, unknown>
-            )?.id;
-          } catch {
-            errorBodyRootId = undefined;
-          }
-          providerCorrelation = providerCorrelationOf(
-            response.headers,
-            requestIdHeader(response.headers) === null
-              ? errorBodyRootId
-              : undefined,
-          );
-          const rate: Record<string, string> = {};
-          for (const header of [
-            "retry-after",
-            "x-ratelimit-reset",
-            "x-ratelimit-remaining",
-            "x-ratelimit-limit",
-          ]) {
-            const value = response.headers.get(header);
-            if (value) rate[header] = value;
-          }
-          console.info("[generation-provider] metrics", {
-            task,
-            tier: ROUTER_MAP[task],
-            model: modelFor(task),
-            endpoint: endpointOrigin,
-            durationMs: Date.now() - startedAt,
-            providerStatus,
-            errorKind: "http_status",
-            rate,
-            timeoutMs: config.timeoutMs,
-            ok: false,
-            errorName: "http_status",
-            ...providerCorrelation,
-          });
-          throw new GenerationError(
-            "GEN-PROVIDER",
-            "Provider indisponível",
-            true,
-            {
-              task,
-              providerStatus,
-              errorKind: "http_status",
-              model: modelFor(task),
-              endpoint: endpointOrigin,
-              ...providerCorrelation,
-              ...(Object.keys(rate).length > 0 ? { rate } : {}),
-            },
-          );
+      // Cadeia de fallback do tier base para cima, apenas com modelos efetivamente
+      // distintos do modelo corrente (modelo repetido não re-solicita).
+      const baseModel = modelFor(task);
+      const chain: string[] = [];
+      let current = baseModel;
+      for (
+        const tier of TIER_CHAIN.slice(TIER_CHAIN.indexOf(ROUTER_MAP[task]) + 1)
+      ) {
+        const candidate = config.models?.[tier];
+        if (candidate && candidate !== current) {
+          chain.push(candidate);
+          current = candidate;
         }
-        const text = await response.text();
-        responseBytes = Buffer.byteLength(text, "utf8");
-        let envelope: {
-          choices?: Array<{ message?: { content?: string } }>;
-          id?: unknown;
-        } | null = null;
-        let content: unknown;
-        try {
-          envelope = JSON.parse(text) as {
-            choices?: Array<{ message?: { content?: string } }>;
-            id?: unknown;
-          };
-          content = envelope?.choices?.[0]?.message?.content;
-        } catch {
-          throw new GenerationError(
-            "GEN-SCHEMA",
-            "Resposta JSON do provider inválida",
-          );
-        }
-        if (typeof content !== "string")
-          throw new GenerationError(
-            "GEN-SCHEMA",
-            "Resposta do provider sem conteúdo",
-          );
-        providerCorrelation = providerCorrelationOf(
-          response.headers,
-          requestIdHeader(response.headers) === null ? envelope?.id : undefined,
-        );
-        let parsedContent: unknown;
-        try {
-          parsedContent = JSON.parse(content);
-        } catch {
-          throw new GenerationError(
-            "GEN-SCHEMA",
-            "Conteúdo do provider sem contrato JSON",
-          );
-        }
-        // Guard de tipo raiz ANTES da métrica: array/não-objeto é GEN-SCHEMA tipado com
-        // detail, não GEN-PROVIDER genérico pós-métrica (regressão do job count16).
-        if (
-          !parsedContent ||
-          typeof parsedContent !== "object" ||
-          Array.isArray(parsedContent)
-        ) {
-          console.info("[generation-provider] metrics", {
-            task,
-            tier: ROUTER_MAP[task],
-            model: modelFor(task),
-            endpoint: endpointOrigin,
-            instructionHash: instructionHash(promptInstruction),
-            durationMs: Date.now() - startedAt,
-            providerStatus,
-            responseBytes,
-            timeoutMs: config.timeoutMs,
-            ok: false,
-            errorName: "GEN-SCHEMA-root-shape",
-            ...providerCorrelation,
-          });
-          throw new GenerationError(
-            "GEN-SCHEMA",
-            "Resposta do provider deve ser um objeto JSON",
-            true,
-            {
-              task,
-              providerStatus,
-              rootShape: Array.isArray(parsedContent)
-                ? "array"
-                : typeof parsedContent,
-              model: modelFor(task),
-              endpoint: endpointOrigin,
-              ...providerCorrelation,
-            },
-          );
-        }
-        const checked = assertProviderOutput(parsedContent);
-        console.info("[generation-provider] metrics", {
-          task,
-          tier: ROUTER_MAP[task],
-          model: modelFor(task),
-          endpoint: endpointOrigin,
-          reasoning: "low",
-          instructionHash: instructionHash(promptInstruction),
-          durationMs: Date.now() - startedAt,
-          requestBytes,
-          trustedContextBytes,
-          externalBytes,
-          responseBytes,
-          providerStatus,
-          timeoutMs: config.timeoutMs,
-          ok: true,
-          ...providerCorrelation,
-        });
-        return checked;
-      } catch (error) {
-        if (error instanceof GenerationError) throw error;
-        const name =
-          error instanceof Error
-            ? error.name
-            : typeof error === "string"
-              ? error
-              : "unknown error";
-        const message = error instanceof Error ? error.message : String(error);
-        console.info("[generation-provider] metrics", {
-          task,
-          tier: ROUTER_MAP[task],
-          model: modelFor(task),
-          endpoint: endpointOrigin,
-          instructionHash: instructionHash(INSTRUCTION[task] ?? ""),
-          durationMs: Date.now() - startedAt,
-          providerStatus,
-          responseBytes,
-          timeoutMs: config.timeoutMs,
-          ok: false,
-          errorName: name,
-          ...providerCorrelation,
-        });
-        throw new GenerationError(
-          "GEN-PROVIDER",
-          "Provider indisponível",
-          true,
-          {
-            task,
-            providerStatus,
-            model: modelFor(task),
-            endpoint: endpointOrigin,
-            ...providerCorrelation,
-            error: { name, message },
-          },
-        );
-      } finally {
-        report();
-        clearTimeout(timer);
-        signal?.removeEventListener("abort", forwardAbort);
       }
+      const attempts: Array<{
+        model: string;
+        failure?: Partial<FallbackFailure>;
+      }> = [
+        { model: baseModel, failure: chain.length > 0 ? {} : undefined },
+        ...chain.map((model) => ({ model })),
+      ];
+      let lastFailure: FallbackFailure | undefined;
+      let lastFailedModel = "";
+      let retryCount = 0;
+      for (const attempt of attempts) {
+        // Registro de retry/custo: as métricas da tentativa corrente carregam a tentativa
+        // sacrifada anterior (retry=N e custo da última falha) para o registro de capability;
+        // job.attempt não muda.
+        const metrics = lastFailure
+          ? (attemptMetrics: ProviderCallMetrics) =>
+              onMetrics?.({
+                ...attemptMetrics,
+                retry: retryCount,
+                fallback: {
+                  from: lastFailedModel,
+                  reason: lastFailure!.kind,
+                  providerStatus: lastFailure!.providerStatus,
+                  requestBytes: lastFailure!.requestBytes,
+                  durationMs: lastFailure!.durationMs,
+                },
+              })
+          : onMetrics;
+        try {
+          return await completeOnce(
+            task,
+            input,
+            signal,
+            metrics,
+            attempt.model,
+            endpoint,
+            attempt.failure,
+          );
+        } catch (error) {
+          if (!attempt.failure?.kind) throw error;
+          lastFailure = attempt.failure as FallbackFailure;
+          lastFailedModel = attempt.model;
+          retryCount += 1;
+          console.info("[generation-provider] fallback", {
+            task,
+            tier: ROUTER_MAP[task],
+            from: attempt.model,
+            reason: lastFailure.kind,
+            providerStatus: lastFailure.providerStatus,
+            requestBytes: lastFailure.requestBytes,
+            durationMs: lastFailure.durationMs,
+          });
+        }
+      }
+      // Inalcançável: a última tentativa da cadeia não tem `failure` e sempre re-propaga.
+      throw new GenerationError("GEN-PROVIDER", "Provider indisponível");
     },
     describe,
     hash,

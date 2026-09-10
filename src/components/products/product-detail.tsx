@@ -87,7 +87,7 @@ function ProductSummaryPanel({ product }: { product: ProductRecord }) {
           )}
           <div className={styles.summaryFact}>
             <dt>Descrição</dt>
-            <dd>{product.description}</dd>
+            <dd className={styles.summaryDescription} tabIndex={0}>{product.description}</dd>
           </div>
         </dl>
       </div>

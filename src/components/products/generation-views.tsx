@@ -577,16 +577,32 @@ const formatHistoryDate = (value: string | null) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : historyDateFormat.format(date);
 };
+/* Duração legível em pt-BR: "45 s" ou "2 min 05 s". */
+const formatHistoryDuration = (start: string | null, end: string | null) => {
+  if (!start || !end) return null;
+  const ms = new Date(end).getTime() - new Date(start).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const totalSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds} s`;
+  return `${minutes} min ${String(seconds).padStart(2, "0")} s`;
+};
 export function HistoryView({ job }: { job: GenerationRecord | null }) {
   if (!job) return <EmptyRegion>Nenhuma análise registrada até agora.</EmptyRegion>;
   const createdAt = formatHistoryDate(job.createdAt);
   /* Estratégia e conteúdos passam a existir juntos, na conclusão do job. */
   const publishedAt = job.status === "SUCCEEDED" ? formatHistoryDate(job.finishedAt ?? job.createdAt) : null;
+  /* Duração cobre o job inteiro (createdAt → finishedAt, inclusive retries);
+     startedAt só serve de início quando createdAt não existe. Falha terminal
+     também mede até o seu finishedAt. */
+  const duration = formatHistoryDuration(job.createdAt ?? job.startedAt, job.finishedAt);
   return (
     <section className={styles.panel}>
       <p><strong>{generationStatusLabel(job.status)}</strong> · até {job.targetContentCount} Briefings solicitados</p>
       {createdAt && <p>Análise criada em {createdAt}.</p>}
       {publishedAt && <p>Estratégia e conteúdos criados em {publishedAt}.</p>}
+      {duration && <p>Tempo total da Commerce Intelligence: {duration}.</p>}
       {job.status === "SUCCEEDED" && <p>Resultado completo disponível na aba Conteúdos.</p>}
       {job.error && <p className={styles.error}>{job.error}</p>}
       {job.previousRunId && <p>Esta análise substitui uma tentativa anterior do mesmo produto.</p>}

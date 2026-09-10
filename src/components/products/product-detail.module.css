@@ -261,6 +261,13 @@
   overflow-wrap: anywhere;
 }
 
+/* Descrições longas rolam internamente em vez de esticar o sumário do produto. */
+.summaryDescription {
+  max-height: 220px;
+  overflow-y: auto;
+  padding-inline-end: 8px;
+}
+
 .summaryList {
   display: grid;
   list-style: none;

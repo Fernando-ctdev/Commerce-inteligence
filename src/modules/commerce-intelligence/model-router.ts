@@ -12,7 +12,9 @@ export const ROUTER_MAP: Record<LogicalTask, IntelligenceTier> = {
 // Envelope de contexto projetado, separando instruções confiáveis de fatos/contexto confirmado
 // e de dados externos não confiáveis. Cada capability recebe apenas a projeção que precisa.
 export type ProjectedContext = { instructions: { task: LogicalTask; tier: IntelligenceTier; instructionHash: string }; confirmedContext: unknown; externalData?: unknown };
-export type ProviderCallMetrics = { model: string; reasoning: string; providerStatus: number | null; requestBytes: number; trustedContextBytes: number; externalBytes: number; responseBytes: number | null; durationMs: number; providerRequestId?: string; providerRequestIdSource?: "header" | "body.id" };
+// Fallback MID→HIGH (decisão do Arquiteto): tentativa sacrifada em MID, registrada com retry/custo.
+export type ProviderFallbackInfo = { from: string; reason: "timeout" | "connection" | "http_status"; providerStatus: number | null; requestBytes: number; durationMs: number };
+export type ProviderCallMetrics = { model: string; reasoning: string; providerStatus: number | null; requestBytes: number; trustedContextBytes: number; externalBytes: number; responseBytes: number | null; durationMs: number; providerRequestId?: string; providerRequestIdSource?: "header" | "body.id"; retry?: number; fallback?: ProviderFallbackInfo };
 // Registro sanitizado por capability: nunca prompts/payload bruto/secrets.
 export type CapabilityRecord = { task: LogicalTask; tier: IntelligenceTier; provider: string; model: string; instructionVersion: string; instructionHash: string; durationMs: number; requestBytes: number; contextBytes: number; responseBytes: number; attempt: number; retry: number };
 export type ModelRouter = { complete(task: LogicalTask, input: { trustedContext: unknown; externalData?: unknown }, signal?: AbortSignal, onMetrics?: (metrics: ProviderCallMetrics) => void): Promise<unknown>; describe(): ModelDescription; hash?(task: LogicalTask): string; modelFor?(task: LogicalTask): string };

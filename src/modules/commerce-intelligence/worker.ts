@@ -5,6 +5,7 @@ import { prisma } from "../db";
 import { runFirstGeneration } from "./engine";
 import { createHttpProvider } from "./provider";
 import type { ModelDescription } from "./model-router";
+import { heartbeat } from "./runtime";
 
 export function fenceMatches(
   job: { leaseOwnerId: string | null; attempt: number },
@@ -48,8 +49,17 @@ function batchSizeForBudget(): number {
 export function callBudget(count: number): number {
   return 4 + Math.ceil(count / batchSizeForBudget());
 }
+// Margem do fallback LOW→MID→HIGH (provider): no pior caso cada chamada MID custa uma
+// chamada extra — 2 fundacionais MID (understanding, mapping) + ceil(N/batch) lotes de
+// brief (MID). Tarefas HIGH não caem em fallback; revisar se tarefas LOW entrarem no
+// ROUTER_MAP (aí a cadeia pode custar 2 extras por chamada).
+export function fallbackCallBudget(count: number): number {
+  return 2 + Math.ceil(count / batchSizeForBudget());
+}
 export function attemptDeadlineMsFor(count: number): number {
-  const derived = callBudget(count) * providerTimeoutMs() + finalizeMarginMs();
+  const derived =
+    (callBudget(count) + fallbackCallBudget(count)) * providerTimeoutMs() +
+    finalizeMarginMs();
   const configured = Number(process.env.GENERATION_ATTEMPT_DEADLINE_MS ?? 0);
   return Number.isFinite(configured) && configured > derived
     ? configured
@@ -73,7 +83,7 @@ function maxAttempts(): number {
 export function validateGenerationConfig(): void {
   const batch = batchSizeForBudget();
   const perCall = providerTimeoutMs();
-  const budget30 = (4 + Math.ceil(30 / batch)) * perCall;
+  const budget30 = (callBudget(30) + fallbackCallBudget(30)) * perCall;
   // Deadline explícito menor que o orçamento p/ count 30 tornaria o count máximo inviável.
   // Lease é renovado por heartbeat, então não é restrição dura; deadline é o abort global.
   const configuredDeadline = Number(
@@ -332,6 +342,10 @@ export async function processGeneration(jobId: string, ownerId: string) {
         loseFence();
         return;
       }
+      // Renova também o marker local de liveness: durante um job longo o loop principal
+      // fica bloqueado em processGeneration e sem isto o healthcheck reiniciaria o container
+      // no meio da tentativa.
+      heartbeat();
       try {
         const renewed = await prisma.commerceIntelligenceJob.updateMany({
           where: {
