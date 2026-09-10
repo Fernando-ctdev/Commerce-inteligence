@@ -7,6 +7,8 @@ import {
   Home,
   Settings2,
   Tag,
+  Flame,
+  MirrorRound
 } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
@@ -25,6 +27,8 @@ type DestinationKey =
   | "products"
   | "studio"
   | "agenda"
+  | "virais"
+  | "ia-influencer"
   | "settings";
 
 const destinations: {
@@ -37,6 +41,8 @@ const destinations: {
   { key: "products", label: "Produtos", href: "/products", icon: Tag },
   { key: "studio", label: "Estúdio", icon: Clapperboard },
   { key: "agenda", label: "Agenda", icon: CalendarDays },
+  { key: "virais", label: "Virais", icon: Flame },
+  { key: "ia-influencer", label: "IA Influencer", icon: MirrorRound },
   {
     key: "settings",
     label: "Configurações",
@@ -114,7 +120,7 @@ export function ShellNav({ active }: { active: DestinationKey }) {
                   title={`${destination.label} indisponível nesta versão`}
                 >
                   {content}
-                  <span className={styles.navUnavailable} id={unavailableId}>Indisponível nesta versão</span>
+                  {/* <span className={styles.navUnavailable} id={unavailableId}>Indisponível nesta versão</span> */}
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );
