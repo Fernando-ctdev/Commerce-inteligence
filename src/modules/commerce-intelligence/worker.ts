@@ -63,8 +63,8 @@ function leakMsDefaultMargin(): number {
   return 120000;
 }
 function maxAttempts(): number {
-  const v = Number(process.env.GENERATION_MAX_ATTEMPTS ?? 3);
-  return Number.isInteger(v) && v > 0 ? v : 3;
+  const v = Number(process.env.GENERATION_MAX_ATTEMPTS ?? 2);
+  return Number.isInteger(v) && v > 0 ? v : 2;
 }
 
 // Validações de parâmetros essenciais no boot (SPEC §B-003-03 / §3.2): rejeita configuração
