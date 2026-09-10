@@ -117,10 +117,10 @@ export function ShellNav({ active }: { active: DestinationKey }) {
                   aria-disabled="true"
                   className={buttonClassName}
                   render={<span />}
-                  title={`${destination.label} indisponível nesta versão`}
+                  title={`${destination.label} Em breve`}
                 >
                   {content}
-                  {/* <span className={styles.navUnavailable} id={unavailableId}>Indisponível nesta versão</span> */}
+                  <span className={styles.navUnavailable} id={unavailableId}>Em breve</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );
