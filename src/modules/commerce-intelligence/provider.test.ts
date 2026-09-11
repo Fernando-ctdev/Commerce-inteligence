@@ -72,7 +72,7 @@ test("never reads LLM_MODEL_BRIEF: env cannot influence routing through configFr
     assert.deepEqual(models, ["balanced-model", "balanced-model"]);
   } finally { restore(); }
 });
-test("sends reasoning effort low explicitly on every capability call", async () => {
+test("sends fixed reasoning effort by logical capability", async () => {
   const bodies: Array<Record<string, unknown>> = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (_url: unknown, init: { body: string }) => { bodies.push(JSON.parse(init.body)); return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200, headers: { "content-type": "application/json" } }); }) as typeof fetch;
@@ -85,7 +85,13 @@ test("sends reasoning effort low explicitly on every capability call", async () 
     await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} });
   } finally { globalThis.fetch = originalFetch; }
   assert.equal(bodies.length, 5);
-  for (const body of bodies) assert.deepEqual(body.reasoning, { effort: "low" });
+  assert.deepEqual(bodies.map((body) => body.reasoning), [
+    { effort: "low" },
+    { effort: "medium" },
+    { effort: "high" },
+    { effort: "high" },
+    { effort: "medium" },
+  ]);
 });
 test("non-2xx captures allowlisted rate headers in detail without body leakage", async () => {
   const originalFetch = globalThis.fetch;

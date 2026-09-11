@@ -30,3 +30,15 @@ test("contradicted numeric fact still rejected with attribute catalog present", 
   const report = validateBriefSet([{ ...base, script: "são 9000 mAh de autonomia" }], ev)[0];
   assert.equal(report.factualStatus, "CONTRADICTED");
 });
+test("CTA neutro passa, claim factual sem evidência repara, contradição rejeita e anti-pattern repara", () => {
+  const neutral = validateBriefSet([{ ...base, cta: "Confira no carrinho" }])[0];
+  assert.equal(neutral.decision, "PASS");
+  const unsupported = validateBriefSet([{ ...base, cta: "Entrega em 24 horas" }])[0];
+  assert.equal(unsupported.factualStatus, "UNSUPPORTED");
+  assert.equal(unsupported.decision, "REPAIR");
+  const contradicted = validateBriefSet([{ ...base, cta: "Não funciona nunca" }], evidence)[0];
+  assert.equal(contradicted.factualStatus, "CONTRADICTED");
+  assert.equal(contradicted.decision, "REJECT");
+  const antiPattern = validateBriefSet([{ ...base, cta: "Corre, última chance!" }])[0];
+  assert.equal(antiPattern.decision, "REPAIR");
+});

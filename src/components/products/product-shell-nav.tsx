@@ -8,7 +8,8 @@ import {
   Settings2,
   Tag,
   Flame,
-  MirrorRound
+  MirrorRound,
+  Fingerprint,
 } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
@@ -28,6 +29,7 @@ type DestinationKey =
   | "studio"
   | "agenda"
   | "virais"
+  | "meu-estilo"
   | "ia-influencer"
   | "settings";
 
@@ -42,6 +44,7 @@ const destinations: {
   { key: "studio", label: "Estúdio", icon: Clapperboard },
   { key: "agenda", label: "Agenda", icon: CalendarDays },
   { key: "virais", label: "Virais", icon: Flame },
+  { key: "meu-estilo", label: "Meu Estilo", icon: Fingerprint },
   { key: "ia-influencer", label: "IA Influencer", icon: MirrorRound },
   {
     key: "settings",

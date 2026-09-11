@@ -149,7 +149,31 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
     const strategyContext = { productId: input.productId, understanding, commercialOpportunities, skill: skill.validationRules, evidenceRefsCatalog: mappingEvidence.refs };
     await emit("BUILDING_STRATEGY");
     strategyOutput = await track("STRATEGY_SYNTHESIS", strategyContext, (onMetrics) => callCapability(input.router!, "STRATEGY_SYNTHESIS", project("STRATEGY_SYNTHESIS", strategyContext, {}), input.signal, onMetrics));
-    const planContext = { productId: input.productId, strategy: strategyOutput, targetContentCount: count };
+    const strategy = validateProductStrategy({ ...strategyOutput, id: `${input.jobId}-strategy`, productId: input.productId, jobId: input.jobId, version: 1, status: "ACTIVE", platformId: skill.id, platformSkillVersion: skill.version, opportunities: commercialOpportunities }, mappingEvidence);
+    const planContext = {
+      productId: input.productId,
+      strategySlice: {
+        primaryPositioning: strategy.primaryPositioning,
+        audiences: strategy.audiences,
+        priorityBenefits: strategy.priorityBenefits,
+        priorityObjections: strategy.priorityObjections,
+        priorityArguments: strategy.priorityArguments,
+        priorityAngles: strategy.priorityAngles,
+        communicationPrinciples: strategy.communicationPrinciples,
+        communicationRisks: strategy.communicationRisks,
+      },
+      plannerSkillSlice: {
+        principles: skill.principles,
+        executionRules: skill.operationalRepertoire.executionRules,
+        hookPatterns: skill.operationalRepertoire.hookPatterns,
+        narrativePatterns: skill.operationalRepertoire.narrativePatterns,
+        proofPatterns: skill.operationalRepertoire.proofPatterns,
+        ctaPatterns: skill.operationalRepertoire.ctaPatterns,
+      },
+      creatorContext: stripCommission(input.creatorContext ?? {}),
+      memoryConstraints: {},
+      targetContentCount: count,
+    };
     await emit("BUILDING_CONTENT_PLAN");
     // Retry único de contrato para o plano: corpo raiz inválido (array/não-objeto) ou
     // opportunities ausentes são re-solicitados uma vez com o mesmo contexto; depois,
@@ -179,6 +203,16 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
   const opportunities = Array.isArray(rawOpportunities) ? rawOpportunities.map((value, index) => validateContentOpportunity({ ...(value && typeof value === "object" ? value as Record<string, unknown> : {}), id: `${input.jobId}-opportunity-${index + 1}` }, input.router ? allowedSourceIds : undefined)) : Array.from({ length: count }, (_, index) => ({ id: `${input.jobId}-opportunity-${index + 1}`, commercialObjective: "Demonstrar valor do produto", angle: `Ângulo ${index + 1}`, coreMessage: input.name, hookMechanism: "demonstração direta", noveltyTargets: [`angle-${index + 1}`] }));
 
   const strategy = strategyOutput ? validateProductStrategy({ ...strategyOutput, id: `${input.jobId}-strategy`, productId: input.productId, jobId: input.jobId, version: 1, status: "ACTIVE", platformId: skill.id, platformSkillVersion: skill.version, opportunities: commercialOpportunities }, mappingEvidence) : { id: `${input.jobId}-strategy`, productId: input.productId, jobId: input.jobId, version: 1, status: "ACTIVE", platformId: skill.id, platformSkillVersion: skill.version, primaryPositioning: input.description, audiences: ["pessoas interessadas no produto"], priorityBenefits: [], priorityObjections: [], priorityArguments: [], priorityAngles: [], communicationPrinciples: [], communicationRisks: [], opportunities: commercialOpportunities };
+  const strategySlice = {
+    primaryPositioning: strategy.primaryPositioning,
+    audiences: strategy.audiences,
+    priorityBenefits: strategy.priorityBenefits,
+    priorityObjections: strategy.priorityObjections,
+    priorityArguments: strategy.priorityArguments,
+    priorityAngles: strategy.priorityAngles,
+    communicationPrinciples: strategy.communicationPrinciples,
+    communicationRisks: strategy.communicationRisks,
+  };
   const plan = validateContentPlan({ ...(opportunityOutput ?? {}), id: `${input.jobId}-plan`, productId: input.productId, strategyVersion: 1, targetContentCount: count, platformId: skill.id, platformSkillVersion: skill.version, opportunities });
 
   // Brief Generator: batches sequenciais de 4-8, um lote por vez (sem Promise.all ilimitado).
@@ -189,7 +223,24 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
   const evidence = buildEvidenceCatalog({ ...input, facts });
   await emit("GENERATING_BRIEFS");
   const generateBatch = async (entries: Array<{ opportunity: ContentOpportunity; causes?: string[]; position: number }>): Promise<BriefCandidate[]> => {
-    const batchContext = { productId: input.productId, strategy, opportunities: entries.map((e) => e.opportunity), creatorContext: stripCommission(input.creatorContext ?? {}), skill: skill.validationRules, causes: entries.map((e) => e.causes ?? []), evidenceRefsCatalog: evidence.refs };
+    const batchContext = {
+      productId: input.productId,
+      opportunities: entries.map((e) => e.opportunity),
+      relevantFacts: evidence.facts.map((value, index) => ({ value, ref: evidence.refs[index] })),
+      evidence: { refs: evidence.refs },
+      strategySlice,
+      creatorContext: stripCommission(input.creatorContext ?? {}),
+      memoryConstraints: {},
+      skillSlice: {
+        principles: skill.principles,
+        executionRules: skill.operationalRepertoire.executionRules,
+        narrativePatterns: skill.operationalRepertoire.narrativePatterns,
+        proofPatterns: skill.operationalRepertoire.proofPatterns,
+        ctaPatterns: skill.operationalRepertoire.ctaPatterns,
+      },
+      variety: { dimensions: ["angle", "hook", "structure", "cta"] },
+      causes: entries.map((e) => e.causes ?? []),
+    };
     let rawBatch: unknown[];
     if (input.router) {
       const batchCall = (onMetrics?: (metrics: ProviderCallMetrics) => void) => callCapability(input.router!, "CONTENT_BRIEF_GENERATION", project("CONTENT_BRIEF_GENERATION", batchContext, {}), input.signal, onMetrics);

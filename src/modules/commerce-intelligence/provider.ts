@@ -61,6 +61,13 @@ const INSTRUCTION: Record<LogicalTask, string> = {
   CONTENT_BRIEF_GENERATION:
     "Retorne um objeto JSON raiz com o campo items contendo EXATAMENTE a mesma quantidade de briefings que oportunidades recebidas na entrada, um briefing por oportunidade, na mesma ordem. Cada briefing tem angle, hook, script, scenes (array JSON com 2 a 8 strings não vazias; nunca string única, nunca array vazio, nunca fora dessa faixa) e cta. A quantidade de items deve ser exatamente igual à quantidade de oportunidades recebidas; nunca omita, adicione ou duplique. Não inclua contentId, briefVersionId, ownership, status, quota, provider, model, tier ou comandos de workflow.",
 };
+const REASONING_BY_TASK: Record<LogicalTask, "low" | "medium" | "high"> = {
+  PRODUCT_UNDERSTANDING: "low",
+  COMMERCIAL_OPPORTUNITY_MAPPING: "medium",
+  STRATEGY_SYNTHESIS: "high",
+  CONTENT_PLAN_GENERATION: "high",
+  CONTENT_BRIEF_GENERATION: "medium",
+};
 // ADR-017: correlação sanitizada — header precede; na ausência de header, apenas a chave
 // raiz JSON `id` do corpo (nunca o corpo/mensagem). ASCII 1–200; inválido omite ambos.
 const PROVIDER_REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
@@ -152,7 +159,7 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
     const report = () =>
       onMetrics?.({
         model,
-        reasoning: "low",
+        reasoning: REASONING_BY_TASK[task],
         providerStatus,
         requestBytes,
         trustedContextBytes,
@@ -174,7 +181,7 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
       const body = JSON.stringify({
         model,
         temperature: 0.2,
-        reasoning: { effort: "low" },
+        reasoning: { effort: REASONING_BY_TASK[task] },
         response_format: { type: "json_object" },
         messages: [
           {
@@ -345,7 +352,7 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
         tier: ROUTER_MAP[task],
         model,
         endpoint: endpointOrigin,
-        reasoning: "low",
+        reasoning: REASONING_BY_TASK[task],
         instructionHash: instructionHash(promptInstruction),
         durationMs: Date.now() - startedAt,
         requestBytes,

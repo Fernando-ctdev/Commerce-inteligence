@@ -154,19 +154,13 @@ function classifyFactual(
   brief: ContentBriefVersion,
   evidence: EvidenceSnapshot,
 ): FactAssessment {
-  if (!evidence || evidence.facts.length === 0)
-    return {
-      status: "INFERRED_BUT_SAFE",
-      claimType: "subjetivo",
-      causes: [],
-      evidenceRefs: [],
-    };
   const text = normalizeForVariety(
     [
       brief.script,
       brief.benefit ?? "",
       brief.pain ?? "",
       brief.desire ?? "",
+      brief.cta,
     ].join(" "),
   );
   const negated = /(não|nunca|jamais)\s/.test(text);
@@ -318,6 +312,8 @@ function classifyFactual(
   };
 }
 
+const CTA_AD_ANTIPATTERNS = /\b(última chance|so hoje|só hoje|garantido|resultado garantido|melhor do mercado|imperdível|milagre|corre|não perca|nao perca)\b/i;
+
 export function validateBriefSet(
   briefs: unknown[],
   evidence: EvidenceSnapshot = { facts: [], refs: [] },
@@ -364,6 +360,8 @@ export function validateBriefSet(
                 : "claim contradito",
             ]),
       );
+    if (CTA_AD_ANTIPATTERNS.test(brief.cta))
+      issues.push("CTA contém anti-pattern publicitário");
     const platformOk =
       platformId === "tiktok-commerce" &&
       skillVersion === "tiktok-commerce@1.0" &&
