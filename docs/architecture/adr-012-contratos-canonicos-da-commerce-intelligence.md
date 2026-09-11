@@ -35,6 +35,16 @@ Regras de contrato:
 
 A implementação da engine só é aceita com o Golden Dataset (produtos reais de categorias variadas) permitindo avaliar factualidade, variedade e naturalidade entre versões.
 
+### Política de cardinalidade versionada
+
+A cardinalidade dos arrays de cada contrato canônico é centralizada em uma política versionada por campo (`CARDINALITY_POLICY` / `CARDINALITY_POLICY_VERSION`, em `src/modules/commerce-intelligence/contract.ts`), não espalhada pelos validadores:
+
+- **Máximos rígidos**: cada campo tem máximo incondicional; excedente é falha tipada `GEN-SCHEMA` fail-closed — nunca truncamento silencioso do provider.
+- **Mínimos condicionais à evidência**: o mínimo estrutural só se aplica quando existe evidência autorizada (snapshot com refs); sem evidência, arrays estratégicos podem chegar vazios, porque o provider não inventa fatos.
+- **Validação/reparo sem invenção**: violações de cardinalidade alimentam os retries de contrato existentes (envelope sem oportunidades, lote com cardinalidade divergente, raiz de plano inválida) e, persistindo, falham fechado — nenhum item é fabricado, preenchido ou aparado para fechar quantidade.
+- **Versionamento e compatibilidade histórica**: a versão da política é registrada por geração (eventos de capability e sinais persistidos); gerações anteriores permanecem válidas sob a política vigente na sua execução, e mudanças de limites exigem bump explícito de versão.
+- **Catálogo de evidências 1:1**: cada fato do catálogo tem exatamente uma `evidenceRef` na mesma posição (`fact:<chave>`; a partir do segundo valor de uma chave, `fact:<chave>:<n>`), garantindo que a citação por índice na proveniência aponte para o fato correto.
+
 ## Alternativas consideradas
 
 | Opção | Decisão | Trade-off |
