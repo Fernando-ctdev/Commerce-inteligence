@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { GenerationError } from "./errors";
 import { emitJobEvent, sanitizeGateReports } from "./observability";
 import { prisma } from "../db";
+import { extractJobCreatorContext } from "../creator-preferences/service";
 import { runFirstGeneration } from "./engine";
 import { createHttpProvider } from "./provider";
 import type { ModelDescription } from "./model-router";
@@ -412,12 +413,10 @@ export async function processGeneration(jobId: string, ownerId: string) {
         seller: product.seller,
         sourceUrl: product.sourceUrl,
       },
-      creatorContext:
-        product.generationConstraints &&
-        typeof product.generationConstraints === "object" &&
-        !Array.isArray(product.generationConstraints)
-          ? (product.generationConstraints as Record<string, unknown>)
-          : {},
+      // Slice 011 (ADR-018): CreatorContext vem do snapshot imutável capturado no Job —
+      // retry técnico reutiliza o mesmo snapshot; GenerationConstraints do Product não
+      // substitui preferências de estilo.
+      creatorContext: extractJobCreatorContext(job.inputSnapshot),
       memory: {},
     });
     if (!(await checkFence()))

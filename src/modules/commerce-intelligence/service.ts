@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { CommerceIntelligenceJobStatus } from "@prisma/client";
 import { prisma } from "../db";
+import { captureJobPreferenceSnapshots } from "../creator-preferences/service";
 import { GenerationError } from "./errors";
 import { validateTargetContentCount } from "./contract";
 import { monthUtc } from "../entitlements/generation";
@@ -28,7 +29,10 @@ export async function startCommerceIntelligence(input: { tenantId: string; userI
     const reserved = await tx.generationUsageReservation.aggregate({ _sum: { quantity: true }, where: { tenantId: input.tenantId, generatedContentsMonth: month, status: { in: ["RESERVED", "CONFIRMED"] } } });
     const capacity = Number(process.env.GENERATED_CONTENTS_MONTH_LIMIT);
     if (!Number.isInteger(capacity) || capacity <= 0 || (reserved._sum.quantity ?? 0) + count > capacity) throw new GenerationError("GEN-CAPACITY", "Capacidade mensal insuficiente");
-    const job = await tx.commerceIntelligenceJob.create({ data: { tenantId: input.tenantId, userId: input.userId, productId: product.id, idempotencyKey: input.idempotencyKey, fingerprint, targetContentCount: count, generatedContentsMonth: month, status: "QUEUED", stage: "UNDERSTANDING_PRODUCT" } });
+    // Slice 011 (ADR-018): snapshot autorizado das preferências no início do Job — gravado
+    // no inputSnapshot; retry técnico reutiliza e mutação posterior não altera a execução.
+    const { accountContext, creatorPreferences } = await captureJobPreferenceSnapshots(input.tenantId, tx);
+    const job = await tx.commerceIntelligenceJob.create({ data: { tenantId: input.tenantId, userId: input.userId, productId: product.id, idempotencyKey: input.idempotencyKey, fingerprint, targetContentCount: count, generatedContentsMonth: month, status: "QUEUED", stage: "UNDERSTANDING_PRODUCT", inputSnapshot: { accountContext, creatorPreferences } } });
     await tx.generationUsageReservation.create({ data: { tenantId: input.tenantId, jobId: job.id, generatedContentsMonth: job.generatedContentsMonth, quantity: count } });
     return job;
   });

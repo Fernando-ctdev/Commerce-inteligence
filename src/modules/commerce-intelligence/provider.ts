@@ -1,4 +1,5 @@
 import { GenerationError } from "./errors";
+import { CARDINALITY_POLICY } from "./contract";
 import {
   assertProviderOutput,
   instructionHash,
@@ -49,9 +50,32 @@ export function providerRuntimeConfig(config = configFromEnv()) {
     timeoutMs: config.timeoutMs,
   };
 }
+// Cardinalidade de PRODUCT_UNDERSTANDING: os limites declarados ao provider derivam da
+// CARDINALITY_POLICY (fonte única de verdade), então prompt e validação nunca divergem.
+// A instrução pede SELEÇÃO prévia até o limite — a redação anterior ("sem truncar, prefira
+// os itens mais sustentados") conflitava com o máximo e o modelo em reasoning low resolvia
+// o conflito excedendo a política (causa do GEN-SCHEMA de purchaseBarriers/emotionalBenefits).
+const UNDERSTANDING_FIELDS = [
+  "coreUseCases",
+  "capabilities",
+  "functionalBenefits",
+  "emotionalBenefits",
+  "desiredOutcomes",
+  "purchaseTriggers",
+  "purchaseBarriers",
+  "communicationRisks",
+  "evidenceRefs",
+] as const;
+export const UNDERSTANDING_CARDINALITY: Record<string, number> = Object.fromEntries(
+  UNDERSTANDING_FIELDS.map((field) => [field, CARDINALITY_POLICY[field].max]),
+);
+const UNDERSTANDING_LIMITS = UNDERSTANDING_FIELDS.map(
+  (field) => `${field}: ≤ ${CARDINALITY_POLICY[field].max}`,
+).join(", ");
+export const PRODUCT_UNDERSTANDING_INSTRUCTION =
+  `Inclua productId e os arrays coreUseCases, capabilities, functionalBenefits, emotionalBenefits, desiredOutcomes, purchaseTriggers, purchaseBarriers, communicationRisks e evidenceRefs. Limites rígidos por campo, validados sem tolerância: ${UNDERSTANDING_LIMITS} — evidenceRefs apenas com refs do evidenceRefsCatalog. Antes de responder, selecione por campo no máximo o limite declarado: se a evidência autorizada sustentar mais itens, mantenha somente os itens mais sustentados até o limite; resposta acima do limite é rejeitada por completo. Use somente evidência autorizada: sem evidência para um campo, retorne [] em vez de inventar; com evidência, retorne ao menos um item quando aplicável. Não inclua status, tenantId, userId, quota, provider, model, tier ou comandos de workflow.`;
 const INSTRUCTION: Record<LogicalTask, string> = {
-  PRODUCT_UNDERSTANDING:
-    "Inclua productId e os arrays coreUseCases, capabilities, functionalBenefits, emotionalBenefits, desiredOutcomes, purchaseTriggers, purchaseBarriers, communicationRisks e evidenceRefs. Cada array tem NO MÁXIMO 8 itens, e evidenceRefs NO MÁXIMO 25 refs do evidenceRefsCatalog. Use somente evidência autorizada: sem evidência para um campo, retorne [] em vez de inventar; com evidência, retorne ao menos um item quando aplicável. Nunca ultrapasse os máximos; sem truncar, prefira os itens mais sustentados pela evidência. Não inclua status, tenantId, userId, quota, provider, model, tier ou comandos de workflow.",
+  PRODUCT_UNDERSTANDING: PRODUCT_UNDERSTANDING_INSTRUCTION,
   COMMERCIAL_OPPORTUNITY_MAPPING:
     "Objetivo único: mapear oportunidades comerciais. Retorne APENAS um envelope JSON com as chaves audiences, situations, pains, desires, objections (arrays de strings, que podem ser [] quando não houver evidência autorizada) e opportunities: array NÃO VAZIO com NO MÍNIMO 1 e NO MÁXIMO maxOpportunities itens (valor recebido no contexto); quando a evidência autorizada for suficiente, prefira 3 ou mais oportunidades — nunca invente oportunidades ou preencha cardinalidade sem suporte. Cada opportunity tem audience, situation, pain, desire, desiredOutcome, objection (quando houver evidência), relevantCapabilities, benefits, proofOptions (cada um com NO MÁXIMO 6 itens), sellingArgument, confidence (0 a 1) e evidenceRefs (refs apenas do evidenceRefsCatalog). Arrays sem evidência autorizada devem ser []; nunca invente fatos. Sem texto fora do JSON, sem análise ou raciocínio no corpo; não inclua ids persistentes, ownership, status, quota, provider, model, tier ou comandos de workflow.",
   STRATEGY_SYNTHESIS:
@@ -126,7 +150,7 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
   const describe = () => ({
     provider: "openai-compatible",
     model: modelFor("PRODUCT_UNDERSTANDING") || "unset",
-    instructionVersion: "slice-003",
+    instructionVersion: "slice-011",
   });
   // Uma tentativa do provider com o modelo dado. Quando `failure` é fornecido, falhas
   // elegíveis a fallback são classificadas nele antes do throw; todo o restante permanece

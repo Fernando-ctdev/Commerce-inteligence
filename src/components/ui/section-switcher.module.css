@@ -43,7 +43,7 @@
 
 .trigger[aria-selected="true"] {
   border-color: var(--color-brand);
-  color: var(--color-text);
+  color: var(--color-brand);
   font-weight: 600;
 }
 

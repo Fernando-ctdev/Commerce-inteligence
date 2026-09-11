@@ -456,6 +456,39 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 - Alimentar a memória usada pelas gerações subsequentes (os eventos já são persistidos; este slice expõe a visão).
 
 **Out of Scope:** `Content Vault` como destino global de navegação, biblioteca de mídia, busca semântica, embeddings, analytics externo, campanhas obrigatórias.
+---
+
+### Slice 011 — Meu estilo e CreatorContext
+**Status:** `Pendente — documentação concluída; código bloqueado até coordenação`
+
+**User Outcome:** O creator abre `Meu estilo` pelo botão já existente na sidebar, salva preferências recorrentes e recebe novas gerações adaptadas ao seu estilo sem misturar preferências, fatos de Product e `GenerationConstraints`.
+
+**Depends On:** Slice 001; Slice 003 para a integração da geração
+
+**Domain Areas:** Identity/Tenant, Creator Preferences, Commerce Intelligence, Configurações
+
+**Scope:**
+
+- Persistir `CreatorPreferences` no registro one-to-one `TenantPreference`, scoped por `tenantId`.
+- Expor leitura e atualização autenticadas via Configurações.
+- Validar defaults, tipos, limites, cardinalidade e campos desconhecidos server-side.
+- Capturar snapshot estável no `CommerceIntelligenceJob`.
+- Projetar `CreatorContext` por capability com allowlist e limite de contexto.
+- Preservar o botão `Meu estilo` na sidebar em desktop, tablet e mobile.
+- Registrar na SPEC/PLAN a exceção explícita do usuário à navegação fixa do `DESIGN.md`; não alterar `DESIGN.md`.
+
+**Out of Scope:** preferências por Product, equipes/RBAC, geração de áudio/vídeo, publicação, analytics, recomendação automática, reescrita de Strategy, nova navegação operacional e alteração do `DESIGN.md`.
+
+**Documentação:** `docs/architecture/adr-018-creator-preferences-e-context.md`, `docs/specs/slice-011/SPEC.md`, `docs/plans/slice-011/PLAN.md`.
+
+---
+
+### Atualização deliberada de navegação
+
+O `DESIGN.md` mantém sua lista fixa como baseline visual, mas a decisão explícita do usuário prevalece para este slice: `Meu estilo` é um botão adicional da sidebar. Ele aponta somente para a área de preferências e não cria destinos paralelos para Hoje, Produção, Conteúdos ou Vault.
+
+---
+
 
 ## Dependências entre slices
 
@@ -469,7 +502,8 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
          │       └─ 007 Estúdio e execução
          │           └─ 009 Home operacional (também depende de 006)
          ├─ 008 Nova geração com memória (após 004/005 para o loop completo)
-         └─ 010 Histórico do Produto (depende de 004 e 006)
+         ├─ 010 Histórico do Produto (depende de 004 e 006)
+         └─ 011 Meu estilo e CreatorContext (depende de 001 e integra geração após 003)
 ```
 
 Nenhuma alteração deste mapa antecipa código, SPEC ou PLAN de um slice futuro.
@@ -496,6 +530,8 @@ Nenhuma alteração deste mapa antecipa código, SPEC ou PLAN de um slice futuro
 | §24–25, §33, §58 (17): memória, variedade, nova geração reutilizando Strategy | 008 |
 | §30: Home operacional | 009 |
 | §29, §58 (16): histórico no contexto do Produto | 010 |
+| PRD §11 e PRD-Engine §23: CreatorPreferences persistente e CreatorContext por capability | 011 |
+| Decisão explícita do usuário: botão Meu estilo na sidebar | 011; exceção registrada em SPEC/PLAN, sem alterar DESIGN |
 | §46: explicabilidade | 004 |
 | §39: busca e filtros contextuais | 004 / 006 / 007 / 010 |
 | §49–50: métricas de produto (instrumentação) | transversal aos slices, sem slice próprio |

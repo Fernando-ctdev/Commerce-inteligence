@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHttpProvider } from "./provider";
+import { createHttpProvider, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY } from "./provider";
+import { CARDINALITY_POLICY } from "./contract";
 import { GenerationError } from "./errors";
 
 function mockProviderFetch(models: string[]) {
@@ -367,4 +368,27 @@ test("GEN-SCHEMA e tarefa HIGH nunca caem em fallback; modelo repetido não re-s
     await assert.rejects(sameProvider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-PROVIDER");
     assert.deepEqual(sameModels, ["m"], "modelo efetivo igual não re-solicita");
   } finally { restoreSame(); }
+});
+
+test("PRODUCT_UNDERSTANDING instruction declares exactly the active CARDINALITY_POLICY maxima", () => {
+  // Guarda anti-drift: os limites do prompt derivam da política (fonte única de verdade).
+  // Se a política mudar e o prompt voltar a texto manual divergente, este teste falha.
+  for (const field of Object.keys(UNDERSTANDING_CARDINALITY))
+    assert.ok(field in CARDINALITY_POLICY, `${field} deve existir na CARDINALITY_POLICY`);
+  for (const [field, rule] of Object.entries(CARDINALITY_POLICY)) {
+    if (!(field in UNDERSTANDING_CARDINALITY)) continue;
+    assert.equal(UNDERSTANDING_CARDINALITY[field], rule.max, `limite derivado de ${field}`);
+    assert.ok(
+      PRODUCT_UNDERSTANDING_INSTRUCTION.includes(`${field}: ≤ ${rule.max}`),
+      `instrução não declara o limite vigente de ${field}`,
+    );
+  }
+  assert.equal(PRODUCT_UNDERSTANDING_INSTRUCTION.includes("productId"), true);
+});
+
+test("PRODUCT_UNDERSTANDING instruction never contradicts the limit with a no-trimming directive", () => {
+  // Causa do GEN-SCHEMA observado: "sem truncar" conflitava com o máximo e o modelo em
+  // reasoning low resolvia o conflito excedendo purchaseBarriers/emotionalBenefits.
+  assert.equal(PRODUCT_UNDERSTANDING_INSTRUCTION.includes("sem truncar"), false);
+  assert.ok(PRODUCT_UNDERSTANDING_INSTRUCTION.includes("até o limite"));
 });

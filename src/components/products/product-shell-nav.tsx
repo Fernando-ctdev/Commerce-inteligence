@@ -44,7 +44,7 @@ const destinations: {
   { key: "studio", label: "Estúdio", icon: Clapperboard },
   { key: "agenda", label: "Agenda", icon: CalendarDays },
   { key: "virais", label: "Virais", icon: Flame },
-  { key: "meu-estilo", label: "Meu Estilo", icon: Fingerprint },
+  { key: "meu-estilo", label: "Meu estilo", href: "/my-style", icon: Fingerprint },
   { key: "ia-influencer", label: "IA Influencer", icon: MirrorRound },
   {
     key: "settings",

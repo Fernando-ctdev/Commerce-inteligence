@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, SunMoon } from "lucide-react";
+import { LogOut, Settings2, SunMoon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -75,6 +75,7 @@ export function SettingsView({ email }: SettingsViewProps) {
       <section aria-labelledby="account-title" className={styles.section}>
         <p className={styles.eyebrow}>Conta</p>
         <div className={styles.identity}>
+          <Settings2 aria-hidden="true" className={styles.sectionIcon} />
           <Avatar size="lg">
             <AvatarFallback>{email.slice(0, 1).toUpperCase()}</AvatarFallback>
           </Avatar>

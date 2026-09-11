@@ -79,6 +79,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.pageTitleIcon {
+  color: var(--color-brand);
+  flex: 0 0 auto;
+  height: 24px;
+  width: 24px;
+}
+
+.objectTitle {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
 
 .objectFacts {
   color: var(--color-text-secondary);
@@ -129,11 +141,25 @@
   max-width: 100%;
   overscroll-behavior-x: contain;
   overflow-x: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+}
+
+.tabsScroller::-webkit-scrollbar {
+  display: none;
 }
 
 .tabsList {
+  display: flex;
+  gap: 8px;
   margin-block-end: 4px;
+  min-width: max-content;
+  width: fit-content;
+}
+
+.tabsList > button {
+  flex: 0 0 auto;
+  min-width: 108px;
+  width: auto;
 }
 
 .overviewContent {
@@ -370,29 +396,15 @@
   .archivedLayout {
     grid-template-columns: minmax(0, 1fr);
   }
-
-  .summaryBody {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .sideRail {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .statusCard {
-    grid-column: 1 / -1;
-  }
 }
 
 @media (max-width: 767px) {
   .tabsScroller {
-    overflow: visible;
+    overflow-x: auto;
   }
 
   .tabsList {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
+    width: max-content;
   }
 
   .objectHeader {

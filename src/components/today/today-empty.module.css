@@ -16,10 +16,20 @@
 }
 
 .empty h2 {
+  align-items: center;
+  display: flex;
   font-size: 32px;
+  gap: 10px;
   letter-spacing: -0.035em;
   line-height: 36px;
   margin: 0;
+}
+
+.titleIcon {
+  color: var(--color-brand);
+  flex: 0 0 auto;
+  height: 24px;
+  width: 24px;
 }
 
 .empty > p {

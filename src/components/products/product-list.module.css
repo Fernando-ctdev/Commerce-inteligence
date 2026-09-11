@@ -42,6 +42,19 @@
   line-height: 20px;
   margin: 8px 0 0;
 }
+.pageTitle {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin: 0;
+}
+
+.pageTitleIcon {
+  color: var(--color-brand);
+  flex: 0 0 auto;
+  height: 20px;
+  width: 20px;
+}
 
 .controls {
   display: grid;
@@ -55,6 +68,21 @@
   font-weight: 600;
 }
 
+.searchField {
+  position: relative;
+}
+
+.searchIcon {
+  color: var(--color-text-muted);
+  height: 18px;
+  left: 12px;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+}
+
 .searchInput {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -63,19 +91,79 @@
   font: inherit;
   min-height: 44px;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 10px 12px 10px 40px;
   width: 100%;
+}
+.filterScroller {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filterScroller::-webkit-scrollbar {
+  display: none;
 }
 
 .filters {
-  max-width: 100%;
-  min-width: 0;
-  width: 100%;
+  display: flex;
+  gap: 8px;
+  min-width: max-content;
+  width: fit-content;
 }
 
-.filters [data-slot="tabs-trigger"] {
-  min-height: 44px;
+.filter {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-secondary);
   cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  gap: 8px;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 108px;
+  padding: 8px 16px;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+  white-space: nowrap;
+}
+
+.filter:hover {
+  background: var(--color-surface-secondary);
+}
+
+.filter[data-pressed] {
+  background: color-mix(in srgb, var(--color-focus) 8%, var(--color-surface));
+  border-color: var(--color-focus);
+  color: var(--color-focus);
+}
+
+.filter[data-pressed] .filterCount {
+  background: color-mix(in srgb, var(--color-focus) 14%, var(--color-surface));
+  color: var(--color-focus);
+}
+
+.filter:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.filterCount {
+  align-items: center;
+  background: var(--color-surface-secondary);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  justify-content: center;
+  min-width: 22px;
+  padding: 2px 6px;
 }
 
 .secondaryButton {
@@ -177,6 +265,10 @@
   min-width: 0;
   overflow: hidden;
 }
+.listIntro h2.pageTitle {
+  display: flex;
+  margin: 0;
+}
 
 .eyebrow,
 .cardMeta {
@@ -236,102 +328,126 @@
 .cardBody {
   display: grid;
   flex: 1 1 auto;
-  gap: 6px;
+  gap: 12px;
   min-height: 0;
   min-width: 0;
-  padding: 12px 14px;
+  padding: 16px;
+}
+
+.cardHeader {
+  min-width: 0;
+  position: relative;
 }
 
 .card h3 {
   display: -webkit-box;
-  font-size: 20px;
-  line-height: 26px;
+  font-size: 18px;
+  line-height: 24px;
   margin: 0;
+  min-width: 0;
+  padding-inline-end: 32px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow-wrap: anywhere;
   overflow: hidden;
 }
 
-.cardBody > p:not(.cardMeta) {
+.cardMenuTrigger {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
   color: var(--color-text-secondary);
-  display: -webkit-box;
-  font-size: 14px;
-  line-height: 20px;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  position: absolute;
+  right: 0;
+  top: -4px;
+  width: 32px;
+}
+
+.cardMenuTrigger:hover {
+  background: var(--color-surface-secondary);
+  color: var(--color-text);
+}
+
+.cardMenuTrigger:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.cardMenuTrigger svg {
+  height: 18px;
+  width: 18px;
+}
+
+.cardStatus,
+.cardActivity {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
   margin: 0;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
+}
+
+.cardStatus {
+  color: var(--color-brand);
+  font-weight: 600;
+}
+
+.cardMetrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.cardMetrics span {
+  align-items: center;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  font-size: 12px;
+  gap: 5px;
+  line-height: 16px;
+}
+
+.cardMetrics span > svg {
+  color: var(--color-text-muted);
+  height: 15px;
+  width: 15px;
+}
+
+.cardMetrics strong {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 .cardAction {
-  align-items: center;
-  border-top: 1px solid var(--color-border);
-  color: var(--color-text);
-  display: flex;
-  font-size: 14px;
-  font-weight: 700;
-  gap: 8px;
-  justify-content: center;
-  margin-top: auto;
-  min-height: 44px;
-  padding: 12px 14px;
-  text-align: center;
-  text-decoration: none;
-}
-
-/* Links no padrão botão: ícone de traço 16px, como nos Buttons. */
-.primaryButton > svg,
-.cardAction > svg {
-  flex: 0 0 auto;
-  height: 16px;
-  width: 16px;
-}
-
-.card > a.cardAction {
   align-items: center;
   background: var(--color-action);
   border: 1px solid var(--color-action);
   border-radius: 8px;
   color: var(--color-on-action);
-  inset: auto;
-  left: 50%;
-  margin: 0;
-  max-width: calc(100% - 32px);
-  opacity: 0;
+  display: flex;
+  font-size: 14px;
+  font-weight: 700;
+  gap: 8px;
+  justify-content: center;
+  margin: 0 16px 16px;
+  min-height: 44px;
   padding: 10px 16px;
-  pointer-events: none;
-  position: absolute;
   text-align: center;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  transition: opacity 160ms ease-out;
-  width: max-content;
-  z-index: 1;
+  text-decoration: none;
 }
 
-.card:hover > a.cardAction,
-.card:focus-within > a.cardAction {
-  opacity: 1;
-  pointer-events: auto;
+.cardAction:hover {
+  filter: brightness(0.96);
 }
 
-.card > a.cardAction:hover {
-  background: var(--color-action);
-  color: var(--color-on-action);
-}
-
-@media (hover: none) {
-  .card > a.cardAction {
-    border-radius: 0;
-    border-inline: 0;
-    border-block-end: 0;
-    opacity: 1;
-    pointer-events: auto;
-    position: static;
-    transform: none;
-    width: 100%;
-  }
+.cardAction > svg {
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
 }
 
 .galleryEmpty {
@@ -401,7 +517,11 @@
     width: 100%;
   }
   .filters {
-    width: 100%;
+    width: max-content;
+  }
+
+  .filter {
+    flex: 0 0 auto;
   }
 
   .cards {

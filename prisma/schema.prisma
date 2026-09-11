@@ -143,10 +143,24 @@ model TenantEntitlement {
   @@map("tenant_entitlements")
 }
 
+// Slice 011 — CreatorPreferences (ADR-018): estilo recorrente do creator no mesmo
+// registro one-to-one. targetContentCount permanece GenerationConstraint e não é projetado.
 model TenantPreference {
-  tenantId           String @id
-  targetContentCount Int
-  tenant             Tenant @relation(fields: [tenantId], references: [id])
+  tenantId                 String  @id
+  targetContentCount       Int
+  language                 String  @default("pt-BR")
+  market                   String?
+  appearsOnCamera          Boolean?
+  prefersVoiceOver         Boolean?
+  preferredDurationSeconds Int?
+  tone                     String?
+  executionStyle           String?
+  recordingEquipment       Json?
+  recordingSupport         Json?
+  recordsAlone             Boolean?
+  restrictions             Json?
+  notes                    Json?
+  tenant                   Tenant  @relation(fields: [tenantId], references: [id])
 
   @@map("tenant_preferences")
 }

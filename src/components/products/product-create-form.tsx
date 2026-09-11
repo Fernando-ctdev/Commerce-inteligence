@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Trash2 } from "lucide-react";
+import { ChevronDown, Tag, Trash2 } from "lucide-react";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -811,8 +811,9 @@ export function ProductCreateForm({
           className={styles.section}
         >
           <div className={styles.sectionHeading}>
-            <h2 id="new-product-facts-title">
-              {isEdit? "Dados do produto" : "Informe os dados do produto"}
+            <h2 className={styles.sectionTitle} id="new-product-facts-title">
+              <Tag aria-hidden="true" className={styles.sectionIcon} />
+              {isEdit ? "Dados do produto" : "Informe os dados do produto"}
             </h2>
             <p className={styles.sectionDescription}>
               Essas informações ajudam a inteligência do sistema a criar a

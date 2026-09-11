@@ -53,7 +53,8 @@ test("mapping context is compact and allowlisted without strategy plan skill or 
   await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", facts: { features: ["x"], rawAggregate: ["não enviar"], memoryHistory: ["nada"] }, targetContentCount: 1, router });
   assert.ok(capturedContext);
   const keys = Object.keys(capturedContext).sort();
-  assert.deepEqual(keys, ["evidenceRefsCatalog", "maxOpportunities", "product", "productId", "understanding"]);
+  // Slice 011: creatorContext (projeção allowlisted) entra no contexto do mapping (ADR-018).
+  assert.deepEqual(keys, ["creatorContext", "evidenceRefsCatalog", "maxOpportunities", "product", "productId", "understanding"]);
   assert.ok(!("facts" in capturedContext));
   assert.ok(!("strategy" in capturedContext));
   assert.ok(!("skill" in capturedContext));

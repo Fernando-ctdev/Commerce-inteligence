@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Fingerprint, Home, Settings2, Tag } from "lucide-react";
 import logo from "@/assets/logo/logo.png";
 import logoText from "@/assets/logo/logo_text.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -21,10 +22,17 @@ type ProductShellProps = {
   title: string;
   action?: ReactNode;
   children: ReactNode;
-  active?: "home" | "products" | "settings";
+  active?: "home" | "products" | "settings" | "meu-estilo";
   /** Identidade autenticada resolvida server-side (requireSession). */
   user?: { name?: string | null; email: string };
 };
+
+const pageIcons = {
+  home: Home,
+  products: Tag,
+  settings: Settings2,
+  "meu-estilo": Fingerprint,
+} as const;
 
 function userInitials(user: { name?: string | null; email: string }) {
   const source = (user.name ?? user.email).trim();
@@ -41,6 +49,7 @@ export function ProductShell({
   children,
   user,
 }: ProductShellProps) {
+  const PageIcon = pageIcons[active];
   const sidebar = (
     <Sidebar collapsible="icon" side="left">
       <SidebarHeader className={styles.sidebarHeader}>
@@ -80,7 +89,10 @@ export function ProductShell({
       <SidebarInset className={styles.inset}>
         <header className={styles.toolbar}>
           <SidebarTrigger aria-label="Alternar navegação" />
-          <h1 className={styles.title}>{title}</h1>
+          <h1 className={styles.title}>
+            <PageIcon aria-hidden="true" className={styles.titleIcon} />
+            {title}
+          </h1>
           {action && <div className={styles.toolbarAction}>{action}</div>}
         </header>
 
@@ -89,7 +101,10 @@ export function ProductShell({
             aria-label="Abrir navegação"
             className={styles.mobileTrigger}
           />
-          <h1 className={styles.title}>{title}</h1>
+          <h1 className={styles.title}>
+            <PageIcon aria-hidden="true" className={styles.titleIcon} />
+            {title}
+          </h1>
         </header>
         <GenerationToast />
 

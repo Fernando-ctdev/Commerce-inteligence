@@ -57,7 +57,7 @@
 }
 
 .sectionIcon {
-  color: var(--color-text);
+  color: var(--color-brand);
   flex: 0 0 auto;
   height: 16px;
   width: 16px;
@@ -140,4 +140,90 @@
   display: flex;
   gap: 12px;
   min-width: 0;
+}
+
+/* Meu estilo (SPEC slice-011): grid de campos, inputs nativos e ações.
+   Mesmos tokens e assinatura visual dos formulários existentes. */
+.fieldGrid {
+  display: grid;
+  gap: 20px;
+}
+
+.field input:not([type="checkbox"]),
+.field textarea {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  font: inherit;
+  min-height: 44px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.field textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.field input:not([type="checkbox"])[aria-invalid="true"],
+.field textarea[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.field input:not([type="checkbox"]):focus-visible,
+.field textarea:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.field input:disabled,
+.field textarea:disabled,
+.field select:disabled {
+  opacity: 0.6;
+}
+
+.fieldCheckGroup {
+  display: grid;
+  gap: 12px;
+}
+
+.fieldCheck {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.fieldCheck input[type="checkbox"] {
+  accent-color: var(--color-brand, var(--color-focus));
+  block-size: 18px;
+  inline-size: 18px;
+}
+
+.fieldCheck label {
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.savedNote {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+}
+
+/* Mobile: uma coluna; o ritmo de 20px se mantém. */
+@media (max-width: 767px) {
+  .fieldGrid {
+    gap: 16px;
+  }
 }

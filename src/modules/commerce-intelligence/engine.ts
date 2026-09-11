@@ -48,6 +48,20 @@ function stripCommission(value: unknown): unknown {
       .map(([key, nested]) => [key, stripCommission(nested)]),
   );
 }
+// Slice 011 (ADR-018/SPEC): projeção allowlisted do CreatorContext por capability.
+// O agregado persistente nunca é enviado ao provider; userId, tenantId, quota,
+// targetContentCount e qualquer campo fora da lista ficam de fora.
+const CREATOR_CONTEXT_ALLOWLIST: Record<LogicalTask, readonly string[]> = {
+  PRODUCT_UNDERSTANDING: [],
+  COMMERCIAL_OPPORTUNITY_MAPPING: ["language", "market", "tone", "executionStyle", "restrictions"],
+  STRATEGY_SYNTHESIS: ["language", "market", "tone", "executionStyle", "restrictions", "notes"],
+  CONTENT_PLAN_GENERATION: ["language", "market", "preferredDurationSeconds", "executionStyle", "restrictions"],
+  CONTENT_BRIEF_GENERATION: ["language", "market", "appearsOnCamera", "prefersVoiceOver", "preferredDurationSeconds", "tone", "executionStyle", "recordingEquipment", "recordingSupport", "recordsAlone", "restrictions", "notes"],
+};
+export function projectCreatorContext(task: LogicalTask, context: unknown): Record<string, unknown> {
+  const source = context && typeof context === "object" && !Array.isArray(context) ? context as Record<string, unknown> : {};
+  return Object.fromEntries(CREATOR_CONTEXT_ALLOWLIST[task].filter((key) => source[key] !== undefined).map((key) => [key, source[key]]));
+}
 // Projeções allowlistadas por capability: contexto confirmado separado de dados externos.
 // O sistema (instruction server-side) é confiável por construção; a capability recebe só o necessário.
 function project(task: string, confirmed: unknown, external: unknown): Parameters<ModelRouter["complete"]>[1] {
@@ -128,6 +142,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
       understanding: { category: understanding?.category, coreUseCases: understanding?.coreUseCases, functionalBenefits: understanding?.functionalBenefits, emotionalBenefits: understanding?.emotionalBenefits, desiredOutcomes: understanding?.desiredOutcomes, purchaseTriggers: understanding?.purchaseTriggers, purchaseBarriers: understanding?.purchaseBarriers, evidenceRefs: understanding?.evidenceRefs },
       evidenceRefsCatalog: mappingEvidence.refs,
       maxOpportunities: mappingOpportunityLimit(),
+      creatorContext: projectCreatorContext("COMMERCIAL_OPPORTUNITY_MAPPING", input.creatorContext),
     };
     await emit("MAPPING_COMMERCIAL_OPPORTUNITIES");
     // Mapping envelope do provider é não confiável: um único retry de contrato re-solicita
@@ -146,7 +161,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
     }
     // IDs de oportunidade comercial são server-derived.
     envelope.opportunities.forEach((opportunity, index) => { commercialOpportunities.push({ ...opportunity, id: `${input.jobId}-commercial-${index + 1}` }); });
-    const strategyContext = { productId: input.productId, understanding, commercialOpportunities, skill: skill.validationRules, evidenceRefsCatalog: mappingEvidence.refs };
+    const strategyContext = { productId: input.productId, understanding, commercialOpportunities, skill: skill.validationRules, evidenceRefsCatalog: mappingEvidence.refs, creatorContext: projectCreatorContext("STRATEGY_SYNTHESIS", input.creatorContext) };
     await emit("BUILDING_STRATEGY");
     strategyOutput = await track("STRATEGY_SYNTHESIS", strategyContext, (onMetrics) => callCapability(input.router!, "STRATEGY_SYNTHESIS", project("STRATEGY_SYNTHESIS", strategyContext, {}), input.signal, onMetrics));
     const strategy = validateProductStrategy({ ...strategyOutput, id: `${input.jobId}-strategy`, productId: input.productId, jobId: input.jobId, version: 1, status: "ACTIVE", platformId: skill.id, platformSkillVersion: skill.version, opportunities: commercialOpportunities }, mappingEvidence);
@@ -170,7 +185,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
         proofPatterns: skill.operationalRepertoire.proofPatterns,
         ctaPatterns: skill.operationalRepertoire.ctaPatterns,
       },
-      creatorContext: stripCommission(input.creatorContext ?? {}),
+      creatorContext: projectCreatorContext("CONTENT_PLAN_GENERATION", input.creatorContext),
       memoryConstraints: {},
       targetContentCount: count,
     };
@@ -229,7 +244,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
       relevantFacts: evidence.facts.map((value, index) => ({ value, ref: evidence.refs[index] })),
       evidence: { refs: evidence.refs },
       strategySlice,
-      creatorContext: stripCommission(input.creatorContext ?? {}),
+      creatorContext: projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
       memoryConstraints: {},
       skillSlice: {
         principles: skill.principles,

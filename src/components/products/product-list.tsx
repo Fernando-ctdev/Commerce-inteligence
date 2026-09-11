@@ -3,20 +3,47 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowRight, Plus } from "lucide-react";
+import { toast } from "sonner";
+import { Toggle } from "@base-ui/react/toggle";
+import { ToggleGroup } from "@base-ui/react/toggle-group";
+import { ArrowRight, CheckCircle2, Ellipsis, FileText, Plus, Search, Tag, Video } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SectionSwitcher, SectionSwitcherList, SectionSwitcherTrigger } from "@/components/ui/section-switcher";
 
-import { listProducts, ProductApiError, ProductRecord } from "./product-api";
-import { formatCommission, formatPriceWithCurrency } from "./product-form-model";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+
+import {
+  archiveProduct,
+  deleteProduct,
+  listProducts,
+  ProductApiError,
+  ProductRecord,
+} from "./product-api";
 import styles from "./product-list.module.css";
+
+const filterOptions = [
+  ["all", "Todos"],
+  ["active", "Ativos"],
+  ["pending", "Pendentes"],
+  ["archived", "Arquivados"],
+] as const;
+
+type ProductFilter = (typeof filterOptions)[number][0];
 
 export function ProductList() {
   const [products, setProducts] = useState<ProductRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "active" | "pending" | "archived">("all");
+  const [filter, setFilter] = useState<ProductFilter>("all");
+  const [actionProduct, setActionProduct] = useState<ProductRecord | null>(null);
+  const [actionType, setActionType] = useState<"archive" | "delete" | null>(null);
+  const [actionPending, setActionPending] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,14 +84,55 @@ export function ProductList() {
       return matchesFilter && matchesQuery;
     });
   }, [filter, products, query]);
+  const filterCounts = useMemo(
+    () => ({
+      all: products.length,
+      active: products.filter((product) => product.active).length,
+      pending: products.filter(
+        (product) => product.readiness !== "READY" && product.active,
+      ).length,
+      archived: products.filter((product) => !product.active).length,
+    }),
+    [products],
+  );
+  async function confirmAction() {
+    if (!actionProduct || !actionType || actionPending) return;
+    setActionPending(true);
+    try {
+      if (actionType === "archive") {
+        await archiveProduct(actionProduct.id);
+        toast.success("Produto arquivado.");
+      } else {
+        await deleteProduct(actionProduct.id);
+        toast.success("Produto excluído.");
+      }
+      setActionProduct(null);
+      setActionType(null);
+      await load();
+    } catch (caught) {
+      const message =
+        caught instanceof ProductApiError
+          ? caught.message
+          : actionType === "archive"
+            ? "Não foi possível arquivar este produto agora."
+            : "Não foi possível excluir este produto agora.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setActionPending(false);
+    }
+  }
 
   return (
     <div className={styles.list}>
       <div className={styles.listIntro}>
         <div>
-          <h2>Produtos</h2>
+          <h2 className={styles.pageTitle}>
+            <Tag aria-hidden="true" className={styles.pageTitleIcon} />
+            Produtos
+          </h2>
           <p className={styles.listHint}>
-            Encontre um produto e continue pelo próximo passo.
+            Gerencie os produtos que você promove e continue de onde parou.
           </p>
         </div>
         <Link className={styles.primaryButton} href="/products/new">
@@ -76,26 +144,41 @@ export function ProductList() {
         <label className={styles.searchLabel} htmlFor="product-search">
           Buscar produtos
         </label>
-        <input
-          className={styles.searchInput}
-          id="product-search"
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Nome, categoria ou descrição"
-          type="search"
-          value={query}
-        />
-        <SectionSwitcher
-          aria-label="Filtrar produtos"
-          onValueChange={(value) => setFilter(value as typeof filter)}
-          value={filter}
-        >
-          <SectionSwitcherList className={styles.filters}>
-            <SectionSwitcherTrigger value="all">Todos</SectionSwitcherTrigger>
-            <SectionSwitcherTrigger value="active">Ativos</SectionSwitcherTrigger>
-            <SectionSwitcherTrigger value="pending">Pendentes</SectionSwitcherTrigger>
-            <SectionSwitcherTrigger value="archived">Arquivados</SectionSwitcherTrigger>
-          </SectionSwitcherList>
-        </SectionSwitcher>
+        <div className={styles.searchField}>
+          <Search aria-hidden="true" className={styles.searchIcon} />
+          <input
+            className={styles.searchInput}
+            id="product-search"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Nome, categoria ou descrição"
+            type="search"
+            value={query}
+          />
+        </div>
+        <div className={styles.filterScroller}>
+          <ToggleGroup
+            aria-label="Filtrar produtos"
+            className={styles.filters}
+            onValueChange={(value) => {
+              const nextFilter = value[0] as ProductFilter | undefined;
+              if (nextFilter) setFilter(nextFilter);
+            }}
+            value={[filter]}
+          >
+            {filterOptions.map(([value, label]) => (
+              <Toggle
+                className={styles.filter}
+                key={value}
+                value={value}
+              >
+                {label}
+                <span className={styles.filterCount}>
+                  {filterCounts[value]}
+                </span>
+              </Toggle>
+            ))}
+          </ToggleGroup>
+        </div>
       </div>
       {loading ? (
         <ul aria-hidden="true" className={styles.cards}>
@@ -189,59 +272,95 @@ export function ProductList() {
                   </div>
                 )}
                 <div className={styles.cardBody}>
-                  <div className={styles.cardTopline}>
-                    <p className={styles.cardMeta}>
-                      {product.category || "Produto"}
-                    </p>
-                    <span
-                      aria-label={`Estado: ${product.readiness === "ANALYZING" ? "Analisando" : product.readiness === "READY" ? "Pronto" : product.readiness === "FAILED" ? "Falhou" : product.active ? "Pendente" : "Arquivado"}`}
-                      className={
-                        product.readiness === "ANALYZING"
-                          ? styles.statusPending
-                          : product.readiness === "READY"
-                            ? styles.statusReady
-                            : product.readiness === "FAILED"
-                              ? styles.statusFailed
-                              : product.active
-                                ? styles.statusActive
-                                : styles.statusArchived
-                      }
-                      data-readiness={product.readiness}
-                      role="status"
-                    >
-                      <span aria-hidden="true" className={styles.statusDot} />
-                      {product.readiness === "ANALYZING"
-                        ? "Analisando"
-                        : product.readiness === "READY"
-                          ? "Pronto"
-                          : product.readiness === "FAILED"
-                            ? "Falhou"
-                            : product.active
-                              ? "Pendente"
-                              : "Arquivado"}
-                    </span>
+                  <div className={styles.cardHeader}>
+                    <h3>{product.name}</h3>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        aria-label={`Mais ações para ${product.name}`}
+                        className={styles.cardMenuTrigger}
+                      >
+                        <Ellipsis aria-hidden="true" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setActionProduct(product);
+                            setActionType("archive");
+                          }}
+                        >
+                          Arquivar produto
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          render={<Link href={`/products/${encodeURIComponent(product.id)}`} />}
+                        >
+                          Editar produto
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setActionProduct(product);
+                            setActionType("delete");
+                          }}
+                          variant="destructive"
+                        >
+                          Excluir produto
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                  <h3>{product.name}</h3>
-                  <p className={styles.cardFacts}>
-                    {[
-                      formatPriceWithCurrency(product.price, product.priceCurrency),
-                      formatCommission(product.commissionType, product.commission, product.price, product.priceCurrency),
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
+                  {product.readiness === "ANALYZING" ? (
+                    <>
+                      <p className={styles.cardStatus}>
+                        Estratégia em geração · 0 conteúdos prontos
+                      </p>
+                      <p className={styles.cardActivity}>
+                        Preparando estratégia e conteúdos...
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div aria-label="Resumo operacional" className={styles.cardMetrics}>
+                        <span><FileText aria-hidden="true" /><strong>{product.targetContentCount}</strong> conteúdos</span>
+                        <span><CheckCircle2 aria-hidden="true" /><strong>8</strong> aprovações</span>
+                        <span><Video aria-hidden="true" /><strong>4</strong> gravados</span>
+                      </div>
+                      <p className={styles.cardActivity}>Última atividade: hoje</p>
+                    </>
+                  )}
                 </div>
                 <Link
                   className={styles.cardAction}
                   href={`/products/${encodeURIComponent(product.id)}`}
                 >
+                  {product.readiness === "ANALYZING" ? "Acompanhar análise" : "Revisar conteúdos"}
                   <ArrowRight aria-hidden="true" />
-                  {product.active ? "Abrir produto" : "Consultar produto"}
                 </Link>
               </li>
             );
           })}
         </ul>
+      )}
+      {actionProduct && actionType && (
+        <ConfirmationDialog
+          confirmLabel={actionType === "archive" ? "Arquivar produto" : "Excluir produto"}
+          description={
+            actionType === "archive"
+              ? `O produto “${actionProduct.name}” será arquivado e deixará de aparecer entre os produtos ativos. Os dados serão preservados.`
+              : `O produto “${actionProduct.name}” será excluído permanentemente.`
+          }
+          error={error}
+          onConfirm={confirmAction}
+          onOpenChange={(open) => {
+            if (!open && !actionPending) {
+              setActionProduct(null);
+              setActionType(null);
+            }
+          }}
+          open
+          pending={actionPending}
+          pendingLabel={actionType === "archive" ? "Arquivando…" : "Excluindo…"}
+          title={actionType === "archive" ? "Arquivar produto?" : "Excluir produto?"}
+          destructive={actionType === "delete"}
+        />
       )}
     </div>
   );

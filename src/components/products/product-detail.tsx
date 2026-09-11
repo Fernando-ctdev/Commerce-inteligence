@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, CircleAlert, Package, Pencil, Save, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, CircleAlert, Package, Pencil, Save, Tag, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -311,7 +311,10 @@ export function ProductDetail({ id }: { id: string }) {
       >
         <div className={styles.objectIdentity}>
           <p className={styles.eyebrow}>Produto</p>
-          <h2 id="product-actions-title">{product.name}</h2>
+          <h2 className={styles.objectTitle} id="product-actions-title">
+            <Tag aria-hidden="true" className={styles.pageTitleIcon} />
+            {product.name}
+          </h2>
         </div>
       </section>
       <ConfirmationDialog
@@ -353,12 +356,14 @@ export function ProductDetail({ id }: { id: string }) {
           onValueChange={changeTab}
           value={tab}
         >
-          <SectionSwitcherList className={styles.tabsList}>
-            <SectionSwitcherTrigger value="overview">Visão geral</SectionSwitcherTrigger>
-            <SectionSwitcherTrigger value="strategy">Estratégia</SectionSwitcherTrigger>
-            <SectionSwitcherTrigger value="contents">Conteúdos</SectionSwitcherTrigger>
-            <SectionSwitcherTrigger value="history">Histórico</SectionSwitcherTrigger>
-          </SectionSwitcherList>
+          <div className={styles.tabsScroller}>
+            <SectionSwitcherList className={styles.tabsList}>
+              <SectionSwitcherTrigger value="overview">Visão geral</SectionSwitcherTrigger>
+              <SectionSwitcherTrigger value="strategy">Estratégia</SectionSwitcherTrigger>
+              <SectionSwitcherTrigger value="contents">Conteúdos</SectionSwitcherTrigger>
+              <SectionSwitcherTrigger value="history">Histórico</SectionSwitcherTrigger>
+            </SectionSwitcherList>
+          </div>
           <SectionSwitcherContent className={styles.overviewContent} value="overview">
             {generation.failed && generation.job && (
               <div className={styles.failureBanner} role="alert">
