@@ -1,13 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildEvidenceCatalog, runFirstGeneration } from "./engine";
+import { CARDINALITY_POLICY_VERSION } from "./contract";
+import { collectJobEvents, resetJobEvents } from "./observability";
 import type { ProviderCallMetrics } from "./model-router";
 const describe = () => ({ provider: "test", model: "test-model", instructionVersion: "slice-003" });
 test("fails closed when provider understanding violates contract", async () => { const router = { describe, complete: async () => ({ tenantId: "forbidden" }) }; await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }), /Resposta inválida/); });
-test("includes non-empty string arrays as stable fact evidence", () => {
+test("includes non-empty string arrays as stable fact evidence with 1:1 facts-to-refs", () => {
   const catalog = buildEvidenceCatalog({ facts: { features: ["Leve", "Compacto"], empty: [], mixed: ["Veloz", 3] } });
-  assert.deepEqual(catalog.refs, ["fact:features"]);
+  assert.deepEqual(catalog.refs, ["fact:features", "fact:features:2"]);
   assert.deepEqual(catalog.facts, ["Leve", "Compacto"]);
+  assert.equal(catalog.facts.length, catalog.refs.length, "cada fato tem exatamente uma ref na mesma posição");
 });
 test("repairs mapping envelope without opportunities via a second contract-true call", async () => {
   let mappingCalls = 0;
@@ -147,3 +150,48 @@ test("capabilities carry provider metrics allowlist for IntelligenceRun metadata
   assert.ok(typeof strategyCap?.durationMs === "number");
 });
 test("requires a provider outside explicit test fallback", async () => { await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1 }), /Provider não configurado/); });
+test("repair of many rejected briefs is chunked by batch size preserving positions and ids", async () => {
+  let briefCalls = 0;
+  const router = { describe, complete: async (task: string, input?: unknown) => {
+    if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["b"], emotionalBenefits: ["e"], desiredOutcomes: ["d"], purchaseTriggers: ["t"], purchaseBarriers: ["b"], communicationRisks: ["r"], evidenceRefs: ["product:name"] };
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
+    if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"], communicationRisks: ["cr"] };
+    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: Array.from({ length: 10 }, (_, i) => ({ commercialObjective: `c${i}`, angle: `a${i}`, coreMessage: `m${i}`, hookMechanism: "h", noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_BRIEF_GENERATION") {
+      briefCalls++;
+      const batch = input as { trustedContext?: { opportunities?: unknown[] } } | undefined;
+      const n = batch?.trustedContext?.opportunities?.length ?? 1;
+      // Rodada inicial: itens idênticos (duplicata estrutural) → 9 de 10 rejeitados.
+      if (briefCalls <= 3) return { items: Array.from({ length: n }, () => ({ angle: "a", hook: "h", script: "igual entre todos", scenes: ["s1", "s2"], cta: "c" })) };
+      // Repair: itens distintos (ângulo/hook/script/cta) → todos passam os gates.
+      return { items: Array.from({ length: n }, (_, i) => ({ angle: `ang ${briefCalls}-${i}`, hook: `hook ${briefCalls}-${i}`, script: `script distinto ${briefCalls}-${i}`, scenes: ["s1", "s2"], cta: `cta ${briefCalls}-${i}` })) };
+    }
+    return {};
+  } };
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 10, router });
+  assert.equal(briefCalls, 6, "3 batches iniciais (4/4/2) + 10 rejeitados em chunks de 4/4/2, nenhum batch acima de 8");
+  assert.equal(result.briefs.length, 10, "exact-N preservado");
+  assert.deepEqual(result.briefs.map((b) => b.contentId), Array.from({ length: 10 }, (_, i) => `j-content-${i + 1}`), "posição/IDs estáveis após repair em chunks");
+  assert.ok(result.reports.every((report) => report.decision === "PASS"));
+  assert.equal(result.repairs, 10);
+});
+test("capability events carry cardinality policy version on success", async () => {
+  const router = { describe, complete: async (task: string) => {
+    if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["b"], emotionalBenefits: ["e"], desiredOutcomes: ["d"], purchaseTriggers: ["t"], purchaseBarriers: ["b"], communicationRisks: ["r"], evidenceRefs: ["product:name"] };
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
+    if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"], communicationRisks: ["cr"] };
+    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", script: "Mostre o Produto", scenes: ["s1", "s2"], cta: "c" }] };
+    return {};
+  } };
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
+  assert.ok(result.capabilities.length >= 5);
+  assert.ok(result.capabilities.every((cap) => cap.cardinalityPolicyVersion === CARDINALITY_POLICY_VERSION), "todo CapabilityEvent persistido carrega a versão da política");
+});
+test("failed capability record and event carry cardinality policy version", async () => {
+  resetJobEvents();
+  const router = { describe, complete: async () => { throw new Error("boom"); } };
+  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }));
+  const failed = collectJobEvents().map((line) => JSON.parse(line) as Record<string, unknown>).find((event) => event.event === "capability.failed");
+  assert.equal(failed?.cardinalityPolicyVersion, CARDINALITY_POLICY_VERSION, "falha de capability registra a versão da política");
+});

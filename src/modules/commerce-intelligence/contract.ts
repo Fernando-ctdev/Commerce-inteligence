@@ -2,7 +2,59 @@ export type FactStatus = "SUPPORTED" | "INFERRED_BUT_SAFE" | "UNSUPPORTED" | "CO
 export type GateDecision = "PASS" | "REPAIR" | "REJECT";
 export class ContractError extends Error { constructor(public readonly code: "GEN-COUNT-REQUIRED" | "GEN-COUNT-RANGE" | "GEN-SCHEMA" | "GEN-FACT" | "GEN-VARIETY" | "GEN-REPAIR-EXHAUSTED", message: string) { super(message); this.name = "ContractError"; } }
 const text = (v: unknown, field: string, max = 2_000): string => { if (typeof v !== "string" || !v.trim() || v.length > max) throw new ContractError("GEN-SCHEMA", `${field} inválido`); return v.trim(); };
-const strings = (v: unknown, field: string, required = true): string[] => { if (!Array.isArray(v) || (required && v.length === 0) || v.some((x) => typeof x !== "string" || !x.trim() || x.length > 500)) throw new ContractError("GEN-SCHEMA", `${field} inválido`); return v.map((x) => (x as string).trim()); };
+// Política centralizada de cardinalidade por campo: máximo rígido incondicional; mínimo
+// estrutural e mínimo condicional à evidência (minWithEvidence aplica quando existe
+// evidência autorizada). Violação é falha tipada GEN-SCHEMA — nunca truncamento,
+// preenchimento ou invenção (B-003-07/ADR-012).
+export const CARDINALITY_POLICY_VERSION = 1;
+export type CardinalityRule = { min: number; minWithEvidence: number; max: number };
+export const CARDINALITY_POLICY: Record<string, CardinalityRule> = {
+  // ProductUnderstanding: arrays estruturais só são exigidos quando há evidência.
+  coreUseCases: { min: 0, minWithEvidence: 1, max: 8 },
+  capabilities: { min: 0, minWithEvidence: 1, max: 8 },
+  functionalBenefits: { min: 0, minWithEvidence: 1, max: 8 },
+  emotionalBenefits: { min: 0, minWithEvidence: 1, max: 8 },
+  desiredOutcomes: { min: 0, minWithEvidence: 1, max: 8 },
+  purchaseTriggers: { min: 0, minWithEvidence: 1, max: 8 },
+  purchaseBarriers: { min: 0, minWithEvidence: 1, max: 8 },
+  communicationRisks: { min: 0, minWithEvidence: 1, max: 8 },
+  evidenceRefs: { min: 0, minWithEvidence: 1, max: 25 },
+  // Oportunidade comercial.
+  relevantCapabilities: { min: 0, minWithEvidence: 1, max: 6 },
+  benefits: { min: 0, minWithEvidence: 1, max: 6 },
+  proofOptions: { min: 0, minWithEvidence: 1, max: 6 },
+  // Envelope de mapping (descritivos opcionais) e Strategy.audiences.
+  audiences: { min: 0, minWithEvidence: 0, max: 10 },
+  situations: { min: 0, minWithEvidence: 0, max: 10 },
+  pains: { min: 0, minWithEvidence: 0, max: 10 },
+  desires: { min: 0, minWithEvidence: 0, max: 10 },
+  objections: { min: 0, minWithEvidence: 0, max: 10 },
+  // Prioridades da Strategy: o caminho determinístico sem provider produz vazios.
+  priorityBenefits: { min: 0, minWithEvidence: 0, max: 10 },
+  priorityObjections: { min: 0, minWithEvidence: 0, max: 10 },
+  priorityArguments: { min: 0, minWithEvidence: 0, max: 10 },
+  priorityAngles: { min: 0, minWithEvidence: 0, max: 10 },
+  communicationPrinciples: { min: 0, minWithEvidence: 0, max: 10 },
+  // Conteúdo e lote de briefings.
+  noveltyTargets: { min: 1, minWithEvidence: 1, max: 4 },
+  scenes: { min: 2, minWithEvidence: 2, max: 8 },
+  items: { min: 1, minWithEvidence: 1, max: 8 },
+  opportunities: { min: 1, minWithEvidence: 3, max: 10 },
+  targetContentCount: { min: 1, minWithEvidence: 1, max: 10 },
+  // Relatórios de validação (GateReport.issues).
+  issues: { min: 0, minWithEvidence: 0, max: 20 },
+};
+const cardinalityRule = (field: string): CardinalityRule => CARDINALITY_POLICY[field] ?? { min: 0, minWithEvidence: 0, max: 20 };
+// hasEvidence: ausência de snapshot ou de refs autorizadas relaxa o mínimo para `min`
+// (sem evidência o provider não pode inventar); com evidência, aplica minWithEvidence.
+const hasEvidence = (evidence?: EvidenceSnapshot): boolean => Boolean(evidence && evidence.refs.length > 0);
+const strings = (v: unknown, field: string, evidence?: EvidenceSnapshot): string[] => {
+  const rule = cardinalityRule(field);
+  const min = hasEvidence(evidence) ? rule.minWithEvidence : rule.min;
+  if (!Array.isArray(v) || v.length < min || v.length > rule.max || v.some((x) => typeof x !== "string" || !x.trim() || x.length > 500))
+    throw new ContractError("GEN-SCHEMA", `cardinalidade de ${field} fora da política (min ${min}, max ${rule.max})`);
+  return v.map((x) => (x as string).trim());
+};
 const id = (v: unknown, field: string): string => { const value = text(v, field, 100); if (!/^[a-zA-Z0-9_-]+$/.test(value)) throw new ContractError("GEN-SCHEMA", `${field} inválido`); return value; };
 export type EvidenceSnapshot = { facts: readonly string[]; refs: readonly string[] };
 // Rejeita quaisquer campos de ownership/persistência/controle que o provider não pode atribuir.
@@ -16,15 +68,17 @@ function validateEvidenceRefs(refs: string[], snapshot: EvidenceSnapshot | undef
   const allowed = new Set(snapshot.refs.map((r) => r.trim()));
   for (const ref of refs) if (!allowed.has(ref)) throw new ContractError("GEN-FACT", `${label} cita evidência fora do snapshot autorizado: ${ref}`);
 }
-export function validateTargetContentCount(value: unknown): number { if (value === undefined || value === null) throw new ContractError("GEN-COUNT-REQUIRED", "Quantidade de conteúdos obrigatória"); if (typeof value !== "number" || !Number.isInteger(value)) throw new ContractError("GEN-COUNT-RANGE", "Quantidade de conteúdos inválida"); if (value < 1 || value > 10) throw new ContractError("GEN-COUNT-RANGE", "Quantidade deve estar entre 1 e 10"); return value; }
+export function validateTargetContentCount(value: unknown): number { const rule = CARDINALITY_POLICY.targetContentCount; if (value === undefined || value === null) throw new ContractError("GEN-COUNT-REQUIRED", "Quantidade de conteúdos obrigatória"); if (typeof value !== "number" || !Number.isInteger(value)) throw new ContractError("GEN-COUNT-RANGE", "Quantidade de conteúdos inválida"); if (value < rule.min || value > rule.max) throw new ContractError("GEN-COUNT-RANGE", `Quantidade deve estar entre ${rule.min} e ${rule.max}`); return value; }
 export type ProductUnderstanding = { productId: string; category?: string; coreUseCases: string[]; capabilities: string[]; functionalBenefits: string[]; emotionalBenefits: string[]; desiredOutcomes: string[]; purchaseTriggers: string[]; purchaseBarriers: string[]; communicationRisks: string[]; evidenceRefs: string[] };
-export function validateProductUnderstanding(value: unknown): ProductUnderstanding { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "ProductUnderstanding inválido"); const v = value as Record<string, unknown>; return { productId: id(v.productId, "productId"), category: v.category === undefined ? undefined : text(v.category, "category", 200), coreUseCases: strings(v.coreUseCases, "coreUseCases"), capabilities: strings(v.capabilities, "capabilities"), functionalBenefits: strings(v.functionalBenefits, "functionalBenefits"), emotionalBenefits: strings(v.emotionalBenefits, "emotionalBenefits"), desiredOutcomes: strings(v.desiredOutcomes, "desiredOutcomes"), purchaseTriggers: strings(v.purchaseTriggers, "purchaseTriggers"), purchaseBarriers: strings(v.purchaseBarriers, "purchaseBarriers"), communicationRisks: strings(v.communicationRisks, "communicationRisks"), evidenceRefs: strings(v.evidenceRefs, "evidenceRefs") }; }
+// Mínimos dos arrays estruturais são condicionais à evidência: sem snapshot autorizado,
+// arrays vazios são aceitos (o provider não inventa); com evidência, mínimo rígido.
+export function validateProductUnderstanding(value: unknown, evidence?: EvidenceSnapshot): ProductUnderstanding { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "ProductUnderstanding inválido"); const v = value as Record<string, unknown>; return { productId: id(v.productId, "productId"), category: v.category === undefined ? undefined : text(v.category, "category", 200), coreUseCases: strings(v.coreUseCases, "coreUseCases", evidence), capabilities: strings(v.capabilities, "capabilities", evidence), functionalBenefits: strings(v.functionalBenefits, "functionalBenefits", evidence), emotionalBenefits: strings(v.emotionalBenefits, "emotionalBenefits", evidence), desiredOutcomes: strings(v.desiredOutcomes, "desiredOutcomes", evidence), purchaseTriggers: strings(v.purchaseTriggers, "purchaseTriggers", evidence), purchaseBarriers: strings(v.purchaseBarriers, "purchaseBarriers", evidence), communicationRisks: strings(v.communicationRisks, "communicationRisks", evidence), evidenceRefs: strings(v.evidenceRefs, "evidenceRefs", evidence) }; }
 export type CommercialOpportunity = { id: string; audience?: string; situation?: string; pain?: string; desire?: string; desiredOutcome?: string; objection?: string; relevantCapabilities: string[]; benefits: string[]; proofOptions: string[]; sellingArgument: string; confidence: number; evidenceRefs: string[] };
-export function validateCommercialOpportunity(value: unknown): CommercialOpportunity { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Oportunidade inválida"); const v = value as Record<string, unknown>; if (typeof v.confidence !== "number" || v.confidence < 0 || v.confidence > 1) throw new ContractError("GEN-SCHEMA", "confidence inválido"); return { id: id(v.id, "id"), audience: v.audience === undefined ? undefined : text(v.audience, "audience"), situation: v.situation === undefined ? undefined : text(v.situation, "situation"), pain: v.pain === undefined ? undefined : text(v.pain, "pain"), desire: v.desire === undefined ? undefined : text(v.desire, "desire"), desiredOutcome: v.desiredOutcome === undefined ? undefined : text(v.desiredOutcome, "desiredOutcome"), objection: v.objection === undefined ? undefined : text(v.objection, "objection"), relevantCapabilities: strings(v.relevantCapabilities, "relevantCapabilities"), benefits: strings(v.benefits, "benefits"), proofOptions: strings(v.proofOptions, "proofOptions"), sellingArgument: text(v.sellingArgument, "sellingArgument"), confidence: v.confidence, evidenceRefs: strings(v.evidenceRefs, "evidenceRefs") }; }
+export function validateCommercialOpportunity(value: unknown, evidence?: EvidenceSnapshot): CommercialOpportunity { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Oportunidade inválida"); const v = value as Record<string, unknown>; if (typeof v.confidence !== "number" || v.confidence < 0 || v.confidence > 1) throw new ContractError("GEN-SCHEMA", "confidence inválido"); return { id: id(v.id, "id"), audience: v.audience === undefined ? undefined : text(v.audience, "audience"), situation: v.situation === undefined ? undefined : text(v.situation, "situation"), pain: v.pain === undefined ? undefined : text(v.pain, "pain"), desire: v.desire === undefined ? undefined : text(v.desire, "desire"), desiredOutcome: v.desiredOutcome === undefined ? undefined : text(v.desiredOutcome, "desiredOutcome"), objection: v.objection === undefined ? undefined : text(v.objection, "objection"), relevantCapabilities: strings(v.relevantCapabilities, "relevantCapabilities", evidence), benefits: strings(v.benefits, "benefits", evidence), proofOptions: strings(v.proofOptions, "proofOptions", evidence), sellingArgument: text(v.sellingArgument, "sellingArgument"), confidence: v.confidence, evidenceRefs: strings(v.evidenceRefs, "evidenceRefs", evidence) }; }
 export type ProductStrategy = { id: string; productId: string; jobId: string; version: 1; status: "ACTIVE"; platformId: string; platformSkillVersion: string; primaryPositioning: string; audiences: string[]; priorityBenefits: string[]; priorityObjections: string[]; priorityArguments: string[]; priorityAngles: string[]; communicationPrinciples: string[]; communicationRisks: string[]; opportunities: CommercialOpportunity[] };
 // AC16/B-003-04: contrato canônico da Strategy v1. objective/positioning/audience/
 // contentPillars eram contrato paralelo e foram removidos sem alias.
-export function validateProductStrategy(value: unknown): ProductStrategy { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Strategy inválida"); const v = value as Record<string, unknown>; if (v.version !== 1 || v.status !== "ACTIVE") throw new ContractError("GEN-SCHEMA", "Strategy deve ser ACTIVE v1"); if (!Array.isArray(v.opportunities)) throw new ContractError("GEN-SCHEMA", "opportunities inválido"); return { id: id(v.id, "id"), productId: id(v.productId, "productId"), jobId: id(v.jobId, "jobId"), version: 1, status: "ACTIVE", platformId: text(v.platformId, "platformId", 100), platformSkillVersion: text(v.platformSkillVersion, "platformSkillVersion", 100), primaryPositioning: text(v.primaryPositioning, "primaryPositioning"), audiences: strings(v.audiences, "audiences"), priorityBenefits: strings(v.priorityBenefits, "priorityBenefits"), priorityObjections: strings(v.priorityObjections, "priorityObjections"), priorityArguments: strings(v.priorityArguments, "priorityArguments"), priorityAngles: strings(v.priorityAngles, "priorityAngles"), communicationPrinciples: strings(v.communicationPrinciples, "communicationPrinciples"), communicationRisks: strings(v.communicationRisks, "communicationRisks"), opportunities: v.opportunities.map(validateCommercialOpportunity) }; }
+export function validateProductStrategy(value: unknown, evidence?: EvidenceSnapshot): ProductStrategy { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Strategy inválida"); const v = value as Record<string, unknown>; if (v.version !== 1 || v.status !== "ACTIVE") throw new ContractError("GEN-SCHEMA", "Strategy deve ser ACTIVE v1"); if (!Array.isArray(v.opportunities)) throw new ContractError("GEN-SCHEMA", "opportunities inválido"); return { id: id(v.id, "id"), productId: id(v.productId, "productId"), jobId: id(v.jobId, "jobId"), version: 1, status: "ACTIVE", platformId: text(v.platformId, "platformId", 100), platformSkillVersion: text(v.platformSkillVersion, "platformSkillVersion", 100), primaryPositioning: text(v.primaryPositioning, "primaryPositioning"), audiences: strings(v.audiences, "audiences", evidence), priorityBenefits: strings(v.priorityBenefits, "priorityBenefits", evidence), priorityObjections: strings(v.priorityObjections, "priorityObjections", evidence), priorityArguments: strings(v.priorityArguments, "priorityArguments", evidence), priorityAngles: strings(v.priorityAngles, "priorityAngles", evidence), communicationPrinciples: strings(v.communicationPrinciples, "communicationPrinciples", evidence), communicationRisks: strings(v.communicationRisks, "communicationRisks", evidence), opportunities: v.opportunities.map((item) => validateCommercialOpportunity(item, evidence)) }; }
 // AC20: além dos obrigatórios, os opcionais canônicos são preservados quando vierem
 // do provider; tipos inválidos falham GEN-SCHEMA (sem coerção).
 export type ContentOpportunity = { id: string; commercialObjective: string; angle: string; coreMessage: string; hookMechanism: string; noveltyTargets: string[]; audience?: string; pain?: string; desire?: string; objection?: string; benefit?: string; proof?: string; narrativePattern?: string; desiredViewerResponse?: string; sourceOpportunityId?: string };
@@ -47,9 +101,9 @@ export function validateCommercialOpportunityDraft(value: unknown, evidence?: Ev
   const v = value as Record<string, unknown>;
   rejectForbiddenFields(v, "Oportunidade");
   if (typeof v.confidence !== "number" || v.confidence < 0 || v.confidence > 1) throw new ContractError("GEN-SCHEMA", "confidence inválido");
-  const evidenceRefs = strings(v.evidenceRefs, "evidenceRefs");
+  const evidenceRefs = strings(v.evidenceRefs, "evidenceRefs", evidence);
   validateEvidenceRefs(evidenceRefs, evidence, "Oportunidade");
-  return { audience: v.audience === undefined ? undefined : text(v.audience, "audience"), situation: v.situation === undefined ? undefined : text(v.situation, "situation"), pain: v.pain === undefined ? undefined : text(v.pain, "pain"), desire: v.desire === undefined ? undefined : text(v.desire, "desire"), desiredOutcome: v.desiredOutcome === undefined ? undefined : text(v.desiredOutcome, "desiredOutcome"), objection: v.objection === undefined ? undefined : text(v.objection, "objection"), relevantCapabilities: strings(v.relevantCapabilities, "relevantCapabilities"), benefits: strings(v.benefits, "benefits"), proofOptions: strings(v.proofOptions, "proofOptions"), sellingArgument: text(v.sellingArgument, "sellingArgument"), confidence: v.confidence, evidenceRefs };
+  return { audience: v.audience === undefined ? undefined : text(v.audience, "audience"), situation: v.situation === undefined ? undefined : text(v.situation, "situation"), pain: v.pain === undefined ? undefined : text(v.pain, "pain"), desire: v.desire === undefined ? undefined : text(v.desire, "desire"), desiredOutcome: v.desiredOutcome === undefined ? undefined : text(v.desiredOutcome, "desiredOutcome"), objection: v.objection === undefined ? undefined : text(v.objection, "objection"), relevantCapabilities: strings(v.relevantCapabilities, "relevantCapabilities", evidence), benefits: strings(v.benefits, "benefits", evidence), proofOptions: strings(v.proofOptions, "proofOptions", evidence), sellingArgument: text(v.sellingArgument, "sellingArgument"), confidence: v.confidence, evidenceRefs };
 }
 export function validateCommercialOpportunityMappingEnvelope(value: unknown, evidence?: EvidenceSnapshot): CommercialOpportunityMappingEnvelope {
   if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Envelope de oportunidades inválido");
@@ -57,13 +111,22 @@ export function validateCommercialOpportunityMappingEnvelope(value: unknown, evi
   rejectForbiddenFields(v, "Envelope");
   for (const key of ["audiences", "situations", "pains", "desires", "objections"]) if (key in v && !Array.isArray((v as Record<string, unknown>)[key])) throw new ContractError("GEN-SCHEMA", `${key} inválido`);
   const opportunities = Array.isArray(v.opportunities) ? v.opportunities.map((item) => ({ ...validateCommercialOpportunityDraft(item, evidence), id: "" })) : [];
-  if (opportunities.length === 0) throw new ContractError("GEN-SCHEMA", "Envelope sem oportunidades comerciais");
-  return { audiences: strings(v.audiences, "audiences", false), situations: strings(v.situations, "situations", false), pains: strings(v.pains, "pains", false), desires: strings(v.desires, "desires", false), objections: strings(v.objections, "objections", false), opportunities };
+  const opportunityRule = cardinalityRule("opportunities");
+  // Três oportunidades só são exigidas quando o catálogo tem evidência suficiente
+  // (refs DISTINTAS: refs citadas pelo understanding são anexadas ao catálogo base e
+  // repetem-se; menções repetidas não criam evidência nova) para sustentá-las;
+  // evidência escassa mantém o mínimo estrutural de uma.
+  const distinctEvidenceRefs = evidence ? new Set(evidence.refs.map((ref) => ref.trim())).size : 0;
+  const minimumOpportunities = distinctEvidenceRefs >= 3 ? opportunityRule.minWithEvidence : opportunityRule.min;
+  // Mensagem de mínimo preservada: é a âncora do retry único de contrato no engine.
+  if (opportunities.length < minimumOpportunities) throw new ContractError("GEN-SCHEMA", minimumOpportunities === 1 ? "Envelope sem oportunidades comerciais" : `cardinalidade de oportunidades fora da política (min ${minimumOpportunities}, max ${opportunityRule.max})`);
+  if (opportunities.length > opportunityRule.max) throw new ContractError("GEN-SCHEMA", `cardinalidade de oportunidades fora da política (max ${opportunityRule.max})`);
+  return { audiences: strings(v.audiences, "audiences"), situations: strings(v.situations, "situations"), pains: strings(v.pains, "pains"), desires: strings(v.desires, "desires"), objections: strings(v.objections, "objections"), opportunities };
 }
 export type ContentPlan = { id: string; productId: string; strategyVersion: 1; targetContentCount: number; platformId: string; platformSkillVersion: string; opportunities: ContentOpportunity[] };
 export function validateContentPlan(value: unknown): ContentPlan { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Plano inválido"); const v = value as Record<string, unknown>; const n = validateTargetContentCount(v.targetContentCount); const opportunities = Array.isArray(v.opportunities) ? v.opportunities.map((item) => validateContentOpportunity(item)) : []; if (opportunities.length !== n) throw new ContractError("GEN-COUNT-RANGE", "Plano deve conter a quantidade exata de oportunidades"); return { id: id(v.id, "id"), productId: id(v.productId, "productId"), strategyVersion: 1, targetContentCount: n, platformId: text(v.platformId, "platformId", 100), platformSkillVersion: text(v.platformSkillVersion, "platformSkillVersion", 100), opportunities }; }
 export type ContentBriefVersion = { contentId: string; briefVersionId: string; version: 1; angle: string; hook: string; script: string; scenes: string[]; cta: string; structure?: string; objective?: string; targetAudience?: string; pain?: string; desire?: string; objection?: string; benefit?: string; notes?: string };
-export function validateContentBrief(value: unknown): ContentBriefVersion { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Brief inválido"); const v = value as Record<string, unknown>; const scenes = strings(v.scenes, "scenes"); if (scenes.length < 2 || scenes.length > 8) throw new ContractError("GEN-SCHEMA", "Quantidade de cenas inválida"); return { contentId: id(v.contentId, "contentId"), briefVersionId: id(v.briefVersionId, "briefVersionId"), version: 1, angle: text(v.angle, "angle"), hook: text(v.hook, "hook"), script: text(v.script, "script", 8_000), scenes, cta: text(v.cta, "cta"), structure: v.structure === undefined ? undefined : text(v.structure, "structure", 100), objective: v.objective === undefined ? undefined : text(v.objective, "objective"), targetAudience: v.targetAudience === undefined ? undefined : text(v.targetAudience, "targetAudience"), pain: v.pain === undefined ? undefined : text(v.pain, "pain"), desire: v.desire === undefined ? undefined : text(v.desire, "desire"), objection: v.objection === undefined ? undefined : text(v.objection, "objection"), benefit: v.benefit === undefined ? undefined : text(v.benefit, "benefit"), notes: v.notes === undefined ? undefined : text(v.notes, "notes") }; }
+export function validateContentBrief(value: unknown): ContentBriefVersion { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Brief inválido"); const v = value as Record<string, unknown>; const scenes = strings(v.scenes, "scenes"); return { contentId: id(v.contentId, "contentId"), briefVersionId: id(v.briefVersionId, "briefVersionId"), version: 1, angle: text(v.angle, "angle"), hook: text(v.hook, "hook"), script: text(v.script, "script", 8_000), scenes, cta: text(v.cta, "cta"), structure: v.structure === undefined ? undefined : text(v.structure, "structure", 100), objective: v.objective === undefined ? undefined : text(v.objective, "objective"), targetAudience: v.targetAudience === undefined ? undefined : text(v.targetAudience, "targetAudience"), pain: v.pain === undefined ? undefined : text(v.pain, "pain"), desire: v.desire === undefined ? undefined : text(v.desire, "desire"), objection: v.objection === undefined ? undefined : text(v.objection, "objection"), benefit: v.benefit === undefined ? undefined : text(v.benefit, "benefit"), notes: v.notes === undefined ? undefined : text(v.notes, "notes") }; }
 export type ContentBriefBatch = { items: ContentBriefVersion[] };
 // Valida a estrutura de um briefing provider-sem-ids; contentId/briefVersionId são server-derived.
 export function validateContentBriefDraft(value: unknown): Omit<ContentBriefVersion, "contentId" | "briefVersionId" | "version"> {
@@ -71,14 +134,15 @@ export function validateContentBriefDraft(value: unknown): Omit<ContentBriefVers
   const v = value as Record<string, unknown>;
   rejectForbiddenFields(v, "Brief");
   const scenes = strings(v.scenes, "scenes");
-  if (scenes.length < 2 || scenes.length > 8) throw new ContractError("GEN-SCHEMA", "Quantidade de cenas inválida");
   return { angle: text(v.angle, "angle"), hook: text(v.hook, "hook"), script: text(v.script, "script", 8_000), scenes, cta: text(v.cta, "cta"), structure: v.structure === undefined ? undefined : text(v.structure, "structure", 100), objective: v.objective === undefined ? undefined : text(v.objective, "objective"), targetAudience: v.targetAudience === undefined ? undefined : text(v.targetAudience, "targetAudience"), pain: v.pain === undefined ? undefined : text(v.pain, "pain"), desire: v.desire === undefined ? undefined : text(v.desire, "desire"), objection: v.objection === undefined ? undefined : text(v.objection, "objection"), benefit: v.benefit === undefined ? undefined : text(v.benefit, "benefit"), notes: v.notes === undefined ? undefined : text(v.notes, "notes") };
 }
 export function validateContentBriefBatch(value: unknown): ContentBriefVersion[] {
   if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Lote de briefings inválido");
   const v = value as Record<string, unknown>;
   const items = Array.isArray(v.items) ? v.items.map((item) => ({ ...validateContentBriefDraft(item), contentId: "", briefVersionId: "", version: 1 as const })) : [];
-  if (items.length === 0) throw new ContractError("GEN-SCHEMA", "Lote de briefings vazio");
+  const itemRule = cardinalityRule("items");
+  if (items.length < itemRule.min) throw new ContractError("GEN-SCHEMA", "Lote de briefings vazio");
+  if (items.length > itemRule.max) throw new ContractError("GEN-SCHEMA", `cardinalidade de items fora da política (max ${itemRule.max})`);
   return items;
 }
 // Atribui identidade persistente server-side a um lote de briefings do provider.
@@ -93,6 +157,6 @@ export function assignServerBriefIds(rawItems: unknown[], jobId: string, baseInd
   });
 }
 export type BriefValidationReport = { briefId: string; contentId: string; briefVersionId: string; factualStatus: FactStatus; structuralStatus: "PASS" | "FAIL"; platformStatus: "PASS" | "FAIL"; varietyStatus: "PASS" | "FAIL"; issues: string[]; decision: GateDecision };
-export function validateBriefValidationReport(value: unknown): BriefValidationReport { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Relatório inválido"); const v = value as Record<string, unknown>; const contentId = id(v.contentId, "contentId"); const briefVersionId = id(v.briefVersionId, "briefVersionId"); if (v.briefId !== `${contentId}:${briefVersionId}`) throw new ContractError("GEN-SCHEMA", "briefId inconsistente"); const factualStatus = v.factualStatus; if (!["SUPPORTED", "INFERRED_BUT_SAFE", "UNSUPPORTED", "CONTRADICTED"].includes(String(factualStatus))) throw new ContractError("GEN-FACT", "Factualidade inválida"); const decision = v.decision; if (!["PASS", "REPAIR", "REJECT"].includes(String(decision))) throw new ContractError("GEN-SCHEMA", "Decisão inválida"); return { briefId: v.briefId as string, contentId, briefVersionId, factualStatus: factualStatus as FactStatus, structuralStatus: v.structuralStatus === "PASS" ? "PASS" : "FAIL", platformStatus: v.platformStatus === "PASS" ? "PASS" : "FAIL", varietyStatus: v.varietyStatus === "PASS" ? "PASS" : "FAIL", issues: strings(v.issues, "issues", false), decision: decision as GateDecision }; }
+export function validateBriefValidationReport(value: unknown): BriefValidationReport { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Relatório inválido"); const v = value as Record<string, unknown>; const contentId = id(v.contentId, "contentId"); const briefVersionId = id(v.briefVersionId, "briefVersionId"); if (v.briefId !== `${contentId}:${briefVersionId}`) throw new ContractError("GEN-SCHEMA", "briefId inconsistente"); const factualStatus = v.factualStatus; if (!["SUPPORTED", "INFERRED_BUT_SAFE", "UNSUPPORTED", "CONTRADICTED"].includes(String(factualStatus))) throw new ContractError("GEN-FACT", "Factualidade inválida"); const decision = v.decision; if (!["PASS", "REPAIR", "REJECT"].includes(String(decision))) throw new ContractError("GEN-SCHEMA", "Decisão inválida"); return { briefId: v.briefId as string, contentId, briefVersionId, factualStatus: factualStatus as FactStatus, structuralStatus: v.structuralStatus === "PASS" ? "PASS" : "FAIL", platformStatus: v.platformStatus === "PASS" ? "PASS" : "FAIL", varietyStatus: v.varietyStatus === "PASS" ? "PASS" : "FAIL", issues: strings(v.issues, "issues"), decision: decision as GateDecision }; }
 export const structureHash = (brief: Pick<ContentBriefVersion, "structure" | "scenes" | "cta">): string => { let h = 2166136261; for (const c of JSON.stringify([brief.structure ?? "", brief.scenes.length, brief.cta]).normalize("NFKC").toLowerCase()) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0).toString(16).padStart(8, "0"); };
 export const normalizeForVariety = (value: string): string => value.normalize("NFKC").toLocaleLowerCase("pt-BR").replace(/\s+/g, " ").trim();

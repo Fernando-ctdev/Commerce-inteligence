@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateTargetContentCount, validateContentBrief, validateContentOpportunity, validateProductStrategy, structureHash, normalizeForVariety, validateCommercialOpportunityMappingEnvelope } from "./contract";
+import { validateTargetContentCount, validateContentBrief, validateContentOpportunity, validateProductStrategy, validateProductUnderstanding, validateCommercialOpportunityDraft, structureHash, normalizeForVariety, validateCommercialOpportunityMappingEnvelope, CARDINALITY_POLICY, CARDINALITY_POLICY_VERSION } from "./contract";
 test("accepts only integer quantity from 1 through 10", () => { assert.equal(validateTargetContentCount(1), 1); assert.equal(validateTargetContentCount(10), 10); for (const value of [0, 11, 1.5, "2", null]) assert.throws(() => validateTargetContentCount(value)); });
 test("requires complete brief and valid scene count", () => { const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", script: "s", scenes: ["1", "2"], cta: "c" }; assert.equal(validateContentBrief(base).version, 1); assert.throws(() => validateContentBrief({ ...base, scenes: ["1"] })); assert.equal(structureHash(base), structureHash({ structure: undefined, scenes: base.scenes, cta: base.cta })); });
 test("normalizes equivalent variety text", () => assert.equal(normalizeForVariety("  Hook  Forte "), "hook forte"));
@@ -38,4 +38,38 @@ test("content opportunity preserves canonical optionals when provided", () => {
   assert.equal(result.narrativePattern, "prova-social");
   assert.equal(result.desiredViewerResponse, "comentar");
   assert.throws(() => validateContentOpportunity({ ...base, proof: 42 }), (e: unknown) => (e as { code?: string }).code === "GEN-SCHEMA");
+});
+test("cardinality policy is versioned and uses MVP limits", () => {
+  assert.equal(CARDINALITY_POLICY_VERSION, 1);
+  assert.equal(CARDINALITY_POLICY.coreUseCases.max, 8);
+  assert.equal(CARDINALITY_POLICY.evidenceRefs.max, 25);
+  assert.deepEqual(CARDINALITY_POLICY.opportunities, { min: 1, minWithEvidence: 3, max: 10 });
+  assert.equal(CARDINALITY_POLICY.relevantCapabilities.max, 6);
+  assert.equal(CARDINALITY_POLICY.priorityBenefits.max, 10);
+  assert.equal(CARDINALITY_POLICY.noveltyTargets.max, 4);
+  assert.equal(CARDINALITY_POLICY.scenes.max, 8);
+});
+test("strict maximums fail closed without truncation", () => {
+  const commercial = { relevantCapabilities: Array.from({ length: 11 }, (_, i) => `cap${i}`), benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] };
+  assert.throws(() => validateCommercialOpportunityDraft(commercial), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /cardinalidade de relevantCapabilities/.test(e.message ?? ""); });
+  const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", script: "s", scenes: Array.from({ length: 9 }, (_, i) => `c${i}`), cta: "c" };
+  assert.throws(() => validateContentBrief(base), (error: unknown) => { const e = error as { code?: string }; return e.code === "GEN-SCHEMA"; });
+});
+test("understanding minimums are conditional to evidence (no invention without it)", () => {
+  const empty = { productId: "p1", coreUseCases: [], capabilities: [], functionalBenefits: [], emotionalBenefits: [], desiredOutcomes: [], purchaseTriggers: [], purchaseBarriers: [], communicationRisks: [], evidenceRefs: [] };
+  assert.equal(validateProductUnderstanding(empty).coreUseCases.length, 0);
+  assert.throws(() => validateProductUnderstanding(empty, { facts: ["Produto"], refs: ["product:name"] }), (error: unknown) => { const e = error as { code?: string }; return e.code === "GEN-SCHEMA"; });
+});
+test("mapping envelope opportunity count is capped by policy", () => {
+  const commercial = { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] };
+  const envelope = { audiences: [], situations: [], pains: [], desires: [], objections: [], opportunities: Array.from({ length: CARDINALITY_POLICY.opportunities.max + 1 }, () => commercial) };
+  assert.throws(() => validateCommercialOpportunityMappingEnvelope(envelope), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /cardinalidade de oportunidades/.test(e.message ?? ""); });
+});
+test("minimum of 3 opportunities requires DISTINCT evidence refs (repeated mentions add nothing)", () => {
+  const commercial = { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["r1"] };
+  const single = { audiences: [], situations: [], pains: [], desires: [], objections: [], opportunities: [commercial] };
+  // refs do understanding repetem refs do catálogo base: 2 evidências distintas → mínimo 1.
+  assert.doesNotThrow(() => validateCommercialOpportunityMappingEnvelope(single, { facts: ["f"], refs: ["r1", "r2", "r1"] }));
+  // 3 evidências distintas sustentam o mínimo de 3: uma só oportunidade falha.
+  assert.throws(() => validateCommercialOpportunityMappingEnvelope(single, { facts: ["f"], refs: ["r1", "r2", "r3"] }), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /min 3/.test(e.message ?? ""); });
 });

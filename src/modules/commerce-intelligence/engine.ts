@@ -1,4 +1,4 @@
-import { assignServerBriefIds, validateCommercialOpportunityMappingEnvelope, validateContentBriefDraft, validateContentOpportunity, validateContentPlan, validateProductStrategy, validateProductUnderstanding, validateTargetContentCount, ContractError, type CommercialOpportunityMappingEnvelope, type ContentBriefVersion, type ContentOpportunity, type EvidenceSnapshot, type ProductUnderstanding } from "./contract";
+import { assignServerBriefIds, CARDINALITY_POLICY_VERSION, validateCommercialOpportunityMappingEnvelope, validateContentBriefDraft, validateContentOpportunity, validateContentPlan, validateProductStrategy, validateProductUnderstanding, validateTargetContentCount, ContractError, type CommercialOpportunityMappingEnvelope, type ContentBriefVersion, type ContentOpportunity, type EvidenceSnapshot, type ProductUnderstanding } from "./contract";
 import { loadPlatformSkill } from "./platform-skill";
 import { validateBriefSet, type GateReport } from "./gates";
 import { emitJobEvent, sanitizeGateReports } from "./observability";
@@ -6,7 +6,7 @@ import { GenerationError } from "./errors";
 import { type GenerationStage } from "./stages";
 import { assertProviderOutput, ROUTER_MAP, type LogicalTask, type ModelRouter, type ProviderCallMetrics } from "./model-router";
 export type EngineInput = { productId: string; jobId: string; name: string; description: string; facts?: Record<string, unknown>; creatorContext?: Record<string, unknown>; memory?: Record<string, unknown>; router?: ModelRouter; allowDeterministicTestFallback?: boolean; targetContentCount: number; onStage?: (stage: GenerationStage) => Promise<void> | void; signal?: AbortSignal; attempt?: number };
-export type CapabilityEvent = { task: LogicalTask; tier: string; instructionVersion?: string; instructionHash?: string; model?: string; reasoning?: string; providerStatus?: number | null; durationMs: number; contextBytes: number; requestBytes?: number; trustedContextBytes?: number; externalBytes?: number; responseBytes: number; attempt: number; retry: number; ok: boolean; errorCode?: string; providerRequestId?: string; providerRequestIdSource?: "header" | "body.id"; fallback?: { from: string; reason: string; providerStatus: number | null; requestBytes: number; durationMs: number } };
+export type CapabilityEvent = { task: LogicalTask; tier: string; instructionVersion?: string; instructionHash?: string; model?: string; reasoning?: string; providerStatus?: number | null; durationMs: number; contextBytes: number; requestBytes?: number; trustedContextBytes?: number; externalBytes?: number; responseBytes: number; attempt: number; retry: number; ok: boolean; cardinalityPolicyVersion?: number; errorCode?: string; providerRequestId?: string; providerRequestIdSource?: "header" | "body.id"; fallback?: { from: string; reason: string; providerStatus: number | null; requestBytes: number; durationMs: number } };
 export type EngineResult = { productUnderstanding: Record<string, unknown>; strategy: Record<string, unknown>; plan: Record<string, unknown>; opportunities: Record<string, unknown>[]; briefs: ContentBriefVersion[]; reports: GateReport[]; memorySignals: Record<string, unknown>; stage: GenerationStage; capabilities: CapabilityEvent[]; repairs: number; validated: number };
 
 function batchSize(): number { const raw = Number(process.env.GENERATION_BRIEF_BATCH_SIZE ?? 4); return Number.isInteger(raw) && raw >= 4 && raw <= 8 ? raw : 4; }
@@ -22,7 +22,14 @@ export function buildEvidenceCatalog(input: { name?: string; description?: strin
   for (const [key, value] of Object.entries(factsMap)) {
     const values = typeof value === "string" ? [value] : Array.isArray(value) && value.every((item): item is string => typeof item === "string") ? value : [];
     const nonEmptyValues = values.filter((item) => item.trim());
-    if (nonEmptyValues.length > 0) { facts.push(...nonEmptyValues); refs.push(`fact:${key.replace(/[^a-zA-Z0-9_-]/g, "_")}`); }
+    // Relação 1:1 entre fatos e refs: cada valor recebe uma ref própria, mantendo o
+    // alinhamento por índice exigido pela proveniência (refFor). A primeira ref mantém
+    // o id estável `fact:<chave>` (compatibilidade histórica); as demais recebem sufixo
+    // posicional `fact:<chave>:<n>`.
+    if (nonEmptyValues.length > 0) {
+      const safeKey = key.replace(/[^a-zA-Z0-9_-]/g, "_");
+      nonEmptyValues.forEach((item, index) => { facts.push(item); refs.push(index === 0 ? `fact:${safeKey}` : `fact:${safeKey}:${index + 1}`); });
+    }
   }
   return { facts, refs };
 }
@@ -51,7 +58,7 @@ function isRootShapeSchemaError(error: unknown): boolean {
   return error instanceof GenerationError && error.code === "GEN-SCHEMA" && /deve ser um objeto JSON/.test(error.message);
 }
 // Primeira violação estrutural de item do lote (ex.: scenes ausente/não-array/vazio/fora
-// de 2–6), com issue sanitizada (mensagem determinística do contrato, sem payload).
+// de 2–8), com issue sanitizada (mensagem determinística do contrato, sem payload).
 function findBriefItemIssue(items: unknown[]): { item: number; issue: string } | null {
   for (const [index, draft] of items.entries()) {
     try { validateContentBriefDraft(draft); } catch (error) {
@@ -87,16 +94,16 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
       const output = await run((metrics) => { captured = metrics; });
       const durationMs = Date.now() - startedAt;
       const responseBytes = Buffer.byteLength(JSON.stringify(output), "utf8");
-      capabilities.push({ task, tier: ROUTER_MAP[task], instructionVersion, instructionHash: input.router?.hash?.(task), model: captured?.model ?? effectiveModel(task), reasoning: captured?.reasoning, providerStatus: captured?.providerStatus ?? null, durationMs, contextBytes, requestBytes: captured?.requestBytes, trustedContextBytes: captured?.trustedContextBytes, externalBytes: captured?.externalBytes, responseBytes, attempt, retry: captured?.retry ?? 0, ok: true, providerRequestId: captured?.providerRequestId, providerRequestIdSource: captured?.providerRequestIdSource, fallback: captured?.fallback });
-      emitJobEvent("capability.completed", { jobId: input.jobId, attempt, task, tier: ROUTER_MAP[task], model: captured?.model ?? effectiveModel(task), instructionHash: input.router?.hash?.(task), durationMs, requestBytes: captured?.requestBytes, trustedContextBytes: captured?.trustedContextBytes, externalBytes: captured?.externalBytes, responseBytes, arrayLength: Array.isArray(output.opportunities) ? output.opportunities.length : Array.isArray(output.items) ? output.items.length : undefined, providerRequestId: captured?.providerRequestId, providerRequestIdSource: captured?.providerRequestIdSource });
+      capabilities.push({ task, tier: ROUTER_MAP[task], instructionVersion, instructionHash: input.router?.hash?.(task), model: captured?.model ?? effectiveModel(task), reasoning: captured?.reasoning, providerStatus: captured?.providerStatus ?? null, durationMs, contextBytes, requestBytes: captured?.requestBytes, trustedContextBytes: captured?.trustedContextBytes, externalBytes: captured?.externalBytes, responseBytes, attempt, retry: captured?.retry ?? 0, ok: true, cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION, providerRequestId: captured?.providerRequestId, providerRequestIdSource: captured?.providerRequestIdSource, fallback: captured?.fallback });
+      emitJobEvent("capability.completed", { jobId: input.jobId, attempt, task, tier: ROUTER_MAP[task], model: captured?.model ?? effectiveModel(task), instructionHash: input.router?.hash?.(task), durationMs, requestBytes: captured?.requestBytes, trustedContextBytes: captured?.trustedContextBytes, externalBytes: captured?.externalBytes, responseBytes, arrayLength: Array.isArray(output.opportunities) ? output.opportunities.length : Array.isArray(output.items) ? output.items.length : undefined, cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION, providerRequestId: captured?.providerRequestId, providerRequestIdSource: captured?.providerRequestIdSource });
       return output;
     } catch (error) {
       const durationMs = Date.now() - startedAt;
       const errorCode = error instanceof GenerationError ? error.code : "GEN-PROVIDER";
-      capabilities.push({ task, tier: ROUTER_MAP[task], instructionVersion, model: captured?.model ?? effectiveModel(task), reasoning: captured?.reasoning, providerStatus: captured?.providerStatus ?? null, durationMs, contextBytes, requestBytes: captured?.requestBytes, trustedContextBytes: captured?.trustedContextBytes, externalBytes: captured?.externalBytes, responseBytes: captured?.responseBytes ?? 0, attempt, retry: captured?.retry ?? 0, ok: false, errorCode, providerRequestId: captured?.providerRequestId, providerRequestIdSource: captured?.providerRequestIdSource, fallback: captured?.fallback });
+      capabilities.push({ task, tier: ROUTER_MAP[task], instructionVersion, model: captured?.model ?? effectiveModel(task), reasoning: captured?.reasoning, providerStatus: captured?.providerStatus ?? null, durationMs, contextBytes, requestBytes: captured?.requestBytes, trustedContextBytes: captured?.trustedContextBytes, externalBytes: captured?.externalBytes, responseBytes: captured?.responseBytes ?? 0, attempt, retry: captured?.retry ?? 0, ok: false, cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION, errorCode, providerRequestId: captured?.providerRequestId, providerRequestIdSource: captured?.providerRequestIdSource, fallback: captured?.fallback });
       // Repropaga no evento apenas campos sanitizados do detail (ADR-017: endpoint/correlação/rate).
       const safe = error instanceof GenerationError && error.detail && typeof error.detail === "object" ? error.detail as Record<string, unknown> : {};
-      emitJobEvent("capability.failed", { jobId: input.jobId, attempt, task, tier: ROUTER_MAP[task], model: captured?.model ?? effectiveModel(task), durationMs, errorName: error instanceof Error ? error.name : "unknown", errorCode, errorKind: typeof safe.errorKind === "string" ? safe.errorKind : undefined, providerStatus: typeof safe.providerStatus === "number" ? safe.providerStatus : undefined, endpoint: typeof safe.endpoint === "string" ? safe.endpoint : undefined, providerRequestId: typeof safe.providerRequestId === "string" ? safe.providerRequestId : undefined, providerRequestIdSource: typeof safe.providerRequestIdSource === "string" ? safe.providerRequestIdSource : undefined, rate: safe.rate && typeof safe.rate === "object" ? safe.rate as Record<string, string> : undefined });
+      emitJobEvent("capability.failed", { jobId: input.jobId, attempt, task, tier: ROUTER_MAP[task], model: captured?.model ?? effectiveModel(task), durationMs, errorCode, cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION, errorName: error instanceof Error ? error.name : "unknown", errorKind: typeof safe.errorKind === "string" ? safe.errorKind : undefined, providerStatus: typeof safe.providerStatus === "number" ? safe.providerStatus : undefined, endpoint: typeof safe.endpoint === "string" ? safe.endpoint : undefined, providerRequestId: typeof safe.providerRequestId === "string" ? safe.providerRequestId : undefined, providerRequestIdSource: typeof safe.providerRequestIdSource === "string" ? safe.providerRequestIdSource : undefined, rate: safe.rate && typeof safe.rate === "object" ? safe.rate as Record<string, string> : undefined });
       throw error;
     }
   };
@@ -105,12 +112,13 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
   let opportunityOutput: Record<string, unknown> | null = null;
   const commercialOpportunities: Record<string, unknown>[] = [];
 
+  let mappingEvidence: EvidenceSnapshot = { facts: [], refs: [] };
   if (input.router) {
     const baseEvidence = buildEvidenceCatalog({ ...input, facts });
     const understandingContext = { productId: input.productId, facts, evidenceRefsCatalog: baseEvidence.refs };
     await emit("UNDERSTANDING_PRODUCT");
-    understanding = validateProductUnderstanding(await track("PRODUCT_UNDERSTANDING", understandingContext, (onMetrics) => callCapability(input.router!, "PRODUCT_UNDERSTANDING", project("PRODUCT_UNDERSTANDING", understandingContext, {}), input.signal, onMetrics)));
-    const mappingEvidence: EvidenceSnapshot = { facts: [...baseEvidence.facts, ...(understanding?.evidenceRefs ?? [])], refs: [...baseEvidence.refs, ...(understanding?.evidenceRefs ?? [])] };
+    understanding = validateProductUnderstanding(await track("PRODUCT_UNDERSTANDING", understandingContext, (onMetrics) => callCapability(input.router!, "PRODUCT_UNDERSTANDING", project("PRODUCT_UNDERSTANDING", understandingContext, {}), input.signal, onMetrics)), baseEvidence);
+    mappingEvidence = { facts: [...baseEvidence.facts, ...(understanding?.evidenceRefs ?? [])], refs: [...baseEvidence.refs, ...(understanding?.evidenceRefs ?? [])] };
     // Projeção compacta e allowlisted para o mapping: fatos essenciais do Product,
     // catálogo de evidências e campos necessários do understanding. Sem agregado bruto
     // de facts, Strategy, Plan, Skill completa ou memória histórica.
@@ -170,7 +178,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
   const allowedSourceIds = new Set(commercialOpportunities.map((opportunity) => String(opportunity.id)));
   const opportunities = Array.isArray(rawOpportunities) ? rawOpportunities.map((value, index) => validateContentOpportunity({ ...(value && typeof value === "object" ? value as Record<string, unknown> : {}), id: `${input.jobId}-opportunity-${index + 1}` }, input.router ? allowedSourceIds : undefined)) : Array.from({ length: count }, (_, index) => ({ id: `${input.jobId}-opportunity-${index + 1}`, commercialObjective: "Demonstrar valor do produto", angle: `Ângulo ${index + 1}`, coreMessage: input.name, hookMechanism: "demonstração direta", noveltyTargets: [`angle-${index + 1}`] }));
 
-  const strategy = strategyOutput ? validateProductStrategy({ ...strategyOutput, id: `${input.jobId}-strategy`, productId: input.productId, jobId: input.jobId, version: 1, status: "ACTIVE", platformId: skill.id, platformSkillVersion: skill.version, opportunities: commercialOpportunities }) : { id: `${input.jobId}-strategy`, productId: input.productId, jobId: input.jobId, version: 1, status: "ACTIVE", platformId: skill.id, platformSkillVersion: skill.version, primaryPositioning: input.description, audiences: ["pessoas interessadas no produto"], priorityBenefits: [], priorityObjections: [], priorityArguments: [], priorityAngles: [], communicationPrinciples: [], communicationRisks: [], opportunities: commercialOpportunities };
+  const strategy = strategyOutput ? validateProductStrategy({ ...strategyOutput, id: `${input.jobId}-strategy`, productId: input.productId, jobId: input.jobId, version: 1, status: "ACTIVE", platformId: skill.id, platformSkillVersion: skill.version, opportunities: commercialOpportunities }, mappingEvidence) : { id: `${input.jobId}-strategy`, productId: input.productId, jobId: input.jobId, version: 1, status: "ACTIVE", platformId: skill.id, platformSkillVersion: skill.version, primaryPositioning: input.description, audiences: ["pessoas interessadas no produto"], priorityBenefits: [], priorityObjections: [], priorityArguments: [], priorityAngles: [], communicationPrinciples: [], communicationRisks: [], opportunities: commercialOpportunities };
   const plan = validateContentPlan({ ...(opportunityOutput ?? {}), id: `${input.jobId}-plan`, productId: input.productId, strategyVersion: 1, targetContentCount: count, platformId: skill.id, platformSkillVersion: skill.version, opportunities });
 
   // Brief Generator: batches sequenciais de 4-8, um lote por vez (sem Promise.all ilimitado).
@@ -187,7 +195,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
       const batchCall = (onMetrics?: (metrics: ProviderCallMetrics) => void) => callCapability(input.router!, "CONTENT_BRIEF_GENERATION", project("CONTENT_BRIEF_GENERATION", batchContext, {}), input.signal, onMetrics);
       const extractItems = (producer: Record<string, unknown>): unknown[] => Array.isArray(producer.items) ? producer.items : [];
       // Retry único de contrato para o lote: cardinalidade divergente OU item estruturalmente
-      // inválido (ex.: scenes ausente/não-array/vazio/fora de 2–6) re-solicita uma vez com o
+      // inválido (ex.: scenes ausente/não-array/vazio/fora de 2–8) re-solicita uma vez com o
       // mesmo contexto; persistindo, GEN-SCHEMA tipado com detail sanitizado e fail-closed.
       const batchIssue = (items: unknown[]): { item: number; issue: string } | null => items.length !== entries.length ? { item: 0, issue: `cardinalidade divergente: esperado ${entries.length}, recebido ${items.length}` } : findBriefItemIssue(items);
       let producer = (await track("CONTENT_BRIEF_GENERATION", batchContext, batchCall)) as Record<string, unknown>;
@@ -199,7 +207,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
         issue = batchIssue(rawBatch);
         if (issue) {
           const detail = { task: "CONTENT_BRIEF_GENERATION", item: issue.item, issue: issue.issue, expected: entries.length, received: rawBatch.length, retried: true };
-          emitJobEvent("capability.failed", { jobId: input.jobId, attempt, task: "CONTENT_BRIEF_GENERATION", tier: ROUTER_MAP.CONTENT_BRIEF_GENERATION, model: effectiveModel("CONTENT_BRIEF_GENERATION"), errorCode: "GEN-SCHEMA", item: issue.item, issue: issue.issue, expected: entries.length, received: rawBatch.length, retry: 1 });
+          emitJobEvent("capability.failed", { jobId: input.jobId, attempt, task: "CONTENT_BRIEF_GENERATION", tier: ROUTER_MAP.CONTENT_BRIEF_GENERATION, model: effectiveModel("CONTENT_BRIEF_GENERATION"), errorCode: "GEN-SCHEMA", cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION, item: issue.item, issue: issue.issue, expected: entries.length, received: rawBatch.length, retry: 1 });
           throw new GenerationError("GEN-SCHEMA", "Lote de briefings inválido", true, detail);
         }
       }
@@ -225,16 +233,23 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
     repairRounds += 1;
     emitJobEvent("repair.started", { jobId: input.jobId, attempt, expected: rejected.length, retry: round });
     const repairStartedAt = Date.now();
-    // Preserva PASS; regenera apenas rejeitados no lote.
-    const replacements = await generateBatch(rejected.map(({ c, report, i }) => ({ opportunity: c.opportunity, causes: report?.issues ?? [], position: i + 1 })));
-    const passSet = new Set(rejected.map((r) => r.i));
-    Array.from(passSet).sort((a, b) => a - b).forEach((index, offset) => { candidates[index] = replacements[offset]; });
+    // Preserva PASS; regenera apenas rejeitados, em chunks limitados por batchSize
+    // (respeita o máximo de 8 itens por chamada), mantendo posição — da qual derivam
+    // contentId/briefVersionId estáveis.
+    const repairedSet = new Set(rejected.map((r) => r.i));
+    let received = 0;
+    for (let start = 0; start < rejected.length; start += size) {
+      const slice = rejected.slice(start, start + size).map(({ c, report, i }) => ({ opportunity: c.opportunity, causes: report?.issues ?? [], position: i + 1 }));
+      const replacements = await generateBatch(slice);
+      received += replacements.length;
+      slice.forEach((entry, offset) => { candidates[entry.position - 1] = replacements[offset]; });
+    }
     reports = validateBriefSet(candidates.map((c) => c.brief), evidence);
-    emitJobEvent("repair.completed", { jobId: input.jobId, attempt, durationMs: Date.now() - repairStartedAt, expected: rejected.length, received: replacements.length, retry: round, gateReports: sanitizeGateReports(reports.filter((_, index) => passSet.has(index))) });
+    emitJobEvent("repair.completed", { jobId: input.jobId, attempt, durationMs: Date.now() - repairStartedAt, expected: rejected.length, received, retry: round, gateReports: sanitizeGateReports(reports.filter((_, index) => repairedSet.has(index))) });
   }
   const repaired = candidates.map((c) => c.brief);
   const finalReports = validateBriefSet(repaired, evidence);
   if (repaired.length !== count || finalReports.some((report) => report.decision !== "PASS")) throw new GenerationError("GEN-REPAIR-EXHAUSTED", "Repair não produziu briefing válido", true, { task: "CONTENT_BRIEF_GENERATION", rounds: repairRounds, expected: count, received: repaired.length, rejected: sanitizeGateReports(finalReports.filter((report) => report.decision !== "PASS")) });
   await emit("FINALIZING");
-  return { productUnderstanding: understanding ?? {}, strategy, plan, opportunities, briefs: repaired, reports: finalReports, memorySignals: { generatedCount: count, platformSkillVersion: skill.version }, stage: "FINALIZING", capabilities, repairs: repairCount, validated: candidates.length };
+  return { productUnderstanding: understanding ?? {}, strategy, plan, opportunities, briefs: repaired, reports: finalReports, memorySignals: { generatedCount: count, platformSkillVersion: skill.version, cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION }, stage: "FINALIZING", capabilities, repairs: repairCount, validated: candidates.length };
 }
