@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHttpProvider, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY } from "./provider";
+import { CONTENT_BRIEF_GENERATION_INSTRUCTION, createHttpProvider, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY } from "./provider";
 import { CARDINALITY_POLICY } from "./contract";
 import { GenerationError } from "./errors";
 
@@ -103,16 +103,30 @@ test("brief provider gets separate selected hook and CTA patterns in a compact c
   }) as typeof fetch;
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
   try {
-    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: { selectedPatterns: [{ opportunityId: "o1", hook: { id: "problem", guidance: "Comece pelo problema observável." }, cta: { id: "details", guidance: "Convide a conferir detalhes." } }] } });
+    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: { productReference: { name: "Calça", category: "calça" }, selectedPatterns: [{ opportunityId: "o1", hook: { id: "problem", text: "Eu não acredito que isso custa tão pouco" }, cta: { id: "details", text: "Confira os detalhes disponíveis" } }] } });
   } finally { globalThis.fetch = originalFetch; }
   assert.ok(request);
   const messages = request.messages as Array<{ content: string }>;
-  assert.ok(messages[0].content.includes("selectedPatterns.hook somente para formular hook"));
-  const context = JSON.parse(messages[1].content).trustedContext;
-  assert.equal(context.selectedPatterns[0].hook.id, "problem");
-  assert.equal(context.selectedPatterns[0].cta.id, "details");
-  assert.equal("scenes" in context, false);
-  assert.equal("captions" in context, false);
+  assert.ok(messages[1].content.includes("Eu não acredito que isso custa tão pouco"));
+  assert.ok(messages[1].content.includes("Confira os detalhes disponíveis"));
+  assert.ok(messages[1].content.includes('"productReference":{"name":"Calça","category":"calça"}'));
+});
+
+test("brief provider instruction requires development, excludes scenes, and keeps CTA separate", () => {
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("selectedPatterns[index].hook.text como hook"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("variação curta de até 12 palavras"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("dêixis demonstrativa genérica"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("pode manter essa forma ou mencionar productReference.name ou productReference.category"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não faça substituição obrigatória"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Evite repetir a mesma forma de referência em excesso"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Preserve hooks naturalmente específicos"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Hook é uma frase curta de abertura"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Retorne development como uma lista separada de 1 a 4 bullets"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("roteiro oral natural em primeira pessoa que desenvolve esses bullets"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não retorne scenes nem qualquer campo de cena"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("selectedPatterns[index].cta.text somente para formular cta"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("mantenha-o separado do hook, development e script"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Respeite Meu estilo na linguagem"));
 });
 
 test("non-2xx captures allowlisted rate headers in detail without body leakage", async () => {

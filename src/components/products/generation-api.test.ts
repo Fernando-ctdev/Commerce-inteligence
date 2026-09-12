@@ -28,10 +28,12 @@ test("busca o envelope completo após o 202 mínimo de início", async () => {
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test("aceita SUCCEEDED somente com Strategy, Plan e exact-N Briefings completos", () => {
-  const job = normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: { objective: "Vender" }, plan: { targetContentCount: 1 }, contents: [{ id: "content-1", angle: "Demonstração", hook: "Veja isto", script: "Mostre o produto", scenes: ["Cena 1", "Cena 2"], cta: "Confira agora" }] });
+test("aceita SUCCEEDED com bullets separados e remove scenes legadas da resposta", () => {
+  const job = normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: { objective: "Vender" }, plan: { targetContentCount: 1 }, contents: [{ id: "content-1", angle: "Demonstração", hook: "Veja isto", development: ["Mostre o produto"], script: "Mostre o produto", scenes: ["legado"], cta: "Confira agora" }] });
   assert.equal(job.readiness, "READY");
   assert.equal(job.contents.length, job.targetContentCount);
+  assert.deepEqual(job.contents[0].development, ["Mostre o produto"]);
+  assert.equal("scenes" in job.contents[0], false);
 });
 
 test("sanitiza erro público sem expor controle de workflow", () => {
@@ -42,6 +44,7 @@ test("rejeita envelope sem ownership válido, quantidade inválida ou briefing i
   assert.throws(() => normalizeGeneration({ id: "", productId: "product-1", status: "QUEUED", targetContentCount: 1 }), GenerationApiError);
   assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "QUEUED", targetContentCount: 0 }), GenerationApiError);
   assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: {}, plan: {}, contents: [{ id: "content-1" }] }), GenerationApiError);
+  assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: {}, plan: {}, contents: [{ angle: "a", hook: "h", development: "bullet", script: "oral", cta: "cta" }] }), GenerationApiError);
 });
 
 test("consulta o estado atual escopado ao Product e aceita resposta vazia", async () => {

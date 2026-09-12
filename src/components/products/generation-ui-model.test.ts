@@ -19,6 +19,7 @@ import {
   phaseStates,
   stageMessage,
   strategyModel,
+  scriptParagraphs,
 } from "./generation-ui-model";
 
 test("mapeia estados e stages públicos para mensagens humanas", () => {
@@ -168,32 +169,43 @@ test("modelo da Strategy tolera payload vazio ou malformado", () => {
 
 test("briefingItems projeta só campos reais e ordena por posição", () => {
   const items = briefingItems([
-    { id: "c2", position: 2, status: "APPROVED", angle: "Ângulo B", hook: "Hook B", development: ["Mostre o produto"], script: "Roteiro B", scenes: ["Cena 1", " ", 42], cta: "CTA B" },
-    { id: "c1", position: 1, status: "DRAFT", angle: "Ângulo A", hook: "Hook A", development: ["Destaque o benefício real", "Demonstre o uso"], script: "Roteiro A", scenes: ["Cena 1", "Cena 2"], cta: "CTA A", objective: "Objetivo A", targetAudience: "Público A" },
+    { id: "c2", position: 2, status: "APPROVED", angle: "Ângulo B", hook: "Hook B", development: ["Mostre o produto"], script: "Roteiro B", scenes: ["legado"], cta: "CTA B" },
+    { id: "c1", position: 1, status: "DRAFT", angle: "Ângulo A", hook: "Hook A", development: ["Destaque o benefício real", "Demonstre o uso"], script: "Roteiro A", cta: "CTA A", objective: "Objetivo A", targetAudience: "Público A" },
   ]);
   assert.deepEqual(items.map((item) => item.id), ["c1", "c2"]);
   assert.equal(items[0].objective, "Objetivo A");
   assert.equal(items[0].targetAudience, "Público A");
   assert.deepEqual(items[0].development, ["Destaque o benefício real", "Demonstre o uso"]);
   assert.equal(items[0].pain, "");
-  assert.deepEqual(items[1].scenes, ["Cena 1"]);
+  assert.equal("scenes" in items[1], false);
   assert.equal(items[1].objective, "");
 });
 
-test("briefingItems tolera payload ausente ou malformado", () => {
+test("briefingItems tolera payload ausente e exige development como lista", () => {
   const items = briefingItems([{ hook: "Só hook", development: "não é lista" }]);
-  assert.equal(items[0].id, "conteudo-1");
+  assert.deepEqual(items[0].development, []);
   assert.equal(items[0].position, 1);
   assert.equal(items[0].status, "DRAFT");
-  assert.deepEqual(items[0].development, []);
-  assert.deepEqual(items[0].scenes, []);
+  assert.equal("scenes" in items[0], false);
 });
 
+
+test("development persistido como string[] mantém os bullets separados", () => {
+  const items = briefingItems([{ id: "c1", hook: "Hook", development: ["Mostre o produto real em uso", "Comente o benefício principal"], script: "Roteiro", cta: "CTA" }]);
+  assert.deepEqual(items[0].development, ["Mostre o produto real em uso", "Comente o benefício principal"]);
+  assert.equal("scenes" in items[0], false);
+});
 test("labels de status do Content não misturam estados do Estúdio", () => {
   assert.equal(contentStatusLabel("DRAFT"), "Rascunho");
   assert.equal(contentStatusLabel("APPROVED"), "Aprovado");
   assert.equal(contentStatusLabel("DISCARDED"), "Descartado");
   assert.equal(contentStatusLabel("GRAVANDO"), "GRAVANDO");
+});
+
+test("scriptParagraphs separa frases completas em parágrafos distintos", () => {
+  assert.deepEqual(scriptParagraphs("Frase um aqui. Segunda frase! Terceira?"), ["Frase um aqui.", "Segunda frase!", "Terceira?"]);
+  assert.deepEqual(scriptParagraphs("Só uma frase sem fim."), ["Só uma frase sem fim."]);
+  assert.deepEqual(scriptParagraphs("  "), []);
 });
 
 test("resumo da aba conta aprovados só quando existem", () => {

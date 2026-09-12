@@ -19,7 +19,7 @@ test("repairs mapping envelope without opportunities via a second contract-true 
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") { mappingCalls++; if (mappingCalls === 1) return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], analysis: "prosa sem opportunities" }; return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] }; }
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["s1", "s2"], cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] };
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
@@ -33,7 +33,7 @@ test("repairs content plan array root via one contract-true retry, then fail-clo
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") { planCalls++; if (planCalls === 1) return [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }]; return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] }; }
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["s1", "s2"], cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] };
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
@@ -47,7 +47,7 @@ test("plan retry exhausted yields typed GEN-SCHEMA without fabricating opportuni
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") { planCalls++; return [1, 2]; }
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["s1", "s2"], cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] };
     return {};
   } };
   await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string }; return e?.code === "GEN-SCHEMA"; });
@@ -60,7 +60,7 @@ test("repairs brief batch cardinality divergence via one retry preserving exact-
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; if (briefCalls === 1) return { items: [] }; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["s1", "s2"], cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; if (briefCalls === 1) return { items: [] }; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] }; }
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
@@ -74,43 +74,39 @@ test("brief batch retry exhausted yields typed GEN-SCHEMA without publishing", a
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["s1", "s2"], cta: "c" }, { angle: "a2", hook: "h2", development: ["Produto real em uso"], script: "Mostre o Produto de novo", scenes: ["s1", "s2"], cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }, { angle: "a2", hook: "h2", development: ["Produto real em uso"], script: "Mostre o Produto de novo", cta: "c" }] }; }
     return {};
   } };
   await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string }; return e?.code === "GEN-SCHEMA"; });
   assert.equal(briefCalls, 2, "exactly one retry before failing closed");
 });
-test("ignores provider scenes even when the legacy flag is set", async () => {
-  process.env.GENERATION_SCENES_ENABLED = "1";
+test("provider scene data is not persisted in the brief", async () => {
   let briefCalls = 0;
   const router = { describe, complete: async (task: string) => {
     if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["b"], emotionalBenefits: ["e"], desiredOutcomes: ["d"], purchaseTriggers: ["t"], purchaseBarriers: ["b"], evidenceRefs: ["product:name"] };
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["Abertura", "Demonstração"], cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["legado"], cta: "c" }] }; }
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
-  assert.equal(briefCalls, 1, "scenes do not affect the brief contract");
+  assert.equal(briefCalls, 1, "unknown provider fields do not affect the brief contract");
   assert.equal(result.briefs.length, 1, "exact-N preserved");
   assert.equal("scenes" in result.briefs[0], false);
-  delete process.env.GENERATION_SCENES_ENABLED;
 });
-test("legacy scenes flag does not make development optional", async () => {
-  process.env.GENERATION_SCENES_ENABLED = "1";
+test("development remains required in the brief contract", async () => {
   let briefCalls = 0;
   const router = { describe, complete: async (task: string) => {
     if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["b"], emotionalBenefits: ["e"], desiredOutcomes: ["d"], purchaseTriggers: ["t"], purchaseBarriers: ["b"], evidenceRefs: ["product:name"] };
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", script: "Mostre o Produto", scenes: ["Abertura", "Demonstração"], cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", script: "Mostre o Produto", cta: "c" }] }; }
     return {};
   } };
   await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string; detail?: Record<string, unknown> }; return e?.code === "GEN-SCHEMA" && e?.detail?.task === "CONTENT_BRIEF_GENERATION" && e?.detail?.retried === true; });
-  assert.equal(briefCalls, 2, "missing development retries once, regardless of legacy scenes flag");
-  delete process.env.GENERATION_SCENES_ENABLED;
+  assert.equal(briefCalls, 2, "missing development retries once");
 });
 test("GEN-REPAIR-EXHAUSTED carries sanitized gate summary without brief payload", async () => {
   const router = { describe, complete: async (task: string) => {
@@ -118,7 +114,7 @@ test("GEN-REPAIR-EXHAUSTED carries sanitized gate summary without brief payload"
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["SEGREDO_DO_BRIEFING em uso"], script: "SEGREDO_DO_BRIEFING suporta 7 kg comprovados", scenes: ["s1", "s2"], cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["SEGREDO_DO_BRIEFING em uso"], script: "SEGREDO_DO_BRIEFING suporta 7 kg comprovados", cta: "c" }] };
     return {};
   } };
   await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }), (error: unknown) => {
@@ -142,7 +138,7 @@ test("capabilities carry provider metrics allowlist for IntelligenceRun metadata
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["s1", "s2"], cta: "c" }] };
+    return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] };
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
   const strategyCap = result.capabilities.find((cap) => cap.task === "STRATEGY_SYNTHESIS");
@@ -167,9 +163,9 @@ test("repair of many rejected briefs is chunked by batch size preserving positio
       const batch = input as { trustedContext?: { opportunities?: unknown[] } } | undefined;
       const n = batch?.trustedContext?.opportunities?.length ?? 1;
       // Rodada inicial: itens idênticos (duplicata estrutural) → 9 de 10 rejeitados.
-      if (briefCalls <= 3) return { items: Array.from({ length: n }, () => ({ angle: "a", hook: "h", development: ["Produto real em uso"], script: "igual entre todos", scenes: ["s1", "s2"], cta: "c" })) };
+      if (briefCalls <= 3) return { items: Array.from({ length: n }, () => ({ angle: "a", hook: "h", development: ["Produto real em uso"], script: "igual entre todos", cta: "c" })) };
       // Repair: itens distintos (ângulo/hook/script/cta) → todos passam os gates.
-      return { items: Array.from({ length: n }, (_, i) => ({ angle: `ang ${briefCalls}-${i}`, hook: `hook ${briefCalls}-${i}`, development: [`Ponto distinto ${briefCalls}-${i}`], script: `script distinto ${briefCalls}-${i}`, scenes: ["s1", "s2"], cta: `cta ${briefCalls}-${i}` })) };
+      return { items: Array.from({ length: n }, (_, i) => ({ angle: `ang ${briefCalls}-${i}`, hook: `hook ${briefCalls}-${i}`, development: [`Ponto distinto ${briefCalls}-${i}`], script: `script distinto ${briefCalls}-${i}`, cta: `cta ${briefCalls}-${i}` })) };
     }
     return {};
   } };
@@ -186,7 +182,7 @@ test("capability events carry cardinality policy version on success", async () =
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["s1", "s2"], cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] };
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });

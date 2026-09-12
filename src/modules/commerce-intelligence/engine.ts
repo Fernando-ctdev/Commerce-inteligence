@@ -89,8 +89,7 @@ function project(task: string, confirmed: unknown, external: unknown): Parameter
 function isRootShapeSchemaError(error: unknown): boolean {
   return error instanceof GenerationError && error.code === "GEN-SCHEMA" && /deve ser um objeto JSON/.test(error.message);
 }
-// Primeira violação estrutural de item do lote (ex.: scenes ausente/não-array/vazio/fora
-// de 2–8), com issue sanitizada (mensagem determinística do contrato, sem payload).
+// Primeira violação estrutural do item do lote, com issue sanitizada e sem payload.
 function findBriefItemIssue(items: unknown[]): { item: number; issue: string } | null {
   for (const [index, draft] of items.entries()) {
     try { validateContentBriefDraft(draft); } catch (error) {
@@ -254,6 +253,10 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
   const generateBatch = async (entries: Array<{ opportunity: ContentOpportunity; causes?: string[]; position: number }>): Promise<BriefCandidate[]> => {
     const batchContext = {
       productId: input.productId,
+      productReference: {
+        name: input.name,
+        category: typeof (understanding?.category ?? facts.category) === "string" ? String(understanding?.category ?? facts.category) : undefined,
+      },
       opportunities: entries.map((e) => e.opportunity),
       relevantFacts: evidence.facts.map((value, index) => ({ value, ref: evidence.refs[index] })),
       evidence: { refs: evidence.refs },
@@ -275,7 +278,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
       const batchCall = (onMetrics?: (metrics: ProviderCallMetrics) => void) => callCapability(input.router!, "CONTENT_BRIEF_GENERATION", project("CONTENT_BRIEF_GENERATION", batchContext, {}), input.signal, onMetrics);
       const extractItems = (producer: Record<string, unknown>): unknown[] => Array.isArray(producer.items) ? producer.items : [];
       // Retry único de contrato para o lote: cardinalidade divergente OU item estruturalmente
-      // inválido (ex.: scenes ausente/não-array/vazio/fora de 2–8) re-solicita uma vez com o
+      // inválido re-solicita uma vez com o
       // mesmo contexto; persistindo, GEN-SCHEMA tipado com detail sanitizado e fail-closed.
       const batchIssue = (items: unknown[]): { item: number; issue: string } | null => items.length !== entries.length ? { item: 0, issue: `cardinalidade divergente: esperado ${entries.length}, recebido ${items.length}` } : findBriefItemIssue(items);
       let producer = (await track("CONTENT_BRIEF_GENERATION", batchContext, batchCall)) as Record<string, unknown>;

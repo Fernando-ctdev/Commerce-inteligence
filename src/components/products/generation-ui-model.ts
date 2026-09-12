@@ -162,7 +162,6 @@ export type BriefingItem = {
   hook: string;
   development: string[];
   script: string;
-  scenes: string[];
   cta: string;
   objective: string;
   targetAudience: string;
@@ -184,6 +183,9 @@ export const contentStatusLabel = (status: string) => contentStatusLabels[status
 export const contentsSummaryLabel = (total: number, approved: number) =>
   approved > 0 ? `${total} conteúdos · ${approved} aprovados` : `${total} conteúdos`;
 
+/** Development persistido em array, separado do roteiro. */
+const developmentBullets = (value: unknown): string[] =>
+  Array.isArray(value) ? strings(value) : [];
 export function briefingItems(contents: Array<Record<string, unknown>>): BriefingItem[] {
   return contents
     .map((content, index): BriefingItem => ({
@@ -191,9 +193,8 @@ export function briefingItems(contents: Array<Record<string, unknown>>): Briefin
       position: typeof content.position === "number" ? content.position : index + 1,
       status: text(content.status) || "DRAFT",
       hook: text(content.hook),
-      development: strings(content.development),
+      development: developmentBullets(content.development),
       script: text(content.script),
-      scenes: strings(content.scenes),
       cta: text(content.cta),
       objective: text(content.objective),
       targetAudience: text(content.targetAudience),
@@ -203,6 +204,11 @@ export function briefingItems(contents: Array<Record<string, unknown>>): Briefin
       objection: text(content.objection),
     }))
     .sort((a, b) => a.position - b.position);
+}
+
+/** Roteiro em parágrafos de leitura: uma frase completa por parágrafo, para leitura start-to-end com pausas visuais. */
+export function scriptParagraphs(script: string): string[] {
+  return script.split(/(?<=[.!?])["']?\s+/u).map((paragraph) => paragraph.trim()).filter(Boolean);
 }
 
 /** Estado de cada fase pública do job, derivado apenas de status + stage. */

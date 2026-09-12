@@ -36,8 +36,8 @@ export const CARDINALITY_POLICY: Record<string, CardinalityRule> = {
   communicationPrinciples: { min: 0, minWithEvidence: 0, max: 10 },
   // Conteúdo e lote de briefings.
   noveltyTargets: { min: 1, minWithEvidence: 1, max: 4 },
-  // Development canônico (decisão do Arquiteto): 1–4 bullets objetivos do desenvolvimento
-  // real do produto. Gerado pelo provider; nunca derivado de scenes/script no servidor.
+  // Development canônico: 1–4 bullets objetivos do produto, mantidos como lista
+  // separada do roteiro.
   development: { min: 1, minWithEvidence: 1, max: 4 },
   items: { min: 1, minWithEvidence: 1, max: 8 },
   opportunities: { min: 1, minWithEvidence: 3, max: 10 },
@@ -127,11 +127,12 @@ export function validateCommercialOpportunityMappingEnvelope(value: unknown, evi
 export type ContentPlan = { id: string; productId: string; strategyVersion: 1; targetContentCount: number; platformId: string; platformSkillVersion: string; opportunities: ContentOpportunity[] };
 export function validateContentPlan(value: unknown): ContentPlan { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Plano inválido"); const v = value as Record<string, unknown>; const n = validateTargetContentCount(v.targetContentCount); const opportunities = Array.isArray(v.opportunities) ? v.opportunities.map((item) => validateContentOpportunity(item)) : []; if (opportunities.length !== n) throw new ContractError("GEN-COUNT-RANGE", "Plano deve conter a quantidade exata de oportunidades"); return { id: id(v.id, "id"), productId: id(v.productId, "productId"), strategyVersion: 1, targetContentCount: n, platformId: text(v.platformId, "platformId", 100), platformSkillVersion: text(v.platformSkillVersion, "platformSkillVersion", 100), opportunities }; }
 export type ContentBriefVersion = { contentId: string; briefVersionId: string; version: 1; angle: string; hook: string; development: string[]; script: string; cta: string; structure?: string; objective?: string; targetAudience?: string; pain?: string; desire?: string; objection?: string; benefit?: string; notes?: string };
-// Scenes are outside this contract; provider-supplied fields are discarded.
+export type ContentBriefDraft = Omit<ContentBriefVersion, "contentId" | "briefVersionId" | "version">;
+// Only declared brief fields cross into persistence; unknown provider fields are omitted.
 export function validateContentBrief(value: unknown): ContentBriefVersion { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Brief inválido"); const v = value as Record<string, unknown>; return { contentId: id(v.contentId, "contentId"), briefVersionId: id(v.briefVersionId, "briefVersionId"), version: 1, angle: text(v.angle, "angle"), hook: text(v.hook, "hook"), development: strings(v.development, "development"), script: text(v.script, "script", 8_000), cta: text(v.cta, "cta"), structure: v.structure === undefined ? undefined : text(v.structure, "structure", 100), objective: v.objective === undefined ? undefined : text(v.objective, "objective"), targetAudience: v.targetAudience === undefined ? undefined : text(v.targetAudience, "targetAudience"), pain: v.pain === undefined ? undefined : text(v.pain, "pain"), desire: v.desire === undefined ? undefined : text(v.desire, "desire"), objection: v.objection === undefined ? undefined : text(v.objection, "objection"), benefit: v.benefit === undefined ? undefined : text(v.benefit, "benefit"), notes: v.notes === undefined ? undefined : text(v.notes, "notes") }; }
 export type ContentBriefBatch = { items: ContentBriefVersion[] };
 // Valida a estrutura de um briefing provider-sem-ids; contentId/briefVersionId são server-derived.
-export function validateContentBriefDraft(value: unknown): Omit<ContentBriefVersion, "contentId" | "briefVersionId" | "version"> {
+export function validateContentBriefDraft(value: unknown): ContentBriefDraft {
   if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Brief inválido");
   const v = value as Record<string, unknown>;
   rejectForbiddenFields(v, "Brief");

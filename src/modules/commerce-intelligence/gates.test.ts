@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { validateBriefSet, repairBriefs } from "./gates";
 import { ContractError } from "./contract";
-const brief = (id: string, angle = "angle", hook = "hook", cta = "cta") => ({ contentId: id, briefVersionId: `${id}-v1`, version: 1 as const, angle, hook, development: ["Mostre o produto em uso"], script: `Fale sobre ${id}`, scenes: ["a", "b"], cta });
+const brief = (id: string, angle = "angle", hook = "hook", cta = "cta") => ({ contentId: id, briefVersionId: `${id}-v1`, version: 1 as const, angle, hook, development: ["Mostre o produto em uso"], script: `Fale sobre ${id}`, cta });
 test("desconto só é factual quando presente no catálogo: suportado com fato, contradito sem correspondência e não suportado sem fato", () => {
   const evidence = { facts: ["20% de desconto"], refs: ["fact:discountPercentage"] };
   const report = validateBriefSet([{ ...brief("d1"), script: "Mostre o produto e diga que ele está com 20% de desconto." }], evidence)[0];

@@ -461,6 +461,12 @@
 }
 
 /* Leitura editorial: ~65–75 caracteres por linha, sem correr o painel todo. */
+/* Roteiro para leitura start-to-end: uma frase completa por parágrafo, com pausa visual entre frases. */
+.scriptParagraphs {
+  display: grid;
+  gap: 12px;
+}
+
 .readingText {
   margin: 0;
   max-width: 62ch;

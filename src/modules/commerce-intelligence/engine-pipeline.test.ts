@@ -11,7 +11,7 @@ const contentOpportunity = { commercialObjective: "vender", angle: "demonstraç�
 const describe = () => ({ provider: "test", model: "test-model", instructionVersion: "slice-003" });
 test("composes validated provider outputs into the pipeline (4 foundational + batched briefs)", async () => {
   const calls: string[] = [];
-  const router = { describe, complete: async (task: string) => { calls.push(task); if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "demonstração", hook: "Veja", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["a", "b"], cta: "Confira" }] }; return {}; } };
+  const router = { describe, complete: async (task: string) => { calls.push(task); if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "demonstração", hook: "Veja", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "Confira" }] }; return {}; } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
   const strategy = result.strategy as { opportunities: Array<{ id: string }> };
   const plan = result.plan as { opportunities: Array<{ id: string }> };
@@ -24,7 +24,7 @@ test("composes validated provider outputs into the pipeline (4 foundational + ba
 test("repairs only rejected briefs via causal CONTENT_BRIEF_GENERATION, preserving ids", async () => {
   const briefCalls: string[] = [];
   let briefGenCount = 0;
-  const router = { describe, hash: () => "h", complete: async (task: string) => { if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") { briefGenCount++; const causes = briefCalls.push("gen") > 0; void causes; if (briefGenCount === 1) return { items: [{ angle: "x", hook: "h", development: ["Carga de 999 kg em teste"], script: "testado com 999 kg de carga", scenes: ["a", "b"], cta: "c" }] }; return { items: [{ angle: "dem", hook: "Veja", development: ["Produto real em uso"], script: "Mostre o Produto na prática", scenes: ["a", "b"], cta: "Confira" }] }; } return {}; } };
+  const router = { describe, hash: () => "h", complete: async (task: string) => { if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") { briefGenCount++; const causes = briefCalls.push("gen") > 0; void causes; if (briefGenCount === 1) return { items: [{ angle: "x", hook: "h", development: ["Carga de 999 kg em teste"], script: "testado com 999 kg de carga", cta: "c" }] }; return { items: [{ angle: "dem", hook: "Veja", development: ["Produto real em uso"], script: "Mostre o Produto na prática", cta: "Confira" }] }; } return {}; } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
   assert.equal(briefGenCount, 2, "rejected item regenerated causally");
   assert.equal(result.briefs[0].contentId, "j-content-1");
@@ -34,7 +34,7 @@ test("repairs only rejected briefs via causal CONTENT_BRIEF_GENERATION, preservi
 });
 test("batches brief generation sequentially with server-derived ids", async () => {
   const calls: string[] = [];
-  const router = { describe, complete: async (task: string) => { calls.push(task); if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity, contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Produto com demonstração", scenes: ["a", "b"], cta: "c" }, { angle: "a2", hook: "h2", development: ["Produto real em uso"], script: "Produto na prática", scenes: ["a", "b"], cta: "c2" }] }; return {}; } };
+  const router = { describe, complete: async (task: string) => { calls.push(task); if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity, contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Produto com demonstração", cta: "c" }, { angle: "a2", hook: "h2", development: ["Produto real em uso"], script: "Produto na prática", cta: "c2" }] }; return {}; } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 2, router });
   assert.equal(result.briefs.length, 2);
   assert.equal(result.briefs[0].contentId, "j-content-1");
@@ -48,7 +48,7 @@ test("mapping context is compact and allowlisted without strategy plan skill or 
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") { capturedContext = input.trustedContext as Record<string, unknown>; return envelope; }
     if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Produto na prática", scenes: ["a", "b"], cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Produto na prática", cta: "c" }] };
     return {};
   } };
   await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", facts: { features: ["x"], rawAggregate: ["não enviar"], memoryHistory: ["nada"], discountPercentage: "20% de desconto" }, targetContentCount: 1, router });
@@ -71,7 +71,7 @@ test("Meu estilo: creatorContext completo (tone, recordsAlone, restrictions, exe
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
     if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefContext = input.trustedContext as Record<string, unknown>; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Produto na prática", scenes: ["a", "b"], cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefContext = input.trustedContext as Record<string, unknown>; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Produto na prática", cta: "c" }] }; }
     return {};
   } };
   const meuEstilo = { tone: "bem-humorado", executionStyle: "natural-venda", recordsAlone: true, restrictions: ["Cenas difíceis de gravar"], recordingEquipment: ["camera"], recordingSupport: ["tripod"] };
@@ -93,10 +93,10 @@ test("plan and brief contexts expose only their explicit allowlisted slices", as
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
     if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
     if (task === "CONTENT_PLAN_GENERATION") { planContext = input.trustedContext as Record<string, unknown>; return { opportunities: [contentOpportunity] }; }
-    if (task === "CONTENT_BRIEF_GENERATION") { briefContext = input.trustedContext as Record<string, unknown>; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Produto na prática", scenes: ["a", "b"], cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefContext = input.trustedContext as Record<string, unknown>; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Produto na prática", cta: "c" }] }; }
     return {};
   } };
-  await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", facts: { features: ["fato"], rawAggregate: ["não enviar"] }, creatorContext: { tone: "direto" }, targetContentCount: 1, router });
+  await runFirstGeneration({ productId: "p", jobId: "j", name: "Calça", description: "Descrição", facts: { category: "calça", features: ["fato"], rawAggregate: ["não enviar"] }, creatorContext: { tone: "direto" }, targetContentCount: 1, router });
   if (!planContext || !briefContext) throw new Error("contextos não capturados");
   assert.ok(!("strategy" in planContext));
   assert.ok(planContext.strategySlice);
@@ -104,6 +104,7 @@ test("plan and brief contexts expose only their explicit allowlisted slices", as
   assert.deepEqual(planContext.memoryConstraints, {});
   assert.ok(!("name" in briefContext) && !("description" in briefContext) && !("facts" in briefContext));
   assert.ok(briefContext.relevantFacts && briefContext.evidence && briefContext.strategySlice);
+  assert.deepEqual(briefContext.productReference, { name: "Calça", category: "calça" });
   assert.deepEqual(briefContext.creatorContext, { tone: "direto" });
   assert.deepEqual(briefContext.memoryConstraints, {});
   const selectedPatterns = briefContext.selectedPatterns as Array<{ opportunityId: string; hook: { id: string; type?: string; category?: string; source?: string; text?: string; guidance?: string }; cta: { id: string; type?: string; category?: string; source?: string; text?: string; guidance?: string } }>;
@@ -134,7 +135,7 @@ test("never sends commission through any AI context", async () => {
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
       if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
       if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
-      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Produto na prática", scenes: ["a", "b"], cta: "c" }] };
+      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Produto na prática", cta: "c" }] };
       return {};
     },
   };

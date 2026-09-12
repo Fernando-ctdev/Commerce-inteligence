@@ -1,12 +1,22 @@
 import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { GenerationError } from "./errors";
 import { emitJobEvent, sanitizeGateReports } from "./observability";
 import { prisma } from "../db";
 import { extractJobCreatorContext } from "../creator-preferences/service";
 import { runFirstGeneration } from "./engine";
+import type { ContentBriefVersion } from "./contract";
 import { createHttpProvider } from "./provider";
 import type { ModelDescription } from "./model-router";
 import { heartbeat } from "./runtime";
+
+export function briefPayloadForPersistence(brief: ContentBriefVersion): Prisma.InputJsonObject {
+  const { scenes: _legacyScenes, ...payload } = brief as ContentBriefVersion & { scenes?: unknown };
+  if (!Array.isArray(payload.development) || payload.development.length < 1 || payload.development.some((point) => typeof point !== "string" || !point.trim())) {
+    throw new GenerationError("GEN-SCHEMA", "Brief sem development válido não pode ser persistido", false);
+  }
+  return JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonObject;
+}
 
 export function fenceMatches(
   job: { leaseOwnerId: string | null; attempt: number },
@@ -531,7 +541,7 @@ export async function processGeneration(jobId: string, ownerId: string) {
             // P0-2: proveniência server-derived — Content vinculado à ContentOpportunity da mesma posição.
             opportunityId: opportunity ? String(opportunity.id) : null,
             position: index + 1,
-            payload: JSON.parse(JSON.stringify(brief)),
+            payload: briefPayloadForPersistence(brief),
           },
         });
         const version = await tx.contentBriefVersion.create({
@@ -541,7 +551,7 @@ export async function processGeneration(jobId: string, ownerId: string) {
             productId: job.productId,
             jobId: job.id,
             contentId: content.id,
-            payload: JSON.parse(JSON.stringify(brief)),
+            payload: briefPayloadForPersistence(brief),
           },
         });
         const report = output.reports[index];

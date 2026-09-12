@@ -21,6 +21,7 @@ import {
   contentStatusLabel,
   contentsSummaryLabel,
   strategyModel,
+  scriptParagraphs,
   type BriefingItem,
   type GenerationActionProjection,
 } from "./generation-ui-model";
@@ -95,6 +96,28 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
         </p>
         <p className={styles.briefingHook}>{item.hook}</p>
       </section>
+      {item.development.length > 0 && (
+        <section aria-label="Desenvolvimento" className={styles.detailSection}>
+          <SectionLabel icon={Sparkles}>DESENVOLVIMENTO</SectionLabel>
+          <ul className={styles.bulletList}>
+            {item.development.map((point, index) => <li key={`${index}-${point}`}>{point}</li>)}
+          </ul>
+        </section>
+      )}
+      {item.script.trim() !== "" && (
+        <section aria-label="Roteiro" className={styles.detailSection}>
+          <SectionLabel icon={ScrollText}>ROTEIRO</SectionLabel>
+          <div className={styles.scriptParagraphs}>
+            {scriptParagraphs(item.script).map((paragraph, index) => (
+              <p className={styles.readingText} key={`${index}-${paragraph.slice(0, 20)}`}>{paragraph}</p>
+            ))}
+          </div>
+        </section>
+      )}
+      <section aria-label="CTA" className={styles.detailSection}>
+        <SectionLabel icon={Megaphone}>CTA</SectionLabel>
+        <p className={styles.readingText}>{item.cta}</p>
+      </section>
       {context.length > 0 && (
         <section className={styles.contextRow}>
           {context.map(([label, value]) => (
@@ -105,22 +128,6 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
           ))}
         </section>
       )}
-      {item.development.length > 0 && (
-        <section aria-label="Desenvolvimento" className={styles.detailSection}>
-          <SectionLabel icon={Sparkles}>DESENVOLVIMENTO</SectionLabel>
-          <ul className={styles.bulletList}>
-            {item.development.map((point, index) => <li key={`${index}-${point}`}>{point}</li>)}
-          </ul>
-        </section>
-      )}
-      <section aria-label="Roteiro" className={styles.detailSection}>
-        <SectionLabel icon={ScrollText}>ROTEIRO</SectionLabel>
-        <p className={styles.readingText}>{item.script}</p>
-      </section>
-      <section aria-label="CTA" className={styles.detailSection}>
-        <SectionLabel icon={Megaphone}>CTA</SectionLabel>
-        <p className={styles.readingText}>{item.cta}</p>
-      </section>
       {deep.length > 0 && (
         <details className={styles.disclosure}>
           <summary className={styles.whySummary}>

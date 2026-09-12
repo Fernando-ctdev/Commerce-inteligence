@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "diagnose:generation": "tsx scripts/diagnose-generation.mts",
+    "catalog:generate": "tsx scripts/generate-creative-catalog.mts",
     "worker": "tsx scripts/worker.mts",
     "build": "next build",
     "start": "next start",
