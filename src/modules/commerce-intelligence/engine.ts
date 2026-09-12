@@ -1,4 +1,4 @@
-import { assignServerBriefIds, CARDINALITY_POLICY_VERSION, validateCommercialOpportunityMappingEnvelope, validateContentBriefDraft, validateContentOpportunity, validateContentPlan, validateProductStrategy, validateProductUnderstanding, validateTargetContentCount, ContractError, type CommercialOpportunityMappingEnvelope, type ContentBriefVersion, type ContentOpportunity, type EvidenceSnapshot, type ProductUnderstanding } from "./contract";
+import { assignServerBriefIds, CARDINALITY_POLICY_VERSION, scenesEnabled, validateCommercialOpportunityMappingEnvelope, validateContentBriefDraft, validateContentOpportunity, validateContentPlan, validateProductStrategy, validateProductUnderstanding, validateTargetContentCount, ContractError, type CommercialOpportunityMappingEnvelope, type ContentBriefVersion, type ContentOpportunity, type EvidenceSnapshot, type ProductUnderstanding } from "./contract";
 import { loadPlatformSkill } from "./platform-skill";
 import { validateBriefSet, type GateReport } from "./gates";
 import { emitJobEvent, sanitizeGateReports } from "./observability";
@@ -278,7 +278,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
         }
       }
     } else {
-      rawBatch = entries.map((entry) => { const position = entry.position; return { angle: `Ângulo ${position}`, hook: `Veja como ${input.name} pode ajudar`, script: `Apresente ${input.name} de forma natural e demonstre o uso.`, scenes: ["Apresentação", "Demonstração"], cta: "Confira o produto." }; });
+      rawBatch = entries.map((entry) => { const position = entry.position; return { angle: `Ângulo ${position}`, hook: `Veja como ${input.name} pode ajudar`, development: ["Mostre o produto real em uso", "Comente o benefício principal observável"], script: `Apresente ${input.name} de forma natural e demonstre o uso.`, ...(scenesEnabled() ? { scenes: ["Apresentação", "Demonstração"] } : {}), cta: "Confira o produto." }; });
     }
     const assigned = assignServerBriefIds(rawBatch, input.jobId, 0);
     return assigned.map((brief, index) => { const position = entries[index].position; return { brief: { ...brief, contentId: `${input.jobId}-content-${position}`, briefVersionId: `${input.jobId}-brief-${position}` }, opportunity: entries[index].opportunity }; });

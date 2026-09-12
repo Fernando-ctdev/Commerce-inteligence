@@ -169,22 +169,24 @@ test("modelo da Strategy tolera payload vazio ou malformado", () => {
 
 test("briefingItems projeta só campos reais e ordena por posição", () => {
   const items = briefingItems([
-    { id: "c2", position: 2, status: "APPROVED", angle: "Ângulo B", hook: "Hook B", script: "Roteiro B", scenes: ["Cena 1", " ", 42], cta: "CTA B" },
-    { id: "c1", position: 1, status: "DRAFT", angle: "Ângulo A", hook: "Hook A", script: "Roteiro A", scenes: ["Cena 1", "Cena 2"], cta: "CTA A", objective: "Objetivo A", targetAudience: "Público A" },
+    { id: "c2", position: 2, status: "APPROVED", angle: "Ângulo B", hook: "Hook B", development: ["Mostre o produto"], script: "Roteiro B", scenes: ["Cena 1", " ", 42], cta: "CTA B" },
+    { id: "c1", position: 1, status: "DRAFT", angle: "Ângulo A", hook: "Hook A", development: ["Destaque o benefício real", "Demonstre o uso"], script: "Roteiro A", scenes: ["Cena 1", "Cena 2"], cta: "CTA A", objective: "Objetivo A", targetAudience: "Público A" },
   ]);
   assert.deepEqual(items.map((item) => item.id), ["c1", "c2"]);
   assert.equal(items[0].objective, "Objetivo A");
   assert.equal(items[0].targetAudience, "Público A");
+  assert.deepEqual(items[0].development, ["Destaque o benefício real", "Demonstre o uso"]);
   assert.equal(items[0].pain, "");
   assert.deepEqual(items[1].scenes, ["Cena 1"]);
   assert.equal(items[1].objective, "");
 });
 
 test("briefingItems tolera payload ausente ou malformado", () => {
-  const items = briefingItems([{ hook: "Só hook" }]);
+  const items = briefingItems([{ hook: "Só hook", development: "não é lista" }]);
   assert.equal(items[0].id, "conteudo-1");
   assert.equal(items[0].position, 1);
   assert.equal(items[0].status, "DRAFT");
+  assert.deepEqual(items[0].development, []);
   assert.deepEqual(items[0].scenes, []);
 });
 

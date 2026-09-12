@@ -6,6 +6,7 @@ import {
   type EvidenceSnapshot,
   type FactStatus,
 } from "./contract";
+import { scenesEnabled } from "./contract";
 import { ContractError } from "./contract";
 
 export type GateReport = {
@@ -157,20 +158,31 @@ function classifyFactual(
   const text = normalizeForVariety(
     [
       brief.script,
+      // Enforcement factual do development canônico: bullets passam pelo mesmo
+      // controle de fatos autorizados que o script (decisão do Arquiteto).
+      ...(brief.development ?? []),
       brief.benefit ?? "",
       brief.pain ?? "",
       brief.desire ?? "",
       brief.cta,
     ].join(" "),
   );
-  // Regressão b0d4b7a6: negação só contradiz quando imediatamente antes do fato
-  // ("não r$ 28,90"); um "não" em outra frase não nega evidência distante.
+  // Regressão b0d4b7a6: negação só contradiz quando imediatamente antes OU depois de uma
+  // OCORRÊNCIA do fato ("não r$ 28,90" / "produto nunca funciona"); um "não" em outra
+  // frase não nega evidência distante. Busca por ocorrência sobre texto com acentos dobrados.
+  const foldedClaim = attrStems(text);
   const negationAdjacent = (needle: string): boolean => {
-    if (needle.length === 0) return false;
-    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    // Negação imediatamente antes OU depois do fato: "não r$ 28,90" / "produto nunca funciona".
-    return new RegExp(`(?:não|nao|nunca|jamais)\\s+${escaped}`, "i").test(text) ||
-      new RegExp(`${escaped}\\s+(?:não|nao|nunca|jamais)`, "i").test(text);
+    const target = attrStems(needle.toLowerCase());
+    if (!target) return false;
+    let index = foldedClaim.indexOf(target);
+    while (index >= 0) {
+      const before = foldedClaim.slice(Math.max(0, index - 12), index);
+      const after = foldedClaim.slice(index + target.length, index + target.length + 12);
+      if (/(não|nao|nunca|jamais)\s$/.test(before) || /^\s(não|nao|nunca|jamais)(\s|$)/.test(after))
+        return true;
+      index = foldedClaim.indexOf(target, index + 1);
+    }
+    return false;
   };
   const factValues = new Map<string, Set<string>>();
   for (const fact of evidence.facts)
@@ -256,9 +268,8 @@ function classifyFactual(
         );
         continue;
       }
-      const foldedText = attrStems(text);
       const attributeNegated = ATTRIBUTE_LEXICON[group].some(
-        (stem) => foldedText.includes(stem) && negationAdjacent(stem),
+        (stem) => negationAdjacent(stem),
       );
       if (attributeNegated) {
         contradicted = true;
@@ -327,6 +338,12 @@ function classifyFactual(
 
 const CTA_AD_ANTIPATTERNS = /\b(última chance|so hoje|só hoje|garantido|resultado garantido|melhor do mercado|imperdível|milagre|corre|não perca|nao perca)\b/i;
 
+// Creator solo (nota "da-uma-olhada-nesse-briefing-d"): por padrão, 1 creator + 1 celular/câmera
+// (mão ou tripé) + ambiente cotidiano + cortes simples. Léxico fechado e determinístico dos
+// anti-padrões de produção que exigem operador, pós-produção ou múltiplos setups.
+const SOLO_PRODUCTION_ANTIPATTERNS =
+  /\b(360\s*graus|órbita|orbita|orbit|travelling|motion\s*graphics|animação|animacao|vfx|efeitos especiais|chroma\s*key|croma|green\s*screen|drone|operador de câmera|operador de camera|segunda câmera|segunda camera|montagem (rápida|complexa)|montagem (rapida|complexa)|múltiplas locações|multiplas locacoes|múltiplos setups|multiplos setups|estúdio montado|câmera gira|camera gira|câmera começa a orbitar|camera comeca a orbitar)\b/i;
+
 export function validateBriefSet(
   briefs: unknown[],
   evidence: EvidenceSnapshot = { facts: [], refs: [] },
@@ -375,18 +392,26 @@ export function validateBriefSet(
       );
     if (CTA_AD_ANTIPATTERNS.test(brief.cta))
       issues.push("CTA contém anti-pattern publicitário");
+    if (
+      SOLO_PRODUCTION_ANTIPATTERNS.test(
+        `${brief.script} ${(brief.development ?? []).join(" ")} ${brief.scenes?.join(" ") ?? ""}`,
+      )
+    )
+      issues.push("produção incompatível com creator solo");
+    const scenesPresent = brief.scenes !== undefined;
     const platformOk =
       platformId === "tiktok-commerce" &&
       skillVersion === "tiktok-commerce@1.0" &&
-      brief.scenes.length >= 2 &&
-      brief.scenes.length <= 6 &&
+      (!scenesPresent || (brief.scenes!.length >= 2 && brief.scenes!.length <= 6)) &&
       !/leia literalmente|leitura obrigatória/i.test(brief.script);
     if (!platformOk)
       issues.push("brief incompatível com a Skill da plataforma");
     seen.add(normalized);
     hashes.add(hash);
     const structuralStatus =
-      brief.scenes.length >= 2 && brief.scenes.length <= 8 ? "PASS" : "FAIL";
+      !scenesPresent || (brief.scenes!.length >= 2 && brief.scenes!.length <= 8)
+        ? "PASS"
+        : "FAIL";
     if (structuralStatus === "FAIL")
       issues.push("quantidade de cenas inválida");
     const varietyStatus = issues.some((issue) => issue.includes("duplicata"))

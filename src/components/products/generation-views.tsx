@@ -51,10 +51,11 @@ function SectionLabel({ icon: Icon, children }: { icon: typeof Mic; children: st
 }
 
 /**
- * Painel do Briefing selecionado: hook dominante, roteiro/cenas/CTA sempre
- * visíveis e estratégia profunda em progressive disclosure ("Por que este
- * conteúdo?"). Somente leitura — ações de Edição/Aprovação dependem de
- * capability de backend ainda não exposta.
+ * Painel do Briefing selecionado: hook dominante, desenvolvimento real em
+ * bullets, roteiro oral e CTA sempre visíveis; cenas permanecem fora da UI.
+ * Estratégia profunda segue em progressive disclosure ("Por que este conteúdo?").
+ * Somente leitura — ações de Edição/Aprovação dependem de capability de
+ * backend ainda não exposta.
  */
 /** Sentinela: usuário pediu explicitamente voltar à lista (mobile). Diferente de "nunca selecionou". */
 const LIST_VIEW = "__list__";
@@ -104,23 +105,18 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
           ))}
         </section>
       )}
-      <section aria-label="Desenvolvimento" className={styles.detailSection}>
-        <SectionLabel icon={ScrollText}>DESENVOLVIMENTO</SectionLabel>
-        <p className={styles.readingText}>{item.script}</p>
-      </section>
-      {item.scenes.length > 0 && (
-        <section className={styles.detailSection}>
-          <SectionLabel icon={Clapperboard}>Cenas</SectionLabel>
-          <ol className={styles.sceneList}>
-            {item.scenes.map((scene, sceneIndex) => (
-              <li className={styles.sceneItem} key={sceneIndex}>
-                <span aria-hidden="true" className={styles.sceneIndex}>{pad2(sceneIndex + 1)}</span>
-                <p className={styles.readingText}>{scene}</p>
-              </li>
-            ))}
-          </ol>
+      {item.development.length > 0 && (
+        <section aria-label="Desenvolvimento" className={styles.detailSection}>
+          <SectionLabel icon={Sparkles}>DESENVOLVIMENTO</SectionLabel>
+          <ul className={styles.bulletList}>
+            {item.development.map((point, index) => <li key={`${index}-${point}`}>{point}</li>)}
+          </ul>
         </section>
       )}
+      <section aria-label="Roteiro" className={styles.detailSection}>
+        <SectionLabel icon={ScrollText}>ROTEIRO</SectionLabel>
+        <p className={styles.readingText}>{item.script}</p>
+      </section>
       <section aria-label="CTA" className={styles.detailSection}>
         <SectionLabel icon={Megaphone}>CTA</SectionLabel>
         <p className={styles.readingText}>{item.cta}</p>

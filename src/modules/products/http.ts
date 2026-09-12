@@ -15,7 +15,6 @@ import {
 } from "../identity/http";
 import { resolveSession } from "../identity/service";
 import {
-  ProductDeleteRejectedError,
   ProductNotFoundError,
   ProductValidationError,
   ProductVersionConflictError,
@@ -282,11 +281,6 @@ export async function handleDeleteProduct(req: Request, id: string): Promise<Res
   try {
     await deleteTenantProduct(session.tenantId, id);
   } catch (error) {
-    if (error instanceof ProductDeleteRejectedError)
-      return json(409, {
-        error: "Este produto tem análises ou conteúdos e não pode ser excluído. Arquive o produto.",
-        code: error.code,
-      });
     if (error instanceof ProductNotFoundError) return json(404, { error: "Product não encontrado.", code: "PRODUCT-NOT-FOUND" });
     console.error("[products] falha ao excluir Product", error);
     return json(500, { error: "Não foi possível processar a exclusão do Product.", code: "DELETE-FAILED" });

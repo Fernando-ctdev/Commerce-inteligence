@@ -7,6 +7,7 @@ export const TIKTOK_COMMERCE_SKILL = Object.freeze({
     "cenas simples",
     "linguagem oral",
     "script não literal",
+    "produção de creator solo",
   ],
   operationalRepertoire: {
     executionRules: [
@@ -14,6 +15,12 @@ export const TIKTOK_COMMERCE_SKILL = Object.freeze({
       "mostre o produto em uso quando isso sustentar a mensagem",
       "priorize fala natural e demonstração curta",
       "termine com CTA contextual e não coercitivo",
+      // Modelo de produção padrão (nota "da-uma-olhada-nesse-briefing-d"):
+      // 1 creator + 1 celular/câmera (mão ou tripé) + ambiente cotidiano + cortes simples.
+      "assuma creator sozinho: um celular ou câmera na mão ou no tripé, ambiente que ele já tem, cortes simples e edição básica",
+      "prefira fala para câmera, POV, mãos + produto, câmera fixa e close simples feito com o próprio celular",
+      "nunca exija operador de câmera, órbita ou 360 graus, travelling, montagem complexa, múltiplas locações, atores, animações, VFX ou motion graphics",
+      "se um creator sozinho com celular e tripé não conseguir gravar a cena imediatamente, simplifique-a",
     ],
     hookPatterns: ["problema imediato", "descoberta", "demonstração", "objeção"],
     narrativePatterns: ["hook-problema-solução", "objeção-teste-prova", "descoberta-demonstração-resultado"],
@@ -29,6 +36,7 @@ export const TIKTOK_COMMERCE_SKILL = Object.freeze({
     simpleScenes: true,
     oralLanguage: true,
     scriptNotLiteral: true,
+    soloCreatorProduction: true,
   },
 });
 export function loadPlatformSkill(version = TIKTOK_COMMERCE_SKILL.version) {

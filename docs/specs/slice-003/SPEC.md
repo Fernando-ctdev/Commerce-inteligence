@@ -76,6 +76,7 @@ A confirmação do Product precisa levar diretamente ao primeiro valor do produt
 - Persistência de `ProductStrategy`, `ContentPlan`, `ContentOpportunity`, `Content` e `ContentBriefVersion` inicial em `DRAFT`, com proveniência suficiente para rastrear o job, Product, Strategy e Skill.
 - Confirmação ou liberação transacional da reserva mensal de conteúdos no mês UTC de origem.
 - Preservação do Product e dos fatos confirmados em falhas, com recuperação explícita.
+- Exclusão Big Bang de Product por mutação autenticada: remoção transacional, tenant-scoped e completa do Product e de todos os dados relacionados.
 
 ## Out of Scope
 
@@ -83,7 +84,6 @@ A confirmação do Product precisa levar diretamente ao primeiro valor do produt
 - Segunda confirmação obrigatória da Strategy, botão intermediário `Gerar estratégia` ou página permanente de `Análise`.
 - Fila visual de múltiplos jobs, prioridade manual ou múltiplos jobs concorrentes do mesmo usuário.
 - Edição, regeneração, duplicação, aprovação ou descarte de Content; versionamento operacional posterior.
-- Exclusão física (`DELETE` efetivo) de Product; este slice define somente a rejeição sanitizada de DELETE e o caminho preservativo `Arquivar produto`.
 - Seleção de Contents para `RecordingBatch`, lotes, Agenda, Estúdio ou execução de gravação.
 - Memória histórica, aprendizado por performance e nova geração com variedade; a primeira execução usa somente snapshot vazio, sem consultar histórico ou implementar o loop de recorrência.
 - Escolha de provider, modelo ou tier na UI; exposição de prompts, tokens, custos, logs, chain-of-thought ou detalhes da Skill.
@@ -261,11 +261,31 @@ Ao navegar, fechar a aba ou reabrir a aplicação, o estado é recuperado a part
 Essa readiness alimenta os badges dos Product cards e o filtro `Pendente` na lista de Produtos. Product `READY` não oferece reanálise neste slice; `Revisar conteúdos` é a única ação de resultado bem-sucedido, e nova geração/recorrência pertence ao Slice 008.
 
 Um Product em `QUEUED`/`RUNNING` aparece como `Pendente`/`Analisando`; após sucesso aparece como pronto para revisão; após falha ou cancelamento preserva o Product e oferece recuperação. Nenhum resultado parcial é apresentado como Strategy ou Briefing concluído antes de `SUCCEEDED`. Não existe tela permanente de análise nem dependência de memória local do frontend para recuperar o job.
-### B-003-14 — Preservação e arquivamento do Product
+### B-003-14 — Exclusão Big Bang e arquivamento do Product
 
-DELETE físico de Product é rejeitado neste slice. Se houver qualquer histórico associado — `CommerceIntelligenceJob`/`IntelligenceRun`, Strategy, Plan, Opportunity, Content ou BriefVersion — o sistema retorna erro sanitizado `PRODUCT_HAS_HISTORY`; sem histórico, retorna `PRODUCT_DELETE_UNSUPPORTED`. Em ambos os casos, orienta `Arquivar produto`.
+`DELETE /api/products/:id` executa exclusão Big Bang quando o Product pertence ao Tenant da sessão. A operação ocorre em uma única transação interativa, sempre com escopo `(tenantId, productId)`, e remove o Product e todo o grafo relacionado:
 
-`Arquivar produto` preserva Product, fatos, resultados e memória. Ao arquivar um Product ativo autorizado, o sistema decrementa `activeProductsUsed` atomicamente com a mudança de lifecycle; repetir o arquivamento não decrementa novamente. Arquivamento não cria job, não altera Strategy e não remove registros.
+```text
+ProductImportAttempt relacionado
+CommerceIntelligenceJob
+GenerationUsageReservation
+IntelligenceRun
+ProductUnderstanding
+ProductStrategy
+ContentPlan
+ContentOpportunity
+Content
+ContentBriefVersion
+BriefValidationReport
+ProductMemorySnapshot
+Product
+```
+
+Antes de apagar `ContentBriefVersion`, a transação nulifica `Content.currentBriefVersionId` e `Content.approvedBriefVersionId`, quebrando o ciclo `Content ↔ ContentBriefVersion`. A ordem de exclusão respeita as FKs e qualquer falha causa rollback integral. Jobs em execução não são bloqueados por regra de produto; a implementação deve preservar a integridade transacional e o fencing do worker.
+
+Em sucesso, a API retorna `204 No Content`. Product inexistente ou fora do Tenant retorna `404 PRODUCT-NOT-FOUND`, sem revelar existência. Falha transacional retorna erro sanitizado e não confirma exclusão parcial.
+
+`Arquivar produto` continua preservando Product, fatos, resultados e memória. Ao arquivar um Product ativo autorizado, o sistema decrementa `activeProductsUsed` atomicamente com a mudança de lifecycle; repetir o arquivamento não decrementa novamente. Arquivamento não cria job, não altera Strategy e não remove registros.
 ## 6. Regras e invariantes
 
 ### RI-003-01 — Product confirmado é pré-condição
@@ -334,9 +354,9 @@ Reconnect, reentrada e reclaim de worker usam o mesmo `job.id`, a mesma chave l�
 ### RI-003-17 — Memória inicial e sinais
 
 O snapshot de entrada da primeira geração é vazio e não consulta histórico nem recorrência. Somente um job `SUCCEEDED` persiste os sinais estruturados gerados para uso futuro; falha ou cancelamento não atualizam a memória.
-### RI-003-18 — Preservação do Product e chave de relatório
+### RI-003-18 — Exclusão Big Bang e chave de relatório
 
-Product nunca é fisicamente excluído neste slice. O `BriefValidationReport` usa `briefId` como nome canônico, derivado de `contentId + briefVersionId` para manter a identidade da versão imutável.
+`DELETE` de Product é tenant-scoped e transacional. Em sucesso, nenhum Product, Job, Run, reserva, Understanding, Strategy, Plan, Opportunity, Content, Brief Version, relatório, snapshot ou import attempt relacionado permanece. A operação quebra previamente as referências de versão atual/aprovada do Content. O `BriefValidationReport` usa `briefId` como nome canônico, derivado de `contentId + briefVersionId`, até sua exclusão.
 ### RI-003-19 — Projeção da ação de geração
 
 Todo Product `ACTIVE` retornado em leitura autenticada inclui `generationAction`, objeto server-authoritative completo: `{ state: "AVAILABLE", reason: null, nextAction: null }`, `{ state: "BLOCKED", reason: "GEN-ACTIVE", nextAction: "VIEW_ACTIVE_ANALYSIS" }` ou `{ state: "BLOCKED", reason: "GEN-CAPACITY", nextAction: "WAIT_FOR_CAPACITY" }`. `reason` e `nextAction` nunca são omitidos e o objeto nunca é `null`. Product `ARCHIVED` é `ArchivedProductView` e não serializa `generationAction`; não recebe novo código ou estado de bloqueio. Archive/reactivate retornam apenas `{ id, version }`; a UI recarrega o Product autenticado após o commit. A projeção é avaliada para o `tenantId` e `userId` da sessão, orienta apenas a UI e nunca autoriza a mutação; `POST /api/generations` revalida sessão, origem, escopo, job ativo e reserva na transação. A projeção não expõe plano, limite, uso, reserva, IDs ou dados de outro Tenant. `GEN-PRODUCT-CAPACITY` pertence à ativação de Product novo e não bloqueia a análise de Product já ativo.
@@ -352,8 +372,8 @@ Todo Product `ACTIVE` retornado em leitura autenticada inclui `generationAction`
 | `GEN-PRODUCT-CAPACITY` | Limite transacional de `active_products` atingido ao ativar Product novo | Rejeitar a operação sem criar Product, job ou reserva mensal e explicar que o limite de Products ativos foi atingido. |
 | `GEN-ACTIVE` | Usuário possui job `QUEUED`/`RUNNING` | Bloquear nova análise, manter `Analisar produto` visível e explicar que existe análise em andamento. |
 | `GEN-AUTH` | Sessão ausente ou Product fora do Tenant | Negar acesso com erro sanitizado; não revelar existência ou dados de outro Tenant. |
-| `PRODUCT_HAS_HISTORY` | DELETE solicitado para Product com histórico | Rejeitar com erro sanitizado e orientar `Arquivar produto`, sem excluir ou criar alteração parcial. |
-| `PRODUCT_DELETE_UNSUPPORTED` | DELETE solicitado para Product sem histórico | Rejeitar com erro sanitizado e orientar `Arquivar produto`, sem excluir o Product. |
+| `PRODUCT-NOT-FOUND` | Product inexistente ou fora do Tenant no DELETE | Retornar `404` sanitizado, sem revelar existência ou dados de outro Tenant. |
+| `DELETE-FAILED` | Falha durante a exclusão Big Bang | Fazer rollback integral da transação, não publicar exclusão parcial e retornar erro sanitizado. |
 | `GEN-TECHNICAL-RETRY` | Reconnect, reentrada ou worker após lease expirado | Reutilizar o mesmo `job.id`, chave e reserva; reclaim aplicar tentativa/backoff/limite sem duplicar resultado. |
 | `GEN-USER-RETRY` | `Tentar novamente` após `FAILED`/`CANCELLED` | Criar novo job, chave idempotente e reserva; preservar o job terminal e reutilizar Product/fatos. |
 | `GEN-SKILL` | Skill default ausente, inválida ou sem versão | Falhar de modo recuperável antes de publicar resultado; preservar Product e registrar causa interna. |
@@ -460,12 +480,14 @@ Requisitos de responsividade e acessibilidade:
 45. **WHEN** a interface for usada em mobile, teclado ou tecnologia assistiva, **o sistema SHALL** manter acompanhamento e recuperação completos, foco-visible, labels associadas, feedback textual, CSRF nas mutações e alvos de interação de pelo menos `44×44px`.
 46. **WHEN** o job estiver `QUEUED` ou `RUNNING`, **o sistema SHALL** derivar readiness `ANALYZING`.
 47. **WHEN** um Product estiver `READY` após `SUCCEEDED`, **o sistema SHALL** oferecer somente `Revisar conteúdos` neste slice e não criar reanálise para o mesmo Product; nova geração pertence ao Slice 008.
-48. **WHEN** `DELETE` for solicitado para Product com histórico, **o sistema SHALL** rejeitar a exclusão, retornar `PRODUCT_HAS_HISTORY` de forma sanitizada e orientar `Arquivar produto`.
-49. **WHEN** `DELETE` for solicitado para Product sem histórico, **o sistema SHALL** rejeitar a exclusão, retornar `PRODUCT_DELETE_UNSUPPORTED` de forma sanitizada e orientar `Arquivar produto`.
-50. **WHEN** `Arquivar produto` for acionado para Product ativo autorizado, **o sistema SHALL** preservar seus registros e decrementar `activeProductsUsed` atomicamente, sem decrementar novamente em repetição.
-51. **WHEN** a lista de Produtos for exibida, **o sistema SHALL** usar a readiness para badges dos Product cards e para o filtro `Pendente`.
-52. **WHEN** o creator iniciar uma ação intencional, **o sistema SHALL** gerar uma `Idempotency-Key`, validar seu fingerprint server-side e rejeitar fingerprint divergente sem criar nova linha.
-53. **WHEN** um `BriefValidationReport` for persistido, **o sistema SHALL** identificar `briefId` pelo par estável `contentId + briefVersionId`.
+48. **WHEN** `DELETE` for solicitado para Product autorizado, **o sistema SHALL** apagar em uma única transação interativa e tenant-scoped o Product e todos os dados relacionados — Jobs, Runs, reservas, Understandings, Strategies, Plans, Opportunities, Contents, Brief Versions, Reports, Snapshots e Import Attempts relacionados — retornando `204` somente após o commit.
+49. **WHEN** a transação de DELETE precisar apagar Brief Versions, **o sistema SHALL** nulificar antes `Content.currentBriefVersionId` e `Content.approvedBriefVersionId`, respeitando o ciclo `Content ↔ ContentBriefVersion`; qualquer falha SHALL causar rollback integral.
+50. **IF** qualquer etapa da exclusão Big Bang falhar, **o sistema SHALL** retornar `500 DELETE-FAILED` sanitizado e preservar integralmente o Product e seus dados relacionados.
+51. **WHEN** `DELETE` for solicitado para Product inexistente ou fora do Tenant, **o sistema SHALL** retornar `404 PRODUCT-NOT-FOUND` sem revelar existência.
+52. **WHEN** `Arquivar produto` for acionado para Product ativo autorizado, **o sistema SHALL** preservar seus registros e decrementar `activeProductsUsed` atomicamente, sem decrementar novamente em repetição.
+53. **WHEN** a lista de Produtos for exibida, **o sistema SHALL** usar a readiness para badges dos Product cards e para o filtro `Pendente`.
+54. **WHEN** o creator iniciar uma ação intencional, **o sistema SHALL** gerar uma `Idempotency-Key`, validar seu fingerprint server-side e rejeitar fingerprint divergente sem criar nova linha.
+55. **WHEN** um `BriefValidationReport` for persistido, **o sistema SHALL** identificar `briefId` pelo par estável `contentId + briefVersionId`.
 ## Edge Cases
 
 - Confirmação duplicada por duplo clique ou timeout deve reutilizar o mesmo job lógico; `Tentar novamente` após estado terminal deve criar novo job.
@@ -515,11 +537,11 @@ Requisitos de responsividade e acessibilidade:
 | S003-20 | Strategy e Plan consultáveis sem gate | B-003-13; AC 38–39 | Pending |
 | S003-21 | Limite transacional de Products ativos | B-003-01; B-003-02; RI-003-05; AC 5–6 | Pending |
 | S003-22 | Product READY sem reanálise e nova geração no Slice 008 | B-003-12; B-003-13; RI-003-07; AC 47 | Pending |
-| S003-23 | Preservação archive-only e DELETE sanitizado | B-003-14; RI-003-18; AC 48–50 | Pending |
-| S003-24 | Readiness em cards e filtro Pendente | B-003-13; AC 51 | Pending |
-| S003-25 | Origem e ciclo de vida da Idempotency-Key | B-003-10; AC 52 | Pending |
+| S003-23 | Exclusão Big Bang transacional e arquivamento preservativo | B-003-14; RI-003-18; AC 48–52 | Done |
+| S003-24 | Readiness em cards e filtro Pendente | B-003-13; AC 53 | Pending |
+| S003-25 | Origem e ciclo de vida da Idempotency-Key | B-003-10; AC 54 | Pending |
 | S003-26 | Estrutura, cenas e hash determinísticos | B-003-08; B-003-09; AC 24, 30 | Pending |
-| S003-27 | Chave versionada do BriefValidationReport | B-003-09; RI-003-18; AC 53 | Pending |
+| S003-27 | Chave versionada do BriefValidationReport | B-003-09; RI-003-18; AC 55 | Pending |
 | S003-28 | Composição de chamadas e batching | B-003-04; AC 25–26 | Pending |
 | S003-29 | Projeção mínima e separação de contexto | B-003-04; Segurança; AC 43 | Pending |
 | S003-30 | Stages reais antes do trabalho | B-003-04; B-003-12; AC 33, 36 | Pending |
@@ -569,12 +591,11 @@ Requisitos de responsividade e acessibilidade:
 - Product, job, resultados e Entitlements são escopados ao Tenant da sessão; mutações exigem proteção CSRF e erros públicos são sanitizados.
 - `IntelligenceRun` registra metadata allowlisted por capability/batch — duração, tamanhos, retries, validações, repairs e códigos — sem prompts completos ou payloads brutos.
 - O limite de repair e a oferta de cancelamento seguro permanecem configurações explicitamente em aberto; esta SPEC não inventa seus valores.
-- Product READY não oferece reanálise neste Slice 003; após `SUCCEEDED`, a única ação de resultado é `Revisar conteúdos`; nova geração/recorrência pertence ao Slice 008.
-- DELETE físico é archive-only; arquivamento preserva dados e decrementa `activeProductsUsed` atomicamente, sem repetição.
+- DELETE Big Bang remove transacionalmente o Product e todo o grafo relacionado, com isolamento por Tenant, quebra explícita do ciclo Content/BriefVersion, rollback integral em falha e resposta `204` após commit; Product inexistente ou fora do Tenant retorna `404 PRODUCT-NOT-FOUND`.
 - `Idempotency-Key` nasce em cada ação intencional do creator, tem fingerprint validado server-side e não pode ser reutilizada com contexto divergente.
 - `structure` é campo opcional canônico da `ContentBriefVersion` v1; cenas válidas e hash estrutural fazem parte das validações determinísticas.
 - `briefId` do `BriefValidationReport` é o identificador canônico derivado de `contentId + briefVersionId`.
-- Esta revisão atualiza a SPEC aprovada para refletir batching, contexto mínimo, stages reais, resiliência e observabilidade; a implementação permanece pendente até os gates de validação.
+- Esta revisão atualiza a SPEC aprovada para refletir a exclusão Big Bang; a implementação foi validada pelos gates reportados: service 33/33, suíte npm 216/216 sem skips, typecheck, eslint, isolamento de Tenant, rollback e concorrência worker/delete.
 ## 12. Especificação visual integral — Products e Product detail
 
 ### 12.1 Objetivo e fronteira

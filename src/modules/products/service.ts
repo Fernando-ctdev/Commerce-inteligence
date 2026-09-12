@@ -34,15 +34,6 @@ export class ProductVersionConflictError extends Error {
     this.name = "ProductVersionConflictError";
   }
 }
-export class ProductDeleteRejectedError extends Error {
-  constructor(
-    public readonly code: "PRODUCT_HAS_HISTORY" | "PRODUCT_DELETE_UNSUPPORTED",
-  ) {
-    super(code);
-    this.name = "ProductDeleteRejectedError";
-  }
-}
-
 // Ordem determinística dos códigos da SPEC §7 quando vários campos falham juntos.
 const FIELD_CODE_PRIORITY = [
   "name",
@@ -729,57 +720,61 @@ export async function deleteTenantProduct(
 ): Promise<void> {
   const product = await prisma.product.findFirst({
     where: { tenantId, id },
-    select: { id: true },
+    select: { id: true, submittedUrl: true, sourceUrl: true },
   });
   if (!product) throw new ProductNotFoundError();
-  const [
-    jobs,
-    runs,
-    understandings,
-    strategies,
-    plans,
-    opportunities,
-    contents,
-    briefs,
-    reports,
-    memory,
-  ] = await Promise.all([
-    prisma.commerceIntelligenceJob.count({
+  // Vínculo determinístico de ProductImportAttempt: mesma URL submetida/origem
+  // no mesmo tenant (a tabela não tem FK productId).
+  const attemptUrlFilter = {
+    OR: [
+      ...(product.submittedUrl ? [{ submittedUrl: product.submittedUrl }] : []),
+      ...(product.sourceUrl ? [{ sourceUrl: product.sourceUrl }] : []),
+    ],
+  };
+  // Exclusão Big Bang (decisão do Arquiteto): apaga TODO o histórico relacionado,
+  // direto ou indireto, em uma única transação — sem preservar histórico e sem
+  // bloquear por conteúdo. Sempre tenant-scoped. Ordem respeita FKs e quebra o
+  // ciclo Content↔ContentBriefVersion antes de apagar versões.
+  await prisma.$transaction(async (tx) => {
+    await tx.productImportAttempt.deleteMany({
+      where: { tenantId, ...attemptUrlFilter },
+    });
+    // Ciclo: Content.currentBriefVersionId → ContentBriefVersion.contentId.
+    await tx.content.updateMany({
       where: { tenantId, productId: id },
-    }),
-    prisma.intelligenceRun.count({ where: { tenantId, productId: id } }),
-    prisma.productUnderstanding.count({
+      data: { currentBriefVersionId: null, approvedBriefVersionId: null },
+    });
+    await tx.briefValidationReport.deleteMany({
       where: { tenantId, productId: id },
-    }),
-    prisma.productStrategy.count({ where: { tenantId, productId: id } }),
-    prisma.contentPlan.count({ where: { tenantId, productId: id } }),
-    prisma.contentOpportunity.count({
+    });
+    await tx.contentBriefVersion.deleteMany({
       where: { tenantId, productId: id },
-    }),
-    prisma.content.count({ where: { tenantId, productId: id } }),
-    prisma.contentBriefVersion.count({
+    });
+    await tx.content.deleteMany({ where: { tenantId, productId: id } });
+    await tx.contentOpportunity.deleteMany({
       where: { tenantId, productId: id },
-    }),
-    prisma.briefValidationReport.count({
+    });
+    await tx.contentPlan.deleteMany({ where: { tenantId, productId: id } });
+    // Snapshot referencia sourceJob: apagar antes dos jobs.
+    await tx.productMemorySnapshot.deleteMany({
       where: { tenantId, productId: id },
-    }),
-    prisma.productMemorySnapshot.count({
+    });
+    // Reservas de quota referenciam job: apagar via filtro de relação, antes dos jobs.
+    await tx.generationUsageReservation.deleteMany({
+      where: { tenantId, job: { productId: id } },
+    });
+    await tx.intelligenceRun.deleteMany({
       where: { tenantId, productId: id },
-    }),
-  ]);
-  const hasHistory =
-    jobs +
-      runs +
-      understandings +
-      strategies +
-      plans +
-      opportunities +
-      contents +
-      briefs +
-      reports +
-      memory >
-    0;
-  if (hasHistory)
-    throw new ProductDeleteRejectedError("PRODUCT_HAS_HISTORY");
-  await prisma.product.delete({ where: { id } });
+    });
+    await tx.productUnderstanding.deleteMany({
+      where: { tenantId, productId: id },
+    });
+    await tx.productStrategy.deleteMany({
+      where: { tenantId, productId: id },
+    });
+    await tx.commerceIntelligenceJob.deleteMany({
+      where: { tenantId, productId: id },
+    });
+    await tx.product.delete({ where: { tenantId_id: { tenantId, id } } });
+  });
 }

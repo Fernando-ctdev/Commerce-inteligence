@@ -67,7 +67,7 @@ test("pipeline entrega a projeção exata por capability, sem creatorContext no 
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
       if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
       if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
-      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", script: "Produto na prática", scenes: ["a", "b"], cta: "c" }] };
+      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Produto na prática", scenes: ["a", "b"], cta: "c" }] };
       return {};
     },
   };

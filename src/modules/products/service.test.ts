@@ -21,9 +21,11 @@ import {
   ProductNotFoundError,
   ProductValidationError,
   archiveTenantProduct,
+  deleteTenantProduct,
   reactivateTenantProduct,
   validateManualProductInput,
 } from "./service.js";
+import { failJobAndReleaseReservation } from "../commerce-intelligence/worker.js";
 import { monthUtc } from "../entitlements/generation.js";
 
 // APP_ORIGIN pode ser lista separada por vírgula; o runtime valida contra o conjunto.
@@ -856,7 +858,55 @@ test("PATCH com expectedVersion desatualizada responde 409 VERSION-CONFLICT", as
   );
 });
 
-test("DELETE exclui Product sem histórico; com histórico responde 409 e preserva", async (t) => {
+// Grafo completo de histórico: job → run/understanding/snapshot/reserva e
+// strategy → plan → opportunity → content → brief (ciclo currentBrief) + report.
+async function seedHistory(tenantId: string, userId: string, productId: string) {
+  const job = await prisma.commerceIntelligenceJob.create({
+    data: {
+      tenantId,
+      userId,
+      productId,
+      idempotencyKey: randomBytes(16).toString("base64url"),
+      fingerprint: "delete-bigbang",
+      targetContentCount: 1,
+      generatedContentsMonth: monthUtc(),
+      status: "SUCCEEDED",
+    },
+  });
+  await prisma.intelligenceRun.create({ data: { tenantId, jobId: job.id, productId, engineVersion: "v1", platformSkillVersion: "tiktok-commerce@1.0" } });
+  await prisma.productUnderstanding.create({ data: { tenantId, productId, jobId: job.id, payload: {} } });
+  await prisma.generationUsageReservation.create({ data: { tenantId, jobId: job.id, generatedContentsMonth: monthUtc(), quantity: 1 } });
+  await prisma.productMemorySnapshot.create({ data: { tenantId, productId, sourceJobId: job.id, signals: {} } });
+  const strategy = await prisma.productStrategy.create({ data: { tenantId, productId, jobId: job.id, platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.0", payload: {} } });
+  const plan = await prisma.contentPlan.create({ data: { tenantId, productId, jobId: job.id, strategyId: strategy.id, strategyVersion: 1, targetContentCount: 1, platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.0", payload: {} } });
+  const opportunity = await prisma.contentOpportunity.create({ data: { tenantId, productId, planId: plan.id, jobId: job.id, position: 1, commercialObjective: "CONVERSION", angle: "ângulo", coreMessage: "mensagem", hookMechanism: "gancho", noveltyTargets: [], payload: {} } });
+  const content = await prisma.content.create({ data: { tenantId, productId, jobId: job.id, planId: plan.id, opportunityId: opportunity.id, position: 1, payload: {} } });
+  const brief = await prisma.contentBriefVersion.create({ data: { tenantId, productId, jobId: job.id, contentId: content.id, payload: {} } });
+  // Ciclo: Content.currentBriefVersionId → ContentBriefVersion.
+  await prisma.content.update({ where: { tenantId_id: { tenantId, id: content.id } }, data: { currentBriefVersionId: brief.id } });
+  await prisma.briefValidationReport.create({ data: { tenantId, jobId: job.id, productId, contentId: content.id, briefVersionId: brief.id, briefId: `${content.id}:${brief.id}`, factualStatus: "SUPPORTED", structuralStatus: "PASS", platformStatus: "PASS", varietyStatus: "PASS", decision: "PASS", issues: [] } });
+  return job;
+}
+
+// [product, job, run, understanding, strategy, plan, opportunity, content, brief, report, snapshot, reservation]
+function historyCounts(tenantId: string, productId: string): Promise<number[]> {
+  return Promise.all([
+    prisma.product.count({ where: { tenantId, id: productId } }),
+    prisma.commerceIntelligenceJob.count({ where: { tenantId, productId } }),
+    prisma.intelligenceRun.count({ where: { tenantId, productId } }),
+    prisma.productUnderstanding.count({ where: { tenantId, productId } }),
+    prisma.productStrategy.count({ where: { tenantId, productId } }),
+    prisma.contentPlan.count({ where: { tenantId, productId } }),
+    prisma.contentOpportunity.count({ where: { tenantId, productId } }),
+    prisma.content.count({ where: { tenantId, productId } }),
+    prisma.contentBriefVersion.count({ where: { tenantId, productId } }),
+    prisma.briefValidationReport.count({ where: { tenantId, productId } }),
+    prisma.productMemorySnapshot.count({ where: { tenantId, productId } }),
+    prisma.generationUsageReservation.count({ where: { tenantId, job: { productId } } }),
+  ]);
+}
+
+test("DELETE Big Bang exclui Product e TODO o histórico relacionado em transação", async (t) => {
   if (!dbUp) return t.skip();
   const { token, tenantId, userId } = await tenantOf();
   const semHistorico = await criarProduct(token);
@@ -867,28 +917,139 @@ test("DELETE exclui Product sem histórico; com histórico responde 409 e preser
     0,
   );
 
-  const comHistorico = await criarProduct(token);
-  await prisma.commerceIntelligenceJob.create({
+  const url = "https://exemplo.com/produto";
+  const resAlvo = await handleCreateProduct(
+    post(token, { ...validInput, url }, randomBytes(16).toString("base64url")),
+  );
+  assert.equal(resAlvo.status, 200);
+  const alvo = (await resAlvo.json()) as { id: string };
+  await seedHistory(tenantId, userId, alvo.id);
+  // Attempt não tem FK productId: vínculo é pela URL submetida/origem.
+  await prisma.productImportAttempt.createMany({
+    data: [
+      { tenantId, status: "SUCCEEDED", submittedUrl: url },
+      { tenantId, status: "FAILED", submittedUrl: "https://outro.com/y" },
+    ],
+  });
+
+  const resHistorico = await handleDeleteProduct(del(token, alvo.id), alvo.id);
+  assert.equal(resHistorico.status, 204);
+  assert.deepEqual(
+    await historyCounts(tenantId, alvo.id),
+    Array(12).fill(0),
+    "nada do histórico sobrevive ao Big Bang",
+  );
+  assert.equal(
+    await prisma.productImportAttempt.count({ where: { tenantId, submittedUrl: url } }),
+    0,
+    "attempt vinculada pela URL do Product é apagada",
+  );
+  assert.equal(
+    await prisma.productImportAttempt.count({ where: { tenantId, submittedUrl: "https://outro.com/y" } }),
+    1,
+    "attempt de outra URL no mesmo tenant sobrevive",
+  );
+});
+
+test("DELETE Big Bang é isolado por tenant: mesma URL e histórico do outro tenant sobrevivem", async (t) => {
+  if (!dbUp) return t.skip();
+  const dona = await tenantOf();
+  const vizinha = await tenantOf();
+  const url = "https://exemplo.com/compartilhada";
+  const criar = async (tenant: { token: string; tenantId: string; userId: string }) => {
+    const res = await handleCreateProduct(
+      post(tenant.token, { ...validInput, url }, randomBytes(16).toString("base64url")),
+    );
+    assert.equal(res.status, 200);
+    const { id } = (await res.json()) as { id: string };
+    await seedHistory(tenant.tenantId, tenant.userId, id);
+    await prisma.productImportAttempt.create({ data: { tenantId: tenant.tenantId, status: "SUCCEEDED", submittedUrl: url } });
+    return id;
+  };
+  const idA = await criar(dona);
+  const idB = await criar(vizinha);
+
+  const res = await handleDeleteProduct(del(dona.token, idA), idA);
+  assert.equal(res.status, 204);
+  assert.deepEqual(await historyCounts(dona.tenantId, idA), Array(12).fill(0));
+  assert.equal(
+    await prisma.productImportAttempt.count({ where: { tenantId: dona.tenantId } }),
+    0,
+  );
+  // Tenant vizinho intocado: Product "gêmeo", mesma URL e mesmo grafo de histórico.
+  assert.deepEqual(await historyCounts(vizinha.tenantId, idB), Array(12).fill(1));
+  assert.equal(
+    await prisma.productImportAttempt.count({ where: { tenantId: vizinha.tenantId, submittedUrl: url } }),
+    1,
+  );
+});
+
+test("Falha dentro da transação faz rollback: nenhum dado é apagado parcialmente", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId, userId } = await tenantOf();
+  const created = await criarProduct(token);
+  await seedHistory(tenantId, userId, created.id);
+  await prisma.productImportAttempt.create({ data: { tenantId, status: "SUCCEEDED", submittedUrl: "https://exemplo.com/produto" } });
+
+  // Conexão externa segura a linha do Product com timeout próprio maior: o
+  // DELETE final da exclusão bloqueia, a transação interativa do Prisma (5s
+  // default) estoura primeiro e força o rollback de tudo.
+  const lock = new PrismaClient();
+  try {
+    const trava = lock.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT id FROM products WHERE id = ${created.id} FOR UPDATE`;
+        await new Promise((resolve) => setTimeout(resolve, 7_000));
+      },
+      { timeout: 15_000 },
+    );
+    // Garante a trava adquirida antes de iniciar a exclusão.
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await assert.rejects(() => deleteTenantProduct(tenantId, created.id));
+    await trava;
+  } finally {
+    await lock.$disconnect();
+  }
+  assert.deepEqual(
+    await historyCounts(tenantId, created.id),
+    Array(12).fill(1),
+    "rollback restaura o grafo inteiro",
+  );
+  assert.equal(
+    await prisma.productImportAttempt.count({ where: { tenantId } }),
+    1,
+    "rollback restaura as attempts",
+  );
+});
+
+test("DELETE não bloqueia job RUNNING: exclusão prossegue e o worker falha sem erro (fencing)", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId, userId } = await tenantOf();
+  const created = await criarProduct(token);
+  const job = await prisma.commerceIntelligenceJob.create({
     data: {
       tenantId,
       userId,
-      productId: comHistorico.id,
+      productId: created.id,
       idempotencyKey: randomBytes(16).toString("base64url"),
-      fingerprint: "delete-hist",
+      fingerprint: "delete-running",
       targetContentCount: 1,
       generatedContentsMonth: monthUtc(),
-      status: "FAILED",
+      status: "RUNNING",
+      leaseOwnerId: "worker-test",
+      leaseDeadlineAt: new Date(Date.now() + 60_000),
     },
   });
-  const resHistorico = await handleDeleteProduct(del(token, comHistorico.id), comHistorico.id);
-  assert.equal(resHistorico.status, 409);
-  assert.equal(
-    ((await resHistorico.json()) as { code?: string }).code,
-    "PRODUCT_HAS_HISTORY",
-  );
-  assert.equal(
-    await prisma.product.count({ where: { tenantId, id: comHistorico.id } }),
-    1,
+  await prisma.generationUsageReservation.create({ data: { tenantId, jobId: job.id, generatedContentsMonth: monthUtc(), quantity: 1 } });
+
+  // Sem bloqueio por precaução: a exclusão Big Bang prossegue com o job RUNNING.
+  const res = await handleDeleteProduct(del(token, created.id), created.id);
+  assert.equal(res.status, 204);
+  assert.deepEqual(await historyCounts(tenantId, created.id), Array(12).fill(0));
+
+  // Worker chega depois: fencing condicional resolve com 0 linhas, sem erro.
+  await assert.doesNotReject(() =>
+    failJobAndReleaseReservation(job.id, "GEN-PROVIDER", "worker-test"),
   );
 });
 

@@ -1,5 +1,5 @@
 import { GenerationError } from "./errors";
-import { CARDINALITY_POLICY } from "./contract";
+import { CARDINALITY_POLICY, scenesEnabled } from "./contract";
 import {
   assertProviderOutput,
   instructionHash,
@@ -82,8 +82,13 @@ const INSTRUCTION: Record<LogicalTask, string> = {
     "Retorne um objeto JSON raiz com as chaves canônicas da Strategy: primaryPositioning (string não vazia), audiences, priorityBenefits, priorityObjections, priorityArguments, priorityAngles, communicationPrinciples e communicationRisks (cada array com NO MÁXIMO 10 itens). Use somente evidência autorizada: arrays podem ser [] quando não houver evidência suficiente; com evidência, inclua apenas itens suportados. Não inclua objective, positioning, audience ou contentPillars; não inclua status, tenantId, userId, quota, provider, model, tier ou comandos de workflow.",
   CONTENT_PLAN_GENERATION:
     "Retorne um objeto JSON raiz (NUNCA array) com as chaves platformId e opportunities: um array com quantidade EXATA de oportunidades de conteúdo igual ao targetContentCount recebido. Cada opportunity tem commercialObjective, angle, coreMessage, hookMechanism e noveltyTargets (array de 1 a 4 strings; nunca vazio, nunca mais que 4). Não coloque texto fora do JSON; não inclua ownership, status, quota, provider, model, tier ou comandos de workflow.",
-  CONTENT_BRIEF_GENERATION:
-    "Retorne um objeto JSON raiz com o campo items contendo EXATAMENTE a mesma quantidade de briefings que oportunidades recebidas na entrada, um briefing por oportunidade, na mesma ordem. Cada briefing tem angle, hook, script, scenes (array JSON com 2 a 8 strings não vazias; nunca string única, nunca array vazio, nunca fora dessa faixa) e cta. A quantidade de items deve ser exatamente igual à quantidade de oportunidades recebidas; nunca omita, adicione ou duplique. Não inclua contentId, briefVersionId, ownership, status, quota, provider, model, tier ou comandos de workflow.",
+  get CONTENT_BRIEF_GENERATION() {
+    return scenesEnabled()
+      ? "Retorne um objeto JSON raiz com o campo items contendo EXATAMENTE a mesma quantidade de briefings que oportunidades recebidas na entrada, um briefing por oportunidade, na mesma ordem. Cada briefing tem angle, hook, script, scenes (array JSON com 2 a 8 strings não vazias; nunca string única, nunca array vazio, nunca fora dessa faixa) e cta. A quantidade de items deve ser exatamente igual à quantidade de oportunidades recebidas; nunca omita, adicione ou duplique. Não inclua contentId, briefVersionId, ownership, status, quota, provider, model, tier ou comandos de workflow."
+      // Estrutura da nota gancho: hook, desenvolvimento real do produto (pontos objetivos),
+      // roteiro oral e CTA. Sem scenes no modo padrão (GENERATION_SCENES_ENABLED desativada).
+      : "Retorne um objeto JSON raiz com o campo items contendo EXATAMENTE a mesma quantidade de briefings que oportunidades recebidas na entrada, um briefing por oportunidade, na mesma ordem. Cada briefing tem angle, hook, development (pontos objetivos do desenvolvimento real do produto, separados por ponto e vírgula; use somente evidência autorizada, sem inventar atributos), script (roteiro oral em primeira pessoa, linguagem falada, não literal) e cta. NÃO inclua o campo scenes. A quantidade de items deve ser exatamente igual à quantidade de oportunidades recebidas; nunca omita, adicione ou duplique. Não inclua contentId, briefVersionId, ownership, status, quota, provider, model, tier ou comandos de workflow.";
+  },
 };
 const REASONING_BY_TASK: Record<LogicalTask, "low" | "medium" | "high"> = {
   PRODUCT_UNDERSTANDING: "low",
@@ -132,10 +137,20 @@ type FallbackFailure = {
   durationMs: number;
 };
 
+// Meu estilo (ADR-018/slice-011): o creatorContext projetado é vinculante nas capabilities
+// que o recebem (SPEC slice-011 — mapping, strategy, plan e brief). Instrução explícita:
+// restrições são invioláveis; gravação solo não admite segunda pessoa/equipamento extra;
+// tom e estilo de execução governam a fala; nada é inventado além do informado.
+export const MEU_ESTILO_CLAUSE =
+  " Considere obrigatoriamente o creatorContext (Meu estilo) presente no contexto: tom (tone), estilo de execução (executionStyle), equipamentos de gravação (recordingEquipment, recordingSupport), gravação sozinho (recordsAlone), restrições (restrictions) e notas (notes) quando presentes. Restrições declaradas são invioláveis. Se recordsAlone for true, nenhuma cena pode exigir outra pessoa, operador ou equipamento além dos declarados. Adapte linguagem e abordagem ao tone e ao executionStyle informados. Nunca invente preferências que não estejam no creatorContext.";
+
 export function createHttpProvider(config = configFromEnv()): ModelRouter {
-  const instruction = (task: LogicalTask): string =>
-    INSTRUCTION[task] ??
-    "Retorne JSON compatível com o contrato solicitado; não inclua ownership, status ou comandos de workflow.";
+  const instruction = (task: LogicalTask): string => {
+    const base = INSTRUCTION[task] ??
+      "Retorne JSON compatível com o contrato solicitado; não inclua ownership, status ou comandos de workflow.";
+    // PRODUCT_UNDERSTANDING não recebe creatorContext (SPEC slice-011).
+    return task === "PRODUCT_UNDERSTANDING" ? base : base + MEU_ESTILO_CLAUSE;
+  };
   const modelFor = (task: LogicalTask): string => modelForTier(config, task);
   const guard = (task: LogicalTask): void => {
     if (!modelFor(task))
@@ -146,7 +161,7 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
         { task },
       );
   };
-  const hash = (task: LogicalTask) => instructionHash(INSTRUCTION[task] ?? "");
+  const hash = (task: LogicalTask) => instructionHash(instruction(task));
   const describe = () => ({
     provider: "openai-compatible",
     model: modelFor("PRODUCT_UNDERSTANDING") || "unset",
@@ -412,7 +427,7 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
         tier: ROUTER_MAP[task],
         model,
         endpoint: endpointOrigin,
-        instructionHash: instructionHash(INSTRUCTION[task] ?? ""),
+        instructionHash: instructionHash(instruction(task)),
         durationMs: Date.now() - startedAt,
         providerStatus,
         responseBytes,

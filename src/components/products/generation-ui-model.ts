@@ -163,6 +163,7 @@ export type BriefingItem = {
   status: string;
   angle: string;
   hook: string;
+  development: string[];
   script: string;
   scenes: string[];
   cta: string;
@@ -194,6 +195,7 @@ export function briefingItems(contents: Array<Record<string, unknown>>): Briefin
       status: text(content.status) || "DRAFT",
       angle: text(content.angle),
       hook: text(content.hook),
+      development: strings(content.development),
       script: text(content.script),
       scenes: strings(content.scenes),
       cta: text(content.cta),
