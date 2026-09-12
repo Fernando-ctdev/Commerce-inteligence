@@ -6,8 +6,21 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Toggle } from "@base-ui/react/toggle";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
-import { ArrowRight, CheckCircle2, Ellipsis, FileText, Plus, Search, Tag, Video } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Clock3,
+  Ellipsis,
+  FileText,
+  Plus,
+  Search,
+  Sparkles,
+  Tag,
+  Video,
+} from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { phaseStates, stageMessage } from "./generation-ui-model";
 
 import {
   DropdownMenu,
@@ -17,6 +30,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
+import {
+  getCurrentGenerationForProduct,
+  isActiveGeneration,
+  type GenerationRecord,
+} from "./generation-api";
 import {
   archiveProduct,
   deleteProduct,
@@ -35,12 +53,23 @@ const filterOptions = [
 
 type ProductFilter = (typeof filterOptions)[number][0];
 
+function activityLabel(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const today = new Date();
+  return date.toDateString() === today.toDateString()
+    ? "hoje"
+    : date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
+
 export function ProductList() {
   const [products, setProducts] = useState<ProductRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ProductFilter>("all");
+  const [generations, setGenerations] = useState<Record<string, GenerationRecord | null>>({});
   const [actionProduct, setActionProduct] = useState<ProductRecord | null>(null);
   const [actionType, setActionType] = useState<"archive" | "delete" | null>(null);
   const [actionPending, setActionPending] = useState(false);
@@ -49,7 +78,18 @@ export function ProductList() {
     setLoading(true);
     setError(null);
     try {
-      setProducts(await listProducts());
+      const nextProducts = await listProducts();
+      setProducts(nextProducts);
+      const entries = await Promise.all(
+        nextProducts.map(async (product) => {
+          try {
+            return [product.id, await getCurrentGenerationForProduct(product.id)] as const;
+          } catch {
+            return [product.id, null] as const;
+          }
+        }),
+      );
+      setGenerations(Object.fromEntries(entries));
     } catch (caught) {
       setError(
         caught instanceof ProductApiError
@@ -251,6 +291,31 @@ export function ProductList() {
               )
                 ? firstImage
                 : null;
+            const generation = generations[product.id];
+            const analyzing = generation
+              ? isActiveGeneration(generation.status)
+              : product.readiness === "ANALYZING";
+            const ready =
+              generation?.status === "SUCCEEDED" ||
+              (!generation && product.readiness === "READY");
+            const failed =
+              generation?.status === "FAILED" ||
+              generation?.status === "CANCELLED" ||
+              (!generation && product.readiness === "FAILED");
+            const approved =
+              generation?.contents.filter((content) => content.status === "APPROVED")
+                .length ?? 0;
+            const phases = generation
+              ? phaseStates(generation.status, generation.stage)
+              : [];
+            const completedPhases = phases.filter((phase) => phase.state === "done").length;
+            const progressPercent = phases.length
+              ? Math.round((completedPhases / phases.length) * 100)
+              : 0;
+            const currentStage = generation?.stage
+              ? stageMessage(generation.stage)
+              : "Preparando a análise...";
+            const activity = activityLabel(generation?.finishedAt);
             return (
               <li className={styles.card} key={product.id}>
                 {imageUrl ? (
@@ -307,32 +372,54 @@ export function ProductList() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                  {product.readiness === "ANALYZING" ? (
-                    <>
-                      <p className={styles.cardStatus}>
-                        Estratégia em geração · 0 conteúdos prontos
-                      </p>
-                      <p className={styles.cardActivity}>
-                        Preparando estratégia e conteúdos...
-                      </p>
-                    </>
-                  ) : (
+                  {analyzing ? (
+                    <div className={styles.cardProgress} aria-label={`Progresso da análise: ${currentStage}`}>
+                      <div className={styles.cardProgressHeader}>
+                        <span>{currentStage}</span>
+                        <strong>{progressPercent}%</strong>
+                      </div>
+                      <div
+                        aria-valuemax={100}
+                        aria-valuemin={0}
+                        aria-valuenow={progressPercent}
+                        className={styles.cardProgressTrack}
+                        role="progressbar"
+                      >
+                        <span style={{ width: `${progressPercent}%` }} />
+                      </div>
+                    </div>
+                  ) : failed ? (
+                    <p className={styles.cardError}>
+                      <AlertTriangle aria-hidden="true" />
+                      Não foi possível concluir a análise.
+                    </p>
+                  ) : ready && generation ? (
                     <>
                       <div aria-label="Resumo operacional" className={styles.cardMetrics}>
-                        <span><FileText aria-hidden="true" /><strong>{product.targetContentCount}</strong> conteúdos</span>
-                        <span><CheckCircle2 aria-hidden="true" /><strong>8</strong> aprovações</span>
+                        <span><FileText aria-hidden="true" /><strong>{generation.contents.length}</strong> conteúdos</span>
+                        <span><CheckCircle2 aria-hidden="true" /><strong>{approved}</strong> aprovados</span>
                         <span><Video aria-hidden="true" /><strong>4</strong> gravados</span>
                       </div>
-                      <p className={styles.cardActivity}>Última atividade: hoje</p>
+                      {activity && (
+                        <p className={styles.cardActivity}>
+                          <Clock3 aria-hidden="true" />
+                          Última atividade: {activity}
+                        </p>
+                      )}
                     </>
+                  ) : (
+                    <p className={styles.cardStatus}>
+                      <FileText aria-hidden="true" />
+                      0 conteúdos gerados
+                    </p>
                   )}
                 </div>
                 <Link
-                  className={styles.cardAction}
+                  className={`${styles.cardAction} ${failed ? styles.cardActionSecondary : ""}`}
                   href={`/products/${encodeURIComponent(product.id)}`}
                 >
-                  {product.readiness === "ANALYZING" ? "Acompanhar análise" : "Revisar conteúdos"}
-                  <ArrowRight aria-hidden="true" />
+                  {analyzing ? "Acompanhar análise" : failed ? "Tentar novamente" : ready ? "Revisar conteúdos" : "Abrir produto"}
+                  {!failed && <ArrowRight aria-hidden="true" />}
                 </Link>
               </li>
             );

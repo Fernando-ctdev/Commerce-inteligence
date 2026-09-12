@@ -382,6 +382,39 @@
   width: 18px;
 }
 
+.cardProgress {
+  display: grid;
+  gap: 8px;
+}
+
+.cardProgressHeader {
+  align-items: center;
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.cardProgressHeader strong {
+  color: var(--color-brand);
+  font-weight: 700;
+}
+
+.cardProgressTrack {
+  background: var(--color-border);
+  border-radius: 999px;
+  height: 7px;
+  overflow: hidden;
+}
+
+.cardProgressTrack span {
+  background: var(--color-brand);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 300ms ease;
+}
 .cardStatus,
 .cardActivity {
   color: var(--color-text-secondary);
@@ -393,6 +426,28 @@
 .cardStatus {
   color: var(--color-brand);
   font-weight: 600;
+}
+.cardStatus,
+.cardActivity,
+.cardError {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+}
+
+.cardStatus > svg,
+.cardActivity > svg,
+.cardError > svg {
+  flex: 0 0 auto;
+  height: 15px;
+  width: 15px;
+}
+
+.cardError {
+  color: var(--color-danger);
+  font-size: 13px;
+  line-height: 18px;
+  margin: 0;
 }
 
 .cardMetrics {
@@ -444,6 +499,16 @@
   filter: brightness(0.96);
 }
 
+.cardActionSecondary {
+  background: var(--color-surface-primary);
+  border-color: var(--color-brand);
+  color: var(--color-brand);
+}
+
+.cardActionSecondary:hover {
+  background: var(--color-surface-secondary);
+  filter: none;
+}
 .cardAction > svg {
   flex: 0 0 auto;
   height: 16px;

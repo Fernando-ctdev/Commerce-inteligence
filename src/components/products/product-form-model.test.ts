@@ -420,3 +420,32 @@ test("comissão: payload envia tipo e valor normalizado apenas quando o par est�
   });
   assert.equal(edicao.commissionValue, "5,00");
 });
+
+test("desconto percentual é opcional, normalizado e validado", () => {
+  const base = {
+    ...emptyProductDraft(),
+    name: "P",
+    description: "D",
+    category: "C",
+    price: "89.90",
+    currency: "R$",
+    characteristics: "x",
+  };
+  assert.deepEqual(validateProductManualDraft({ ...base, discountPercentage: "100,01" }, ""), {
+    discountPercentage: "O desconto deve estar entre 0 e 100%.",
+  });
+  const payload = buildManualProductPayload(
+    { ...base, discountPercentage: "12,50" },
+    { targetContentCount: 1, creatorPresence: "either" },
+    "idempotency-key",
+  );
+  assert.equal(payload.discountPercentage, "12.5");
+  assert.equal(payload.idempotency_key, "idempotency-key");
+  assert.equal(
+    buildManualProductPayload(
+      { ...base, discountPercentage: "" },
+      { targetContentCount: 1, creatorPresence: "either" },
+    ).discountPercentage,
+    null,
+  );
+});

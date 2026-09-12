@@ -75,6 +75,12 @@
   gap: 4px;
 }
 
+.settingsItem {
+  border-block-start: 1px solid var(--color-border);
+  margin-block-start: 16px;
+  padding-block-start: 16px;
+}
+
 .navButton {
   color: var(--color-text-secondary);
   font-size: 15px;

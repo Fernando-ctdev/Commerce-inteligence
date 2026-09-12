@@ -58,6 +58,7 @@ const emptyDraft: ProductManualDraft = {
   commissionType: "",
   commission: "",
   characteristics: "",
+  discountPercentage: "",
   imageReferences: "",
   url: "",
 };
@@ -139,8 +140,9 @@ function draftFromProduct(product?: ProductRecord): ProductManualDraft {
     price: product.price.replace(",", "."),
     currency: product.priceCurrency,
     commissionType: product.commissionType,
-    commission: product.commission,
     characteristics: product.characteristics.join("\n"),
+    commission: product.commission,
+    discountPercentage: product.discountPercentage,
     imageReferences: product.imageReferences.join("\n"),
     url: product.url,
   };
@@ -164,6 +166,7 @@ const errorFieldOrder: Array<keyof ProductManualFieldErrors> = [
   "commissionType",
   "commission",
   "characteristics",
+  "discountPercentage",
   "imageReferences",
   "url",
   "targetContentCount",
@@ -735,6 +738,7 @@ export function ProductCreateForm({
           targetContentCount: caught.fieldErrors.targetContentCount,
           creatorPresence: caught.fieldErrors.creatorPresence,
           constraints: caught.fieldErrors.constraints,
+          discountPercentage: caught.fieldErrors.discountPercentage,
         };
         setFieldErrors(apiErrors);
         setError(caught.message);
@@ -870,6 +874,15 @@ export function ProductCreateForm({
               typeError={combinedErrors.commissionType}
               value={draft.commission ?? ""}
               valueError={combinedErrors.commission}
+            />
+            <TextField
+              error={combinedErrors.discountPercentage}
+              id={fieldId("discountPercentage")}
+              inputMode="decimal"
+              label="Desconto (%)"
+              onChange={(value) => update("discountPercentage", value)}
+              placeholder="Ex.: 15,5"
+              value={draft.discountPercentage ?? ""}
             />
           </div>
           <TextField

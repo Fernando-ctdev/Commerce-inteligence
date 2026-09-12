@@ -711,6 +711,53 @@
   line-height: 22px;
   margin: 0;
 }
+.strategySummary {
+  background: var(--color-surface-secondary);
+  border-left: 2px solid var(--color-intelligence);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 16px 20px;
+}
+
+.strategySummary h3,
+.strategySummary p {
+  margin: 0;
+}
+
+.strategySummary h3 {
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.strategySummary p {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.strategySummary strong {
+  color: var(--color-text);
+}
+
+.strategyDetails {
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+}
+
+.strategyDetails summary {
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  list-style-position: inside;
+}
+
+.strategyDetailsBody {
+  display: grid;
+  gap: 32px;
+  padding-top: 24px;
+}
 
 .positioning {
   background: var(--color-surface-secondary);

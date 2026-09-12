@@ -359,8 +359,8 @@ export function ProductDetail({ id }: { id: string }) {
           <div className={styles.tabsScroller}>
             <SectionSwitcherList className={styles.tabsList}>
               <SectionSwitcherTrigger value="overview">Visão geral</SectionSwitcherTrigger>
-              <SectionSwitcherTrigger value="strategy">Estratégia</SectionSwitcherTrigger>
               <SectionSwitcherTrigger value="contents">Conteúdos</SectionSwitcherTrigger>
+              <SectionSwitcherTrigger value="strategy">Estratégia</SectionSwitcherTrigger>
               <SectionSwitcherTrigger value="history">Histórico</SectionSwitcherTrigger>
             </SectionSwitcherList>
           </div>
@@ -388,7 +388,7 @@ export function ProductDetail({ id }: { id: string }) {
                 <GenerationStatusCard
                   className={styles.statusCard}
                   generationAction={product.generationAction}
-                  onOpenStrategy={() => changeTab("strategy")}
+                  onOpenContents={() => changeTab("contents")}
                   productName={product.name}
                   readiness={generation.readiness}
                   state={generation}
@@ -463,14 +463,14 @@ export function ProductDetail({ id }: { id: string }) {
               </aside>
             </div>
           </SectionSwitcherContent>
-          <SectionSwitcherContent value="strategy">
-            <StrategyView job={generation.job} onOpenContents={() => changeTab("contents")} />
-          </SectionSwitcherContent>
           <SectionSwitcherContent value="contents">
             <ContentsView
               active={generation.active}
               job={generation.job}
             />
+          </SectionSwitcherContent>
+          <SectionSwitcherContent value="strategy">
+            <StrategyView job={generation.job} onOpenContents={() => changeTab("contents")} />
           </SectionSwitcherContent>
           <SectionSwitcherContent value="history">
             <HistoryView job={generation.job} />

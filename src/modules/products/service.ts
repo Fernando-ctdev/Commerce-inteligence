@@ -52,6 +52,7 @@ const FIELD_CODE_PRIORITY = [
   "priceCurrency",
   "commissionType",
   "commissionValue",
+  "discountPercentage",
   "features",
   "imageRefs",
   "url",
@@ -187,6 +188,46 @@ function normalizePriceAmount(price: string): string {
   if (/^\d{1,3}(?:\.\d{3})+$/.test(price)) return price.replace(/\./g, "");
   return price;
 }
+// Desconto factual opcional, em percentual: null = sem desconto; presente, na faixa 0–100.
+const DISCOUNT_MAX = 100;
+function validateDiscountPercentage(
+  input: ManualProductInput,
+  fail: Fail,
+): string | null {
+  const raw = input.discountPercentage;
+  // Ausente ou null = sem desconto (compatibilidade). Campo presente em outro
+  // tipo (número, objeto) é rejeitado: o desconto é factual e chega como texto.
+  if (raw == null) return null;
+  if (typeof raw !== "string") {
+    fail(
+      "discountPercentage",
+      "Informe um desconto válido e não negativo, com até duas casas decimais.",
+      "VAL-DISCOUNT-FORMAT",
+    );
+    return null;
+  }
+  const value = raw.trim();
+  if (!value) return null;
+  if (!PRICE_PATTERN.test(value)) {
+    fail(
+      "discountPercentage",
+      "Informe um desconto válido e não negativo, com até duas casas decimais.",
+      "VAL-DISCOUNT-FORMAT",
+    );
+    return null;
+  }
+  const amount = Number(normalizePriceAmount(value));
+  if (amount < 0 || amount > DISCOUNT_MAX) {
+    fail(
+      "discountPercentage",
+      `O desconto percentual deve estar entre 0 e ${DISCOUNT_MAX}.`,
+      "VAL-DISCOUNT-RANGE",
+    );
+    return null;
+  }
+  return normalizePriceAmount(value);
+}
+
 function validateCommission(
   input: ManualProductInput,
   fail: Fail,
@@ -219,6 +260,7 @@ type ValidatedFacts = {
   priceCurrency: string;
   commissionType: CommissionType | null;
   commissionValue: string | null;
+  discountPercentage: string | null;
   features: string[];
   imageRefs: string[];
 };
@@ -348,6 +390,7 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
 
   const imageRefs = validateImageRefs(input.imageRefs, fail);
   const commission = validateCommission(input, fail);
+  const discountPercentage = validateDiscountPercentage(input, fail);
 
   return {
     name,
@@ -356,6 +399,7 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
     priceAmount: normalizePriceAmount(price),
     priceCurrency,
     ...commission,
+    discountPercentage,
     features,
     imageRefs,
   };
@@ -502,6 +546,7 @@ export async function createManualProduct(
         priceCurrency: data.priceCurrency,
         commissionType: data.commissionType,
         commissionValue: data.commissionValue,
+        discountPercentage: data.discountPercentage,
         features: data.features,
         images: data.imageRefs,
         submittedUrl: data.submittedUrl,
@@ -572,6 +617,7 @@ export async function updateTenantProduct(
         priceCurrency: facts.priceCurrency,
         commissionType: facts.commissionType,
         commissionValue: facts.commissionValue,
+        discountPercentage: facts.discountPercentage,
         features: facts.features,
         images: facts.imageRefs,
         submittedUrl: facts.submittedUrl,

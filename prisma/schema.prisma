@@ -100,6 +100,9 @@ model Product {
   priceCurrency      String?
   commissionType     String?
   commissionValue    Decimal?
+  // Desconto factual opcional informado pelo criador, em percentual (0–100).
+  // Null = sem desconto: nunca inventado pela geração (fato entra no contexto só quando presente).
+  discountPercentage Decimal?
   features           Json
   variants           Json?
   images             Json

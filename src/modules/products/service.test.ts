@@ -112,6 +112,58 @@ test("validação: campos obrigatórios retornam códigos VAL-*-REQUIRED", () =>
   );
 });
 
+test("validação: discountPercentage é opcional, factual e limitado a 0–100 com até duas casas", () => {
+  // Ausente/vazio → null: produtos existentes sem desconto permanecem compatíveis.
+  assert.equal(validateManualProductInput(validInput).discountPercentage, null);
+  assert.equal(
+    validateManualProductInput({ ...validInput, discountPercentage: "   " })
+      .discountPercentage,
+    null,
+  );
+  // Presente: vírgula vira ponto; 0 e 100 são aceitos (faixa 0–100).
+  assert.equal(
+    validateManualProductInput({ ...validInput, discountPercentage: "12,5" })
+      .discountPercentage,
+    "12.5",
+  );
+  assert.equal(
+    validateManualProductInput({ ...validInput, discountPercentage: "0" })
+      .discountPercentage,
+    "0",
+  );
+  assert.equal(
+    validateManualProductInput({ ...validInput, discountPercentage: "100" })
+      .discountPercentage,
+    "100",
+  );
+  // Campo presente em tipo não-string é rejeitado (desconto factual chega como texto).
+  const formatos: unknown[] = ["abc", "-5", "1,2,3", "20%", 20, { value: 20 }, true];
+  for (const discountPercentage of formatos) {
+    assert.throws(
+      () =>
+        validateManualProductInput({ ...validInput, discountPercentage }),
+      (error: unknown) => {
+        assert.ok(error instanceof ProductValidationError);
+        assert.equal(error.code, "VAL-DISCOUNT-FORMAT");
+        assert.ok(error.fieldErrors.discountPercentage);
+        return true;
+      },
+    );
+  }
+  const faixas = ["150", "100.01", "1.234"];
+  for (const discountPercentage of faixas) {
+    assert.throws(
+      () =>
+        validateManualProductInput({ ...validInput, discountPercentage }),
+      (error: unknown) => {
+        assert.ok(error instanceof ProductValidationError);
+        assert.equal(error.code, "VAL-DISCOUNT-RANGE");
+        return true;
+      },
+    );
+  }
+});
+
 test("validação: preço não negativo, moeda válida e normalização preservada", () => {
   assert.throws(
     () =>
@@ -611,6 +663,58 @@ test("GET por id retorna o Product do tenant com moeda; inexistente responde 404
     "PRODUCT-NOT-FOUND",
   );
   assert.equal(await prisma.product.count({ where: { tenantId } }), 1);
+});
+
+test("discountPercentage: POST persiste, GET expõe, PATCH atualiza e vazio limpa; ausente permanece null", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+
+  // Compatibilidade: produto criado sem desconto projeta null.
+  const semDesconto = await criarProduct(token);
+  const viewSem = (await handleGetProduct(getById(token, semDesconto.id), semDesconto.id).then((r) => r.json())) as { discountPercentage: string | null };
+  assert.equal(viewSem.discountPercentage, null);
+
+  // POST com desconto factual persiste e GET expõe o valor normalizado.
+  const resPost = await handleCreateProduct(
+    post(
+      token,
+      { ...validInput, discountPercentage: "25,5" },
+      randomBytes(16).toString("base64url"),
+    ),
+  );
+  assert.equal(resPost.status, 200);
+  const criado = (await resPost.json()) as { id: string };
+  const row = await prisma.product.findUniqueOrThrow({ where: { id: criado.id } });
+  assert.equal(row.discountPercentage?.toString(), "25.5");
+  const viewPost = (await handleGetProduct(getById(token, criado.id), criado.id).then((r) => r.json())) as { discountPercentage: string | null };
+  assert.equal(viewPost.discountPercentage, "25.5");
+
+  // PATCH atualiza o desconto (mesmo contrato de fatos do POST).
+  const resPatch = await handleUpdateProduct(
+    patch(token, semDesconto.id, {
+      ...validInput,
+      discountPercentage: "10",
+      expectedVersion: semDesconto.version,
+    }),
+    semDesconto.id,
+  );
+  assert.equal(resPatch.status, 200);
+  const atualizado = (await resPatch.json()) as { version: number };
+  const rowPatch = await prisma.product.findUniqueOrThrow({ where: { id: semDesconto.id } });
+  assert.equal(rowPatch.discountPercentage?.toString(), "10");
+
+  // PATCH sem o campo limpa o desconto (fatos são substituídos por completo).
+  const resLimpa = await handleUpdateProduct(
+    patch(token, semDesconto.id, {
+      ...validInput,
+      expectedVersion: atualizado.version,
+    }),
+    semDesconto.id,
+  );
+  assert.equal(resLimpa.status, 200);
+  const rowLimpo = await prisma.product.findUniqueOrThrow({ where: { id: semDesconto.id } });
+  assert.equal(rowLimpo.discountPercentage, null);
+  assert.equal(await prisma.product.count({ where: { tenantId } }), 2);
 });
 
 test("GET/PATCH/DELETE de outro tenant responde 404 sem vazar o Product", async (t) => {

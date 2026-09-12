@@ -101,6 +101,7 @@ export function ShellNav({ active }: { active: DestinationKey }) {
         {destinations.map((destination) => {
           const isActive = destination.key === active;
           const Icon = destination.icon;
+          const itemClassName = destination.key === "settings" ? styles.settingsItem : undefined;
           const buttonClassName = destination.href
             ? styles.navButton
             : styles.navPlaceholder;
@@ -114,7 +115,7 @@ export function ShellNav({ active }: { active: DestinationKey }) {
           if (!destination.href) {
             const unavailableId = `${destination.key}-unavailable`;
             return (
-              <SidebarMenuItem key={destination.label}>
+              <SidebarMenuItem className={itemClassName} key={destination.label}>
                 <SidebarMenuButton
                   aria-describedby={unavailableId}
                   aria-disabled="true"
@@ -130,7 +131,7 @@ export function ShellNav({ active }: { active: DestinationKey }) {
           }
 
           return (
-            <SidebarMenuItem key={destination.label}>
+            <SidebarMenuItem className={itemClassName} key={destination.label}>
               <SidebarMenuButton
                 aria-current={isActive ? "page" : undefined}
                 className={buttonClassName}

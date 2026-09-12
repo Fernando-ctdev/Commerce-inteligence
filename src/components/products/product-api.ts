@@ -16,6 +16,7 @@ export type ProductRecord = {
   priceCurrency: string;
   commissionType: string;
   commission: string;
+  discountPercentage: string;
   characteristics: string[];
   imageReferences: string[];
   observations: string;
@@ -33,11 +34,10 @@ export type ProductMutation = {
   version: number;
   replay?: boolean;
 };
-
 export type ServerFieldErrors = ProductFieldErrors &
   Partial<
     Record<
-      "currency" | "targetContentCount" | "creatorPresence" | "constraints",
+      "currency" | "targetContentCount" | "creatorPresence" | "constraints" | "discountPercentage",
       string
     >
   >;
@@ -104,6 +104,7 @@ const serverFieldNames: Record<string, string> = {
   priceCurrency: "currency",
   commissionType: "commissionType",
   commissionValue: "commission",
+  discountPercentage: "discountPercentage",
   targetContentCount: "targetContentCount",
   creatorPresence: "creatorPresence",
   constraints: "constraints",
@@ -154,6 +155,7 @@ export function normalizeProduct(value: unknown): ProductRecord {
         ? record.commissionType
         : "",
     commission: nullableString(record.commissionValue ?? record.commission),
+    discountPercentage: nullableString(record.discountPercentage ?? record.discount_percentage),
     characteristics: listValue(record.features ?? record.characteristics),
     imageReferences: listValue(
       record.imageRefs ?? record.imageReferences ?? record.image_references,

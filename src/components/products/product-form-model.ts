@@ -13,6 +13,7 @@ export type ProductDraft = {
   url: string;
   commissionType?: string;
   commission?: string;
+  discountPercentage?: string;
 };
 
 export type ProductFieldErrors = Partial<Record<keyof ProductDraft, string>>;
@@ -41,6 +42,7 @@ export type ProductPayload = {
   expectedVersion?: number;
   commissionType?: string;
   commissionValue?: string;
+  discountPercentage?: string | null;
 };
 
 /* Máscara do Preço: o input exibe pt-BR (10,50) e o draft guarda o
@@ -102,12 +104,13 @@ export type ProductManualDraft = {
   description: string;
   category: string;
   price: string;
-  currency: string;
   characteristics: string;
   imageReferences?: string;
+  currency: string;
   url?: string;
   commissionType?: string;
   commission?: string;
+  discountPercentage?: string;
 };
 
 export type ProductManualFieldErrorKey =
@@ -131,6 +134,12 @@ function cleanNullable(value: string) {
 
 function lines(value: string) {
   return value.split(/\r?\n/).map(clean).filter(Boolean);
+}
+function normalizeDiscountPercentage(value?: string) {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return null;
+  const number = Number(trimmed.replace(",", "."));
+  return Number.isFinite(number) ? String(number) : trimmed;
 }
 
 export function validateProductDraft(
@@ -176,6 +185,9 @@ export function buildProductPayload(
     ...(draft.commissionType && draft.commission
       ? { commissionType: draft.commissionType, commissionValue: formatPriceDisplay(draft.commission) }
       : {}),
+    ...(draft.discountPercentage !== undefined
+      ? { discountPercentage: normalizeDiscountPercentage(draft.discountPercentage) }
+      : {}),
     ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
     ...(version === undefined ? {} : { expectedVersion: version }),
   };
@@ -210,10 +222,12 @@ export function buildManualProductPayload(
     targetContentCount: preparation.targetContentCount,
     creatorPresence: preparation.creatorPresence,
     ...(constraints ? { constraints } : {}),
+    ...(draft.discountPercentage !== undefined
+      ? { discountPercentage: normalizeDiscountPercentage(draft.discountPercentage) }
+      : {}),
     ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
   };
 }
-
 export function validateProductManualDraft(
   draft: ProductManualDraft,
   notes: string,
@@ -250,6 +264,12 @@ export function validateProductManualDraft(
     errors.commission = "Informe um valor não negativo com até duas casas.";
   else if (commissionType === "PERCENT" && Number(commission.replace(",", ".")) > 100)
     errors.commission = "A comissão percentual deve estar entre 0 e 100.";
+  const discountPercentage = draft.discountPercentage?.trim() ?? "";
+  if (discountPercentage && !/^\d+(?:[.,]\d{1,2})?$/.test(discountPercentage)) {
+    errors.discountPercentage = "Informe um desconto entre 0 e 100%, com até duas casas decimais.";
+  } else if (discountPercentage && Number(discountPercentage.replace(",", ".")) > 100) {
+    errors.discountPercentage = "O desconto deve estar entre 0 e 100%.";
+  }
   if (lines(draft.characteristics).length === 0)
     errors.characteristics = "Informe ao menos uma característica.";
   const url = draft.url?.trim();
@@ -290,5 +310,6 @@ export function emptyProductDraft(): ProductDraft {
     imageReferences: "",
     observations: "",
     url: "",
+    discountPercentage: "",
   };
 }

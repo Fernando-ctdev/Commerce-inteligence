@@ -407,6 +407,11 @@ export async function processGeneration(jobId: string, ownerId: string) {
         brand: product.brand,
         priceAmount: product.priceAmount?.toString(),
         priceCurrency: product.priceCurrency,
+        // Desconto só entra como fato quando existe no Product (nunca inventado).
+        // Com unidade "%" para o Quality Gate validar claims percentuais contra ele.
+        discountPercentage: product.discountPercentage
+          ? `${product.discountPercentage.toString()}% de desconto`
+          : undefined,
         features: product.features,
         variants: product.variants,
         images: product.images,

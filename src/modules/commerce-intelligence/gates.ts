@@ -163,7 +163,15 @@ function classifyFactual(
       brief.cta,
     ].join(" "),
   );
-  const negated = /(não|nunca|jamais)\s/.test(text);
+  // Regressão b0d4b7a6: negação só contradiz quando imediatamente antes do fato
+  // ("não r$ 28,90"); um "não" em outra frase não nega evidência distante.
+  const negationAdjacent = (needle: string): boolean => {
+    if (needle.length === 0) return false;
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Negação imediatamente antes OU depois do fato: "não r$ 28,90" / "produto nunca funciona".
+    return new RegExp(`(?:não|nao|nunca|jamais)\\s+${escaped}`, "i").test(text) ||
+      new RegExp(`${escaped}\\s+(?:não|nao|nunca|jamais)`, "i").test(text);
+  };
   const factValues = new Map<string, Set<string>>();
   for (const fact of evidence.facts)
     for (const token of techTokens(fact)) {
@@ -248,7 +256,11 @@ function classifyFactual(
         );
         continue;
       }
-      if (negated) {
+      const foldedText = attrStems(text);
+      const attributeNegated = ATTRIBUTE_LEXICON[group].some(
+        (stem) => foldedText.includes(stem) && negationAdjacent(stem),
+      );
+      if (attributeNegated) {
         contradicted = true;
         causes.push(
           `nega atributo autorizado (${supporting.map(({ index }) => refFor(index)).join("; ")})`,
@@ -281,11 +293,12 @@ function classifyFactual(
   const matched = mentions
     .filter((fact) => text.includes(fact))
     .map((fact) => fact.slice(0, 40));
-  if (negated && matched.length > 0)
+  const negatedMatches = matched.filter((fact) => negationAdjacent(fact));
+  if (negatedMatches.length > 0)
     return {
       status: "CONTRADICTED",
       claimType: "subjetivo",
-      causes: [`nega evidência autorizada (${matched.join("; ")})`],
+      causes: [`nega evidência autorizada (${negatedMatches.join("; ")})`],
       evidenceRefs: [],
     };
   if (matched.length > 0)

@@ -208,9 +208,19 @@
 }
 
 .factsGrid {
+  border: 0;
   display: grid;
   gap: 20px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  padding: 0;
+}
+
+.factsGrid > :nth-child(-n + 3) {
+  grid-column: span 2;
+}
+
+.factsGrid > :nth-child(n + 4) {
+  grid-column: span 3;
 }
 
 .categoryTrigger {
@@ -656,6 +666,9 @@
   .imageManager,
   .preparationGrid {
     grid-template-columns: 1fr;
+  }
+  .factsGrid > :nth-child(n) {
+    grid-column: 1 / -1;
   }
 }
 

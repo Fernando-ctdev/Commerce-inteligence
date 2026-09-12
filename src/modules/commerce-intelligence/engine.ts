@@ -138,7 +138,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
     // de facts, Strategy, Plan, Skill completa ou memória histórica.
     const mappingContext = {
       productId: input.productId,
-      product: { name: input.name, description: input.description, category: facts.category, brand: facts.brand, priceAmount: facts.priceAmount, priceCurrency: facts.priceCurrency },
+      product: { name: input.name, description: input.description, category: facts.category, brand: facts.brand, priceAmount: facts.priceAmount, priceCurrency: facts.priceCurrency, discountPercentage: facts.discountPercentage },
       understanding: { category: understanding?.category, coreUseCases: understanding?.coreUseCases, functionalBenefits: understanding?.functionalBenefits, emotionalBenefits: understanding?.emotionalBenefits, desiredOutcomes: understanding?.desiredOutcomes, purchaseTriggers: understanding?.purchaseTriggers, purchaseBarriers: understanding?.purchaseBarriers, evidenceRefs: understanding?.evidenceRefs },
       evidenceRefsCatalog: mappingEvidence.refs,
       maxOpportunities: mappingOpportunityLimit(),

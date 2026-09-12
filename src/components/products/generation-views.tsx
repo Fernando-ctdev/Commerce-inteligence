@@ -73,10 +73,9 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
     ["Benefício", item.benefit],
     ["Objeção", item.objection],
   ].filter((pair): pair is [string, string] => !!pair[1]);
-  /* Linha de contexto sob o hook: leitura rápida de objetivo + ângulo. */
+  /* Linha de contexto sob o gancho: somente o objetivo é creator-facing. */
   const context = [
     ["Objetivo", item.objective],
-    ["Ângulo", item.angle],
   ].filter((pair): pair is [string, string] => !!pair[1]);
   return (
     <article className={styles.detail}>
@@ -88,10 +87,10 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
         <h3 className={styles.detailTitle}>{`Conteúdo ${pad2(item.position)}`}</h3>
         <p className={styles.statusTag}>{contentStatusLabel(item.status)}</p>
       </header>
-      <section aria-label="Hook" className={styles.hookBlock}>
+      <section aria-label="Gancho" className={styles.hookBlock}>
         <p className={styles.sectionLabel}>
           <Mic aria-hidden="true" className={[styles.sectionIcon, styles.sectionIconIntelligence].join(" ")} />
-          Hook
+          GANCHO
         </p>
         <p className={styles.briefingHook}>{item.hook}</p>
       </section>
@@ -105,8 +104,8 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
           ))}
         </section>
       )}
-      <section className={styles.detailSection}>
-        <SectionLabel icon={ScrollText}>Roteiro</SectionLabel>
+      <section aria-label="Desenvolvimento" className={styles.detailSection}>
+        <SectionLabel icon={ScrollText}>DESENVOLVIMENTO</SectionLabel>
         <p className={styles.readingText}>{item.script}</p>
       </section>
       {item.scenes.length > 0 && (
@@ -157,14 +156,14 @@ function EmptyRegion({ children }: { children: React.ReactNode }) {
 }
 
 /** Aba Visão geral: estado do job, ação primária, bloqueio preventivo e cancelamento (só QUEUED). */
-export function GenerationStatusCard({ className, productName, targetContentCount, readiness, state, generationAction, onOpenStrategy }: {
+export function GenerationStatusCard({ className, productName, targetContentCount, readiness, state, generationAction, onOpenContents }: {
   className?: string;
   productName: string;
   targetContentCount: number;
   readiness: GenerationRecord["readiness"];
   state: GenerationState;
   generationAction?: GenerationActionProjection;
-  onOpenStrategy: () => void;
+  onOpenContents: () => void;
 }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const { job, busy, error, active, failed, blockedByOther, start, retry, cancel } = state;
@@ -181,7 +180,7 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
     : failed && job
       ? "Análise interrompida"
       : job?.status === "SUCCEEDED"
-        ? "Revisar estratégia"
+        ? "Revisar conteúdos"
         : "Analisar produto";
   const idleHeading = !active && !failed && job?.status !== "SUCCEEDED";
   return (
@@ -223,9 +222,9 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
             <strong>{statusLabels[job.status]}</strong> · {statusMessage(job.status, productName)}
           </p>
           <div className={styles.actions}>
-            <Button className={styles.stateAction} onClick={onOpenStrategy} type="button">
-              <Compass aria-hidden="true" />
-              Revisar estratégia
+            <Button className={styles.stateAction} onClick={onOpenContents} type="button">
+              <ScrollText aria-hidden="true" />
+              Revisar conteúdos
             </Button>
           </div>
         </div>
@@ -343,6 +342,18 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
             <p className={styles.positioningText}>{strategy.positioning}</p>
           </section>
         )}
+        <section aria-label="Resumo para criação" className={styles.strategySummary}>
+          <h3>Direção para criar</h3>
+          {strategy.audiences[0] && (
+            <p><strong>Público prioritário:</strong> {strategy.audiences[0]}</p>
+          )}
+          {strategy.benefits[0] && (
+            <p><strong>Benefício principal:</strong> {strategy.benefits[0]}</p>
+          )}
+        </section>
+        <details className={styles.strategyDetails}>
+          <summary>Ver estratégia completa</summary>
+          <div className={styles.strategyDetailsBody}>
         {strategy.audiences.length > 0 && (
           <section className={styles.strategySection}>
             <h3 className={styles.sectionTitle}>
@@ -457,6 +468,8 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
             </ul>
           </section>
         )}
+          </div>
+        </details>
       </div>
       {(strategy.active || contentsReady) && (
         <aside className={styles.strategyAside}>
@@ -546,7 +559,6 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
                   <span className={styles.statusTag}>{contentStatusLabel(item.status)}</span>
                 </span>
                 <span className={styles.contentRowHook}>{item.hook}</span>
-                {item.angle && <span className={styles.contentRowAngle}>{item.angle}</span>}
               </button>
             </li>
           ))}
