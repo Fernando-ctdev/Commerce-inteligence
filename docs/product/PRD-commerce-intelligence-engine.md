@@ -529,8 +529,7 @@ interface ProductUnderstanding {
   purchaseTriggers: string[];
   purchaseBarriers: string[];
 
-  communicationRisks: string[];
-
+  
   evidenceRefs: string[];
 }
 ```
@@ -711,8 +710,7 @@ interface ProductStrategy {
   priorityAngles: string[];
 
   communicationPrinciples: string[];
-  communicationRisks: string[];
-
+  
   platformId: string;
   platformSkillVersion: string;
 

@@ -107,7 +107,6 @@ export type StrategyViewData = {
   arguments: string[];
   angles: string[];
   principles: string[];
-  risks: string[];
   active: boolean;
   audienceSituations: ReadonlyMap<string, string>;
   objectionArguments: ReadonlyMap<string, string>;
@@ -145,7 +144,6 @@ export function strategyModel(strategy: Record<string, unknown> | null): Strateg
     arguments: strings(strategy?.priorityArguments),
     angles: strings(strategy?.priorityAngles),
     principles: strings(strategy?.communicationPrinciples),
-    risks: strings(strategy?.communicationRisks),
     active: strategy?.status === "ACTIVE",
     audienceSituations: firstBy("audience", "situation"),
     objectionArguments: firstBy("objection", "sellingArgument"),

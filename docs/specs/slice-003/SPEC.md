@@ -156,7 +156,7 @@ Commercial Opportunity Mapping recebe somente uma projeção compacta: `productI
 
 Commercial Opportunity Mapping pode retornar, em um envelope único, os dados de público, situação, dor/desejo, objeção e as `CommercialOpportunity`s relacionadas. A engine separa e valida cada contrato deterministicamente antes de construir a Strategy. Brief Generator recebe batches de oportunidades e devolve um item estruturado por oportunidade; IDs persistentes, posições, versões e ownership são sempre atribuídos pelo servidor.
 
-Um batch de briefing é processado por vez no MVP, salvo limite explícito de concorrência configurado e observado. O Planner decide o conjunto; a engine não gera Contents independentes sem considerar o portfólio. A Strategy inicial é a `ProductStrategy` v1 `ACTIVE` e contém, no mínimo, `id`, `productId`, `version`, `status`, `primaryPositioning`, `audiences`, `opportunities`, `priorityBenefits`, `priorityObjections`, `priorityArguments`, `priorityAngles`, `communicationPrinciples`, `communicationRisks`, `platformId` e `platformSkillVersion`.
+Um batch de briefing é processado por vez no MVP, salvo limite explícito de concorrência configurado e observado. O Planner decide o conjunto; a engine não gera Contents independentes sem considerar o portfólio. A Strategy inicial é a `ProductStrategy` v1 `ACTIVE` e contém, no mínimo, `id`, `productId`, `version`, `status`, `primaryPositioning`, `audiences`, `opportunities`, `priorityBenefits`, `priorityObjections`, `priorityArguments`, `priorityAngles`, `communicationPrinciples`, `platformId` e `platformSkillVersion`.
 
 Stages públicos são emitidos imediatamente antes da chamada ou processamento correspondente. Subetapas internas não podem ser expostas como stages concluídos se forem executadas dentro da mesma chamada.
 
@@ -181,7 +181,7 @@ A Skill não decide fatos, não inventa benefícios técnicos, não escolhe Stra
 
 ### B-003-07 — Contratos e factualidade
 
-Toda saída de capability deve obedecer ao schema canônico correspondente antes de seguir para a próxima etapa. `ProductUnderstanding` exige `productId`, os arrays estruturais `coreUseCases`, `capabilities`, `functionalBenefits`, `emotionalBenefits`, `desiredOutcomes`, `purchaseTriggers`, `purchaseBarriers` e `communicationRisks`, além de `evidenceRefs`; `category` é opcional e é preservada quando houver evidência.
+Toda saída de capability deve obedecer ao schema canônico correspondente antes de seguir para a próxima etapa. `ProductUnderstanding` exige `productId`, os arrays estruturais `coreUseCases`, `capabilities`, `functionalBenefits`, `emotionalBenefits`, `desiredOutcomes`, `purchaseTriggers`, `purchaseBarriers`, além de `evidenceRefs`; `category` é opcional e é preservada quando houver evidência.
 
 `CommercialOpportunity` possui `id`, `audience`, `situation`, `pain`, `desire`, `relevantCapabilities`, `benefits`, `desiredOutcome`, `objection`, `proofOptions`, `sellingArgument`, `confidence` interno e `evidenceRefs`, com campos opcionais permanecendo ausentes quando não houver evidência estratégica adequada. O contrato é validado antes de ser aceito pela Strategy.
 
@@ -448,9 +448,9 @@ Requisitos de responsividade e acessibilidade:
 13. **WHEN** uma análise terminar com sucesso, **o sistema SHALL** persistir sinais estruturados da geração para uso futuro.
 14. **IF** uma análise falhar ou for cancelada, **o sistema SHALL** preservar Product/fatos e não atualizar a memória com sinais dessa tentativa.
 15. **WHEN** a pipeline concluir as capabilities com consistência, **o sistema SHALL** persistir `ProductStrategy` v1 `ACTIVE` antes do `ContentPlan`.
-16. **WHEN** uma Strategy inicial for persistida, **o sistema SHALL** exigir `id`, `productId`, `version`, `status`, `primaryPositioning`, `audiences`, `opportunities`, `priorityBenefits`, `priorityObjections`, `priorityArguments`, `priorityAngles`, `communicationPrinciples`, `communicationRisks`, `platformId` e `platformSkillVersion`.
+16. **WHEN** uma Strategy inicial for persistida, **o sistema SHALL** exigir `id`, `productId`, `version`, `status`, `primaryPositioning`, `audiences`, `opportunities`, `priorityBenefits`, `priorityObjections`, `priorityArguments`, `priorityAngles`, `communicationPrinciples`, `platformId` e `platformSkillVersion`.
 17. **WHEN** um plano for criado, **o sistema SHALL** exigir `id`, `productId`, `strategyVersion`, `targetContentCount`, `platformId`, `platformSkillVersion` e oportunidades vinculadas à Strategy.
-18. **WHEN** uma `ProductUnderstanding` for persistida, **o sistema SHALL** exigir `productId`, os arrays `coreUseCases`, `capabilities`, `functionalBenefits`, `emotionalBenefits`, `desiredOutcomes`, `purchaseTriggers`, `purchaseBarriers`, `communicationRisks` e `evidenceRefs`, preservando `category` quando disponível e permitindo sua ausência sem evidência.
+18. **WHEN** uma `ProductUnderstanding` for persistida, **o sistema SHALL** exigir `productId`, os arrays `coreUseCases`, `capabilities`, `functionalBenefits`, `emotionalBenefits`, `desiredOutcomes`, `purchaseTriggers`, `purchaseBarriers` e `evidenceRefs`, preservando `category` quando disponível e permitindo sua ausência sem evidência.
 19. **WHEN** uma `CommercialOpportunity` for persistida, **o sistema SHALL** preservar `id`, público/situação, dor/desejo, capabilities, benefícios, outcome, objeção/prova, argumento, confiança interna e evidências, após validação do contrato canônico.
 20. **WHEN** uma `ContentOpportunity` for persistida, **o sistema SHALL** exigir `id`, `commercialObjective`, `angle`, `coreMessage`, `hookMechanism` e `noveltyTargets`, mantendo `audience`, `pain`, `desire`, `objection`, `benefit`, `proof`, `narrativePattern`, `desiredViewerResponse` e `sourceOpportunityId` opcionais conforme evidência.
 21. **WHEN** um job terminar com sucesso, **o sistema SHALL** persistir exatamente `targetContentCount` Contents com status `DRAFT`.

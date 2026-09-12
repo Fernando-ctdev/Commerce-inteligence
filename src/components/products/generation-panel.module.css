@@ -1002,10 +1002,6 @@
   color: var(--color-success);
 }
 
-.signWarning {
-  color: var(--color-warning);
-}
-
 .strategyAside {
   display: grid;
   gap: 20px;

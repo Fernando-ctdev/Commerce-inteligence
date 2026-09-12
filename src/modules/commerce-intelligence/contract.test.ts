@@ -14,11 +14,11 @@ test("content opportunity sourceOpportunityId must exist in the allowed server-d
   assert.equal(validateContentOpportunity({ ...valid, sourceOpportunityId: "qualquer-ref" }).sourceOpportunityId, "qualquer-ref");
 });
 test("strategy contract is canonical AC16 with no parallel objective/positioning/audience/contentPillars", () => {
-  const canonical = { id: "j-strategy", productId: "p", jobId: "j", version: 1, status: "ACTIVE", platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.0", primaryPositioning: "suporte estável e compacto", audiences: ["home office"], priorityBenefits: ["mãos livres"], priorityObjections: ["instabilidade"], priorityArguments: ["base magnética"], priorityAngles: ["demonstração"], communicationPrinciples: ["sem promessas"], communicationRisks: ["evitar exageros"], opportunities: [{ id: "j-commercial-1", relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["fact:features"] }] };
+  const canonical = { id: "j-strategy", productId: "p", jobId: "j", version: 1, status: "ACTIVE", platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.0", primaryPositioning: "suporte estável e compacto", audiences: ["home office"], priorityBenefits: ["mãos livres"], priorityObjections: ["instabilidade"], priorityArguments: ["base magnética"], priorityAngles: ["demonstração"], communicationPrinciples: ["sem promessas"], opportunities: [{ id: "j-commercial-1", relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["fact:features"] }] };
   const result = validateProductStrategy(canonical);
   assert.equal(result.primaryPositioning, "suporte estável e compacto");
   assert.deepEqual(result.audiences, ["home office"]);
-  assert.deepEqual(Object.keys(result).sort().join(","), "audiences,communicationPrinciples,communicationRisks,id,jobId,opportunities,platformId,platformSkillVersion,primaryPositioning,priorityAngles,priorityArguments,priorityBenefits,priorityObjections,productId,status,version");
+  assert.deepEqual(Object.keys(result).sort().join(","), "audiences,communicationPrinciples,id,jobId,opportunities,platformId,platformSkillVersion,primaryPositioning,priorityAngles,priorityArguments,priorityBenefits,priorityObjections,productId,status,version");
   // Contrato paralelo antigo rejeitado, sem alias.
   assert.throws(() => validateProductStrategy({ ...canonical, primaryPositioning: undefined, positioning: "legado" }), (e: unknown) => (e as { code?: string }).code === "GEN-SCHEMA");
   // Campos legados sem alias: positioning vazio/ausente falha; contentPillars desconhecido é descartado (nunca persistido).
@@ -55,7 +55,7 @@ test("strict maximums fail closed without truncation", () => {
   assert.throws(() => validateContentBrief(base), (error: unknown) => { const e = error as { code?: string }; return e.code === "GEN-SCHEMA"; });
 });
 test("understanding minimums are conditional to evidence (no invention without it)", () => {
-  const empty = { productId: "p1", coreUseCases: [], capabilities: [], functionalBenefits: [], emotionalBenefits: [], desiredOutcomes: [], purchaseTriggers: [], purchaseBarriers: [], communicationRisks: [], evidenceRefs: [] };
+  const empty = { productId: "p1", coreUseCases: [], capabilities: [], functionalBenefits: [], emotionalBenefits: [], desiredOutcomes: [], purchaseTriggers: [], purchaseBarriers: [], evidenceRefs: [] };
   assert.equal(validateProductUnderstanding(empty).coreUseCases.length, 0);
   assert.throws(() => validateProductUnderstanding(empty, { facts: ["Produto"], refs: ["product:name"] }), (error: unknown) => { const e = error as { code?: string }; return e.code === "GEN-SCHEMA"; });
 });

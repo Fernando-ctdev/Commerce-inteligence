@@ -193,7 +193,6 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
         priorityArguments: strategy.priorityArguments,
         priorityAngles: strategy.priorityAngles,
         communicationPrinciples: strategy.communicationPrinciples,
-        communicationRisks: strategy.communicationRisks,
       },
       plannerSkillSlice: {
         principles: skill.principles,
@@ -233,7 +232,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
   const allowedSourceIds = new Set(commercialOpportunities.map((opportunity) => String(opportunity.id)));
   const opportunities = Array.isArray(rawOpportunities) ? rawOpportunities.map((value, index) => validateContentOpportunity({ ...(value && typeof value === "object" ? value as Record<string, unknown> : {}), id: `${input.jobId}-opportunity-${index + 1}` }, input.router ? allowedSourceIds : undefined)) : Array.from({ length: count }, (_, index) => ({ id: `${input.jobId}-opportunity-${index + 1}`, commercialObjective: "Demonstrar valor do produto", angle: `Ângulo ${index + 1}`, coreMessage: input.name, hookMechanism: "demonstração direta", noveltyTargets: [`angle-${index + 1}`] }));
 
-  const strategy = strategyOutput ? validateProductStrategy({ ...strategyOutput, id: `${input.jobId}-strategy`, productId: input.productId, jobId: input.jobId, version: 1, status: "ACTIVE", platformId: skill.id, platformSkillVersion: skill.version, opportunities: commercialOpportunities }, mappingEvidence) : { id: `${input.jobId}-strategy`, productId: input.productId, jobId: input.jobId, version: 1, status: "ACTIVE", platformId: skill.id, platformSkillVersion: skill.version, primaryPositioning: input.description, audiences: ["pessoas interessadas no produto"], priorityBenefits: [], priorityObjections: [], priorityArguments: [], priorityAngles: [], communicationPrinciples: [], communicationRisks: [], opportunities: commercialOpportunities };
+  const strategy = strategyOutput ? validateProductStrategy({ ...strategyOutput, id: `${input.jobId}-strategy`, productId: input.productId, jobId: input.jobId, version: 1, status: "ACTIVE", platformId: skill.id, platformSkillVersion: skill.version, opportunities: commercialOpportunities }, mappingEvidence) : { id: `${input.jobId}-strategy`, productId: input.productId, jobId: input.jobId, version: 1, status: "ACTIVE", platformId: skill.id, platformSkillVersion: skill.version, primaryPositioning: input.description, audiences: ["pessoas interessadas no produto"], priorityBenefits: [], priorityObjections: [], priorityArguments: [], priorityAngles: [], communicationPrinciples: [], opportunities: commercialOpportunities };
   const strategySlice = {
     primaryPositioning: strategy.primaryPositioning,
     audiences: strategy.audiences,
@@ -242,7 +241,6 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
     priorityArguments: strategy.priorityArguments,
     priorityAngles: strategy.priorityAngles,
     communicationPrinciples: strategy.communicationPrinciples,
-    communicationRisks: strategy.communicationRisks,
   };
   const plan = validateContentPlan({ ...(opportunityOutput ?? {}), id: `${input.jobId}-plan`, productId: input.productId, strategyVersion: 1, targetContentCount: count, platformId: skill.id, platformSkillVersion: skill.version, opportunities });
 

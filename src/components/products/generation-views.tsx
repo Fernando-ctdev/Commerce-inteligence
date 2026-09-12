@@ -451,19 +451,6 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
             </ul>
           </section>
         )}
-        {strategy.risks.length > 0 && (
-          <section className={styles.strategySection}>
-            <h3 className={styles.sectionTitle}>Cuidados de comunicação</h3>
-            <ul className={styles.signList}>
-              {strategy.risks.map((risk, index) => (
-                <li className={styles.signItem} key={`${index}-${risk}`}>
-                  <CircleAlert aria-hidden="true" className={styles.signWarning} />
-                  <span>{risk}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
           </div>
         </details>
       </div>

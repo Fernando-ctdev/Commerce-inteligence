@@ -63,8 +63,7 @@ const UNDERSTANDING_FIELDS = [
   "desiredOutcomes",
   "purchaseTriggers",
   "purchaseBarriers",
-  "communicationRisks",
-  "evidenceRefs",
+    "evidenceRefs",
 ] as const;
 export const UNDERSTANDING_CARDINALITY: Record<string, number> = Object.fromEntries(
   UNDERSTANDING_FIELDS.map((field) => [field, CARDINALITY_POLICY[field].max]),
@@ -73,13 +72,13 @@ const UNDERSTANDING_LIMITS = UNDERSTANDING_FIELDS.map(
   (field) => `${field}: ≤ ${CARDINALITY_POLICY[field].max}`,
 ).join(", ");
 export const PRODUCT_UNDERSTANDING_INSTRUCTION =
-  `Inclua productId e os arrays coreUseCases, capabilities, functionalBenefits, emotionalBenefits, desiredOutcomes, purchaseTriggers, purchaseBarriers, communicationRisks e evidenceRefs. Limites rígidos por campo, validados sem tolerância: ${UNDERSTANDING_LIMITS} — evidenceRefs apenas com refs do evidenceRefsCatalog. Antes de responder, selecione por campo no máximo o limite declarado: se a evidência autorizada sustentar mais itens, mantenha somente os itens mais sustentados até o limite; resposta acima do limite é rejeitada por completo. Use somente evidência autorizada: sem evidência para um campo, retorne [] em vez de inventar; com evidência, retorne ao menos um item quando aplicável. Não inclua status, tenantId, userId, quota, provider, model, tier ou comandos de workflow.`;
+  `Inclua productId e os arrays coreUseCases, capabilities, functionalBenefits, emotionalBenefits, desiredOutcomes, purchaseTriggers, purchaseBarriers e evidenceRefs. Limites rígidos por campo, validados sem tolerância: ${UNDERSTANDING_LIMITS} — evidenceRefs apenas com refs do evidenceRefsCatalog. Antes de responder, selecione por campo no máximo o limite declarado: se a evidência autorizada sustentar mais itens, mantenha somente os itens mais sustentados até o limite; resposta acima do limite é rejeitada por completo. Use somente evidência autorizada: sem evidência para um campo, retorne [] em vez de inventar; com evidência, retorne ao menos um item quando aplicável. Não inclua status, tenantId, userId, quota, provider, model, tier ou comandos de workflow.`;
 const INSTRUCTION: Record<LogicalTask, string> = {
   PRODUCT_UNDERSTANDING: PRODUCT_UNDERSTANDING_INSTRUCTION,
   COMMERCIAL_OPPORTUNITY_MAPPING:
     "Objetivo único: mapear oportunidades comerciais. Retorne APENAS um envelope JSON com as chaves audiences, situations, pains, desires, objections (arrays de strings, que podem ser [] quando não houver evidência autorizada) e opportunities: array NÃO VAZIO com NO MÍNIMO 1 e NO MÁXIMO maxOpportunities itens (valor recebido no contexto); quando a evidência autorizada for suficiente, prefira 3 ou mais oportunidades — nunca invente oportunidades ou preencha cardinalidade sem suporte. Cada opportunity tem audience, situation, pain, desire, desiredOutcome, objection (quando houver evidência), relevantCapabilities, benefits, proofOptions (cada um com NO MÁXIMO 6 itens), sellingArgument, confidence (0 a 1) e evidenceRefs (refs apenas do evidenceRefsCatalog). Arrays sem evidência autorizada devem ser []; nunca invente fatos. Sem texto fora do JSON, sem análise ou raciocínio no corpo; não inclua ids persistentes, ownership, status, quota, provider, model, tier ou comandos de workflow.",
   STRATEGY_SYNTHESIS:
-    "Retorne um objeto JSON raiz com as chaves canônicas da Strategy: primaryPositioning (string não vazia), audiences, priorityBenefits, priorityObjections, priorityArguments, priorityAngles, communicationPrinciples e communicationRisks (cada array com NO MÁXIMO 10 itens). Use somente evidência autorizada: arrays podem ser [] quando não houver evidência suficiente; com evidência, inclua apenas itens suportados. Não inclua objective, positioning, audience ou contentPillars; não inclua status, tenantId, userId, quota, provider, model, tier ou comandos de workflow.",
+    "Retorne um objeto JSON raiz com as chaves canônicas da Strategy: primaryPositioning (string não vazia), audiences, priorityBenefits, priorityObjections, priorityArguments, priorityAngles, communicationPrinciples. Use somente evidência autorizada: arrays podem ser [] quando não houver evidência suficiente; com evidência, inclua apenas itens suportados. Não inclua objective, positioning, audience ou contentPillars; não inclua status, tenantId, userId, quota, provider, model, tier ou comandos de workflow.",
   CONTENT_PLAN_GENERATION:
     "Retorne um objeto JSON raiz (NUNCA array) com as chaves platformId e opportunities: um array com quantidade EXATA de oportunidades de conteúdo igual ao targetContentCount recebido. Cada opportunity tem commercialObjective, angle, coreMessage, hookMechanism e noveltyTargets (array de 1 a 4 strings; nunca vazio, nunca mais que 4). Não coloque texto fora do JSON; não inclua ownership, status, quota, provider, model, tier ou comandos de workflow.",
   CONTENT_BRIEF_GENERATION:

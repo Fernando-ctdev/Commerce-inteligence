@@ -77,7 +77,7 @@ O worker persiste cada stage antes da chamada/processamento correspondente. Sube
 
 Criar em `src/modules/commerce-intelligence/contract.ts` tipos e validadores runtime para:
 
-- `ProductUnderstanding`: `productId`, arrays `coreUseCases`, `capabilities`, `functionalBenefits`, `emotionalBenefits`, `desiredOutcomes`, `purchaseTriggers`, `purchaseBarriers`, `communicationRisks`, `evidenceRefs`; `category` opcional.
+- `ProductUnderstanding`: `productId`, arrays `coreUseCases`, `capabilities`, `functionalBenefits`, `emotionalBenefits`, `desiredOutcomes`, `purchaseTriggers`, `purchaseBarriers`, `evidenceRefs`; `category` opcional.
 - `CommercialOpportunity`: `id`, relações opcionais de `audience`, `situation`, `pain`, `desire`, `desiredOutcome`, `objection`; arrays `relevantCapabilities`, `benefits`, `proofOptions`; `sellingArgument`, `confidence` interno e `evidenceRefs`.
 - `CommercialOpportunityMappingEnvelope`: públicos, situações, dores, desejos, objeções e `CommercialOpportunity`s relacionadas, sem ownership ou comandos.
 - `ProductStrategy` v1 `ACTIVE`: campos mínimos da SPEC, inclusive `platformId` e `platformSkillVersion`, vinculada ao Product e ao Job.

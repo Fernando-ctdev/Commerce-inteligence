@@ -137,7 +137,6 @@ test("modelo da Strategy expõe só campos presentes e deriva vínculos por matc
     priorityArguments: ["Argumento 1"],
     priorityAngles: ["Ângulo 1"],
     communicationPrinciples: ["Princípio 1"],
-    communicationRisks: ["Risco 1"],
     opportunities: [
       { audience: "Público A", situation: "Situação A", pain: "Dor 1", desire: "Desejo 1", objection: "Objeção 1", sellingArgument: "Argumento vinculado" },
       { audience: "Público A", situation: "Situação duplicada", pain: "Dor 1", desire: "Desejo 2" },

@@ -424,7 +424,6 @@ A engine deve identificar:
 * contexto de utilização;
 * gatilhos de compra;
 * barreiras de compra;
-* riscos de comunicação;
 * possíveis argumentos de venda.
 
 ---
