@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { validateTargetContentCount, validateContentBrief, validateContentOpportunity, validateProductStrategy, validateProductUnderstanding, validateCommercialOpportunityDraft, structureHash, normalizeForVariety, validateCommercialOpportunityMappingEnvelope, CARDINALITY_POLICY, CARDINALITY_POLICY_VERSION } from "./contract";
 test("accepts only integer quantity from 1 through 10", () => { assert.equal(validateTargetContentCount(1), 1); assert.equal(validateTargetContentCount(10), 10); for (const value of [0, 11, 1.5, "2", null]) assert.throws(() => validateTargetContentCount(value)); });
-test("requires complete brief and valid scene count", () => { const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: ["ponto"], script: "s", scenes: ["1", "2"], cta: "c" }; assert.equal(validateContentBrief(base).version, 1); assert.equal(structureHash(base), structureHash({ structure: undefined, scenes: base.scenes, cta: base.cta })); process.env.GENERATION_SCENES_ENABLED = "1"; try { assert.throws(() => validateContentBrief({ ...base, scenes: ["1"] })); assert.throws(() => validateContentBrief({ ...base, scenes: undefined })); } finally { delete process.env.GENERATION_SCENES_ENABLED; } });
+test("requires a complete brief and always omits provider-supplied scenes", () => { const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: ["ponto"], script: "s", scenes: ["1", "2"], cta: "c" }; process.env.GENERATION_SCENES_ENABLED = "1"; try { const brief = validateContentBrief(base); assert.equal(brief.version, 1); assert.equal("scenes" in brief, false); assert.equal(structureHash(brief), structureHash({ structure: undefined, development: base.development, cta: base.cta })); assert.throws(() => validateContentBrief({ ...base, development: undefined })); } finally { delete process.env.GENERATION_SCENES_ENABLED; } });
 test("normalizes equivalent variety text", () => assert.equal(normalizeForVariety("  Hook  Forte "), "hook forte"));
 test("mapping envelope missing opportunities yields typed GEN-SCHEMA, not generic failure", () => { const envelope = { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], analysis: "longo texto sem oportunidades" }; assert.throws(() => validateCommercialOpportunityMappingEnvelope(envelope), (error: unknown) => { const e = error as { name?: string; code?: string; message?: string }; return e.name === "ContractError" && e.code === "GEN-SCHEMA" && /sem oportunidades/.test(e.message ?? ""); }); });
 test("mapping envelope with one opportunity passes and preserves canonical shape", () => { const commercial = { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }; const envelope = { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [commercial] }; const result = validateCommercialOpportunityMappingEnvelope(envelope, { facts: ["Produto"], refs: ["product:name"] }); assert.equal(result.opportunities.length, 1); assert.equal(result.opportunities[0].sellingArgument, "s"); });
@@ -47,12 +47,11 @@ test("cardinality policy is versioned and uses MVP limits", () => {
   assert.equal(CARDINALITY_POLICY.relevantCapabilities.max, 6);
   assert.equal(CARDINALITY_POLICY.priorityBenefits.max, 10);
   assert.equal(CARDINALITY_POLICY.noveltyTargets.max, 4);
-  assert.equal(CARDINALITY_POLICY.scenes.max, 8);
 });
 test("strict maximums fail closed without truncation", () => {
   const commercial = { relevantCapabilities: Array.from({ length: 11 }, (_, i) => `cap${i}`), benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] };
   assert.throws(() => validateCommercialOpportunityDraft(commercial), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /cardinalidade de relevantCapabilities/.test(e.message ?? ""); });
-  const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", script: "s", scenes: Array.from({ length: 9 }, (_, i) => `c${i}`), cta: "c" };
+  const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: Array.from({ length: 5 }, (_, i) => `c${i}`), script: "s", scenes: Array.from({ length: 9 }, (_, i) => `c${i}`), cta: "c" };
   assert.throws(() => validateContentBrief(base), (error: unknown) => { const e = error as { code?: string }; return e.code === "GEN-SCHEMA"; });
 });
 test("understanding minimums are conditional to evidence (no invention without it)", () => {
@@ -73,23 +72,15 @@ test("minimum of 3 opportunities requires DISTINCT evidence refs (repeated menti
   // 3 evidências distintas sustentam o mínimo de 3: uma só oportunidade falha.
   assert.throws(() => validateCommercialOpportunityMappingEnvelope(single, { facts: ["f"], refs: ["r1", "r2", "r3"] }), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /min 3/.test(e.message ?? ""); });
 });
-test("development canônico 1–4 no modo ativo; scenes fora do output e obrigatório apenas no legado", () => {
+test("development é obrigatório e scenes seguem fora do contrato mesmo com flag legada", () => {
   const base = { contentId: "c1", briefVersionId: "b1", version: 1 as const, angle: "a", hook: "h", development: ["ponto 1", "ponto 2"], script: "s", cta: "c" };
-  // Modo ativo (default): development obrigatório; scenes NUNCA sai — mesmo inválido vindo do provider é descartado.
-  delete process.env.GENERATION_SCENES_ENABLED;
+  process.env.GENERATION_SCENES_ENABLED = "1";
   assert.deepEqual(validateContentBrief(base).development, ["ponto 1", "ponto 2"]);
-  assert.equal(validateContentBrief(base).scenes, undefined);
-  assert.equal(validateContentBrief({ ...base, scenes: ["1"] }).scenes, undefined);
-  assert.equal(validateContentBrief({ ...base, scenes: ["1", "2"] }).scenes, undefined);
+  assert.equal("scenes" in validateContentBrief(base), false);
+  assert.equal("scenes" in validateContentBrief({ ...base, scenes: ["1"] }), false);
+  assert.equal("scenes" in validateContentBrief({ ...base, scenes: ["1", "2"] }), false);
   assert.throws(() => validateContentBrief({ ...base, development: undefined }));
   assert.throws(() => validateContentBrief({ ...base, development: ["1", "2", "3", "4", "5"] }));
   assert.equal(structureHash(validateContentBrief(base)), structureHash({ structure: undefined, development: base.development, cta: base.cta }));
-  // Modo legado (flag on): scenes obrigatório, development opcional.
-  process.env.GENERATION_SCENES_ENABLED = "1";
-  try {
-    const legacy = validateContentBrief({ ...base, development: undefined, scenes: ["1", "2"] });
-    assert.equal(legacy.development, undefined);
-    assert.deepEqual(legacy.scenes, ["1", "2"]);
-    assert.throws(() => validateContentBrief({ ...base, scenes: undefined }));
-  } finally { delete process.env.GENERATION_SCENES_ENABLED; }
+  delete process.env.GENERATION_SCENES_ENABLED;
 });

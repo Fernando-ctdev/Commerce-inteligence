@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runFirstGeneration } from "./engine";
+import { loadPlatformSkill } from "./platform-skill";
 const understanding = { productId: "p", category: undefined, coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["preço"], communicationRisks: ["não exagerar"], evidenceRefs: ["fact-1"] };
 const commercial = { relevantCapabilities: ["cap"], benefits: ["benefício"], proofOptions: ["fact-1"], sellingArgument: "argumento", confidence: 0.9, evidenceRefs: ["fact-1"] };
 const strategyPayload = { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.0", primaryPositioning: "posicionamento", audiences: ["público"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["arg"], priorityAngles: ["ângulo"], communicationPrinciples: ["cp"], communicationRisks: ["r"] };
@@ -105,6 +106,22 @@ test("plan and brief contexts expose only their explicit allowlisted slices", as
   assert.ok(briefContext.relevantFacts && briefContext.evidence && briefContext.strategySlice);
   assert.deepEqual(briefContext.creatorContext, { tone: "direto" });
   assert.deepEqual(briefContext.memoryConstraints, {});
+  const selectedPatterns = briefContext.selectedPatterns as Array<{ opportunityId: string; hook: { id: string; type?: string; category?: string; source?: string; text?: string; guidance?: string }; cta: { id: string; type?: string; category?: string; source?: string; text?: string; guidance?: string } }>;
+  assert.equal(selectedPatterns.length, 1);
+  assert.equal(selectedPatterns[0].opportunityId, "j-opportunity-1");
+  assert.ok(!selectedPatterns[0].hook.type || selectedPatterns[0].hook.type === "hook");
+  assert.notEqual(selectedPatterns[0].hook.category, "apparel", "non-apparel products must never receive apparel hooks");
+  assert.equal(selectedPatterns[0].cta.type, "cta");
+  assert.equal(selectedPatterns[0].hook.category, "general", "eligible non-apparel opportunity selects a general catalog hook");
+  assert.ok(loadPlatformSkill().operationalRepertoire.hookPatterns.some(({ id }) => id === "demonstration"), "legacy mechanism fallback remains available when no catalog category matches");
+  assert.ok(selectedPatterns[0].cta.category && selectedPatterns[0].cta.source && selectedPatterns[0].cta.text);
+  assert.ok(!("creativeCatalog" in briefContext), "full catalog must stay local");
+  assert.ok(!("scenes" in briefContext) && !("caption" in briefContext) && !("captions" in briefContext));
+  assert.ok(!("hookPatterns" in (briefContext.skillSlice as Record<string, unknown>)));
+  assert.ok(!("ctaPatterns" in (briefContext.skillSlice as Record<string, unknown>)));
+  assert.ok(!("scenes" in briefContext) && !("caption" in briefContext) && !("captions" in briefContext));
+  assert.ok(!("hookPatterns" in (planContext.plannerSkillSlice as Record<string, unknown>)));
+  assert.ok(!("ctaPatterns" in (planContext.plannerSkillSlice as Record<string, unknown>)));
   assert.ok(!("evidenceRefs" in briefContext) && !("evidenceRefsCatalog" in briefContext));
 });
 test("never sends commission through any AI context", async () => {

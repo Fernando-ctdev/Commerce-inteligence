@@ -80,8 +80,7 @@ test("brief batch retry exhausted yields typed GEN-SCHEMA without publishing", a
   await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string }; return e?.code === "GEN-SCHEMA"; });
   assert.equal(briefCalls, 2, "exactly one retry before failing closed");
 });
-test("repairs invalid brief item scenes via one contract retry preserving exact-N", async () => {
-  // Cenário de retry por scenes cobre o modo legado (GENERATION_SCENES_ENABLED).
+test("ignores provider scenes even when the legacy flag is set", async () => {
   process.env.GENERATION_SCENES_ENABLED = "1";
   let briefCalls = 0;
   const router = { describe, complete: async (task: string) => {
@@ -89,17 +88,16 @@ test("repairs invalid brief item scenes via one contract retry preserving exact-
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"], communicationRisks: ["cr"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; if (briefCalls === 1) return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["só uma"], cta: "c" }] }; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["abertura", "demonstração"], cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["Abertura", "Demonstração"], cta: "c" }] }; }
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
-  assert.equal(briefCalls, 2, "batch retried once when item scenes violated schema");
+  assert.equal(briefCalls, 1, "scenes do not affect the brief contract");
   assert.equal(result.briefs.length, 1, "exact-N preserved");
+  assert.equal("scenes" in result.briefs[0], false);
   delete process.env.GENERATION_SCENES_ENABLED;
 });
-test("brief item scenes invalid after retry yields typed GEN-SCHEMA with sanitized detail", async () => {
-  // Cenário cobre o modo com scenes (GENERATION_SCENES_ENABLED): ausência de scenes é
-  // violação de contrato com retry único. Padrão atual (flag off) aceita brief sem scenes.
+test("legacy scenes flag does not make development optional", async () => {
   process.env.GENERATION_SCENES_ENABLED = "1";
   let briefCalls = 0;
   const router = { describe, complete: async (task: string) => {
@@ -107,11 +105,11 @@ test("brief item scenes invalid after retry yields typed GEN-SCHEMA with sanitiz
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"], communicationRisks: ["cr"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", script: "Mostre o Produto", scenes: ["Abertura", "Demonstração"], cta: "c" }] }; }
     return {};
   } };
   await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string; detail?: Record<string, unknown> }; return e?.code === "GEN-SCHEMA" && e?.detail?.task === "CONTENT_BRIEF_GENERATION" && e?.detail?.retried === true; });
-  assert.equal(briefCalls, 2, "exactly one retry before failing closed");
+  assert.equal(briefCalls, 2, "missing development retries once, regardless of legacy scenes flag");
   delete process.env.GENERATION_SCENES_ENABLED;
 });
 test("GEN-REPAIR-EXHAUSTED carries sanitized gate summary without brief payload", async () => {

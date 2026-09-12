@@ -6,7 +6,7 @@ import {
   type EvidenceSnapshot,
   type FactStatus,
 } from "./contract";
-import { scenesEnabled } from "./contract";
+import { TIKTOK_COMMERCE_SKILL } from "./platform-skill";
 import { ContractError } from "./contract";
 
 export type GateReport = {
@@ -157,6 +157,7 @@ function classifyFactual(
 ): FactAssessment {
   const text = normalizeForVariety(
     [
+      brief.hook,
       brief.script,
       // Enforcement factual do development canônico: bullets passam pelo mesmo
       // controle de fatos autorizados que o script (decisão do Arquiteto).
@@ -337,6 +338,7 @@ function classifyFactual(
 }
 
 const CTA_AD_ANTIPATTERNS = /\b(última chance|so hoje|só hoje|garantido|resultado garantido|melhor do mercado|imperdível|milagre|corre|não perca|nao perca)\b/i;
+const NATURALNESS_ANTIPATTERNS = /\b(no mundo de hoje|em um mundo cada vez mais|diante desse cenário|solução inovadora|solução revolucionária|ideal para quem busca|venha descobrir)\b/i;
 
 // Creator solo (nota "da-uma-olhada-nesse-briefing-d"): por padrão, 1 creator + 1 celular/câmera
 // (mão ou tripé) + ambiente cotidiano + cortes simples. Léxico fechado e determinístico dos
@@ -344,13 +346,28 @@ const CTA_AD_ANTIPATTERNS = /\b(última chance|so hoje|só hoje|garantido|result
 const SOLO_PRODUCTION_ANTIPATTERNS =
   /\b(360\s*graus|órbita|orbita|orbit|travelling|motion\s*graphics|animação|animacao|vfx|efeitos especiais|chroma\s*key|croma|green\s*screen|drone|operador de câmera|operador de camera|segunda câmera|segunda camera|montagem (rápida|complexa)|montagem (rapida|complexa)|múltiplas locações|multiplas locacoes|múltiplos setups|multiplos setups|estúdio montado|câmera gira|camera gira|câmera começa a orbitar|camera comeca a orbitar)\b/i;
 
+function copySimilarity(left: string, right: string): number {
+  const tokens = (text: string) => new Set(text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").match(/[a-z0-9]+/g)?.filter((token) => token.length > 2) ?? []);
+  const a = tokens(left);
+  const b = tokens(right);
+  if (normalizeForVariety(left) === normalizeForVariety(right)) return 1;
+  if (a.size < 4 || b.size < 4) return 0;
+  const intersection = [...a].filter((token) => b.has(token)).length;
+  return intersection / (a.size + b.size - intersection);
+}
+type GatePattern = { id?: string; guidance?: string; type?: string; text?: string };
+type SelectedBriefPatterns = Array<{ hook: GatePattern; cta: GatePattern }>;
+
 export function validateBriefSet(
   briefs: unknown[],
   evidence: EvidenceSnapshot = { facts: [], refs: [] },
   platformId = "tiktok-commerce",
-  skillVersion = "tiktok-commerce@1.0",
+  skillVersion: string = TIKTOK_COMMERCE_SKILL.version,
+  selectedPatterns: SelectedBriefPatterns = [],
 ): GateReport[] {
   const seen = new Set<string>();
+  const seenHooks = new Set<string>();
+  const seenCtas = new Set<string>();
   const hashes = new Set<string>();
   const angleCounts = new Map<string, number>();
   const reports = briefs.map((value, index): GateReport => {
@@ -374,8 +391,17 @@ export function validateBriefSet(
     const normalized = normalizeForVariety(
       `${brief.angle}|${brief.hook}|${brief.script}`,
     );
+    const normalizedHook = normalizeForVariety(brief.hook);
+    const normalizedCta = normalizeForVariety(brief.cta);
+    const selected = selectedPatterns[index];
+    const crossedHook = selected?.cta.text && copySimilarity(brief.hook, selected.cta.text) >= 0.8;
+    const crossedCta = selected?.hook.text && copySimilarity(brief.cta, selected.hook.text) >= 0.8;
+    if (crossedHook) issues.push("CTA usado como hook");
+    if (crossedCta) issues.push("hook usado como CTA");
     const hash = structureHash(brief);
     if (seen.has(normalized)) issues.push("duplicata normalizada");
+    if (seenHooks.has(normalizedHook)) issues.push("hook repetido");
+    if (seenCtas.has(normalizedCta)) issues.push("CTA repetido");
     if (hashes.has(hash)) issues.push("duplicata estrutural");
     const angleKey = normalizeForVariety(brief.angle);
     angleCounts.set(angleKey, (angleCounts.get(angleKey) ?? 0) + 1);
@@ -392,34 +418,31 @@ export function validateBriefSet(
       );
     if (CTA_AD_ANTIPATTERNS.test(brief.cta))
       issues.push("CTA contém anti-pattern publicitário");
+    if (NATURALNESS_ANTIPATTERNS.test(`${brief.hook} ${brief.script} ${brief.cta}`))
+      issues.push("linguagem pouco natural ou publicitária");
     if (
       SOLO_PRODUCTION_ANTIPATTERNS.test(
-        `${brief.script} ${(brief.development ?? []).join(" ")} ${brief.scenes?.join(" ") ?? ""}`,
+        `${brief.script} ${brief.development.join(" ")}`,
       )
     )
       issues.push("produção incompatível com creator solo");
-    const scenesPresent = brief.scenes !== undefined;
     const platformOk =
       platformId === "tiktok-commerce" &&
-      skillVersion === "tiktok-commerce@1.0" &&
-      (!scenesPresent || (brief.scenes!.length >= 2 && brief.scenes!.length <= 6)) &&
+      skillVersion === TIKTOK_COMMERCE_SKILL.version &&
       !/leia literalmente|leitura obrigatória/i.test(brief.script);
     if (!platformOk)
       issues.push("brief incompatível com a Skill da plataforma");
     seen.add(normalized);
+    seenHooks.add(normalizedHook);
+    seenCtas.add(normalizedCta);
     hashes.add(hash);
-    const structuralStatus =
-      !scenesPresent || (brief.scenes!.length >= 2 && brief.scenes!.length <= 8)
-        ? "PASS"
-        : "FAIL";
-    if (structuralStatus === "FAIL")
-      issues.push("quantidade de cenas inválida");
-    const varietyStatus = issues.some((issue) => issue.includes("duplicata"))
+    const structuralStatus = "PASS";
+    const varietyStatus = issues.some((issue) => issue.includes("duplicata") || issue.includes("repetido"))
       ? "FAIL"
       : "PASS";
     const platformStatus = platformOk ? "PASS" : "FAIL";
     const decision =
-      fact.status === "CONTRADICTED" || structuralStatus === "FAIL"
+      fact.status === "CONTRADICTED"
         ? "REJECT"
         : issues.length
           ? "REPAIR"
@@ -463,7 +486,7 @@ export function repairBriefs(
   maxRepairs: number,
   evidence: EvidenceSnapshot = { facts: [], refs: [] },
   platformId = "tiktok-commerce",
-  skillVersion = "tiktok-commerce@1.0",
+  skillVersion = TIKTOK_COMMERCE_SKILL.version,
 ): ContentBriefVersion[] {
   const rejected = briefs
     .map((brief, index) => ({ brief, report: reports[index] }))

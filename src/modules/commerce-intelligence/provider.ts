@@ -1,5 +1,5 @@
 import { GenerationError } from "./errors";
-import { CARDINALITY_POLICY, scenesEnabled } from "./contract";
+import { CARDINALITY_POLICY } from "./contract";
 import {
   assertProviderOutput,
   instructionHash,
@@ -82,13 +82,8 @@ const INSTRUCTION: Record<LogicalTask, string> = {
     "Retorne um objeto JSON raiz com as chaves canônicas da Strategy: primaryPositioning (string não vazia), audiences, priorityBenefits, priorityObjections, priorityArguments, priorityAngles, communicationPrinciples e communicationRisks (cada array com NO MÁXIMO 10 itens). Use somente evidência autorizada: arrays podem ser [] quando não houver evidência suficiente; com evidência, inclua apenas itens suportados. Não inclua objective, positioning, audience ou contentPillars; não inclua status, tenantId, userId, quota, provider, model, tier ou comandos de workflow.",
   CONTENT_PLAN_GENERATION:
     "Retorne um objeto JSON raiz (NUNCA array) com as chaves platformId e opportunities: um array com quantidade EXATA de oportunidades de conteúdo igual ao targetContentCount recebido. Cada opportunity tem commercialObjective, angle, coreMessage, hookMechanism e noveltyTargets (array de 1 a 4 strings; nunca vazio, nunca mais que 4). Não coloque texto fora do JSON; não inclua ownership, status, quota, provider, model, tier ou comandos de workflow.",
-  get CONTENT_BRIEF_GENERATION() {
-    return scenesEnabled()
-      ? "Retorne um objeto JSON raiz com o campo items contendo EXATAMENTE a mesma quantidade de briefings que oportunidades recebidas na entrada, um briefing por oportunidade, na mesma ordem. Cada briefing tem angle, hook, script, scenes (array JSON com 2 a 8 strings não vazias; nunca string única, nunca array vazio, nunca fora dessa faixa) e cta. A quantidade de items deve ser exatamente igual à quantidade de oportunidades recebidas; nunca omita, adicione ou duplique. Não inclua contentId, briefVersionId, ownership, status, quota, provider, model, tier ou comandos de workflow."
-      // Estrutura da nota gancho: hook, desenvolvimento real do produto (pontos objetivos),
-      // roteiro oral e CTA. Sem scenes no modo padrão (GENERATION_SCENES_ENABLED desativada).
-      : "Retorne um objeto JSON raiz com o campo items contendo EXATAMENTE a mesma quantidade de briefings que oportunidades recebidas na entrada, um briefing por oportunidade, na mesma ordem. Cada briefing tem angle, hook, development (pontos objetivos do desenvolvimento real do produto, separados por ponto e vírgula; use somente evidência autorizada, sem inventar atributos), script (roteiro oral em primeira pessoa, linguagem falada, não literal) e cta. NÃO inclua o campo scenes. A quantidade de items deve ser exatamente igual à quantidade de oportunidades recebidas; nunca omita, adicione ou duplique. Não inclua contentId, briefVersionId, ownership, status, quota, provider, model, tier ou comandos de workflow.";
-  },
+  CONTENT_BRIEF_GENERATION:
+    "Retorne um objeto JSON raiz com o campo items contendo EXATAMENTE a mesma quantidade de briefings que oportunidades recebidas na entrada, um briefing por oportunidade, na mesma ordem. Cada briefing tem angle, hook, development (1 a 4 pontos objetivos do desenvolvimento real do produto; use somente evidência autorizada, sem inventar atributos), script (roteiro oral em primeira pessoa, linguagem falada, não literal) e cta. Não inclua scenes. Use selectedPatterns.hook somente para formular hook e selectedPatterns.cta somente para formular cta; não misture os dois nem os aplique a outros campos. A quantidade de items deve ser exatamente igual à quantidade de oportunidades recebidas; nunca omita, adicione ou duplique. Não inclua contentId, briefVersionId, ownership, status, quota, provider, model, tier ou comandos de workflow.",
 };
 const REASONING_BY_TASK: Record<LogicalTask, "low" | "medium" | "high"> = {
   PRODUCT_UNDERSTANDING: "low",

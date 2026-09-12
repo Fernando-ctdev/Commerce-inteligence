@@ -341,15 +341,6 @@
   overflow: hidden;
 }
 
-.contentRowAngle {
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  line-height: 18px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .detailPane {
   align-content: start;
   display: grid;
@@ -427,7 +418,7 @@
   margin: 0;
 }
 
-/* Linha de contexto rápida: objetivo + ângulo lado a lado. */
+/* Linha de contexto rápida: objetivo do conteúdo, creator-facing. */
 .contextRow {
   display: grid;
   gap: 16px;
@@ -445,7 +436,7 @@
   margin: 0;
 }
 
-/* Rótulo de seção do Briefing (Hook, Roteiro, Cenas, CTA) com âncora visual.
+/* Rótulo de seção do Briefing (Gancho, Desenvolvimento, Roteiro, CTA) com âncora visual.
    Peso + secundário, sem caixa alta: o DESIGN veta peso+caixa alta+cor juntos. */
 .sectionLabel {
   align-items: center;

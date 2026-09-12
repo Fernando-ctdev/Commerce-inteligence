@@ -94,6 +94,27 @@ test("sends fixed reasoning effort by logical capability", async () => {
     { effort: "medium" },
   ]);
 });
+test("brief provider gets separate selected hook and CTA patterns in a compact context", async () => {
+  const originalFetch = globalThis.fetch;
+  let request: Record<string, unknown> | undefined;
+  globalThis.fetch = (async (_url: unknown, init: { body: string }) => {
+    request = JSON.parse(init.body);
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  try {
+    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: { selectedPatterns: [{ opportunityId: "o1", hook: { id: "problem", guidance: "Comece pelo problema observável." }, cta: { id: "details", guidance: "Convide a conferir detalhes." } }] } });
+  } finally { globalThis.fetch = originalFetch; }
+  assert.ok(request);
+  const messages = request.messages as Array<{ content: string }>;
+  assert.ok(messages[0].content.includes("selectedPatterns.hook somente para formular hook"));
+  const context = JSON.parse(messages[1].content).trustedContext;
+  assert.equal(context.selectedPatterns[0].hook.id, "problem");
+  assert.equal(context.selectedPatterns[0].cta.id, "details");
+  assert.equal("scenes" in context, false);
+  assert.equal("captions" in context, false);
+});
+
 test("non-2xx captures allowlisted rate headers in detail without body leakage", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response("TOKEN_SEGREDO_corpo_nao_lido", { status: 429, headers: { "content-type": "application/json", "retry-after": "7", "x-ratelimit-reset": "30", "x-ratelimit-remaining": "0", "x-ratelimit-limit": "5", "authorization": "should-not-be-captured" } })) as typeof fetch;

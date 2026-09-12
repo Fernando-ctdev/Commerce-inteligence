@@ -1,4 +1,4 @@
-import { assignServerBriefIds, CARDINALITY_POLICY_VERSION, scenesEnabled, validateCommercialOpportunityMappingEnvelope, validateContentBriefDraft, validateContentOpportunity, validateContentPlan, validateProductStrategy, validateProductUnderstanding, validateTargetContentCount, ContractError, type CommercialOpportunityMappingEnvelope, type ContentBriefVersion, type ContentOpportunity, type EvidenceSnapshot, type ProductUnderstanding } from "./contract";
+import { assignServerBriefIds, CARDINALITY_POLICY_VERSION, validateCommercialOpportunityMappingEnvelope, validateContentBriefDraft, validateContentOpportunity, validateContentPlan, validateProductStrategy, validateProductUnderstanding, validateTargetContentCount, ContractError, type CommercialOpportunityMappingEnvelope, type ContentBriefVersion, type ContentOpportunity, type EvidenceSnapshot, type ProductUnderstanding } from "./contract";
 import { loadPlatformSkill } from "./platform-skill";
 import { validateBriefSet, type GateReport } from "./gates";
 import { emitJobEvent, sanitizeGateReports } from "./observability";
@@ -11,6 +11,24 @@ export type EngineResult = { productUnderstanding: Record<string, unknown>; stra
 
 function batchSize(): number { const raw = Number(process.env.GENERATION_BRIEF_BATCH_SIZE ?? 4); return Number.isInteger(raw) && raw >= 4 && raw <= 8 ? raw : 4; }
 function mappingOpportunityLimit(): number { const raw = Number(process.env.GENERATION_MAPPING_MAX_OPPORTUNITIES ?? 4); return Number.isInteger(raw) && raw >= 1 && raw <= 10 ? raw : 4; }
+function selectBriefPatterns(opportunity: ContentOpportunity, position: number, skill: ReturnType<typeof loadPlatformSkill>, productCategory?: string) {
+  const mechanism = opportunity.hookMechanism.normalize("NFKC").toLocaleLowerCase("pt-BR");
+  const hookId = [
+    ["problem", /problema|dor|dificuld|frustra/],
+    ["discovery", /descoberta|surpresa|curios|novidade/],
+    ["demonstration", /demonstr|prova|teste|visual|resultado/],
+    ["objection", /objeç|objec|dúvida|duvida|receio/],
+  ].find(([, pattern]) => (pattern as RegExp).test(mechanism))?.[0] ?? skill.operationalRepertoire.hookPatterns[position % skill.operationalRepertoire.hookPatterns.length].id;
+  const isApparel = /roupa|vestu|vestuário|vestuario|moda|confecção|confeccao|calçado|calcado/.test((productCategory ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR"));
+  const hooks = skill.creativeCatalog.hooks.filter(({ type, category, categoryScope }) => type === "hook" && ((category === "general" && categoryScope === "global") || (isApparel && category === "apparel" && categoryScope === "apparel")));
+  const ctaCategories = [...new Set(skill.creativeCatalog.ctas.map(({ category }) => category))];
+  const ctas = skill.creativeCatalog.ctas.filter(({ type, category }) => type === "cta" && category === (ctaCategories.includes("commerce") ? "commerce" : ctaCategories[0]));
+  return {
+    opportunityId: opportunity.id,
+    hook: hooks.length ? { ...hooks[position % hooks.length] } : skill.operationalRepertoire.hookPatterns.find(({ id }) => id === hookId)!,
+    cta: ctas.length ? { ...ctas[position % ctas.length] } : skill.operationalRepertoire.ctaPatterns[position % skill.operationalRepertoire.ctaPatterns.length],
+  };
+}
 // Catálogo autorizado de evidências com ids estáveis fornecidos ao provider (não IDs inventados).
 // refs validam contra este catálogo; o provider recebe a lista para retornar apenas refs válidos.
 export function buildEvidenceCatalog(input: { name?: string; description?: string; facts?: Record<string, unknown> }): EvidenceSnapshot {
@@ -180,10 +198,8 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
       plannerSkillSlice: {
         principles: skill.principles,
         executionRules: skill.operationalRepertoire.executionRules,
-        hookPatterns: skill.operationalRepertoire.hookPatterns,
         narrativePatterns: skill.operationalRepertoire.narrativePatterns,
         proofPatterns: skill.operationalRepertoire.proofPatterns,
-        ctaPatterns: skill.operationalRepertoire.ctaPatterns,
       },
       creatorContext: projectCreatorContext("CONTENT_PLAN_GENERATION", input.creatorContext),
       memoryConstraints: {},
@@ -251,8 +267,8 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
         executionRules: skill.operationalRepertoire.executionRules,
         narrativePatterns: skill.operationalRepertoire.narrativePatterns,
         proofPatterns: skill.operationalRepertoire.proofPatterns,
-        ctaPatterns: skill.operationalRepertoire.ctaPatterns,
       },
+      selectedPatterns: entries.map(({ opportunity, position }) => selectBriefPatterns(opportunity, position - 1, skill, typeof (understanding?.category ?? facts.category) === "string" ? String(understanding?.category ?? facts.category) : undefined)),
       variety: { dimensions: ["angle", "hook", "structure", "cta"] },
       causes: entries.map((e) => e.causes ?? []),
     };
@@ -278,7 +294,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
         }
       }
     } else {
-      rawBatch = entries.map((entry) => { const position = entry.position; return { angle: `Ângulo ${position}`, hook: `Veja como ${input.name} pode ajudar`, development: ["Mostre o produto real em uso", "Comente o benefício principal observável"], script: `Apresente ${input.name} de forma natural e demonstre o uso.`, ...(scenesEnabled() ? { scenes: ["Apresentação", "Demonstração"] } : {}), cta: "Confira o produto." }; });
+      rawBatch = entries.map((entry) => { const position = entry.position; return { angle: `Ângulo ${position}`, hook: `Veja como ${input.name} pode ajudar`, development: ["Mostre o produto real em uso", "Comente o benefício principal observável"], script: `Apresente ${input.name} de forma natural e demonstre o uso.`, cta: "Confira o produto." }; });
     }
     const assigned = assignServerBriefIds(rawBatch, input.jobId, 0);
     return assigned.map((brief, index) => { const position = entries[index].position; return { brief: { ...brief, contentId: `${input.jobId}-content-${position}`, briefVersionId: `${input.jobId}-brief-${position}` }, opportunity: entries[index].opportunity }; });
@@ -288,7 +304,9 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
     candidates.push(...await generateBatch(batch));
   }
   // Repair causal e limitado: somente itens rejeitados recebem nova geração, com causas + oportunidade original.
-  let reports = validateBriefSet(candidates.map((c) => c.brief), evidence);
+  const selectedPatterns = candidates.map(({ opportunity }, index) => selectBriefPatterns(opportunity, index, skill, typeof (understanding?.category ?? facts.category) === "string" ? String(understanding?.category ?? facts.category) : undefined));
+  const validateCandidates = () => validateBriefSet(candidates.map((c) => c.brief), evidence, "tiktok-commerce", skill.version, selectedPatterns);
+  let reports = validateCandidates();
   const maxRepairs = Number(process.env.GENERATION_MAX_REPAIRS ?? 2);
   let repairCount = 0;
   let repairRounds = 0;
@@ -310,11 +328,11 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
       received += replacements.length;
       slice.forEach((entry, offset) => { candidates[entry.position - 1] = replacements[offset]; });
     }
-    reports = validateBriefSet(candidates.map((c) => c.brief), evidence);
+    reports = validateCandidates();
     emitJobEvent("repair.completed", { jobId: input.jobId, attempt, durationMs: Date.now() - repairStartedAt, expected: rejected.length, received, retry: round, gateReports: sanitizeGateReports(reports.filter((_, index) => repairedSet.has(index))) });
   }
   const repaired = candidates.map((c) => c.brief);
-  const finalReports = validateBriefSet(repaired, evidence);
+  const finalReports = validateBriefSet(repaired, evidence, "tiktok-commerce", skill.version, selectedPatterns);
   if (repaired.length !== count || finalReports.some((report) => report.decision !== "PASS")) throw new GenerationError("GEN-REPAIR-EXHAUSTED", "Repair não produziu briefing válido", true, { task: "CONTENT_BRIEF_GENERATION", rounds: repairRounds, expected: count, received: repaired.length, rejected: sanitizeGateReports(finalReports.filter((report) => report.decision !== "PASS")) });
   await emit("FINALIZING");
   return { productUnderstanding: understanding ?? {}, strategy, plan, opportunities, briefs: repaired, reports: finalReports, memorySignals: { generatedCount: count, platformSkillVersion: skill.version, cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION }, stage: "FINALIZING", capabilities, repairs: repairCount, validated: candidates.length };
