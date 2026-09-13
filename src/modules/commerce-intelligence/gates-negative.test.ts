@@ -130,6 +130,54 @@ test("normalized duplicate hooks and repeated CTAs fail the set variety gate", (
   assert.ok(repeatedCta[1].issues.includes("CTA repetido"));
   assert.ok(!repeatedCta[1].issues.some((issue) => /copyright|direitos autorais|cópia/i.test(issue)));
 });
+test("five regressions: catalog verbatim, adapted duplicate, full duplicate, declared drone, and solo without equipment", () => {
+  const catalogHook = CREATIVE_CATALOG.hooks[0].text;
+  const content = (id: string, angle: string, hook: string, script: string, cta: string) => ({
+    ...base,
+    contentId: id,
+    briefVersionId: `b-${id}`,
+    angle,
+    hook,
+    script,
+    cta,
+  });
+  const catalogReuse = validateBriefSet([
+    content("catalog-1", "angle um", catalogHook, "Script um", "CTA um"),
+    content("catalog-2", "angle dois", catalogHook, "Script dois", "CTA dois"),
+  ], evidence);
+  assert.equal(catalogReuse[1].decision, "PASS", "hook literal do catálogo pode ser reutilizado");
+
+  const adapted = `${catalogHook} do meu jeito`;
+  const adaptedRepeated = validateBriefSet([
+    content("adapted-1", "angle um", adapted, "Script um", "CTA um"),
+    content("adapted-2", "angle dois", adapted, "Script dois", "CTA dois"),
+  ], evidence);
+  assert.equal(adaptedRepeated[1].decision, "REPAIR", "hook adaptado repetido continua bloqueado");
+  assert.ok(adaptedRepeated[1].issues.includes("hook repetido"));
+
+  const fullDuplicate = validateBriefSet([
+    content("full-1", "mesmo ângulo", catalogHook, "Mesmo script", "Mesmo CTA"),
+    content("full-2", "mesmo ângulo", catalogHook, "Mesmo script", "Mesmo CTA"),
+  ], evidence);
+  assert.equal(fullDuplicate[1].decision, "REPAIR", "duplicata integral continua bloqueada mesmo com hook do catálogo");
+  assert.ok(fullDuplicate[1].issues.includes("duplicata normalizada"));
+
+  const orbitBrief = {
+    ...content("solo-drone", "ângulo orbital", "Hook orbital", "A câmera orbita 360 graus ao redor do produto", "CTA orbital"),
+    development: ["A câmera orbita 360 graus ao redor do produto"],
+  };
+  const droneEquipped = validateBriefSet([orbitBrief], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], {
+    recordsAlone: true,
+    recordingEquipment: ["drone"],
+  });
+  assert.equal(droneEquipped[0].decision, "PASS", "drone declarado suporta tomada orbital solo");
+
+  const soloWithoutEquipment = validateBriefSet([orbitBrief], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], {
+    recordsAlone: true,
+  });
+  assert.equal(soloWithoutEquipment[0].decision, "REPAIR", "produção incompatível sem equipamento declarado");
+  assert.ok(soloWithoutEquipment[0].issues.includes("produção incompatível com creator solo"));
+});
 test("catalog phrases may be reused literally without anti-copy rejection", () => {
   const pattern = CREATIVE_CATALOG.hooks[0];
   const reused = validateBriefSet([{ ...base, hook: pattern.text }], evidence)[0];
