@@ -1,5 +1,5 @@
-export class GenerationError extends Error {
-  constructor(public readonly code: string, message: string, public readonly recoverable = true, public readonly detail?: unknown) { super(message); this.name = "GenerationError"; }
+export class GenerationError<TCode extends string = string> extends Error {
+  constructor(public readonly code: TCode, message: string, public readonly recoverable = true, public readonly detail?: unknown) { super(message); this.name = "GenerationError"; }
 }
 
 export const publicGenerationError = (code: string): string => ({

@@ -12,10 +12,12 @@ import {
   type CommercialOpportunityMappingEnvelope,
   type ContentBriefVersion,
   type ContentOpportunity,
+  type ContentPlan,
   type EvidenceSnapshot,
+  type ProductStrategy,
   type ProductUnderstanding,
 } from "./contract";
-import { loadPlatformSkill } from "./platform-skill";
+import { loadPlatformSkill, projectPlatformSkillSlice } from "./platform-skill";
 import { validateBriefSet, type GateReport } from "./gates";
 import { emitJobEvent, sanitizeGateReports } from "./observability";
 import { GenerationError } from "./errors";
@@ -82,6 +84,7 @@ export type EngineResult = {
   stage: GenerationStage;
   capabilities: CapabilityEvent[];
   repairs: number;
+  repairCauses: Array<{ briefId: string; causes: string[] }>;
   validated: number;
 };
 
@@ -109,8 +112,8 @@ function selectBriefPatterns(
       ["demonstration", /demonstr|prova|teste|visual|resultado/],
       ["objection", /objeç|objec|dúvida|duvida|receio/],
     ].find(([, pattern]) => (pattern as RegExp).test(mechanism))?.[0] ??
-    skill.operationalRepertoire.hookPatterns[
-      position % skill.operationalRepertoire.hookPatterns.length
+    skill.operationalRepertoire.hookMechanisms[
+      position % skill.operationalRepertoire.hookMechanisms.length
     ].id;
   const isApparel =
     /roupa|vestu|vestuário|vestuario|moda|confecção|confeccao|calçado|calcado/.test(
@@ -138,13 +141,13 @@ function selectBriefPatterns(
     opportunityId: opportunity.id,
     hook: hooks.length
       ? { ...hooks[position % hooks.length] }
-      : skill.operationalRepertoire.hookPatterns.find(
+      : skill.operationalRepertoire.hookMechanisms.find(
           ({ id }) => id === hookId,
         )!,
     cta: ctas.length
       ? { ...ctas[position % ctas.length] }
-      : skill.operationalRepertoire.ctaPatterns[
-          position % skill.operationalRepertoire.ctaPatterns.length
+      : skill.operationalRepertoire.ctaStrategies[
+          position % skill.operationalRepertoire.ctaStrategies.length
         ],
   };
 }
@@ -273,11 +276,7 @@ function project(
   return { trustedContext: confirmed, externalData: external };
 }
 function isRootShapeSchemaError(error: unknown): boolean {
-  return (
-    error instanceof GenerationError &&
-    error.code === "GEN-SCHEMA" &&
-    /deve ser um objeto JSON/.test(error.message)
-  );
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "GEN-SCHEMA" && "message" in error && typeof error.message === "string" && /deve ser um objeto JSON|Plano sem opportunities/.test(error.message));
 }
 // Primeira violação estrutural do item do lote, com issue sanitizada e sem payload.
 function findBriefItemIssue(
@@ -293,6 +292,10 @@ function findBriefItemIssue(
     }
   }
   return null;
+}
+function isBriefBatchSchemaError(error: unknown): error is GenerationError {
+  return error instanceof GenerationError && error.code === "GEN-SCHEMA" &&
+    Boolean(error.detail && typeof error.detail === "object" && "task" in error.detail && (error.detail as { task?: unknown }).task === "CONTENT_BRIEF_GENERATION");
 }
 function isMissingOpportunitiesError(error: unknown): boolean {
   return (
@@ -348,13 +351,14 @@ export async function runFirstGeneration(
   const attempt = input.attempt ?? 1;
   const effectiveModel = (task: LogicalTask) =>
     input.router?.modelFor?.(task) ?? input.router?.describe().model;
-  const track = async (
+  const track = async <T, R = T>(
     task: LogicalTask,
     context: unknown,
     run: (
       onMetrics?: (metrics: ProviderCallMetrics) => void,
-    ) => Promise<Record<string, unknown>>,
-  ): Promise<Record<string, unknown>> => {
+    ) => Promise<T>,
+    validate?: (output: T) => R,
+  ): Promise<R> => {
     const startedAt = Date.now();
     const contextBytes = Buffer.byteLength(JSON.stringify(context), "utf8");
     let captured: ProviderCallMetrics | undefined;
@@ -370,9 +374,13 @@ export async function runFirstGeneration(
       trustedContextBytes: contextBytes,
     });
     try {
-      const output = await run((metrics) => {
+      const rawOutput = await run((metrics) => {
         captured = metrics;
       });
+      const output = validate ? validate(rawOutput) : rawOutput as unknown as R;
+      const outputRecord = output && typeof output === "object" && !Array.isArray(output)
+        ? output as Record<string, unknown>
+        : {};
       const durationMs = Date.now() - startedAt;
       const responseBytes = Buffer.byteLength(JSON.stringify(output), "utf8");
       capabilities.push({
@@ -409,10 +417,10 @@ export async function runFirstGeneration(
         trustedContextBytes: captured?.trustedContextBytes,
         externalBytes: captured?.externalBytes,
         responseBytes,
-        arrayLength: Array.isArray(output.opportunities)
-          ? output.opportunities.length
-          : Array.isArray(output.items)
-            ? output.items.length
+        arrayLength: Array.isArray(outputRecord.opportunities)
+          ? outputRecord.opportunities.length
+          : Array.isArray(outputRecord.items)
+            ? outputRecord.items.length
             : undefined,
         cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
         providerRequestId: captured?.providerRequestId,
@@ -421,8 +429,9 @@ export async function runFirstGeneration(
       return output;
     } catch (error) {
       const durationMs = Date.now() - startedAt;
-      const errorCode =
-        error instanceof GenerationError ? error.code : "GEN-PROVIDER";
+      const errorCode = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+        ? error.code
+        : "GEN-PROVIDER";
       capabilities.push({
         task,
         tier: ROUTER_MAP[task],
@@ -451,7 +460,9 @@ export async function runFirstGeneration(
         error.detail &&
         typeof error.detail === "object"
           ? (error.detail as Record<string, unknown>)
-          : {};
+          : error instanceof ContractError
+            ? { issue: error.message, field: error.field }
+            : {};
       emitJobEvent("capability.failed", {
         jobId: input.jobId,
         attempt,
@@ -462,6 +473,12 @@ export async function runFirstGeneration(
         errorCode,
         cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
         errorName: error instanceof Error ? error.name : "unknown",
+        issue: typeof safe.issue === "string" ? safe.issue.slice(0, 200) : undefined,
+        field: error instanceof ContractError ? error.field : undefined,
+        expected: typeof safe.expected === "number" ? safe.expected : undefined,
+        received: typeof safe.received === "number" ? safe.received : undefined,
+        item: typeof safe.item === "number" ? safe.item : undefined,
+        retry: typeof safe.retry === "number" ? safe.retry : undefined,
         errorKind:
           typeof safe.errorKind === "string" ? safe.errorKind : undefined,
         providerStatus:
@@ -486,8 +503,8 @@ export async function runFirstGeneration(
     }
   };
   let understanding: ProductUnderstanding | null = null;
-  let strategyOutput: Record<string, unknown> | null = null;
-  let opportunityOutput: Record<string, unknown> | null = null;
+  let strategyOutput: ProductStrategy | null = null;
+  let opportunityOutput: ContentPlan | null = null;
   const commercialOpportunities: Record<string, unknown>[] = [];
 
   let mappingEvidence: EvidenceSnapshot = { facts: [], refs: [] };
@@ -499,17 +516,17 @@ export async function runFirstGeneration(
       evidenceRefsCatalog: baseEvidence.refs,
     };
     await emit("UNDERSTANDING_PRODUCT");
-    understanding = validateProductUnderstanding(
-      await track("PRODUCT_UNDERSTANDING", understandingContext, (onMetrics) =>
-        callCapability(
-          input.router!,
-          "PRODUCT_UNDERSTANDING",
-          project("PRODUCT_UNDERSTANDING", understandingContext, {}),
-          input.signal,
-          onMetrics,
-        ),
+    understanding = await track(
+      "PRODUCT_UNDERSTANDING",
+      understandingContext,
+      (onMetrics) => callCapability(
+        input.router!,
+        "PRODUCT_UNDERSTANDING",
+        project("PRODUCT_UNDERSTANDING", understandingContext, {}),
+        input.signal,
+        onMetrics,
       ),
-      baseEvidence,
+      (output) => validateProductUnderstanding(output, baseEvidence),
     );
     mappingEvidence = {
       facts: [...baseEvidence.facts, ...(understanding?.evidenceRefs ?? [])],
@@ -550,43 +567,33 @@ export async function runFirstGeneration(
     // Mapping envelope do provider é não confiável: um único retry de contrato re-solicita
     // opportunities quando o corpo veio sem elas (200 com prosa/arrays vazios). Falha fechada
     // depois do retry — sem inventar oportunidades.
-    let producer = await track(
-      "COMMERCIAL_OPPORTUNITY_MAPPING",
-      mappingContext,
-      (onMetrics) =>
-        callCapability(
-          input.router!,
-          "COMMERCIAL_OPPORTUNITY_MAPPING",
-          project("COMMERCIAL_OPPORTUNITY_MAPPING", mappingContext, {}),
-          input.signal,
-          onMetrics,
-        ),
-    );
     let envelope: CommercialOpportunityMappingEnvelope;
+    const mappingCall = (onMetrics?: (metrics: ProviderCallMetrics) => void) =>
+      callCapability(
+        input.router!,
+        "COMMERCIAL_OPPORTUNITY_MAPPING",
+        project("COMMERCIAL_OPPORTUNITY_MAPPING", mappingContext, {}),
+        input.signal,
+        onMetrics,
+      );
+    const validateMapping = (output: Record<string, unknown>) =>
+      validateCommercialOpportunityMappingEnvelope(output, mappingEvidence);
     try {
-      envelope = validateCommercialOpportunityMappingEnvelope(
-        producer,
-        mappingEvidence,
+      envelope = await track(
+        "COMMERCIAL_OPPORTUNITY_MAPPING",
+        mappingContext,
+        mappingCall,
+        validateMapping,
       );
     } catch (error) {
       // Retry único e específico: envelope 200 sem `opportunities` é re-solicitado uma vez
       // com o mesmo contexto; qualquer outro erro segue fail-closed. Sem inventar dados.
       if (!isMissingOpportunitiesError(error)) throw error;
-      producer = await track(
+      envelope = await track(
         "COMMERCIAL_OPPORTUNITY_MAPPING",
         mappingContext,
-        (onMetrics) =>
-          callCapability(
-            input.router!,
-            "COMMERCIAL_OPPORTUNITY_MAPPING",
-            project("COMMERCIAL_OPPORTUNITY_MAPPING", mappingContext, {}),
-            input.signal,
-            onMetrics,
-          ),
-      );
-      envelope = validateCommercialOpportunityMappingEnvelope(
-        producer,
-        mappingEvidence,
+        mappingCall,
+        validateMapping,
       );
     }
     // IDs de oportunidade comercial são server-derived.
@@ -619,21 +626,22 @@ export async function runFirstGeneration(
           input.signal,
           onMetrics,
         ),
+      (output) => validateProductStrategy(
+        {
+          ...output,
+          id: `${input.jobId}-strategy`,
+          productId: input.productId,
+          jobId: input.jobId,
+          version: 1,
+          status: "ACTIVE",
+          platformId: skill.id,
+          platformSkillVersion: skill.version,
+          opportunities: commercialOpportunities,
+        },
+        mappingEvidence,
+      ),
     );
-    const strategy = validateProductStrategy(
-      {
-        ...strategyOutput,
-        id: `${input.jobId}-strategy`,
-        productId: input.productId,
-        jobId: input.jobId,
-        version: 1,
-        status: "ACTIVE",
-        platformId: skill.id,
-        platformSkillVersion: skill.version,
-        opportunities: commercialOpportunities,
-      },
-      mappingEvidence,
-    );
+    const strategy = strategyOutput;
     const planContext = {
       productId: input.productId,
       strategySlice: {
@@ -645,12 +653,7 @@ export async function runFirstGeneration(
         priorityAngles: strategy.priorityAngles,
         communicationPrinciples: strategy.communicationPrinciples,
       },
-      plannerSkillSlice: {
-        principles: skill.principles,
-        executionRules: skill.operationalRepertoire.executionRules,
-        narrativePatterns: skill.operationalRepertoire.narrativePatterns,
-        proofPatterns: skill.operationalRepertoire.proofPatterns,
-      },
+      plannerSkillSlice: projectPlatformSkillSlice(skill, "planner"),
       creatorContext: projectCreatorContext(
         "CONTENT_PLAN_GENERATION",
         input.creatorContext,
@@ -670,62 +673,55 @@ export async function runFirstGeneration(
         input.signal,
         onMetrics,
       );
-    let planProducer: Record<string, unknown> | null = null;
+    const allowedSourceIds = new Set(commercialOpportunities.map((opportunity) => String(opportunity.id)));
+    const validatePlan = (value: Record<string, unknown>): ContentPlan => {
+      if (!Array.isArray(value.opportunities)) throw new ContractError("GEN-SCHEMA", "Plano sem opportunities", "opportunities");
+      const opportunities = value.opportunities.map((opportunity, index) =>
+        validateContentOpportunity(
+          {
+            ...(opportunity && typeof opportunity === "object" ? opportunity as Record<string, unknown> : {}),
+            id: `${input.jobId}-opportunity-${index + 1}`,
+          },
+          allowedSourceIds,
+        ),
+      );
+      return validateContentPlan({
+        ...value,
+        id: `${input.jobId}-plan`,
+        productId: input.productId,
+        strategyVersion: 1,
+        targetContentCount: count,
+        platformId: skill.id,
+        platformSkillVersion: skill.version,
+        opportunities,
+      });
+    };
+    let planProducer: ContentPlan | null = null;
     try {
-      planProducer = (await track(
+      planProducer = await track(
         "CONTENT_PLAN_GENERATION",
         planContext,
         planCall,
-      )) as Record<string, unknown> | null;
+        validatePlan,
+      );
     } catch (error) {
       // Corpo raiz inválido (array/não-objeto) vira retry único de contrato; erros
       // sem essa assinatura seguem fail-closed imediato.
       if (!isRootShapeSchemaError(error)) throw error;
     }
-    const planShapeValid = (value: unknown): value is Record<string, unknown> =>
-      Boolean(
-        value &&
-        typeof value === "object" &&
-        !Array.isArray(value) &&
-        Array.isArray((value as { opportunities?: unknown }).opportunities),
-      );
-    if (!planShapeValid(planProducer)) {
-      planProducer = (await track(
+    if (!planProducer) {
+      planProducer = await track(
         "CONTENT_PLAN_GENERATION",
         planContext,
         planCall,
-      )) as Record<string, unknown> | null;
-      if (!planShapeValid(planProducer))
-        throw new GenerationError(
-          "GEN-SCHEMA",
-          "Plano do provider inválido",
-          true,
-          { task: "CONTENT_PLAN_GENERATION", retried: true },
-        );
+        validatePlan,
+      );
     }
     opportunityOutput = planProducer;
   }
 
-  const rawOpportunities = opportunityOutput?.opportunities;
-  if (input.router && !Array.isArray(rawOpportunities))
-    throw new GenerationError("GEN-SCHEMA", "Plano do provider inválido");
-  // Vínculo do provider a oportunidade comercial só vale se existir no conjunto server-derived
-  // da Strategy; referência órfã falha fechado em GEN-SCHEMA (sem fabricar vínculo).
-  const allowedSourceIds = new Set(
-    commercialOpportunities.map((opportunity) => String(opportunity.id)),
-  );
-  const opportunities = Array.isArray(rawOpportunities)
-    ? rawOpportunities.map((value, index) =>
-        validateContentOpportunity(
-          {
-            ...(value && typeof value === "object"
-              ? (value as Record<string, unknown>)
-              : {}),
-            id: `${input.jobId}-opportunity-${index + 1}`,
-          },
-          input.router ? allowedSourceIds : undefined,
-        ),
-      )
+  const opportunities = opportunityOutput?.opportunities
+    ? opportunityOutput.opportunities
     : Array.from({ length: count }, (_, index) => ({
         id: `${input.jobId}-opportunity-${index + 1}`,
         commercialObjective: "Demonstrar valor do produto",
@@ -735,22 +731,7 @@ export async function runFirstGeneration(
         noveltyTargets: [`angle-${index + 1}`],
       }));
 
-  const strategy = strategyOutput
-    ? validateProductStrategy(
-        {
-          ...strategyOutput,
-          id: `${input.jobId}-strategy`,
-          productId: input.productId,
-          jobId: input.jobId,
-          version: 1,
-          status: "ACTIVE",
-          platformId: skill.id,
-          platformSkillVersion: skill.version,
-          opportunities: commercialOpportunities,
-        },
-        mappingEvidence,
-      )
-    : {
+  const strategy = strategyOutput ?? {
         id: `${input.jobId}-strategy`,
         productId: input.productId,
         jobId: input.jobId,
@@ -767,17 +748,7 @@ export async function runFirstGeneration(
         communicationPrinciples: [],
         opportunities: commercialOpportunities,
       };
-  const strategySlice = {
-    primaryPositioning: strategy.primaryPositioning,
-    audiences: strategy.audiences,
-    priorityBenefits: strategy.priorityBenefits,
-    priorityObjections: strategy.priorityObjections,
-    priorityArguments: strategy.priorityArguments,
-    priorityAngles: strategy.priorityAngles,
-    communicationPrinciples: strategy.communicationPrinciples,
-  };
-  const plan = validateContentPlan({
-    ...(opportunityOutput ?? {}),
+  const plan = opportunityOutput ?? validateContentPlan({
     id: `${input.jobId}-plan`,
     productId: input.productId,
     strategyVersion: 1,
@@ -807,24 +778,22 @@ export async function runFirstGeneration(
     const batchContext = {
       productId: input.productId,
       productReference: { name: input.name },
-      opportunities: entries.map((e) => e.opportunity),
+      opportunities: entries.map(({ opportunity }) => ({
+        angle: opportunity.angle,
+        hookMechanism: opportunity.hookMechanism,
+        noveltyTargets: opportunity.noveltyTargets,
+      })),
       relevantFacts: evidence.facts.map((value, index) => ({
         value,
         ref: evidence.refs[index],
       })),
       evidence: { refs: evidence.refs },
-      strategySlice,
       creatorContext: projectCreatorContext(
         "CONTENT_BRIEF_GENERATION",
         input.creatorContext,
       ),
       memoryConstraints: {},
-      skillSlice: {
-        principles: skill.principles,
-        executionRules: skill.operationalRepertoire.executionRules,
-        narrativePatterns: skill.operationalRepertoire.narrativePatterns,
-        proofPatterns: skill.operationalRepertoire.proofPatterns,
-      },
+      skillSlice: projectPlatformSkillSlice(skill, "brief"),
       selectedPatterns: entries.map(({ opportunity, position }) =>
         selectBriefPatterns(
           opportunity,
@@ -833,10 +802,22 @@ export async function runFirstGeneration(
           typeof facts.category === "string" ? facts.category : undefined,
         ),
       ),
+      repairContrast: entries.map(({ causes }) => {
+        if (!causes?.length) return null;
+        const factIndex = evidence.refs.findIndex((ref) => ref !== "product:name");
+        const fact = factIndex >= 0 ? evidence.facts[factIndex] : undefined;
+        return fact
+          ? {
+              featureList: fact,
+              actionWithReason: `Comente ${fact} para explicar por que esse fato importa para o angulo.`,
+            }
+          : null;
+      }),
       variety: { dimensions: ["angle", "hook", "structure", "cta"] },
       causes: entries.map((e) => e.causes ?? []),
     };
-    let rawBatch: unknown[];
+    let rawBatch: unknown[] = [];
+    let validatedBatch: ContentBriefVersion[] | null = null;
     if (input.router) {
       const batchCall = (onMetrics?: (metrics: ProviderCallMetrics) => void) =>
         callCapability(
@@ -858,54 +839,45 @@ export async function runFirstGeneration(
           ? {
               item: 0,
               issue: `cardinalidade divergente: esperado ${entries.length}, recebido ${items.length}`,
-            }
+          }
           : findBriefItemIssue(items);
-      let producer = (await track(
+      const validateBatch = (producer: Record<string, unknown>) => {
+        const items = extractItems(producer);
+        const issue = batchIssue(items);
+        if (issue) throw new GenerationError(
+          "GEN-SCHEMA",
+          "Lote de briefings invalido",
+          true,
+          { task: "CONTENT_BRIEF_GENERATION", item: issue.item, issue: issue.issue, expected: entries.length, received: items.length },
+        );
+        return { items: assignServerBriefIds(items, input.jobId, 0) };
+      };
+      const generateValidatedBatch = () => track(
         "CONTENT_BRIEF_GENERATION",
         batchContext,
         batchCall,
-      )) as Record<string, unknown>;
-      rawBatch = extractItems(producer);
-      let issue = batchIssue(rawBatch);
-      if (issue) {
-        producer = (await track(
-          "CONTENT_BRIEF_GENERATION",
-          batchContext,
-          batchCall,
-        )) as Record<string, unknown>;
-        rawBatch = extractItems(producer);
-        issue = batchIssue(rawBatch);
-        if (issue) {
-          const detail = {
-            task: "CONTENT_BRIEF_GENERATION",
-            item: issue.item,
-            issue: issue.issue,
-            expected: entries.length,
-            received: rawBatch.length,
-            retried: true,
-          };
-          emitJobEvent("capability.failed", {
-            jobId: input.jobId,
-            attempt,
-            task: "CONTENT_BRIEF_GENERATION",
-            tier: ROUTER_MAP.CONTENT_BRIEF_GENERATION,
-            model: effectiveModel("CONTENT_BRIEF_GENERATION"),
-            errorCode: "GEN-SCHEMA",
-            cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
-            item: issue.item,
-            issue: issue.issue,
-            expected: entries.length,
-            received: rawBatch.length,
-            retry: 1,
-          });
+        validateBatch,
+      );
+      try {
+        validatedBatch = (await generateValidatedBatch()).items;
+      } catch (firstError) {
+        if (!isBriefBatchSchemaError(firstError)) throw firstError;
+        try {
+          validatedBatch = (await generateValidatedBatch()).items;
+        } catch (secondError) {
+          if (!isBriefBatchSchemaError(secondError)) throw secondError;
+          const detail = secondError instanceof GenerationError && secondError.detail && typeof secondError.detail === "object"
+            ? secondError.detail as Record<string, unknown>
+            : {};
           throw new GenerationError(
             "GEN-SCHEMA",
-            "Lote de briefings inválido",
+            "Lote de briefings invalido",
             true,
-            detail,
+            { ...detail, retried: true },
           );
         }
       }
+      rawBatch = validatedBatch;
     } else {
       rawBatch = entries.map((entry) => {
         const position = entry.position;
@@ -921,7 +893,7 @@ export async function runFirstGeneration(
         };
       });
     }
-    const assigned = assignServerBriefIds(rawBatch, input.jobId, 0);
+    const assigned = validatedBatch ?? assignServerBriefIds(rawBatch, input.jobId, 0);
     return assigned.map((brief, index) => {
       const position = entries[index].position;
       return {
@@ -965,6 +937,7 @@ export async function runFirstGeneration(
   const maxRepairs = Number(process.env.GENERATION_MAX_REPAIRS ?? 2);
   let repairCount = 0;
   let repairRounds = 0;
+  const repairCauses: Array<{ briefId: string; causes: string[] }> = [];
   for (let round = 0; round < maxRepairs; round++) {
     const rejected = candidates
       .map((c, i) => ({ c, i, report: reports[i] }))
@@ -986,6 +959,12 @@ export async function runFirstGeneration(
     // (respeita o máximo de 8 itens por chamada), mantendo posição — da qual derivam
     // contentId/briefVersionId estáveis.
     const repairedSet = new Set(rejected.map((r) => r.i));
+    rejected.forEach(({ c, report }) => {
+      repairCauses.push({
+        briefId: `${c.brief.contentId}:${c.brief.briefVersionId}`,
+        causes: (report?.issues ?? []).slice(0, 8).map((cause) => cause.slice(0, 200)),
+      });
+    });
     let received = 0;
     for (let start = 0; start < rejected.length; start += size) {
       const slice = rejected
@@ -1057,6 +1036,7 @@ export async function runFirstGeneration(
     stage: "FINALIZING",
     capabilities,
     repairs: repairCount,
+    repairCauses,
     validated: candidates.length,
   };
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { GenerationError } from "./errors";
+import { ContractError } from "./contract";
 import { emitJobEvent, sanitizeGateReports } from "./observability";
 import { prisma } from "../db";
 import { extractJobCreatorContext } from "../creator-preferences/service";
@@ -24,6 +25,31 @@ export function fenceMatches(
   attempt: number,
 ) {
   return job.leaseOwnerId === ownerId && job.attempt === attempt;
+}
+
+export function internalFailureMetadata(code: string, stage: string | null, detail: unknown): Record<string, unknown> {
+  const source = detail && typeof detail === "object" && !Array.isArray(detail)
+    ? detail as Record<string, unknown>
+    : {};
+  const safeDetail: Record<string, string | number | boolean> = {};
+  for (const key of ["task", "rounds", "expected", "received", "retried", "item", "issue", "field", "errorName"]) {
+    const value = source[key];
+    if (typeof value === "string") safeDetail[key] = value.slice(0, 200);
+    else if (typeof value === "number" || typeof value === "boolean") safeDetail[key] = value;
+  }
+  if (typeof source.message === "string" && safeDetail.issue === undefined) safeDetail.issue = source.message.slice(0, 200);
+  const rejected = Array.isArray(source.rejected)
+    ? sanitizeGateReports(source.rejected.filter((value): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value))))
+    : [];
+  return {
+    code,
+    stage,
+    ...(Object.keys(safeDetail).length ? { detail: safeDetail } : {}),
+    ...(rejected.length ? {
+      gateReports: rejected,
+      causes: rejected.map(({ briefId, causes }) => ({ briefId, causes })),
+    } : {}),
+  };
 }
 
 // Decisão pura do heartbeat por tick: nunca renovar além do deadline da tentativa.
@@ -252,6 +278,7 @@ function runMetadata(
   capabilities: unknown[],
   repairs: number,
   validated: number,
+  repairCauses: Array<{ briefId: string; causes: string[] }>,
 ): Record<string, unknown> {
   try {
     const d = describe();
@@ -262,10 +289,11 @@ function runMetadata(
       instructionVersion: d.instructionVersion,
       capabilities,
       repairs,
+      repairCauses,
       validated,
     };
   } catch {
-    return { attempt, capabilities, repairs, validated };
+    return { attempt, capabilities, repairs, repairCauses, validated };
   }
 }
 
@@ -287,6 +315,7 @@ export async function processGeneration(jobId: string, ownerId: string) {
     return false;
   }
   const attempt = job.attempt;
+  let currentStage: string | null = job.stage;
   const deadlineAt =
     job.attemptDeadlineAt ??
     new Date(Date.now() + attemptDeadlineMsFor(job.targetContentCount));
@@ -408,6 +437,7 @@ export async function processGeneration(jobId: string, ownerId: string) {
           },
           data: { stage: stage as never },
         });
+        currentStage = stage;
       },
       facts: {
         productId: product.id,
@@ -445,6 +475,7 @@ export async function processGeneration(jobId: string, ownerId: string) {
       output.capabilities,
       output.repairs,
       output.validated,
+      output.repairCauses,
     );
     emitJobEvent("job.finalizing", {
       jobId: job.id,
@@ -630,18 +661,21 @@ export async function processGeneration(jobId: string, ownerId: string) {
     const detail =
       error instanceof GenerationError
         ? error.detail
-        : error instanceof Error
-          ? { name: error.name, message: error.message }
+        : error instanceof ContractError
+          ? { errorName: error.name, message: error.message, field: error.field }
+          : error instanceof Error
+            ? { errorName: error.name, message: error.message }
           : String(error);
+    const internalError = internalFailureMetadata(code, currentStage, detail);
     console.info("[generation-worker] job failed", {
       tenantId: job.tenantId,
       userId: job.userId,
       jobId: job.id,
       code,
       databaseCode,
-      detail,
+      detail: internalError,
     });
-    await failJobAndReleaseReservation(job.id, code, ownerId, attempt, detail);
+    await failJobAndReleaseReservation(job.id, code, ownerId, attempt, internalError);
     const rejected =
       detail &&
       typeof detail === "object" &&
@@ -654,6 +688,7 @@ export async function processGeneration(jobId: string, ownerId: string) {
     emitJobEvent("job.terminal", {
       jobId: job.id,
       attempt,
+      stage: currentStage ?? undefined,
       errorCode: code,
       reservationAction: "RELEASED",
       gateReports: rejected,

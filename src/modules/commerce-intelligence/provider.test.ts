@@ -117,15 +117,20 @@ test("brief provider instruction makes development strategic, evidence-grounded,
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("variação curta de até 12 palavras"));
   assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("productReference.category"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use categoria no hook somente se explícita em relevantFacts"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Development é uma lista de 1 a 4 strings"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("orientação estratégica e acionável"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não uma lista de features"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("relevantFacts como única fonte de fatos técnicos em development e script"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("angle e oportunidade orientam o recorte, mas não são fonte de fatos"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Development contém 1 a 4 bullets"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("cada bullet precisa combinar ação de comunicação, razão significativa ligada ao fato e o fato específico de relevantFacts"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("'para contextualizar', 'para explicar esse detalhe' e outras frases sem ligação concreta não contam"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Não faça lista de features nem instrução de câmera/gravação"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use relevantFacts como única fonte de fatos técnicos em development e script"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("angle e mecanismo da oportunidade orientam o recorte, mas não são fonte de fatos"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("todo fato técnico no script deve estar em relevantFacts e representado em development"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não retorne scenes nem qualquer campo de cena"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("selectedPatterns[index].cta.text somente para formular cta"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("mantenha cta separado de hook, development e script"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use selectedPatterns[index].cta.text literalmente como cta"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Mantenha cta separado de hook, development e script"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Bom:"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Ruim:"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("causes[index]"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("repairContrast[index]"));
 });
 
 test("non-2xx captures allowlisted rate headers in detail without body leakage", async () => {

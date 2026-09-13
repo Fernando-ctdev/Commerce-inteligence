@@ -143,6 +143,20 @@ const ATTRIBUTE_LEXICON: string[][] = [
   ["garantia vitalicia", "garantia para toda vida", "garantia por toda vida"],
   ["protecao", "proteg"],
 ];
+// Conceitos distintos e polaridade local evitam que "respirável" prove "não esquenta"
+// e que um fato afirmativo sobre capacidade prove sua negação.
+const OBSERVED_THERMAL_CONCEPTS = [
+  { id: "ventilação", phrase: /\b(respiravel|ventila(r|cao)?|circulacao de ar)\b/ },
+  { id: "passagem de calor", phrase: /\bpass(a|ar) calor\b/ },
+  { id: "aquecimento", phrase: /\b(esquent(a|ar)|aquec(e|er))\b/ },
+  { id: "frescor", phrase: /\b(mantem (o corpo )?fresco|fresco)\b/ },
+  { id: "abafamento", phrase: /\babaf(a|ar)\b/ },
+];
+const POCKET_CAPACITY = /\b(cabe|cabem|acomoda|comporta|guarda|armazena)\s+(?:(qualquer|todo|toda|todos|todas)\s+)?(?:(um|uma|o|a)\s+)?(celular|telefone|smartphone|chaves)\b/g;
+const DEVELOPMENT_COMMUNICATION_ACTION = /^\s*(?:mostr|coment|compar|prov|demonstr|destaqu|destac|fal|expli|abrac|apresent|test|vest|peg|segur|abri|reforc)\w*/;
+const DEVELOPMENT_RATIONALE = /\b(para|porque|pois|assim)\b/;
+const DEVELOPMENT_EXPERIENCE_RATIONALE = /\bque voce (sente|percebe|nota) com\b/;
+const DEVELOPMENT_SHOT_LIST = /\b(close|plano|enquadramento|camera|filme|grave|trip[eé]|iluminacao|take|tomada)\b/;
 const UNSUPPORTED_ABSOLUTE_CLAIMS = /\b(sempre|nunca|jamais|qualquer|perfeit[oa]s?|sem falha|sem defeito)\b/i;
 const SOLO_PRODUCTION_ANTIPATTERNS = /\b(360\s*graus|órbita|orbita|orbit|travelling|motion\s*graphics|animação|animacao|vfx|efeitos especiais|chroma\s*key|croma|green\s*screen|drone|operador de câmera|operador de camera|segunda câmera|segunda camera|montagem (rápida|complexa)|montagem (rapida|complexa)|múltiplas locações|multiplas locacoes|múltiplos setups|multiplos setups|estúdio montado|câmera gira|camera gira|câmera começa a orbitar|camera comeca a orbitar)\b/i;
 const DRONE_PRODUCTION = /\bdrone\b/i;
@@ -159,6 +173,22 @@ function detectAttributes(text: string): number[] {
     if (group.some((stem) => folded.includes(stem))) hits.push(index);
   });
   return hits;
+}
+function polarityAt(text: string, index: number): boolean {
+  return !/\b(nao|nunca|jamais|sem)\b(?:\s+\w+){0,2}\s*$/.test(text.slice(Math.max(0, index - 32), index));
+}
+function observedMatches(text: string, pattern: RegExp): Array<{ polarity: boolean; index: number }> {
+  return [...text.matchAll(new RegExp(pattern.source, "g"))].map((match) => ({
+    polarity: polarityAt(text, match.index ?? 0),
+    index: match.index ?? 0,
+  }));
+}
+function capacityMatches(text: string): Array<{ item: string; polarity: boolean; universal: boolean }> {
+  return [...text.matchAll(new RegExp(POCKET_CAPACITY.source, "g"))].map((match) => ({
+    item: ["celular", "telefone", "smartphone"].includes(match[4]) ? "telefone" : match[4],
+    polarity: polarityAt(text, match.index ?? 0),
+    universal: Boolean(match[2]),
+  }));
 }
 function classifyFactual(
   brief: ContentBriefVersion,
@@ -216,6 +246,55 @@ function classifyFactual(
     .filter(({ fact, index }) => fact.length > 0 && evidence.refs[index] !== "product:name");
   const refFor = (factIndex: number): string =>
     evidence.refs[factIndex] ?? `fact:${factIndex + 1}`;
+  const foldedText = attrStems(text);
+  const foldedFacts = evidence.facts
+    .map((fact, index) => ({ fact: attrStems(normalizeForVariety(fact)), index }))
+    .filter(({ index }) => evidence.refs[index] !== "product:name");
+  const claimFields = [
+    brief.hook,
+    brief.script,
+    ...(brief.development ?? []),
+    brief.benefit ?? "",
+    brief.pain ?? "",
+    brief.desire ?? "",
+    brief.cta,
+  ].map((field) => attrStems(normalizeForVariety(field)));
+  const observedGroundingRefs: string[] = [];
+  const observedIssues: string[] = [];
+  let observedContradiction = false;
+  for (const concept of OBSERVED_THERMAL_CONCEPTS) {
+    const claims = claimFields.flatMap((field) => observedMatches(field, concept.phrase));
+    if (!claims.length) continue;
+    const facts = foldedFacts.flatMap(({ fact, index }) =>
+      observedMatches(fact, concept.phrase).map((match) => ({ ...match, index })),
+    );
+    for (const claim of claims) {
+      const samePolarity = facts.filter((fact) => fact.polarity === claim.polarity);
+      if (samePolarity.length) observedGroundingRefs.push(...samePolarity.map(({ index }) => refFor(index)));
+      else if (facts.length) {
+        observedContradiction = true;
+        observedIssues.push(`claim térmica de ${concept.id} contradiz a evidência`);
+      } else observedIssues.push(`claim térmica de ${concept.id} sem evidência autorizada`);
+    }
+  }
+  const capacityClaims = claimFields.flatMap((field) => capacityMatches(field));
+  for (const claim of capacityClaims) {
+    const facts = foldedFacts.flatMap(({ fact, index }) =>
+      capacityMatches(fact)
+        .filter((candidate) => candidate.item === claim.item && (!claim.universal || candidate.universal))
+        .map((candidate) => ({ ...candidate, index })),
+    );
+    const samePolarity = facts.filter((fact) => fact.polarity === claim.polarity);
+    if (samePolarity.length) observedGroundingRefs.push(...samePolarity.map(({ index }) => refFor(index)));
+    else if (facts.length) {
+      observedContradiction = true;
+      observedIssues.push(`claim de capacidade do bolso contradiz a evidência`);
+    } else observedIssues.push("claim de capacidade do bolso sem evidência autorizada");
+  }
+  if (observedContradiction)
+    return { status: "CONTRADICTED", claimType: "objetivo", causes: observedIssues, evidenceRefs: [] };
+  if (observedIssues.length)
+    return { status: "UNSUPPORTED", claimType: "objetivo", causes: observedIssues, evidenceRefs: [] };
   const claimTokens = techTokens(text);
   if (claimTokens.length > 0) {
     const causes: string[] = [];
@@ -349,11 +428,41 @@ function classifyFactual(
       ],
     };
   return {
-    status: "INFERRED_BUT_SAFE",
-    claimType: "subjetivo",
+    status: observedGroundingRefs.length ? "SUPPORTED" : "INFERRED_BUT_SAFE",
+    claimType: observedGroundingRefs.length ? "objetivo" : "subjetivo",
     causes: [],
-    evidenceRefs: [],
+    evidenceRefs: [...new Set(observedGroundingRefs)],
   };
+}
+
+function validDevelopmentPoint(point: string, evidence: EvidenceSnapshot): boolean {
+  const normalized = attrStems(normalizeForVariety(point));
+  const action = DEVELOPMENT_COMMUNICATION_ACTION.exec(normalized);
+  if (DEVELOPMENT_SHOT_LIST.test(normalized) || !action) return false;
+  const rationaleAt = normalized.search(DEVELOPMENT_RATIONALE);
+  const experienceRationale = DEVELOPMENT_EXPERIENCE_RATIONALE.exec(normalized);
+  if (rationaleAt < 0 && !experienceRationale) return false;
+  const stopWords = new Set(["a", "o", "as", "os", "de", "do", "da", "dos", "das", "e", "com", "para", "por", "em", "no", "na", "nos", "nas", "que", "um", "uma", "como", "seu", "sua", "contextualizar", "explicar", "explica", "detalhe", "escolha", "reforcar", "mostrar", "associar", "relacionar"]);
+  const terms = (value: string) => new Set(value.split(/\W+/).filter((term) => term.length > 1 && !stopWords.has(term)));
+  const pointTerms = terms(normalized);
+  const rationaleTerms = rationaleAt >= 0
+    ? terms(normalized.slice(rationaleAt).replace(DEVELOPMENT_RATIONALE, ""))
+    : terms(normalized.slice(experienceRationale!.index));
+  const experienceContext = experienceRationale
+    ? terms(normalized.slice(action[0].length, experienceRationale.index)).size > 0
+    : false;
+  if (rationaleAt >= 0 && rationaleTerms.size < 2) return false;
+  if (rationaleAt < 0 && !experienceContext) return false;
+  return evidence.facts.some((fact, index) => {
+    if (evidence.refs[index] === "product:name") return false;
+    const factTerms = terms(attrStems(normalizeForVariety(fact)));
+    let groundedTerms = 0;
+    for (const term of factTerms) if (pointTerms.has(term)) groundedTerms++;
+    const rationaleFactTerms = [...rationaleTerms].filter((term) => factTerms.has(term)).length;
+    const rationaleContextTerms = [...rationaleTerms].filter((term) => !factTerms.has(term)).length;
+    return groundedTerms >= 2 && rationaleFactTerms >= 2 &&
+      (rationaleAt < 0 || rationaleContextTerms >= 1);
+  });
 }
 
 type GatePattern = { id?: string; guidance?: string; type?: string; text?: string };
@@ -429,16 +538,18 @@ export function validateBriefSet(
             ]),
       );
     const developmentUnverified = brief.development.some((point) => {
-      const normalizedPoint = normalizeForVariety(point).replace(/[.,;:!?]+$/g, "");
-      const hasEvidence = evidence.facts.some((fact, factIndex) => {
-        if (evidence.refs[factIndex] === "product:name") return false;
-        const normalizedFact = normalizeForVariety(fact).replace(/[.,;:!?]+$/g, "");
-        if (!normalizedFact) return false;
-        return normalizedPoint.includes(normalizedFact) || ["produto com ", "o produto com ", "produto tem ", "o produto tem ", "produto possui ", "o produto possui "].some((prefix) => normalizedPoint === `${prefix}${normalizedFact}`);
-      });
-      return !hasEvidence && (techTokens(point).length > 0 || detectAttributes(point).length > 0);
+      const tokens = techTokens(point);
+      const unsupportedToken = tokens.some(({ unit, value }) => !evidence.facts.some((fact, factIndex) =>
+        evidence.refs[factIndex] !== "product:name" && techTokens(fact).some((authorized) => authorized.unit === unit && authorized.value === value),
+      ));
+      const unsupportedAttribute = detectAttributes(point).some((group) => !evidence.facts.some((fact, factIndex) =>
+        evidence.refs[factIndex] !== "product:name" && ATTRIBUTE_LEXICON[group].some((stem) => attrStems(fact.toLowerCase()).includes(stem)),
+      ));
+      return unsupportedToken || unsupportedAttribute;
     });
     if (developmentUnverified) issues.push("development contém claim sem evidência verificável");
+    if (brief.development.some((point) => !validDevelopmentPoint(point, evidence)))
+      issues.push("development deve orientar comunicação com ação e razão/fato, sem lista de features ou planos de gravação");
     const developmentText = normalizeForVariety(brief.development.join(" "));
     const developmentTokens = techTokens(developmentText);
     const developmentAttributes = detectAttributes(developmentText);

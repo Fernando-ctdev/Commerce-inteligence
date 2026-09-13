@@ -67,11 +67,11 @@ test("pipeline entrega a projeção exata por capability, sem creatorContext no 
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
       if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
       if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
-      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Produto na prática", cta: "c" }] };
+      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso"], script: "O tecido duna leve e macio", cta: "c" }] };
       return {};
     },
   };
-  await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", creatorContext: creatorFull, targetContentCount: 1, router });
+  await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido duna leve e macio", creatorContext: creatorFull, targetContentCount: 1, router });
   assert.equal("creatorContext" in (contexts.get("PRODUCT_UNDERSTANDING") ?? {}), false);
   for (const [task, expectedCreator] of Object.entries(expected)) {
     const context = contexts.get(task);

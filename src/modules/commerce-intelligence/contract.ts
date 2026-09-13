@@ -1,7 +1,7 @@
 export type FactStatus = "SUPPORTED" | "INFERRED_BUT_SAFE" | "UNSUPPORTED" | "CONTRADICTED";
 export type GateDecision = "PASS" | "REPAIR" | "REJECT";
-export class ContractError extends Error { constructor(public readonly code: "GEN-COUNT-REQUIRED" | "GEN-COUNT-RANGE" | "GEN-SCHEMA" | "GEN-FACT" | "GEN-VARIETY" | "GEN-REPAIR-EXHAUSTED", message: string) { super(message); this.name = "ContractError"; } }
-const text = (v: unknown, field: string, max = 2_000): string => { if (typeof v !== "string" || !v.trim() || v.length > max) throw new ContractError("GEN-SCHEMA", `${field} inválido`); return v.trim(); };
+export class ContractError extends Error { constructor(public readonly code: "GEN-COUNT-REQUIRED" | "GEN-COUNT-RANGE" | "GEN-SCHEMA" | "GEN-FACT" | "GEN-VARIETY" | "GEN-REPAIR-EXHAUSTED", message: string, public readonly field?: string) { super(message); this.name = "ContractError"; } }
+const text = (v: unknown, field: string, max = 2_000): string => { if (typeof v !== "string" || !v.trim() || v.length > max) throw new ContractError("GEN-SCHEMA", `${field} inválido`, field); return v.trim(); };
 // Política centralizada de cardinalidade por campo: máximo rígido incondicional; mínimo
 // estrutural e mínimo condicional à evidência (minWithEvidence aplica quando existe
 // evidência autorizada). Violação é falha tipada GEN-SCHEMA — nunca truncamento,
@@ -53,7 +53,7 @@ const strings = (v: unknown, field: string, evidence?: EvidenceSnapshot): string
   const rule = cardinalityRule(field);
   const min = hasEvidence(evidence) ? rule.minWithEvidence : rule.min;
   if (!Array.isArray(v) || v.length < min || v.length > rule.max || v.some((x) => typeof x !== "string" || !x.trim() || x.length > 500))
-    throw new ContractError("GEN-SCHEMA", `cardinalidade de ${field} fora da política (min ${min}, max ${rule.max})`);
+    throw new ContractError("GEN-SCHEMA", `cardinalidade de ${field} fora da política (min ${min}, max ${rule.max})`, field);
   return v.map((x) => (x as string).trim());
 };
 const id = (v: unknown, field: string): string => { const value = text(v, field, 100); if (!/^[a-zA-Z0-9_-]+$/.test(value)) throw new ContractError("GEN-SCHEMA", `${field} inválido`); return value; };

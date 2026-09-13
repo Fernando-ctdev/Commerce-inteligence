@@ -5,7 +5,29 @@ import { CARDINALITY_POLICY_VERSION } from "./contract";
 import { collectJobEvents, resetJobEvents } from "./observability";
 import type { ProviderCallMetrics } from "./model-router";
 const describe = () => ({ provider: "test", model: "test-model", instructionVersion: "slice-003" });
-test("fails closed when provider understanding violates contract", async () => { const router = { describe, complete: async () => ({ tenantId: "forbidden" }) }; await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }), /Resposta inválida/); });
+test("fails closed when provider understanding violates contract", async () => { const router = { describe, complete: async () => ({ tenantId: "forbidden" }) }; await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }), /Resposta inválida/); });
+test("Product Understanding cardinality fails before capability.completed with ContractError details", async () => {
+  resetJobEvents();
+  const router = { describe, complete: async () => ({
+    productId: "p", coreUseCases: ["use"], capabilities: ["cap"], functionalBenefits: ["benefit"], emotionalBenefits: ["emotion"], desiredOutcomes: ["outcome"], purchaseTriggers: ["trigger"], purchaseBarriers: Array.from({ length: 9 }, (_, index) => `barrier-${index}`), evidenceRefs: ["product:name"],
+  }) };
+  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j-contract", name: "Product", description: "Description", targetContentCount: 1, router }), (error: unknown) => {
+    const failure = error as { code?: string; name?: string; message?: string; field?: string };
+    assert.equal(failure.code, "GEN-SCHEMA");
+    assert.equal(failure.name, "ContractError");
+    assert.match(failure.message ?? "", /purchaseBarriers/);
+    assert.equal(failure.field, "purchaseBarriers");
+    return true;
+  });
+  const events = collectJobEvents().map((line) => JSON.parse(line) as Record<string, unknown>);
+  const completed = events.filter((event) => event.event === "capability.completed" && event.task === "PRODUCT_UNDERSTANDING");
+  const failed = events.find((event) => event.event === "capability.failed" && event.task === "PRODUCT_UNDERSTANDING");
+  assert.equal(completed.length, 0);
+  assert.equal(failed?.errorCode, "GEN-SCHEMA");
+  assert.equal(failed?.errorName, "ContractError");
+  assert.equal(failed?.field, "purchaseBarriers");
+  assert.match(String(failed?.issue), /purchaseBarriers/);
+});
 test("includes non-empty string arrays as stable fact evidence with 1:1 facts-to-refs", () => {
   const catalog = buildEvidenceCatalog({ facts: { features: ["Leve", "Compacto"], empty: [], mixed: ["Veloz", 3] } });
   assert.deepEqual(catalog.refs, ["fact:features", "fact:features:2"]);
@@ -19,10 +41,10 @@ test("repairs mapping envelope without opportunities via a second contract-true 
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") { mappingCalls++; if (mappingCalls === 1) return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], analysis: "prosa sem opportunities" }; return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] }; }
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
     return {};
   } };
-  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
   assert.equal(mappingCalls, 2, "mapping retried once when envelope lacked opportunities");
   assert.equal((result.strategy as { opportunities: unknown[] }).opportunities.length, 1);
 });
@@ -33,10 +55,10 @@ test("repairs content plan array root via one contract-true retry, then fail-clo
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") { planCalls++; if (planCalls === 1) return [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }]; return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] }; }
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
     return {};
   } };
-  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
   assert.equal(planCalls, 2, "plan retried once when root was an array");
   assert.equal(result.briefs.length, 1);
 });
@@ -47,10 +69,10 @@ test("plan retry exhausted yields typed GEN-SCHEMA without fabricating opportuni
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") { planCalls++; return [1, 2]; }
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
     return {};
   } };
-  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string }; return e?.code === "GEN-SCHEMA"; });
+  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string }; return e?.code === "GEN-SCHEMA"; });
   assert.equal(planCalls, 2, "exactly one retry before failing closed");
 });
 test("repairs brief batch cardinality divergence via one retry preserving exact-N", async () => {
@@ -60,10 +82,10 @@ test("repairs brief batch cardinality divergence via one retry preserving exact-
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; if (briefCalls === 1) return { items: [] }; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; if (briefCalls === 1) return { items: [] }; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] }; }
     return {};
   } };
-  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
   assert.equal(briefCalls, 2, "batch retried once on cardinality divergence");
   assert.equal(result.briefs.length, 1, "exact-N preserved after repair");
 });
@@ -74,10 +96,10 @@ test("brief batch retry exhausted yields typed GEN-SCHEMA without publishing", a
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }, { angle: "a2", hook: "h2", development: ["Produto real em uso"], script: "Mostre o Produto de novo", cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }, { angle: "a2", hook: "h2", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto de novo", cta: "c" }] }; }
     return {};
   } };
-  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string }; return e?.code === "GEN-SCHEMA"; });
+  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string }; return e?.code === "GEN-SCHEMA"; });
   assert.equal(briefCalls, 2, "exactly one retry before failing closed");
 });
 test("provider scene data is not persisted in the brief", async () => {
@@ -87,10 +109,10 @@ test("provider scene data is not persisted in the brief", async () => {
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", scenes: ["legado"], cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", scenes: ["legado"], cta: "c" }] }; }
     return {};
   } };
-  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
   assert.equal(briefCalls, 1, "unknown provider fields do not affect the brief contract");
   assert.equal(result.briefs.length, 1, "exact-N preserved");
   assert.equal("scenes" in result.briefs[0], false);
@@ -105,7 +127,7 @@ test("development remains required in the brief contract", async () => {
     if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", script: "Mostre o Produto", cta: "c" }] }; }
     return {};
   } };
-  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string; detail?: Record<string, unknown> }; return e?.code === "GEN-SCHEMA" && e?.detail?.task === "CONTENT_BRIEF_GENERATION" && e?.detail?.retried === true; });
+  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string; detail?: Record<string, unknown> }; return e?.code === "GEN-SCHEMA" && e?.detail?.task === "CONTENT_BRIEF_GENERATION" && e?.detail?.retried === true; });
   assert.equal(briefCalls, 2, "missing development retries once");
 });
 test("GEN-REPAIR-EXHAUSTED carries sanitized gate summary without brief payload", async () => {
@@ -117,7 +139,7 @@ test("GEN-REPAIR-EXHAUSTED carries sanitized gate summary without brief payload"
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["SEGREDO_DO_BRIEFING em uso"], script: "SEGREDO_DO_BRIEFING suporta 7 kg comprovados", cta: "c" }] };
     return {};
   } };
-  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }), (error: unknown) => {
+  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }), (error: unknown) => {
     const e = error as { code?: string; detail?: Record<string, unknown> };
     assert.equal(e.code, "GEN-REPAIR-EXHAUSTED");
     assert.equal(e.detail?.task, "CONTENT_BRIEF_GENERATION");
@@ -138,9 +160,9 @@ test("capabilities carry provider metrics allowlist for IntelligenceRun metadata
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] };
+    return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
   } };
-  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
   const strategyCap = result.capabilities.find((cap) => cap.task === "STRATEGY_SYNTHESIS");
   assert.equal(strategyCap?.model, "high-model", "modelo efetivo por capability");
   assert.equal(strategyCap?.reasoning, "low");
@@ -150,7 +172,7 @@ test("capabilities carry provider metrics allowlist for IntelligenceRun metadata
   assert.equal(strategyCap?.externalBytes, 2);
   assert.ok(typeof strategyCap?.durationMs === "number");
 });
-test("requires a provider outside explicit test fallback", async () => { await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1 }), /Provider não configurado/); });
+test("requires a provider outside explicit test fallback", async () => { await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1 }), /Provider não configurado/); });
 test("repair of many rejected briefs is chunked by batch size preserving positions and ids", async () => {
   let briefCalls = 0;
   const router = { describe, complete: async (task: string, input?: unknown) => {
@@ -163,13 +185,13 @@ test("repair of many rejected briefs is chunked by batch size preserving positio
       const batch = input as { trustedContext?: { opportunities?: unknown[] } } | undefined;
       const n = batch?.trustedContext?.opportunities?.length ?? 1;
       // Rodada inicial: claim numérico sem evidência → todos os itens exigem repair factual.
-      if (briefCalls <= 3) return { items: Array.from({ length: n }, () => ({ angle: "a", hook: "h", development: ["Produto"], script: "Suporta 999 kg", cta: "c" })) };
+      if (briefCalls <= 3) return { items: Array.from({ length: n }, () => ({ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c" })) };
       // Repair: itens distintos (ângulo/hook/script/cta) → todos passam os gates.
-      return { items: Array.from({ length: n }, (_, i) => ({ angle: `ang ${briefCalls}-${i}`, hook: `hook ${briefCalls}-${i}`, development: ["Produto"], script: `script distinto ${briefCalls}-${i}`, cta: `cta ${briefCalls}-${i}` })) };
+      return { items: Array.from({ length: n }, (_, i) => ({ angle: `ang ${briefCalls}-${i}`, hook: `hook ${briefCalls}-${i}`, development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: `script distinto ${briefCalls}-${i}`, cta: `cta ${briefCalls}-${i}` })) };
     }
     return {};
   } };
-  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 10, router });
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 10, router });
   assert.equal(briefCalls, 6, "3 batches iniciais (4/4/2) + 10 rejeitados em chunks de 4/4/2, nenhum batch acima de 8");
   assert.equal(result.briefs.length, 10, "exact-N preservado");
   assert.deepEqual(result.briefs.map((b) => b.contentId), Array.from({ length: 10 }, (_, i) => `j-content-${i + 1}`), "posição/IDs estáveis após repair em chunks");
@@ -182,17 +204,17 @@ test("capability events carry cardinality policy version on success", async () =
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Produto real em uso"], script: "Mostre o Produto", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
     return {};
   } };
-  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router });
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
   assert.ok(result.capabilities.length >= 5);
   assert.ok(result.capabilities.every((cap) => cap.cardinalityPolicyVersion === CARDINALITY_POLICY_VERSION), "todo CapabilityEvent persistido carrega a versão da política");
 });
 test("failed capability record and event carry cardinality policy version", async () => {
   resetJobEvents();
   const router = { describe, complete: async () => { throw new Error("boom"); } };
-  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Descrição", targetContentCount: 1, router }));
+  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }));
   const failed = collectJobEvents().map((line) => JSON.parse(line) as Record<string, unknown>).find((event) => event.event === "capability.failed");
   assert.equal(failed?.cardinalityPolicyVersion, CARDINALITY_POLICY_VERSION, "falha de capability registra a versão da política");
 });

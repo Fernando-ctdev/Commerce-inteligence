@@ -69,7 +69,15 @@ test("collectJobEvents returns allowlisted buffered events and reset clears", ()
 test("gate reports are sanitized to status fields and issues without payload leakage", () => {
   const reports = sanitizeGateReports([{ briefId: "j-content-1:j-brief-1", factualStatus: "UNSUPPORTED", structuralStatus: "PASS", platformStatus: "PASS", varietyStatus: "PASS", decision: "REPAIR", issues: ["claim sem suporte em evidência"], script: "TOKEN_SEGREDO_script_nao_pode_aparecer", prompt: "x" }]);
   assert.equal(JSON.stringify(reports).includes("TOKEN_SEGREDO"), false);
-  assert.deepEqual(Object.keys(reports[0]).sort().join(","), "briefId,claimType,decision,evidenceRefs,factualStatus,issues,platformStatus,structuralStatus,varietyStatus");
+  assert.deepEqual(Object.keys(reports[0]).sort().join(","), "briefId,causes,claimType,decision,evidenceRefs,factualStatus,issues,platformStatus,structuralStatus,varietyStatus");
+  assert.deepEqual(reports[0].causes, ["claim sem suporte em evidência"]);
+});
+
+test("gate report causes remain tied to the server-derived brief id", () => {
+  const [report] = sanitizeGateReports([{ briefId: "job-content-2:job-brief-2", issues: ["development inválido", "claim sem suporte"], script: "payload must not be persisted" }]);
+  assert.equal(report.briefId, "job-content-2:job-brief-2");
+  assert.deepEqual(report.causes, ["development inválido", "claim sem suporte"]);
+  assert.ok(!JSON.stringify(report).includes("payload"));
 });
 
 test("repair.completed and job.terminal carry allowlisted gateReports", () => {
