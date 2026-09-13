@@ -163,9 +163,9 @@ test("repair of many rejected briefs is chunked by batch size preserving positio
       const batch = input as { trustedContext?: { opportunities?: unknown[] } } | undefined;
       const n = batch?.trustedContext?.opportunities?.length ?? 1;
       // Rodada inicial: itens idênticos (duplicata estrutural) → 9 de 10 rejeitados.
-      if (briefCalls <= 3) return { items: Array.from({ length: n }, () => ({ angle: "a", hook: "h", development: ["Produto real em uso"], script: "igual entre todos", cta: "c" })) };
+      if (briefCalls <= 3) return { items: Array.from({ length: n }, () => ({ angle: "a", hook: "h", development: ["Produto"], script: "igual entre todos", cta: "c" })) };
       // Repair: itens distintos (ângulo/hook/script/cta) → todos passam os gates.
-      return { items: Array.from({ length: n }, (_, i) => ({ angle: `ang ${briefCalls}-${i}`, hook: `hook ${briefCalls}-${i}`, development: [`Ponto distinto ${briefCalls}-${i}`], script: `script distinto ${briefCalls}-${i}`, cta: `cta ${briefCalls}-${i}` })) };
+      return { items: Array.from({ length: n }, (_, i) => ({ angle: `ang ${briefCalls}-${i}`, hook: `hook ${briefCalls}-${i}`, development: ["Produto"], script: `script distinto ${briefCalls}-${i}`, cta: `cta ${briefCalls}-${i}` })) };
     }
     return {};
   } };

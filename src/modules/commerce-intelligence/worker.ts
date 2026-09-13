@@ -12,7 +12,7 @@ import { heartbeat } from "./runtime";
 
 export function briefPayloadForPersistence(brief: ContentBriefVersion): Prisma.InputJsonObject {
   const { scenes: _legacyScenes, ...payload } = brief as ContentBriefVersion & { scenes?: unknown };
-  if (!Array.isArray(payload.development) || payload.development.length < 1 || payload.development.some((point) => typeof point !== "string" || !point.trim())) {
+  if (!Array.isArray(payload.development) || payload.development.length < 1 || payload.development.length > 4 || payload.development.some((point) => typeof point !== "string" || !point.trim())) {
     throw new GenerationError("GEN-SCHEMA", "Brief sem development válido não pode ser persistido", false);
   }
   return JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonObject;

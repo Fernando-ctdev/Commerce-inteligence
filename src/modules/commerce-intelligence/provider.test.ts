@@ -103,30 +103,32 @@ test("brief provider gets separate selected hook and CTA patterns in a compact c
   }) as typeof fetch;
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
   try {
-    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: { productReference: { name: "Calça", category: "calça" }, selectedPatterns: [{ opportunityId: "o1", hook: { id: "problem", text: "Eu não acredito que isso custa tão pouco" }, cta: { id: "details", text: "Confira os detalhes disponíveis" } }] } });
+    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: { productReference: { name: "Calça" }, selectedPatterns: [{ opportunityId: "o1", hook: { id: "problem", text: "Eu não acredito que isso custa tão pouco" }, cta: { id: "details", text: "Confira os detalhes disponíveis" } }] } });
   } finally { globalThis.fetch = originalFetch; }
   assert.ok(request);
   const messages = request.messages as Array<{ content: string }>;
   assert.ok(messages[1].content.includes("Eu não acredito que isso custa tão pouco"));
   assert.ok(messages[1].content.includes("Confira os detalhes disponíveis"));
-  assert.ok(messages[1].content.includes('"productReference":{"name":"Calça","category":"calça"}'));
+  assert.ok(messages[1].content.includes('"productReference":{"name":"Calça"}'));
 });
 
 test("brief provider instruction requires development, excludes scenes, and keeps CTA separate", () => {
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("selectedPatterns[index].hook.text como hook"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("variação curta de até 12 palavras"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("dêixis demonstrativa genérica"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("pode manter essa forma ou mencionar productReference.name ou productReference.category"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não faça substituição obrigatória"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Evite repetir a mesma forma de referência em excesso"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("podendo usar productReference.name"));
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("productReference.category"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Só use categoria no hook se ela estiver explícita em relevantFacts"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Preserve hooks naturalmente específicos"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Hook é uma frase curta de abertura"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Retorne development como uma lista separada de 1 a 4 bullets"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("roteiro oral natural em primeira pessoa que desenvolve esses bullets"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("development sempre como uma lista de 1 a 4 bullets factuais verificáveis"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("fala oral natural em primeira pessoa, desenvolvendo somente os pontos de development"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Qualquer afirmação factual do roteiro deve estar autorizada por relevantFacts"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não podem conter câmera, cena, CTA, roteiro ou instrução de gravação"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("evite comandos como filme, mostre, fale, clique, carrinho, cupom ou frete"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não retorne scenes nem qualquer campo de cena"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("selectedPatterns[index].cta.text somente para formular cta"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("mantenha-o separado do hook, development e script"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Respeite Meu estilo na linguagem"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Respeite Meu estilo"));
 });
 
 test("non-2xx captures allowlisted rate headers in detail without body leakage", async () => {

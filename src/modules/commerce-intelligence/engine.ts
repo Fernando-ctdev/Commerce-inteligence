@@ -253,10 +253,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
   const generateBatch = async (entries: Array<{ opportunity: ContentOpportunity; causes?: string[]; position: number }>): Promise<BriefCandidate[]> => {
     const batchContext = {
       productId: input.productId,
-      productReference: {
-        name: input.name,
-        category: typeof (understanding?.category ?? facts.category) === "string" ? String(understanding?.category ?? facts.category) : undefined,
-      },
+      productReference: { name: input.name },
       opportunities: entries.map((e) => e.opportunity),
       relevantFacts: evidence.facts.map((value, index) => ({ value, ref: evidence.refs[index] })),
       evidence: { refs: evidence.refs },
@@ -269,7 +266,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
         narrativePatterns: skill.operationalRepertoire.narrativePatterns,
         proofPatterns: skill.operationalRepertoire.proofPatterns,
       },
-      selectedPatterns: entries.map(({ opportunity, position }) => selectBriefPatterns(opportunity, position - 1, skill, typeof (understanding?.category ?? facts.category) === "string" ? String(understanding?.category ?? facts.category) : undefined)),
+      selectedPatterns: entries.map(({ opportunity, position }) => selectBriefPatterns(opportunity, position - 1, skill, typeof facts.category === "string" ? facts.category : undefined)),
       variety: { dimensions: ["angle", "hook", "structure", "cta"] },
       causes: entries.map((e) => e.causes ?? []),
     };
@@ -305,7 +302,7 @@ export async function runFirstGeneration(input: EngineInput): Promise<EngineResu
     candidates.push(...await generateBatch(batch));
   }
   // Repair causal e limitado: somente itens rejeitados recebem nova geração, com causas + oportunidade original.
-  const selectedPatterns = candidates.map(({ opportunity }, index) => selectBriefPatterns(opportunity, index, skill, typeof (understanding?.category ?? facts.category) === "string" ? String(understanding?.category ?? facts.category) : undefined));
+  const selectedPatterns = candidates.map(({ opportunity }, index) => selectBriefPatterns(opportunity, index, skill, typeof facts.category === "string" ? facts.category : undefined));
   const validateCandidates = () => validateBriefSet(candidates.map((c) => c.brief), evidence, "tiktok-commerce", skill.version, selectedPatterns);
   let reports = validateCandidates();
   const maxRepairs = Number(process.env.GENERATION_MAX_REPAIRS ?? 2);

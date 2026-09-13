@@ -139,7 +139,11 @@ const ATTRIBUTE_LEXICON: string[][] = [
   ["couro legítimo", "couro legitimo"],
   ["policarbonato"],
   ["temperado"],
+  ["respiravel", "respirabilidade", "ar circular", "circulacao de ar"],
+  ["garantia vitalicia", "garantia para toda vida", "garantia por toda vida"],
+  ["protecao", "proteg"],
 ];
+const UNSUPPORTED_ABSOLUTE_CLAIMS = /\b(sempre|nunca|jamais|qualquer|perfeit[oa]s?|sem falha|sem defeito)\b/i;
 function attrStems(text: string): string {
   return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
@@ -155,6 +159,15 @@ function classifyFactual(
   brief: ContentBriefVersion,
   evidence: EvidenceSnapshot,
 ): FactAssessment {
+  const scriptHasAbsolute = UNSUPPORTED_ABSOLUTE_CLAIMS.test(brief.script);
+  const absoluteHasEvidenceAndBullet = evidence.facts.some((fact, index) => {
+    if (evidence.refs[index] === "product:name") return false;
+    const normalizedFact = normalizeForVariety(fact);
+    return UNSUPPORTED_ABSOLUTE_CLAIMS.test(normalizedFact) && normalizeForVariety(brief.script).includes(normalizedFact) &&
+      brief.development.some((point) => normalizeForVariety(point).includes(normalizedFact));
+  });
+  if (scriptHasAbsolute && !absoluteHasEvidenceAndBullet)
+    return { status: "UNSUPPORTED", claimType: "objetivo", causes: ["claim absoluto sem evidência autorizada"], evidenceRefs: [] };
   const text = normalizeForVariety(
     [
       brief.hook,
@@ -192,8 +205,8 @@ function classifyFactual(
       factValues.get(token.unit)!.add(token.value);
     }
   const mentions = evidence.facts
-    .map((fact) => normalizeForVariety(fact))
-    .filter((fact) => fact.length > 0);
+    .map((fact, index) => ({ fact: normalizeForVariety(fact), index }))
+    .filter(({ fact, index }) => fact.length > 0 && evidence.refs[index] !== "product:name");
   const refFor = (factIndex: number): string =>
     evidence.refs[factIndex] ?? `fact:${factIndex + 1}`;
   const claimTokens = techTokens(text);
@@ -303,8 +316,12 @@ function classifyFactual(
     };
   }
   const matched = mentions
-    .filter((fact) => text.includes(fact))
-    .map((fact) => fact.slice(0, 40));
+    .filter(({ fact }) => text.includes(fact))
+    .map(({ fact }) => fact.slice(0, 40));
+  const identityRefs = evidence.facts
+    .map((fact, index) => ({ fact: normalizeForVariety(fact), index }))
+    .filter(({ fact, index }) => evidence.refs[index] === "product:name" && fact.length > 0 && text.includes(fact))
+    .map(({ index }) => refFor(index));
   const negatedMatches = matched.filter((fact) => negationAdjacent(fact));
   if (negatedMatches.length > 0)
     return {
@@ -320,12 +337,13 @@ function classifyFactual(
       causes: [],
       evidenceRefs: [
         ...new Set(
-          matched
-            .map((fact) => {
-              const index = mentions.indexOf(fact);
+          [
+            ...identityRefs,
+            ...matched.map((fact) => {
+              const index = mentions.find(({ fact: mention }) => mention.slice(0, 40) === fact)?.index ?? -1;
               return index >= 0 ? refFor(index) : "";
-            })
-            .filter((ref) => ref.length > 0),
+            }).filter((ref) => ref.length > 0),
+          ],
         ),
       ],
     };
@@ -339,6 +357,7 @@ function classifyFactual(
 
 const CTA_AD_ANTIPATTERNS = /\b(última chance|so hoje|só hoje|garantido|resultado garantido|melhor do mercado|imperdível|milagre|corre|não perca|nao perca)\b/i;
 const NATURALNESS_ANTIPATTERNS = /\b(no mundo de hoje|em um mundo cada vez mais|diante desse cenário|solução inovadora|solução revolucionária|ideal para quem busca|venha descobrir)\b/i;
+const DEVELOPMENT_RECORDING_ANTIPATTERNS = /\b(câmera|camera|cena|cta|gravação|gravacao|gravar|tripé|tripe|enquadramento|close|roteiro|filme|filmar|filmagem|mostre|mostrar|mostra|fale|falar|clique|clicar|carrinho|cupom|frete)\b/i;
 
 // Creator solo (nota "da-uma-olhada-nesse-briefing-d"): por padrão, 1 creator + 1 celular/câmera
 // (mão ou tripé) + ambiente cotidiano + cortes simples. Léxico fechado e determinístico dos
@@ -416,6 +435,33 @@ export function validateBriefSet(
                 : "claim contradito",
             ]),
       );
+    const developmentUnverified = brief.development.some((point) => {
+      const normalizedPoint = normalizeForVariety(point).replace(/[.,;:!?]+$/g, "");
+      const hasEvidence = evidence.facts.some((fact, factIndex) => {
+        if (evidence.refs[factIndex] === "product:name") return false;
+        const normalizedFact = normalizeForVariety(fact).replace(/[.,;:!?]+$/g, "");
+        if (!normalizedFact) return false;
+        return normalizedPoint.includes(normalizedFact) || ["produto com ", "o produto com ", "produto tem ", "o produto tem ", "produto possui ", "o produto possui "].some((prefix) => normalizedPoint === `${prefix}${normalizedFact}`);
+      });
+      return !hasEvidence && (techTokens(point).length > 0 || detectAttributes(point).length > 0);
+    });
+    if (developmentUnverified) issues.push("development contém claim sem evidência verificável");
+    if (brief.development.some((point) => DEVELOPMENT_RECORDING_ANTIPATTERNS.test(point)))
+      issues.push("development contém direção de gravação, cena ou CTA");
+    const developmentText = normalizeForVariety(brief.development.join(" "));
+    const developmentTokens = techTokens(developmentText);
+    const developmentAttributes = detectAttributes(developmentText);
+    const normalizedScript = normalizeForVariety(brief.script);
+    const scriptTechClaims = techTokens(brief.script);
+    const scriptAttributes = detectAttributes(brief.script);
+    const missingScriptClaim =
+      scriptTechClaims.some(({ unit, value }) => !developmentTokens.some((token) => token.unit === unit && token.value === value)) ||
+      scriptAttributes.some((group) => !developmentAttributes.includes(group)) ||
+      evidence.facts.some((fact, index) => {
+        const normalizedFact = normalizeForVariety(fact);
+        return normalizedFact.length >= 4 && evidence.refs[index] !== "product:name" && normalizedScript.includes(normalizedFact) && !developmentText.includes(normalizedFact);
+      });
+    if (missingScriptClaim) issues.push("script contém claim factual ausente de development");
     if (CTA_AD_ANTIPATTERNS.test(brief.cta))
       issues.push("CTA contém anti-pattern publicitário");
     if (NATURALNESS_ANTIPATTERNS.test(`${brief.hook} ${brief.script} ${brief.cta}`))

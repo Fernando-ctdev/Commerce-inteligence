@@ -9,6 +9,12 @@ test("brief persistence keeps development bullets and strips legacy scenes", () 
 test("brief persistence rejects missing development", () => {
   assert.throws(() => briefPayloadForPersistence({ contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", script: "Roteiro oral", cta: "CTA" } as never), /development/);
 });
+test("brief persistence rejects empty, oversized, or non-string development bullets", () => {
+  const base = { contentId: "c1", briefVersionId: "b1", version: 1 as const, angle: "a", hook: "h", script: "Roteiro oral", cta: "CTA" };
+  for (const development of [[], ["1", "2", "3", "4", "5"], ["válido", 2]]) {
+    assert.throws(() => briefPayloadForPersistence({ ...base, development } as never), /development/);
+  }
+});
 test("rejects result writes from a reclaimed owner", () => { const current = { leaseOwnerId: "new-owner", attempt: 2 }; assert.equal(fenceMatches(current, "old-owner", 1), false); assert.equal(fenceMatches(current, "new-owner", 2), true); });
 // Coração do bloqueio 2 do Review: o heartbeat deve INTERROMPER a renovação e ABORTAR a
 // tentativa no attemptDeadlineAt, cobrindo até provider que ignora o AbortSignal.
