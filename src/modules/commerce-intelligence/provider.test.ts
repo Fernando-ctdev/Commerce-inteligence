@@ -112,23 +112,20 @@ test("brief provider gets separate selected hook and CTA patterns in a compact c
   assert.ok(messages[1].content.includes('"productReference":{"name":"Calça"}'));
 });
 
-test("brief provider instruction requires development, excludes scenes, and keeps CTA separate", () => {
+test("brief provider instruction makes development strategic, evidence-grounded, and keeps CTA separate", () => {
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("selectedPatterns[index].hook.text como hook"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("variação curta de até 12 palavras"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("podendo usar productReference.name"));
   assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("productReference.category"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Só use categoria no hook se ela estiver explícita em relevantFacts"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Preserve hooks naturalmente específicos"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Hook é uma frase curta de abertura"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("development sempre como uma lista de 1 a 4 bullets factuais verificáveis"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("fala oral natural em primeira pessoa, desenvolvendo somente os pontos de development"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Qualquer afirmação factual do roteiro deve estar autorizada por relevantFacts"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não podem conter câmera, cena, CTA, roteiro ou instrução de gravação"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("evite comandos como filme, mostre, fale, clique, carrinho, cupom ou frete"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use categoria no hook somente se explícita em relevantFacts"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Development é uma lista de 1 a 4 strings"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("orientação estratégica e acionável"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não uma lista de features"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("relevantFacts como única fonte de fatos técnicos em development e script"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("angle e oportunidade orientam o recorte, mas não são fonte de fatos"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("todo fato técnico no script deve estar em relevantFacts e representado em development"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não retorne scenes nem qualquer campo de cena"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("selectedPatterns[index].cta.text somente para formular cta"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("mantenha-o separado do hook, development e script"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Respeite Meu estilo"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("mantenha cta separado de hook, development e script"));
 });
 
 test("non-2xx captures allowlisted rate headers in detail without body leakage", async () => {

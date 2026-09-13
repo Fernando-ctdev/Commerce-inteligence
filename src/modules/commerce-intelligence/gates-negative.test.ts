@@ -50,11 +50,11 @@ test("script claims beyond factual development are repaired", () => {
   assert.equal(report.decision, "REPAIR");
   assert.ok(report.issues.includes("script contém claim factual ausente de development"));
 });
-test("development rejects reproduced filming, CTA, and commerce directions", () => {
+test("development wording is not rejected by lexical production or CTA gates", () => {
   for (const instruction of ["Filme Produto", "Mostre Produto", "Fale de Produto", "Clique para ver", "Confira no carrinho", "Use cupom", "Confira o frete"]) {
-    const report = validateBriefSet([{ ...base, development: [instruction] }], evidence)[0];
-    assert.equal(report.decision, "REPAIR", instruction);
-    assert.ok(report.issues.includes("development contém direção de gravação, cena ou CTA"), instruction);
+    const report = validateBriefSet([{ ...base, development: [instruction], script: "Minha opinião pessoal", cta: "Confira" }], evidence)[0];
+    assert.equal(report.decision, "PASS", instruction);
+    assert.deepEqual(report.issues, [], instruction);
   }
 });
 test("product name alone cannot support an unrelated lifetime-warranty claim", () => {
@@ -94,7 +94,7 @@ test("unsupported strategic development is repaired and neutral factual framing 
   assert.equal(framed.factualStatus, "SUPPORTED");
   assert.equal(framed.decision, "PASS");
 });
-test("CTA neutro passa, claim factual sem evidência repara, contradição rejeita e anti-pattern repara", () => {
+test("CTA neutro passa, claim factual sem evidência repara e contradição rejeita", () => {
   const neutral = validateBriefSet([{ ...base, cta: "Confira no carrinho" }], evidence)[0];
   assert.equal(neutral.decision, "PASS");
   const unsupported = validateBriefSet([{ ...base, cta: "Entrega em 24 horas" }])[0];
@@ -104,29 +104,31 @@ test("CTA neutro passa, claim factual sem evidência repara, contradição rejei
   assert.equal(contradicted.factualStatus, "CONTRADICTED");
   assert.equal(contradicted.decision, "REJECT");
   const antiPattern = validateBriefSet([{ ...base, cta: "Corre, última chance!" }], evidence)[0];
-  assert.equal(antiPattern.decision, "REPAIR");
+  assert.equal(antiPattern.decision, "PASS");
 });
-test("naturalness gate flags boilerplate while preserving conversational language", () => {
+test("wording is not rejected by lexical naturalness gates", () => {
   const natural = validateBriefSet([{ ...base, hook: "Olha como fica no uso do dia a dia" }], evidence)[0];
   assert.equal(natural.decision, "PASS");
   const boilerplate = validateBriefSet([{ ...base, hook: "No mundo de hoje, uma solução inovadora" }], evidence)[0];
-  assert.equal(boilerplate.decision, "REPAIR");
-  assert.ok(boilerplate.issues.includes("linguagem pouco natural ou publicitária"));
+  assert.equal(boilerplate.decision, "PASS");
+  assert.ok(!boilerplate.issues.includes("linguagem pouco natural ou publicitária"));
 });
-test("variety gate repairs repeated hooks or CTAs without copyright checks", () => {
+test("normalized duplicate hooks and repeated CTAs fail the set variety gate", () => {
   const repeatedHook = validateBriefSet([
     { ...base, contentId: "c1", briefVersionId: "b1", hook: "Olha esse detalhe", script: "produto no uso" },
-    { ...base, contentId: "c2", briefVersionId: "b2", angle: "outro ângulo", hook: "Olha esse detalhe", script: "outro uso do produto", cta: "Veja detalhes" },
+    { ...base, contentId: "c2", briefVersionId: "b2", angle: "outro ângulo", hook: " olha ESSE   detalhe ", script: "outro uso do produto", cta: "Veja detalhes" },
   ], evidence);
+  assert.equal(repeatedHook[1].decision, "REPAIR");
   assert.equal(repeatedHook[1].varietyStatus, "FAIL");
   assert.ok(repeatedHook[1].issues.includes("hook repetido"));
   const repeatedCta = validateBriefSet([
     { ...base, contentId: "c1", briefVersionId: "b1", hook: "primeiro hook", script: "produto no uso", cta: "Confira no carrinho" },
     { ...base, contentId: "c2", briefVersionId: "b2", angle: "outro ângulo", hook: "segundo hook", script: "outro uso do produto", cta: "Confira no carrinho" },
   ], evidence);
+  assert.equal(repeatedCta[1].decision, "REPAIR");
   assert.equal(repeatedCta[1].varietyStatus, "FAIL");
   assert.ok(repeatedCta[1].issues.includes("CTA repetido"));
-  assert.ok(!repeatedCta[0].issues.some((issue) => /copyright|direitos autorais|cópia/i.test(issue)));
+  assert.ok(!repeatedCta[1].issues.some((issue) => /copyright|direitos autorais|cópia/i.test(issue)));
 });
 test("catalog phrases may be reused literally without anti-copy rejection", () => {
   const pattern = CREATIVE_CATALOG.hooks[0];

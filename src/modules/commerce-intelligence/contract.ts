@@ -36,8 +36,8 @@ export const CARDINALITY_POLICY: Record<string, CardinalityRule> = {
   communicationPrinciples: { min: 0, minWithEvidence: 0, max: 10 },
   // Conteúdo e lote de briefings.
   noveltyTargets: { min: 1, minWithEvidence: 1, max: 4 },
-  // Development canônico: 1–4 bullets objetivos do produto, mantidos como lista
-  // separada do roteiro.
+  // Development canônico: 1–4 strings de orientação estratégica/acionável,
+  // separadas do roteiro; fatos técnicos usados nelas devem vir de relevantFacts.
   development: { min: 1, minWithEvidence: 1, max: 4 },
   items: { min: 1, minWithEvidence: 1, max: 8 },
   opportunities: { min: 1, minWithEvidence: 3, max: 10 },

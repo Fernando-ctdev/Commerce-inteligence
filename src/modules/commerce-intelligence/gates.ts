@@ -6,7 +6,7 @@ import {
   type EvidenceSnapshot,
   type FactStatus,
 } from "./contract";
-import { TIKTOK_COMMERCE_SKILL } from "./platform-skill";
+import { CREATIVE_CATALOG, TIKTOK_COMMERCE_SKILL } from "./platform-skill";
 import { ContractError } from "./contract";
 
 export type GateReport = {
@@ -144,6 +144,11 @@ const ATTRIBUTE_LEXICON: string[][] = [
   ["protecao", "proteg"],
 ];
 const UNSUPPORTED_ABSOLUTE_CLAIMS = /\b(sempre|nunca|jamais|qualquer|perfeit[oa]s?|sem falha|sem defeito)\b/i;
+const SOLO_PRODUCTION_ANTIPATTERNS = /\b(360\s*graus|órbita|orbita|orbit|travelling|motion\s*graphics|animação|animacao|vfx|efeitos especiais|chroma\s*key|croma|green\s*screen|drone|operador de câmera|operador de camera|segunda câmera|segunda camera|montagem (rápida|complexa)|montagem (rapida|complexa)|múltiplas locações|multiplas locacoes|múltiplos setups|multiplos setups|estúdio montado|câmera gira|camera gira|câmera começa a orbitar|camera comeca a orbitar)\b/i;
+const DRONE_PRODUCTION = /\bdrone\b/i;
+const CREW_OR_POST_PRODUCTION_ANTIPATTERNS = /\b(motion\s*graphics|animação|animacao|vfx|efeitos especiais|chroma\s*key|croma|green\s*screen|operador de câmera|operador de camera|segunda câmera|segunda camera|montagem (rápida|complexa)|montagem (rapida|complexa)|múltiplas locações|multiplas locacoes|múltiplos setups|multiplos setups|estúdio montado)\b/i;
+const CAMERA_MOVEMENT_ANTIPATTERNS = /\b(360\s*graus|órbita|orbita|orbit|travelling|câmera gira|camera gira|câmera começa a orbitar|camera comeca a orbitar)\b/i;
+const MOTION_EQUIPMENT = /\b(drone|gimbal|estabilizador)\b/i;
 function attrStems(text: string): string {
   return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
@@ -199,11 +204,13 @@ function classifyFactual(
     return false;
   };
   const factValues = new Map<string, Set<string>>();
-  for (const fact of evidence.facts)
+  for (const [index, fact] of evidence.facts.entries()) {
+    if (evidence.refs[index] === "product:name") continue;
     for (const token of techTokens(fact)) {
       if (!factValues.has(token.unit)) factValues.set(token.unit, new Set());
       factValues.get(token.unit)!.add(token.value);
     }
+  }
   const mentions = evidence.facts
     .map((fact, index) => ({ fact: normalizeForVariety(fact), index }))
     .filter(({ fact, index }) => fact.length > 0 && evidence.refs[index] !== "product:name");
@@ -271,7 +278,8 @@ function classifyFactual(
     for (const group of claimAttrs) {
       const supporting = evidence.facts
         .map((fact, index) => ({ fact, index }))
-        .filter(({ fact }) => {
+        .filter(({ fact, index }) => {
+          if (evidence.refs[index] === "product:name") return false;
           const folded = attrStems(fact.toLowerCase());
           return ATTRIBUTE_LEXICON[group].some((stem) => folded.includes(stem));
         });
@@ -318,10 +326,6 @@ function classifyFactual(
   const matched = mentions
     .filter(({ fact }) => text.includes(fact))
     .map(({ fact }) => fact.slice(0, 40));
-  const identityRefs = evidence.facts
-    .map((fact, index) => ({ fact: normalizeForVariety(fact), index }))
-    .filter(({ fact, index }) => evidence.refs[index] === "product:name" && fact.length > 0 && text.includes(fact))
-    .map(({ index }) => refFor(index));
   const negatedMatches = matched.filter((fact) => negationAdjacent(fact));
   if (negatedMatches.length > 0)
     return {
@@ -337,13 +341,10 @@ function classifyFactual(
       causes: [],
       evidenceRefs: [
         ...new Set(
-          [
-            ...identityRefs,
-            ...matched.map((fact) => {
+          matched.map((fact) => {
               const index = mentions.find(({ fact: mention }) => mention.slice(0, 40) === fact)?.index ?? -1;
               return index >= 0 ? refFor(index) : "";
             }).filter((ref) => ref.length > 0),
-          ],
         ),
       ],
     };
@@ -355,27 +356,13 @@ function classifyFactual(
   };
 }
 
-const CTA_AD_ANTIPATTERNS = /\b(última chance|so hoje|só hoje|garantido|resultado garantido|melhor do mercado|imperdível|milagre|corre|não perca|nao perca)\b/i;
-const NATURALNESS_ANTIPATTERNS = /\b(no mundo de hoje|em um mundo cada vez mais|diante desse cenário|solução inovadora|solução revolucionária|ideal para quem busca|venha descobrir)\b/i;
-const DEVELOPMENT_RECORDING_ANTIPATTERNS = /\b(câmera|camera|cena|cta|gravação|gravacao|gravar|tripé|tripe|enquadramento|close|roteiro|filme|filmar|filmagem|mostre|mostrar|mostra|fale|falar|clique|clicar|carrinho|cupom|frete)\b/i;
-
-// Creator solo (nota "da-uma-olhada-nesse-briefing-d"): por padrão, 1 creator + 1 celular/câmera
-// (mão ou tripé) + ambiente cotidiano + cortes simples. Léxico fechado e determinístico dos
-// anti-padrões de produção que exigem operador, pós-produção ou múltiplos setups.
-const SOLO_PRODUCTION_ANTIPATTERNS =
-  /\b(360\s*graus|órbita|orbita|orbit|travelling|motion\s*graphics|animação|animacao|vfx|efeitos especiais|chroma\s*key|croma|green\s*screen|drone|operador de câmera|operador de camera|segunda câmera|segunda camera|montagem (rápida|complexa)|montagem (rapida|complexa)|múltiplas locações|multiplas locacoes|múltiplos setups|multiplos setups|estúdio montado|câmera gira|camera gira|câmera começa a orbitar|camera comeca a orbitar)\b/i;
-
-function copySimilarity(left: string, right: string): number {
-  const tokens = (text: string) => new Set(text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").match(/[a-z0-9]+/g)?.filter((token) => token.length > 2) ?? []);
-  const a = tokens(left);
-  const b = tokens(right);
-  if (normalizeForVariety(left) === normalizeForVariety(right)) return 1;
-  if (a.size < 4 || b.size < 4) return 0;
-  const intersection = [...a].filter((token) => b.has(token)).length;
-  return intersection / (a.size + b.size - intersection);
-}
 type GatePattern = { id?: string; guidance?: string; type?: string; text?: string };
 type SelectedBriefPatterns = Array<{ hook: GatePattern; cta: GatePattern }>;
+type CreatorRecordingContext = {
+  recordsAlone?: unknown;
+  recordingEquipment?: unknown;
+  recordingSupport?: unknown;
+};
 
 export function validateBriefSet(
   briefs: unknown[],
@@ -383,12 +370,12 @@ export function validateBriefSet(
   platformId = "tiktok-commerce",
   skillVersion: string = TIKTOK_COMMERCE_SKILL.version,
   selectedPatterns: SelectedBriefPatterns = [],
+  creatorContext: CreatorRecordingContext = {},
 ): GateReport[] {
-  const seen = new Set<string>();
+  const seenBriefs = new Set<string>();
   const seenHooks = new Set<string>();
   const seenCtas = new Set<string>();
-  const hashes = new Set<string>();
-  const angleCounts = new Map<string, number>();
+  const structuralHashes = new Set<string>();
   const reports = briefs.map((value, index): GateReport => {
     const issues: string[] = [];
     let brief: ContentBriefVersion;
@@ -407,23 +394,29 @@ export function validateBriefSet(
         decision: "REJECT",
       };
     }
-    const normalized = normalizeForVariety(
-      `${brief.angle}|${brief.hook}|${brief.script}`,
-    );
-    const normalizedHook = normalizeForVariety(brief.hook);
-    const normalizedCta = normalizeForVariety(brief.cta);
     const selected = selectedPatterns[index];
-    const crossedHook = selected?.cta.text && copySimilarity(brief.hook, selected.cta.text) >= 0.8;
-    const crossedCta = selected?.hook.text && copySimilarity(brief.cta, selected.hook.text) >= 0.8;
+    const crossedHook = selected?.cta.text && normalizeForVariety(brief.hook) === normalizeForVariety(selected.cta.text);
+    const crossedCta = selected?.hook.text && normalizeForVariety(brief.cta) === normalizeForVariety(selected.hook.text);
     if (crossedHook) issues.push("CTA usado como hook");
     if (crossedCta) issues.push("hook usado como CTA");
-    const hash = structureHash(brief);
-    if (seen.has(normalized)) issues.push("duplicata normalizada");
-    if (seenHooks.has(normalizedHook)) issues.push("hook repetido");
-    if (seenCtas.has(normalizedCta)) issues.push("CTA repetido");
-    if (hashes.has(hash)) issues.push("duplicata estrutural");
-    const angleKey = normalizeForVariety(brief.angle);
-    angleCounts.set(angleKey, (angleCounts.get(angleKey) ?? 0) + 1);
+    const normalizedBrief = normalizeForVariety(`${brief.angle}|${brief.hook}|${brief.script}`);
+    const normalizedHook = normalizeForVariety(brief.hook);
+    const normalizedCta = normalizeForVariety(brief.cta);
+    const catalogHookVerbatim = CREATIVE_CATALOG.hooks.some(
+      ({ text }) => normalizeForVariety(text) === normalizedHook,
+    );
+    const catalogCtaVerbatim = CREATIVE_CATALOG.ctas.some(
+      ({ text }) => normalizeForVariety(text) === normalizedCta,
+    );
+    const structuralHash = structureHash(brief);
+    if (seenBriefs.has(normalizedBrief)) issues.push("duplicata normalizada");
+    if (!catalogHookVerbatim && seenHooks.has(normalizedHook)) issues.push("hook repetido");
+    if (!catalogCtaVerbatim && seenCtas.has(normalizedCta)) issues.push("CTA repetido");
+    if (structuralHashes.has(structuralHash)) issues.push("duplicata estrutural");
+    seenBriefs.add(normalizedBrief);
+    if (!catalogHookVerbatim) seenHooks.add(normalizedHook);
+    if (!catalogCtaVerbatim) seenCtas.add(normalizedCta);
+    structuralHashes.add(structuralHash);
     const fact = classifyFactual(brief, evidence);
     if (fact.status === "UNSUPPORTED" || fact.status === "CONTRADICTED")
       issues.push(
@@ -446,8 +439,6 @@ export function validateBriefSet(
       return !hasEvidence && (techTokens(point).length > 0 || detectAttributes(point).length > 0);
     });
     if (developmentUnverified) issues.push("development contém claim sem evidência verificável");
-    if (brief.development.some((point) => DEVELOPMENT_RECORDING_ANTIPATTERNS.test(point)))
-      issues.push("development contém direção de gravação, cena ou CTA");
     const developmentText = normalizeForVariety(brief.development.join(" "));
     const developmentTokens = techTokens(developmentText);
     const developmentAttributes = detectAttributes(developmentText);
@@ -462,28 +453,25 @@ export function validateBriefSet(
         return normalizedFact.length >= 4 && evidence.refs[index] !== "product:name" && normalizedScript.includes(normalizedFact) && !developmentText.includes(normalizedFact);
       });
     if (missingScriptClaim) issues.push("script contém claim factual ausente de development");
-    if (CTA_AD_ANTIPATTERNS.test(brief.cta))
-      issues.push("CTA contém anti-pattern publicitário");
-    if (NATURALNESS_ANTIPATTERNS.test(`${brief.hook} ${brief.script} ${brief.cta}`))
-      issues.push("linguagem pouco natural ou publicitária");
-    if (
-      SOLO_PRODUCTION_ANTIPATTERNS.test(
-        `${brief.script} ${brief.development.join(" ")}`,
-      )
-    )
+    const equipment = [creatorContext.recordingEquipment, creatorContext.recordingSupport]
+      .flatMap((value) => Array.isArray(value) ? value : [])
+      .filter((value): value is string => typeof value === "string")
+      .join(" ");
+    const productionText = `${brief.script} ${brief.development.join(" ")}`;
+    const productionRequiresUndeclaredEquipment = SOLO_PRODUCTION_ANTIPATTERNS.test(productionText) && (
+      CREW_OR_POST_PRODUCTION_ANTIPATTERNS.test(productionText) ||
+      (CAMERA_MOVEMENT_ANTIPATTERNS.test(productionText) && !MOTION_EQUIPMENT.test(equipment)) ||
+      (DRONE_PRODUCTION.test(productionText) && !DRONE_PRODUCTION.test(equipment))
+    );
+    if (creatorContext.recordsAlone === true && productionRequiresUndeclaredEquipment)
       issues.push("produção incompatível com creator solo");
     const platformOk =
       platformId === "tiktok-commerce" &&
-      skillVersion === TIKTOK_COMMERCE_SKILL.version &&
-      !/leia literalmente|leitura obrigatória/i.test(brief.script);
+      skillVersion === TIKTOK_COMMERCE_SKILL.version;
     if (!platformOk)
       issues.push("brief incompatível com a Skill da plataforma");
-    seen.add(normalized);
-    seenHooks.add(normalizedHook);
-    seenCtas.add(normalizedCta);
-    hashes.add(hash);
     const structuralStatus = "PASS";
-    const varietyStatus = issues.some((issue) => issue.includes("duplicata") || issue.includes("repetido"))
+    const varietyStatus = issues.some((issue) => /duplicata|repetido/.test(issue))
       ? "FAIL"
       : "PASS";
     const platformStatus = platformOk ? "PASS" : "FAIL";
@@ -505,22 +493,6 @@ export function validateBriefSet(
       decision,
     };
   });
-  // Concentração de ângulo no conjunto (dimensão estruturada): mais da metade no mesmo ângulo é variedade ruim.
-  if (briefs.length > 1) {
-    for (const count of angleCounts.values())
-      if (count > Math.floor(briefs.length / 2)) {
-        const idx = reports.findIndex((report) => report.decision === "PASS");
-        if (idx >= 0) {
-          reports[idx] = {
-            ...reports[idx],
-            varietyStatus: "FAIL",
-            issues: [...reports[idx].issues, "concentração de ângulo"],
-            decision: "REPAIR",
-          };
-        }
-        break;
-      }
-  }
   return reports;
 }
 
