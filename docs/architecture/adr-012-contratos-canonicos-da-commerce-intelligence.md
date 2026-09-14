@@ -26,7 +26,7 @@ Adotar os schemas canônicos conceituais como contrato de domínio entre caso de
 Regras de contrato:
 
 - Fato ≠ inferência. A engine pode inferir por que alguém compraria; não pode inventar o que o Produto é ou faz. O Fact Validator classifica claims como `SUPPORTED`, `INFERRED_BUT_SAFE`, `UNSUPPORTED` ou `CONTRADICTED`; `UNSUPPORTED` corrige/remove, `CONTRADICTED` rejeita.
-- Nenhum briefing é válido só porque um LLM devolveu JSON: Quality Gate (estrutural + factual + avaliação semântica quando necessária) e Variety Gate no conjunto (variedade subordinada à relevância).
+- Nenhum briefing é válido só porque um LLM devolveu JSON: o hard gate estrutural/factual roda primeiro; depois, `CONTENT_QUALITY_JUDGE` interno é obrigatório por parte no Slice 003. Só `REPAIR` chama repair seletivo e consome até 2 rounds; `REJECT` é terminal. O Variety Gate continua determinístico; judge de variedade/memória fica fora do MVP.
 - Repair recebe as causas da rejeição, preserva briefings aprovados no gate e tem limite de tentativas; esgotado, o job falha de forma recuperável — nunca sucesso parcial silencioso.
 - Retry técnico é idempotente: não cria duas Strategies ativas, planos duplicados, briefings repetidos nem consumo duplicado.
 - Novas gerações reutilizam a Strategy ativa e a memória; reconstrução integral acontece só quando a Strategy fica `STALE` ou há regeneração explícita.
@@ -64,7 +64,7 @@ A cardinalidade dos arrays de cada contrato canônico é centralizada em uma pol
 ## Consequências negativas e riscos
 
 - Volume de schemas e validação é o maior custo de engenharia do MVP.
-- Gates determinísticos não capturam toda paráfrase; variedade semântica depende de judge e tem custo.
+- Gates determinísticos não capturam toda paráfrase; avaliação semântica de variedade ou memória exigiria judge e custo, portanto permanece fora do MVP.
 - Schemas podem evoluir; toda mudança exige versionamento explícito para não invalidar histórico.
 
 ## Segurança / Operação

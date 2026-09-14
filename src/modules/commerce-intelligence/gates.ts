@@ -6,11 +6,37 @@ import {
   type EvidenceSnapshot,
   type FactStatus,
 } from "./contract";
-import { CREATIVE_CATALOG, TIKTOK_COMMERCE_SKILL } from "./platform-skill";
+import {
+  PLATFORM_SKILLS,
+  CREATIVE_CATALOG,
+  TIKTOK_COMMERCE_SKILL,
+  classifyCtaFunction,
+  classifyHookMechanism,
+  type HookMechanismBucket,
+  CTA_FUNCTION_BUCKET_COUNT,
+  UNCLASSIFIED_CTA_FUNCTION,
+} from "./platform-skill";
 import { ContractError } from "./contract";
 
+// ADR-019: versão da política de gates com bump manual (mesmo precedente de
+// CARDINALITY_POLICY_VERSION). Reports persistidos carregam a versão sob a qual
+// foram produzidos; revalidação sob versão diferente é GATE-VERSION-MISMATCH,
+// nunca REPAIR falso. 1 = pré-versionamento implícito (histórico).
+export const GATE_POLICY_VERSION = 2;
+
+// Revalidação forense: recusa reclassificar payload validado sob outra política.
+// NULL/ausente = gerado antes do versionamento — também é incompatível.
+export function assertGateVersionCompatible(recorded: unknown): number {
+  if (typeof recorded !== "number" || recorded !== GATE_POLICY_VERSION)
+    throw new ContractError(
+      "GEN-GATE-VERSION",
+      `Revalidação exige gateVersion ${GATE_POLICY_VERSION} (registrado: ${typeof recorded === "number" ? recorded : "pré-versionamento"})`,
+    );
+  return recorded;
+}
 export type GateReport = {
   briefId: string;
+  gateVersion: number;
   factualStatus: FactStatus;
   claimType: "objetivo" | "subjetivo";
   evidenceRefs: string[];
@@ -145,16 +171,40 @@ const ATTRIBUTE_LEXICON: string[][] = [
 ];
 // Conceitos distintos e polaridade local evitam que "respirável" prove "não esquenta"
 // e que um fato afirmativo sobre capacidade prove sua negação.
+// ADR-019/P6: "deixa o ar circular"/"ar circulando" entram no conceito de ventilação;
+// vestuário (amassar/marcar/apertar) e promoção (frete grátis) são conceitos observáveis
+// próprios — claim sem fato de mesma polaridade é UNSUPPORTED (mecanismo ADR-004).
 const OBSERVED_THERMAL_CONCEPTS = [
-  { id: "ventilação", phrase: /\b(respiravel|ventila(r|cao)?|circulacao de ar)\b/ },
+  { id: "ventilação", phrase: /\b(respiravel|respirabilidade|ventila(r|cao)?|circulacao de ar|ar circulando|deixa o ar circular|deixando o ar circular|ar circular)\b/ },
   { id: "passagem de calor", phrase: /\bpass(a|ar) calor\b/ },
   { id: "aquecimento", phrase: /\b(esquent(a|ar)|aquec(e|er))\b/ },
   { id: "frescor", phrase: /\b(mantem (o corpo )?fresco|fresco)\b/ },
   { id: "abafamento", phrase: /\babaf(a|ar)\b/ },
 ];
+// Vestuário: negações como "não amassa"/"não marca"/"não aperta" são claims de
+// propriedade observável do produto, não opinião. "aperta" ignora "aperta play/botão"
+// (ação de gravação, não propriedade de vestibilidade); "marca" só em composição
+// (deixa marca / marca na pele / não marca / sem marcar) para não colidir com marca=brand.
+const OBSERVED_GARMENT_CONCEPTS = [
+  { id: "amassar", phrase: /\b(amassa|amassar|amassou|amassada|amassado|amassando)\b/ },
+  { id: "marcar", phrase: /\b(nao\s+marca|deixa\s+marca|deixando\s+marca|marca\s+na\s+pele|sem\s+marcar|nao\s+deixa\s+marca)\b/ },
+  { id: "apertar", phrase: /\baperta(?!\s+(play|pausa|o\s+botao|botao|o\s+botão))\w*\b/ },
+];
+const OBSERVED_PROMO_CONCEPTS = [
+  { id: "frete grátis", phrase: /\bfrete\s+gratis\b/ },
+];
+const OBSERVED_CONCEPTS = [
+  ...OBSERVED_THERMAL_CONCEPTS,
+  ...OBSERVED_GARMENT_CONCEPTS,
+  ...OBSERVED_PROMO_CONCEPTS,
+];
 const POCKET_CAPACITY = /\b(cabe|cabem|acomoda|comporta|guarda|armazena)\s+(?:(qualquer|todo|toda|todos|todas)\s+)?(?:(um|uma|o|a)\s+)?(celular|telefone|smartphone|chaves)\b/g;
-const DEVELOPMENT_COMMUNICATION_ACTION = /^\s*(?:mostr|coment|compar|prov|demonstr|destaqu|destac|fal|expli|abrac|apresent|test|vest|peg|segur|abri|reforc)\w*/;
-const DEVELOPMENT_RATIONALE = /\b(para|porque|pois|assim)\b/;
+// ADR-020 (contrato estruturado do repair): constantes do próprio gate expostas
+// para os requirements server-derived — reuso, sem regex nova.
+export const DEVELOPMENT_ACTION_STEMS: readonly string[] = ["mostr", "coment", "compar", "prov", "demonstr", "destaqu", "destac", "fal", "expli", "abrac", "apresent", "test", "vest", "peg", "segur", "abri", "reforc"];
+export const DEVELOPMENT_CONNECTORS: readonly string[] = ["para", "porque", "pois", "assim"];
+const DEVELOPMENT_COMMUNICATION_ACTION = /(?:mostr|coment|compar|prov|demonstr|destaqu|destac|fal|expli|abrac|apresent|test|vest|peg|segur|abri|reforc)\w*/;
+export const DEVELOPMENT_RATIONALE = /\b(para|porque|pois|assim)\b/;
 const DEVELOPMENT_EXPERIENCE_RATIONALE = /\bque voce (sente|percebe|nota) com\b/;
 const DEVELOPMENT_SHOT_LIST = /\b(close|plano|enquadramento|camera|filme|grave|trip[eé]|iluminacao|take|tomada)\b/;
 const UNSUPPORTED_ABSOLUTE_CLAIMS = /\b(sempre|nunca|jamais|qualquer|perfeit[oa]s?|sem falha|sem defeito)\b/i;
@@ -189,6 +239,38 @@ function capacityMatches(text: string): Array<{ item: string; polarity: boolean;
     polarity: polarityAt(text, match.index ?? 0),
     universal: Boolean(match[2]),
   }));
+}
+
+// Avaliação de conceitos observáveis (térmicos, vestuário, promoção) sobre campos
+// de claim já dobrados (attrStems): claim exige fato autorizado de MESMA polaridade;
+// fato de polaridade oposta é contradição; sem fato é claim sem evidência.
+// Extraído de classifyFactual para reuso no gate de cenas (ADR-019).
+function assessObservedConcepts(
+  claimFields: string[],
+  foldedFacts: Array<{ fact: string; index: number }>,
+  evidence: EvidenceSnapshot,
+): { groundingRefs: string[]; issues: string[]; contradiction: boolean } {
+  const groundingRefs: string[] = [];
+  const issues: string[] = [];
+  let contradiction = false;
+  const refFor = (factIndex: number): string =>
+    evidence.refs[factIndex] ?? `fact:${factIndex + 1}`;
+  for (const concept of OBSERVED_CONCEPTS) {
+    const claims = claimFields.flatMap((field) => observedMatches(field, concept.phrase));
+    if (!claims.length) continue;
+    const facts = foldedFacts.flatMap(({ fact, index }) =>
+      observedMatches(fact, concept.phrase).map((match) => ({ ...match, index })),
+    );
+    for (const claim of claims) {
+      const samePolarity = facts.filter((fact) => fact.polarity === claim.polarity);
+      if (samePolarity.length) groundingRefs.push(...samePolarity.map(({ index }) => refFor(index)));
+      else if (facts.length) {
+        contradiction = true;
+        issues.push(`claim de ${concept.id} contradiz a evidência`);
+      } else issues.push(`claim de ${concept.id} sem evidência autorizada`);
+    }
+  }
+  return { groundingRefs: [...new Set(groundingRefs)], issues, contradiction };
 }
 function classifyFactual(
   brief: ContentBriefVersion,
@@ -259,24 +341,10 @@ function classifyFactual(
     brief.desire ?? "",
     brief.cta,
   ].map((field) => attrStems(normalizeForVariety(field)));
-  const observedGroundingRefs: string[] = [];
-  const observedIssues: string[] = [];
-  let observedContradiction = false;
-  for (const concept of OBSERVED_THERMAL_CONCEPTS) {
-    const claims = claimFields.flatMap((field) => observedMatches(field, concept.phrase));
-    if (!claims.length) continue;
-    const facts = foldedFacts.flatMap(({ fact, index }) =>
-      observedMatches(fact, concept.phrase).map((match) => ({ ...match, index })),
-    );
-    for (const claim of claims) {
-      const samePolarity = facts.filter((fact) => fact.polarity === claim.polarity);
-      if (samePolarity.length) observedGroundingRefs.push(...samePolarity.map(({ index }) => refFor(index)));
-      else if (facts.length) {
-        observedContradiction = true;
-        observedIssues.push(`claim térmica de ${concept.id} contradiz a evidência`);
-      } else observedIssues.push(`claim térmica de ${concept.id} sem evidência autorizada`);
-    }
-  }
+  const observed = assessObservedConcepts(claimFields, foldedFacts, evidence);
+  const observedGroundingRefs = observed.groundingRefs;
+  const observedIssues = observed.issues;
+  let observedContradiction = observed.contradiction;
   const capacityClaims = claimFields.flatMap((field) => capacityMatches(field));
   for (const claim of capacityClaims) {
     const facts = foldedFacts.flatMap(({ fact, index }) =>
@@ -435,43 +503,122 @@ function classifyFactual(
   };
 }
 
-function validDevelopmentPoint(point: string, evidence: EvidenceSnapshot): boolean {
+// ADR-020: termos de ancoragem do development — MESMA computação interna do
+// gate (fold + stopwords), exposta para factRefs server-derived.
+export function developmentGroundingTerms(value: string): string[] {
+  const normalized = attrStems(normalizeForVariety(value));
+  const stopWords = new Set(["a", "o", "as", "os", "de", "do", "da", "dos", "das", "e", "com", "para", "por", "em", "no", "na", "nos", "nas", "que", "um", "uma", "como", "seu", "sua", "contextualizar", "explicar", "explica", "detalhe", "escolha", "reforcar", "mostrar", "associar", "relacionar"]);
+  return [...new Set(normalized.split(/\W+/).filter((term) => term.length > 1 && !stopWords.has(term)))];
+}
+
+export function validDevelopmentPoint(point: string, evidence: EvidenceSnapshot): boolean {
   const normalized = attrStems(normalizeForVariety(point));
   const action = DEVELOPMENT_COMMUNICATION_ACTION.exec(normalized);
   if (DEVELOPMENT_SHOT_LIST.test(normalized) || !action) return false;
   const rationaleAt = normalized.search(DEVELOPMENT_RATIONALE);
   const experienceRationale = DEVELOPMENT_EXPERIENCE_RATIONALE.exec(normalized);
   if (rationaleAt < 0 && !experienceRationale) return false;
-  const stopWords = new Set(["a", "o", "as", "os", "de", "do", "da", "dos", "das", "e", "com", "para", "por", "em", "no", "na", "nos", "nas", "que", "um", "uma", "como", "seu", "sua", "contextualizar", "explicar", "explica", "detalhe", "escolha", "reforcar", "mostrar", "associar", "relacionar"]);
-  const terms = (value: string) => new Set(value.split(/\W+/).filter((term) => term.length > 1 && !stopWords.has(term)));
-  const pointTerms = terms(normalized);
-  const rationaleTerms = rationaleAt >= 0
-    ? terms(normalized.slice(rationaleAt).replace(DEVELOPMENT_RATIONALE, ""))
-    : terms(normalized.slice(experienceRationale!.index));
+  const rationaleTerms = new Set(
+    rationaleAt >= 0
+      ? developmentGroundingTerms(normalized.slice(rationaleAt).replace(DEVELOPMENT_RATIONALE, ""))
+      : developmentGroundingTerms(normalized.slice(experienceRationale!.index)),
+  );
   const experienceContext = experienceRationale
-    ? terms(normalized.slice(action[0].length, experienceRationale.index)).size > 0
+    ? developmentGroundingTerms(normalized.slice(action[0].length, experienceRationale.index)).length > 0
     : false;
   if (rationaleAt >= 0 && rationaleTerms.size < 2) return false;
   if (rationaleAt < 0 && !experienceContext) return false;
-  return evidence.facts.some((fact, index) => {
-    if (evidence.refs[index] === "product:name") return false;
-    const factTerms = terms(attrStems(normalizeForVariety(fact)));
-    let groundedTerms = 0;
-    for (const term of factTerms) if (pointTerms.has(term)) groundedTerms++;
-    const rationaleFactTerms = [...rationaleTerms].filter((term) => factTerms.has(term)).length;
-    const rationaleContextTerms = [...rationaleTerms].filter((term) => !factTerms.has(term)).length;
-    return groundedTerms >= 2 && rationaleFactTerms >= 2 &&
-      (rationaleAt < 0 || rationaleContextTerms >= 1);
-  });
+  return !unverifiedObjectiveClaims(point, evidence);
 }
 
-type GatePattern = { id?: string; guidance?: string; type?: string; text?: string };
+export type GatePattern = { id?: string; guidance?: string; type?: string; text?: string };
 type SelectedBriefPatterns = Array<{ hook: GatePattern; cta: GatePattern }>;
 type CreatorRecordingContext = {
   recordsAlone?: unknown;
   recordingEquipment?: unknown;
   recordingSupport?: unknown;
 };
+
+
+// ADR-020 (mecanismo deliverable): buckets do catálogo com pelo menos um hook
+// deliverable para a evidência atual — mesma pré-checagem dos CTA patterns.
+// Lista em ordem canônica estável; vazia = nenhum mecanismo planiável, caso que
+// deve falhar GEN-PATTERN antes do plano (fail-closed, sem fallback entre
+// mecanismos).
+export function deliverableHookBuckets(
+  evidence: EvidenceSnapshot,
+  hooks: readonly GatePattern[],
+): HookMechanismBucket[] {
+  const bucketsWithDeliverableHook = new Set<HookMechanismBucket>();
+  for (const hook of hooks) {
+    if (ctaTextFactualIssues(String(hook.text ?? ""), evidence).decision === "deliverable")
+      bucketsWithDeliverableHook.add(classifyHookMechanism(String(hook.text ?? "")));
+  }
+  const order: HookMechanismBucket[] = [
+    "problem",
+    "discovery",
+    "demonstration",
+    "objection",
+    "price-value",
+    "other",
+  ];
+  return order.filter((bucket) => bucketsWithDeliverableHook.has(bucket));
+}
+
+// ADR-020: pré-checagem determinística de patterns do catálogo (CTA ou hook)
+// contra a evidência, ANTES de qualquer geração — seleção e gate não divergem,
+// pois ambos usam o MESMO classificador (classifyFactual sobre texto isolado,
+// com os demais campos vazios). Contrato acordado: recebe somente o texto +
+// EvidenceSnapshot e devolve decisão/causas determinísticas.
+export function ctaTextFactualIssues(
+  text: string,
+  evidence: EvidenceSnapshot,
+): { decision: "deliverable" | "unsupported" | "contradicted"; causes: string[] } {
+  const assessment = classifyFactual(
+    {
+      contentId: "pattern",
+      briefVersionId: "pattern",
+      version: 1,
+      angle: "",
+      hook: "",
+      development: [],
+      script: "",
+      cta: text,
+    },
+    evidence,
+  );
+  const decision =
+    assessment.status === "SUPPORTED" || assessment.status === "INFERRED_BUT_SAFE"
+      ? "deliverable"
+      : assessment.status === "CONTRADICTED"
+        ? "contradicted"
+        : "unsupported";
+  return { decision, causes: assessment.causes };
+}
+// Claim objetivo sem evidência: valor+unidade ou atributo do léxico exige fato
+// autorizado (exclui product:name). Compartilhado entre development e cenas (ADR-019).
+function unverifiedObjectiveClaims(text: string, evidence: EvidenceSnapshot): boolean {
+  const unsupportedToken = techTokens(text).some(({ unit, value }) => !evidence.facts.some((fact, factIndex) =>
+    evidence.refs[factIndex] !== "product:name" && techTokens(fact).some((authorized) => authorized.unit === unit && authorized.value === value),
+  ));
+  const unsupportedAttribute = detectAttributes(text).some((group) => !evidence.facts.some((fact, factIndex) =>
+    evidence.refs[factIndex] !== "product:name" && ATTRIBUTE_LEXICON[group].some((stem) => attrStems(fact.toLowerCase()).includes(stem)),
+  ));
+  return unsupportedToken || unsupportedAttribute;
+}
+
+// Produção incompatível com creator solo: antipadrões exigem equipamento declarado.
+function requiresUndeclaredProduction(productionText: string, creatorContext: CreatorRecordingContext): boolean {
+  const equipment = [creatorContext.recordingEquipment, creatorContext.recordingSupport]
+    .flatMap((value) => Array.isArray(value) ? value : [])
+    .filter((value): value is string => typeof value === "string")
+    .join(" ");
+  return SOLO_PRODUCTION_ANTIPATTERNS.test(productionText) && (
+    CREW_OR_POST_PRODUCTION_ANTIPATTERNS.test(productionText) ||
+    (CAMERA_MOVEMENT_ANTIPATTERNS.test(productionText) && !MOTION_EQUIPMENT.test(equipment)) ||
+    (DRONE_PRODUCTION.test(productionText) && !DRONE_PRODUCTION.test(equipment))
+  );
+}
 
 export function validateBriefSet(
   briefs: unknown[],
@@ -485,6 +632,12 @@ export function validateBriefSet(
   const seenHooks = new Set<string>();
   const seenCtas = new Set<string>();
   const structuralHashes = new Set<string>();
+  // Variedade funcional de CTA (ADR-019): nenhuma função (bucket determinístico
+  // classificado do texto) além de ceil(N/K), K = buckets presentes no catálogo.
+  const ctaFunctionCounts = new Map<string, number>();
+  const ctaFunctionCap = briefs.length > 1 && CTA_FUNCTION_BUCKET_COUNT > 1
+    ? Math.ceil(briefs.length / CTA_FUNCTION_BUCKET_COUNT)
+    : 0;
   const reports = briefs.map((value, index): GateReport => {
     const issues: string[] = [];
     let brief: ContentBriefVersion;
@@ -493,6 +646,7 @@ export function validateBriefSet(
     } catch {
       return {
         briefId: `brief-${index + 1}`,
+        gateVersion: GATE_POLICY_VERSION,
         factualStatus: "UNSUPPORTED",
         claimType: "objetivo",
         evidenceRefs: [],
@@ -522,6 +676,15 @@ export function validateBriefSet(
     if (!catalogHookVerbatim && seenHooks.has(normalizedHook)) issues.push("hook repetido");
     if (!catalogCtaVerbatim && seenCtas.has(normalizedCta)) issues.push("CTA repetido");
     if (structuralHashes.has(structuralHash)) issues.push("duplicata estrutural");
+    // Teto de função só vale para função realmente identificada no texto;
+    // fallback sem regra não é evidência de concentração funcional.
+    const ctaFunction = classifyCtaFunction(brief.cta);
+    if (ctaFunction !== UNCLASSIFIED_CTA_FUNCTION) {
+      const ctaFunctionCount = (ctaFunctionCounts.get(ctaFunction) ?? 0) + 1;
+      ctaFunctionCounts.set(ctaFunction, ctaFunctionCount);
+      if (ctaFunctionCap > 0 && ctaFunctionCount > ctaFunctionCap)
+        issues.push("função de CTA repetida no conjunto");
+    }
     seenBriefs.add(normalizedBrief);
     if (!catalogHookVerbatim) seenHooks.add(normalizedHook);
     if (!catalogCtaVerbatim) seenCtas.add(normalizedCta);
@@ -537,16 +700,7 @@ export function validateBriefSet(
                 : "claim contradito",
             ]),
       );
-    const developmentUnverified = brief.development.some((point) => {
-      const tokens = techTokens(point);
-      const unsupportedToken = tokens.some(({ unit, value }) => !evidence.facts.some((fact, factIndex) =>
-        evidence.refs[factIndex] !== "product:name" && techTokens(fact).some((authorized) => authorized.unit === unit && authorized.value === value),
-      ));
-      const unsupportedAttribute = detectAttributes(point).some((group) => !evidence.facts.some((fact, factIndex) =>
-        evidence.refs[factIndex] !== "product:name" && ATTRIBUTE_LEXICON[group].some((stem) => attrStems(fact.toLowerCase()).includes(stem)),
-      ));
-      return unsupportedToken || unsupportedAttribute;
-    });
+    const developmentUnverified = brief.development.some((point) => unverifiedObjectiveClaims(point, evidence));
     if (developmentUnverified) issues.push("development contém claim sem evidência verificável");
     if (brief.development.some((point) => !validDevelopmentPoint(point, evidence)))
       issues.push("development deve orientar comunicação com ação e razão/fato, sem lista de features ou planos de gravação");
@@ -564,25 +718,17 @@ export function validateBriefSet(
         return normalizedFact.length >= 4 && evidence.refs[index] !== "product:name" && normalizedScript.includes(normalizedFact) && !developmentText.includes(normalizedFact);
       });
     if (missingScriptClaim) issues.push("script contém claim factual ausente de development");
-    const equipment = [creatorContext.recordingEquipment, creatorContext.recordingSupport]
-      .flatMap((value) => Array.isArray(value) ? value : [])
-      .filter((value): value is string => typeof value === "string")
-      .join(" ");
-    const productionText = `${brief.script} ${brief.development.join(" ")}`;
-    const productionRequiresUndeclaredEquipment = SOLO_PRODUCTION_ANTIPATTERNS.test(productionText) && (
-      CREW_OR_POST_PRODUCTION_ANTIPATTERNS.test(productionText) ||
-      (CAMERA_MOVEMENT_ANTIPATTERNS.test(productionText) && !MOTION_EQUIPMENT.test(equipment)) ||
-      (DRONE_PRODUCTION.test(productionText) && !DRONE_PRODUCTION.test(equipment))
-    );
-    if (creatorContext.recordsAlone === true && productionRequiresUndeclaredEquipment)
+    if (creatorContext.recordsAlone === true && requiresUndeclaredProduction(`${brief.script} ${brief.development.join(" ")}`, creatorContext))
       issues.push("produção incompatível com creator solo");
+    // platformSkillVersion é snapshot de geração: versão registrada continua válida
+    // no registry após bumps; apenas versão desconhecida falha (ADR-019).
     const platformOk =
       platformId === "tiktok-commerce" &&
-      skillVersion === TIKTOK_COMMERCE_SKILL.version;
+      PLATFORM_SKILLS[skillVersion as keyof typeof PLATFORM_SKILLS] !== undefined;
     if (!platformOk)
       issues.push("brief incompatível com a Skill da plataforma");
     const structuralStatus = "PASS";
-    const varietyStatus = issues.some((issue) => /duplicata|repetido/.test(issue))
+    const varietyStatus = issues.some((issue) => /duplicata|repetid/.test(issue))
       ? "FAIL"
       : "PASS";
     const platformStatus = platformOk ? "PASS" : "FAIL";
@@ -594,6 +740,7 @@ export function validateBriefSet(
           : "PASS";
     return {
       briefId: `${brief.contentId}:${brief.briefVersionId}`,
+      gateVersion: GATE_POLICY_VERSION,
       factualStatus: fact.status,
       claimType: fact.claimType,
       evidenceRefs: fact.evidenceRefs,
@@ -631,4 +778,64 @@ export function repairBriefs(
     "GEN-REPAIR-EXHAUSTED",
     "Repair não produziu briefing válido",
   );
+}
+
+// ─── Gate de cenas (ADR-019) ─────────────────────────────────────────────────
+// Cenas são sugestões visuais read-only derivadas do briefing: o gate é um FILTRO
+// (drop + telemetria), nunca job-fail. Piso estrutural por cena:
+//   1. ação observável (verbo de ação — garante movimento cedo na primeira cena
+//      mantida, TikTok-first);
+//   2. referência a produto/parte/objeto do briefing (âncora lexical);
+//   3. nenhum claim factual novo (valor+unidade, atributo, conceito observável
+//      com polaridade — mesmos classificadores do gate de briefs);
+//   4. produção compatível com creator solo quando recordsAlone (nota
+//      da-uma-olhada: produção inadequada aparecia exatamente aqui).
+// Sem overlap de tokens com o hook (keyword-stuffing fácil — corte do consenso).
+// Set abaixo do mínimo de 2 cenas mantidas → set vazio (status FILTERED na UI).
+
+export type SceneIdea = { description: string };
+
+const SCENE_ACTION_RE = /\b(mostr|peg|coloc|vest|tir|retir|abr|abrac|sent|levant|caminh|and|apont|gir|vir|pass|test|prov|compar|clic|desliz|estic|amass|dobr|guard|bot|calc|segu|desembrul|acen|sorr|reag|entreg|empur|pux|ajeit|posicion)\w*/i;
+
+const SCENE_STOPWORDS = new Set(["que", "para", "com", "uma", "pelo", "pela", "isso", "aqui", "como", "voc", "voce", "seu", "sua", "mais", "menos", "nao", "sim", "tudo", "todo", "toda", "onde", "quando", "porque", "muito", "pouco", "agora", "depois", "antes", "gente", "coisa", "camera", "cena", "video", "tela", "dose"]);
+
+function sceneTerms(folded: string): Set<string> {
+  return new Set(folded.split(/\W+/).filter((term) => term.length >= 3 && !SCENE_STOPWORDS.has(term)));
+}
+
+function sceneClaimsUnauthorized(description: string, evidence: EvidenceSnapshot): boolean {
+  const folded = attrStems(normalizeForVariety(description));
+  const foldedFacts = evidence.facts
+    .map((fact, index) => ({ fact: attrStems(normalizeForVariety(fact)), index }))
+    .filter(({ index }) => evidence.refs[index] !== "product:name");
+  const observed = assessObservedConcepts([folded], foldedFacts, evidence);
+  if (observed.issues.length || observed.contradiction) return true;
+  return unverifiedObjectiveClaims(description, evidence) ||
+    capacityMatches(folded).some((claim) => {
+      const facts = foldedFacts.flatMap(({ fact }) =>
+        capacityMatches(fact).filter((candidate) => candidate.item === claim.item && (!claim.universal || candidate.universal) && candidate.polarity === claim.polarity),
+      );
+      return facts.length === 0;
+    });
+}
+
+export function gateSceneSet(
+  scenes: SceneIdea[],
+  brief: { angle: string; hook: string; development: string[]; script: string; cta: string },
+  evidence: EvidenceSnapshot,
+  creatorContext: CreatorRecordingContext = {},
+): { kept: SceneIdea[]; dropped: number } {
+  const anchors = sceneTerms(attrStems(normalizeForVariety(
+    [brief.angle, brief.hook, ...brief.development, brief.script, brief.cta, ...evidence.facts].join(" "),
+  )));
+  const kept = scenes.filter(({ description }) => {
+    const folded = attrStems(normalizeForVariety(description));
+    if (!SCENE_ACTION_RE.test(folded)) return false;
+    if (![...sceneTerms(folded)].some((term) => anchors.has(term))) return false;
+    if (sceneClaimsUnauthorized(description, evidence)) return false;
+    if (creatorContext.recordsAlone === true && requiresUndeclaredProduction(folded, creatorContext)) return false;
+    return true;
+  });
+  if (kept.length < 2) return { kept: [], dropped: scenes.length };
+  return { kept, dropped: scenes.length - kept.length };
 }

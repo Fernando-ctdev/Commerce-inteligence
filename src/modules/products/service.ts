@@ -744,6 +744,10 @@ export async function deleteTenantProduct(
       where: { tenantId, productId: id },
       data: { currentBriefVersionId: null, approvedBriefVersionId: null },
     });
+    // ADR-019: sets de cenas referenciam brief versions/contents — apagar antes.
+    await tx.contentSceneSet.deleteMany({
+      where: { tenantId, productId: id },
+    });
     await tx.briefValidationReport.deleteMany({
       where: { tenantId, productId: id },
     });

@@ -92,7 +92,7 @@ test("development shape requires communication action tied to evidence and rejec
   assert.equal(shotList.decision, "REPAIR");
   assert.ok(shotList.issues.some((issue) => issue.startsWith("development deve orientar comunicação")));
 });
-test("every development bullet needs a leading communication action, including grounded facts", () => {
+test("development needs a communication action somewhere, not necessarily leading", () => {
   for (const [development, facts] of [
     ["O tecido duna e leve", ["Tecido duna leve e macio"]],
     ["A cintura e alta", ["Cintura alta"]],
@@ -102,8 +102,10 @@ test("every development bullet needs a leading communication action, including g
     assert.equal(report.decision, "REPAIR", development);
     assert.ok(report.issues.some((issue) => issue.startsWith("development deve orientar comunicação")));
   }
-  const communicative = validateBriefSet([{ ...base, development: ["Comente a leveza que voce sente com o tecido duna"] }], { facts: ["Tecido duna leve e macio"], refs: ["fact:product"] })[0];
-  assert.equal(communicative.decision, "PASS");
+  const nonInitialRationale = validateBriefSet([{ ...base, development: ["A leveza do tecido duna leve e macio aparece no uso: destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso"] }], { facts: ["Tecido duna leve e macio"], refs: ["fact:features"] })[0];
+  assert.equal(nonInitialRationale.decision, "PASS", nonInitialRationale.issues.join("; "));
+  const nonInitialExperience = validateBriefSet([{ ...base, development: ["A leveza do tecido duna merece destaque: comente a leveza que voce sente com o tecido duna"] }], { facts: ["Tecido duna leve e macio"], refs: ["fact:product"] })[0];
+  assert.equal(nonInitialExperience.decision, "PASS", nonInitialExperience.issues.join("; "));
 });
 test("universal pocket capacity claim requires an explicitly universal fact", () => {
   const brief = { ...base, development: ["Destaque o bolso que comporta todo telefone para mostrar como o bolso acomoda o telefone"], script: "No bolso cabe todo smartphone" };

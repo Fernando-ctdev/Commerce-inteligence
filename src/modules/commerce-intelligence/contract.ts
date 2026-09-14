@@ -1,6 +1,6 @@
 export type FactStatus = "SUPPORTED" | "INFERRED_BUT_SAFE" | "UNSUPPORTED" | "CONTRADICTED";
 export type GateDecision = "PASS" | "REPAIR" | "REJECT";
-export class ContractError extends Error { constructor(public readonly code: "GEN-COUNT-REQUIRED" | "GEN-COUNT-RANGE" | "GEN-SCHEMA" | "GEN-FACT" | "GEN-VARIETY" | "GEN-REPAIR-EXHAUSTED", message: string, public readonly field?: string) { super(message); this.name = "ContractError"; } }
+export class ContractError extends Error { constructor(public readonly code: "GEN-COUNT-REQUIRED" | "GEN-COUNT-RANGE" | "GEN-SCHEMA" | "GEN-FACT" | "GEN-VARIETY" | "GEN-REPAIR-EXHAUSTED" | "GEN-GATE-VERSION" | "GEN-PATTERN", message: string, public readonly field?: string) { super(message); this.name = "ContractError"; } }
 const text = (v: unknown, field: string, max = 2_000): string => { if (typeof v !== "string" || !v.trim() || v.length > max) throw new ContractError("GEN-SCHEMA", `${field} inválido`, field); return v.trim(); };
 // Política centralizada de cardinalidade por campo: máximo rígido incondicional; mínimo
 // estrutural e mínimo condicional à evidência (minWithEvidence aplica quando existe
@@ -44,6 +44,9 @@ export const CARDINALITY_POLICY: Record<string, CardinalityRule> = {
   targetContentCount: { min: 1, minWithEvidence: 1, max: 10 },
   // Relatórios de validação (GateReport.issues).
   issues: { min: 0, minWithEvidence: 0, max: 20 },
+  // Cenas por set (ADR-019): provider entrega 2–6; gate filtra e o mínimo
+  // final de 2 mantidos é aplicado pós-filtro (set vazio quando não fecha).
+  scenes: { min: 2, minWithEvidence: 2, max: 6 },
 };
 const cardinalityRule = (field: string): CardinalityRule => CARDINALITY_POLICY[field] ?? { min: 0, minWithEvidence: 0, max: 20 };
 // hasEvidence: ausência de snapshot ou de refs autorizadas relaxa o mínimo para `min`
@@ -125,7 +128,7 @@ export function validateCommercialOpportunityMappingEnvelope(value: unknown, evi
   return { audiences: strings(v.audiences, "audiences"), situations: strings(v.situations, "situations"), pains: strings(v.pains, "pains"), desires: strings(v.desires, "desires"), objections: strings(v.objections, "objections"), opportunities };
 }
 export type ContentPlan = { id: string; productId: string; strategyVersion: 1; targetContentCount: number; platformId: string; platformSkillVersion: string; opportunities: ContentOpportunity[] };
-export function validateContentPlan(value: unknown): ContentPlan { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Plano inválido"); const v = value as Record<string, unknown>; const n = validateTargetContentCount(v.targetContentCount); const opportunities = Array.isArray(v.opportunities) ? v.opportunities.map((item) => validateContentOpportunity(item)) : []; if (opportunities.length !== n) throw new ContractError("GEN-COUNT-RANGE", "Plano deve conter a quantidade exata de oportunidades"); return { id: id(v.id, "id"), productId: id(v.productId, "productId"), strategyVersion: 1, targetContentCount: n, platformId: text(v.platformId, "platformId", 100), platformSkillVersion: text(v.platformSkillVersion, "platformSkillVersion", 100), opportunities }; }
+export function validateContentPlan(value: unknown, hookVariety?: { classify: (mechanism: string) => string; buckets: number }): ContentPlan { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Plano inválido"); const v = value as Record<string, unknown>; const n = validateTargetContentCount(v.targetContentCount); const opportunities = Array.isArray(v.opportunities) ? v.opportunities.map((item) => validateContentOpportunity(item)) : []; if (opportunities.length !== n) throw new ContractError("GEN-COUNT-RANGE", "Plano deve conter a quantidade exata de oportunidades"); if (hookVariety && hookVariety.buckets > 0) { const cap = Math.ceil(n / hookVariety.buckets); const usage = new Map<string, number>(); for (const opportunity of opportunities) { const bucket = hookVariety.classify(opportunity.hookMechanism); usage.set(bucket, (usage.get(bucket) ?? 0) + 1); if (usage.get(bucket)! > cap) throw new ContractError("GEN-VARIETY", `hookMechanism concentrado no bucket "${bucket}" além do teto ceil(${n}/${hookVariety.buckets})=${cap} do plano`, "hookMechanism"); } } return { id: id(v.id, "id"), productId: id(v.productId, "productId"), strategyVersion: 1, targetContentCount: n, platformId: text(v.platformId, "platformId", 100), platformSkillVersion: text(v.platformSkillVersion, "platformSkillVersion", 100), opportunities }; }
 export type ContentBriefVersion = { contentId: string; briefVersionId: string; version: 1; angle: string; hook: string; development: string[]; script: string; cta: string; structure?: string; objective?: string; targetAudience?: string; pain?: string; desire?: string; objection?: string; benefit?: string; notes?: string };
 export type ContentBriefDraft = Omit<ContentBriefVersion, "contentId" | "briefVersionId" | "version">;
 // Only declared brief fields cross into persistence; unknown provider fields are omitted.
@@ -158,7 +161,28 @@ export function assignServerBriefIds(rawItems: unknown[], jobId: string, baseInd
     return validateContentBrief({ ...item, contentId, briefVersionId: `${jobId}-brief-${position}`, version: 1 });
   });
 }
-export type BriefValidationReport = { briefId: string; contentId: string; briefVersionId: string; factualStatus: FactStatus; structuralStatus: "PASS" | "FAIL"; platformStatus: "PASS" | "FAIL"; varietyStatus: "PASS" | "FAIL"; issues: string[]; decision: GateDecision };
-export function validateBriefValidationReport(value: unknown): BriefValidationReport { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Relatório inválido"); const v = value as Record<string, unknown>; const contentId = id(v.contentId, "contentId"); const briefVersionId = id(v.briefVersionId, "briefVersionId"); if (v.briefId !== `${contentId}:${briefVersionId}`) throw new ContractError("GEN-SCHEMA", "briefId inconsistente"); const factualStatus = v.factualStatus; if (!["SUPPORTED", "INFERRED_BUT_SAFE", "UNSUPPORTED", "CONTRADICTED"].includes(String(factualStatus))) throw new ContractError("GEN-FACT", "Factualidade inválida"); const decision = v.decision; if (!["PASS", "REPAIR", "REJECT"].includes(String(decision))) throw new ContractError("GEN-SCHEMA", "Decisão inválida"); return { briefId: v.briefId as string, contentId, briefVersionId, factualStatus: factualStatus as FactStatus, structuralStatus: v.structuralStatus === "PASS" ? "PASS" : "FAIL", platformStatus: v.platformStatus === "PASS" ? "PASS" : "FAIL", varietyStatus: v.varietyStatus === "PASS" ? "PASS" : "FAIL", issues: strings(v.issues, "issues"), decision: decision as GateDecision }; }
+export type BriefValidationReport = { briefId: string; contentId: string; briefVersionId: string; gateVersion: number | null; factualStatus: FactStatus; structuralStatus: "PASS" | "FAIL"; platformStatus: "PASS" | "FAIL"; varietyStatus: "PASS" | "FAIL"; issues: string[]; decision: GateDecision };
+export function validateBriefValidationReport(value: unknown): BriefValidationReport { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Relatório inválido"); const v = value as Record<string, unknown>; const contentId = id(v.contentId, "contentId"); const briefVersionId = id(v.briefVersionId, "briefVersionId"); if (v.briefId !== `${contentId}:${briefVersionId}`) throw new ContractError("GEN-SCHEMA", "briefId inconsistente"); const factualStatus = v.factualStatus; if (!["SUPPORTED", "INFERRED_BUT_SAFE", "UNSUPPORTED", "CONTRADICTED"].includes(String(factualStatus))) throw new ContractError("GEN-FACT", "Factualidade inválida"); const decision = v.decision; if (!["PASS", "REPAIR", "REJECT"].includes(String(decision))) throw new ContractError("GEN-SCHEMA", "Decisão inválida"); return { briefId: v.briefId as string, contentId, briefVersionId, gateVersion: typeof v.gateVersion === "number" ? v.gateVersion : null, factualStatus: factualStatus as FactStatus, structuralStatus: v.structuralStatus === "PASS" ? "PASS" : "FAIL", platformStatus: v.platformStatus === "PASS" ? "PASS" : "FAIL", varietyStatus: v.varietyStatus === "PASS" ? "PASS" : "FAIL", issues: strings(v.issues, "issues"), decision: decision as GateDecision }; }
 export const structureHash = (brief: Pick<ContentBriefVersion, "structure" | "development" | "cta">): string => { let h = 2166136261; for (const c of JSON.stringify([brief.structure ?? "", brief.development.length, brief.cta]).normalize("NFKC").toLowerCase()) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0).toString(16).padStart(8, "0"); };
 export const normalizeForVariety = (value: string): string => value.normalize("NFKC").toLocaleLowerCase("pt-BR").replace(/\s+/g, " ").trim();
+
+// ─── ContentSceneSet (ADR-019) ────────────────────────────────────────────────
+// Contrato canônico separado de ContentBriefVersion: cenas são sugestões visuais
+// read-only derivadas do briefing completo, escopadas por (tenantId, briefVersionId).
+// Nunca voltam ao payload do brief (imutabilidade preservada).
+export type SceneIdea = { description: string };
+
+// Saída do provider para CONTENT_SCENE_IDEAS antes do gate: 2–6 cenas.
+export function validateContentSceneSetDraft(value: unknown): SceneIdea[] {
+  if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Set de cenas inválido");
+  const v = value as Record<string, unknown>;
+  if (!Array.isArray(v.scenes)) throw new ContractError("GEN-SCHEMA", "scenes inválido", "scenes");
+  const rule = CARDINALITY_POLICY.scenes;
+  if (v.scenes.length < rule.min || v.scenes.length > rule.max)
+    throw new ContractError("GEN-SCHEMA", `cardinalidade de scenes fora da política (min ${rule.min}, max ${rule.max})`, "scenes");
+  return v.scenes.map((item): SceneIdea => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw new ContractError("GEN-SCHEMA", "cena inválida", "scenes");
+    const scene = item as Record<string, unknown>;
+    return { description: text(scene.description, "scenes.description", 500) };
+  });
+}

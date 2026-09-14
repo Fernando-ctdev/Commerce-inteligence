@@ -125,7 +125,7 @@ Product Importer┘             │                      │
 - Todo Product `ACTIVE` retornado por leitura autenticada inclui `generationAction`: `AVAILABLE` com `reason`/`nextAction` nulos, ou `BLOCKED` com o par `GEN-ACTIVE`/`VIEW_ACTIVE_ANALYSIS` ou `GEN-CAPACITY`/`WAIT_FOR_CAPACITY`. Product `ARCHIVED` não serializa o campo; archive/reactivate retornam mutação mínima e a UI recarrega o Product. Não há novo código de bloqueio. O `POST` revalida e reserva transacionalmente. Ver ADR-016.
 - Capacities seguem `Input Schema → Capability → Output Schema`. LLM nunca decide regra de sistema (estado de job, quota, persistência, versões).
 - Fato ≠ inferência: a engine pode inferir por que alguém compraria; não pode inventar o que o Produto é. Fact Validator classifica claims (`SUPPORTED`, `INFERRED_BUT_SAFE`, `UNSUPPORTED`, `CONTRADICTED`).
-- Gates: Quality Gate por briefing (estrutural + factual + semântica quando necessária); Variety Gate no conjunto (subordinado à relevância); Repair Loop com causa da rejeição e limite de tentativas; briefings aprovados no gate são preservados durante repair dos demais.
+- Gates: hard Quality Gate determinístico por briefing/conjunto (estrutural, factual e variedade) seguido de judge semântico interno obrigatório por hook, development, script, CTA e cenas. Repair substitui somente partes não-PASS, preserva PASS, revalida hard gate e judge em cada composição e bloqueia sucesso após no máximo 2 rounds globais; `ContentSceneSet` continua entidade separada e é condição de sucesso.
 
 ### Model Router
 
@@ -137,7 +137,7 @@ Engine Capability → Logical Intelligence Task → Model Router
 ```
 
 - Capabilities determinísticas não passam pelo router. Tarefas lógicas (ex.: `PRODUCT_UNDERSTANDING`, `STRATEGY_SYNTHESIS`, `CONTENT_BRIEF_GENERATION`, `VARIETY_AUDIT`) têm tier padrão evoluível por evals.
-- Padrão de custo: HIGH decide o conjunto, MID executa, HIGH audita. Regenerações locais reutilizam contexto (CTA → LOW; hook → LOW/MID; script → MID; replanejar conjunto → HIGH).
+- Padrão de custo: HIGH decide o conjunto, MID executa, HIGH audita. Curadoria usa `CONTENT_QUALITY_JUDGE`/HIGH e repair pontual `CONTENT_PART_REPAIR`/HIGH, sem fallback oculto. Regenerações locais reutilizam contexto (CTA → LOW; hook → LOW/MID; script → MID; replanejar conjunto → HIGH).
 - Um provider por vez no MVP, atrás do adapter. Provider nunca entra na regra de negócio. Tiers nunca variam por plano comercial.
 - Conteúdo extraído de páginas é dado não confiável, nunca instrução: separação explícita entre system instructions, contexto confiável da engine e conteúdo do Produto.
 

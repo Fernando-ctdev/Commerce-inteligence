@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CONTENT_BRIEF_GENERATION_INSTRUCTION, createHttpProvider, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY } from "./provider";
+import { CONTENT_BRIEF_GENERATION_INSTRUCTION, createHttpProvider, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
 import { CARDINALITY_POLICY } from "./contract";
 import { GenerationError } from "./errors";
 
@@ -9,10 +9,15 @@ function mockProviderFetch(models: string[]) {
   globalThis.fetch = (async (_url: unknown, init: { body: string }) => { models.push(JSON.parse(init.body).model); return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200, headers: { "content-type": "application/json" } }); }) as typeof fetch;
   return () => { globalThis.fetch = originalFetch; };
 }
+
+// Type guard local (sem inline cast) para leitura do body capturado.
+function recordOf(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
 test("preserves typed schema errors from provider output (no GEN-PROVIDER wrap)", async () => {
   const restore = mockProviderFetch([]);
   globalThis.fetch = (async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ tenantId: "forbidden", status: "X" }) } }] }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
-  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
   try {
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
     assert.fail("should have thrown");
@@ -32,7 +37,7 @@ test("routes by tier: MID→BALANCED, HIGH→QUALITY, LOW→FAST with existing v
     await provider.complete("STRATEGY_SYNTHESIS", { trustedContext: {} });
     await provider.complete("CONTENT_PLAN_GENERATION", { trustedContext: {} });
   } finally { restore(); }
-  assert.deepEqual(models, ["balanced-model", "balanced-model", "quality-model", "quality-model"]);
+  assert.deepEqual(models, ["quality-model", "balanced-model", "quality-model", "quality-model"], "ADR-020 adendo 3: PU roteado a QUALITY");
 });
 
 test("falls back only between existing configured variables (BALANCED→FAST→none)", async () => {
@@ -70,7 +75,7 @@ test("never reads LLM_MODEL_BRIEF: env cannot influence routing through configFr
     const provider = createHttpProvider();
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
     await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} });
-    assert.deepEqual(models, ["balanced-model", "balanced-model"]);
+    assert.deepEqual(models, ["quality-model", "balanced-model"]);
   } finally { restore(); }
 });
 test("sends fixed reasoning effort by logical capability", async () => {
@@ -136,7 +141,7 @@ test("brief provider instruction makes development strategic, evidence-grounded,
 test("non-2xx captures allowlisted rate headers in detail without body leakage", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response("TOKEN_SEGREDO_corpo_nao_lido", { status: 429, headers: { "content-type": "application/json", "retry-after": "7", "x-ratelimit-reset": "30", "x-ratelimit-remaining": "0", "x-ratelimit-limit": "5", "authorization": "should-not-be-captured" } })) as typeof fetch;
-  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
   try {
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
     assert.fail("should have thrown");
@@ -170,7 +175,7 @@ test("non-2xx without rate headers omits rate but keeps errorKind and providerSt
 test("ADR-017: 429 carrega telemetria sanitizada (modelo/endpoint/request-id/status) sem expor a API key", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response("rate limited", { status: 429, headers: { "x-request-id": "req_abc123", "x-ratelimit-remaining": "0" } })) as typeof fetch;
-  const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "sk-secret-key-valor", models: { MID: "modelo-efetivo" }, timeoutMs: 5000 });
+  const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "sk-secret-key-valor", models: { MID: "modelo-efetivo", HIGH: "modelo-efetivo" }, timeoutMs: 5000 });
   try {
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
     assert.fail("should have thrown");
@@ -191,7 +196,7 @@ test("ADR-017: 429 carrega telemetria sanitizada (modelo/endpoint/request-id/sta
 test("ADR-017: 429 com header x-request-id — header precede body.id e nada do corpo vaza", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(JSON.stringify({ id: "gen-body-111", error: { message: "Mensagem-interna-de-rate-limit-NAO-PERSISTIR" } }), { status: 429, headers: { "x-request-id": "req_header_001" } })) as typeof fetch;
-  const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "sk-secret-key-valor", models: { MID: "modelo-efetivo" }, timeoutMs: 5000 });
+  const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "sk-secret-key-valor", models: { MID: "modelo-efetivo", HIGH: "modelo-efetivo" }, timeoutMs: 5000 });
   try {
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
     assert.fail("should have thrown");
@@ -209,7 +214,7 @@ test("ADR-017: 429 com header x-request-id — header precede body.id e nada do 
 test("ADR-017: 429 sem header cai para body.id (chave raiz JSON, validado)", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(JSON.stringify({ id: "gen-1788464706-UnG9QGb0YH53nkPWhJXC", error: { message: "rate-limited" } }), { status: 429 })) as typeof fetch;
-  const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
   try {
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
     assert.fail("should have thrown");
@@ -224,7 +229,7 @@ test("ADR-017: valores inválidos são omitidos (header inválido não cai para 
   const originalFetch = globalThis.fetch;
   // Header presente porém inválido (>200 inviabiliza? aqui caracteres proibidos) — omitido, sem fallback.
   globalThis.fetch = (async () => new Response(JSON.stringify({ id: "gen-valido" }), { status: 429, headers: { "x-request-id": "id com espaço!!!" } })) as typeof fetch;
-  const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  const provider = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
   try {
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
     assert.fail("should have thrown");
@@ -236,7 +241,7 @@ test("ADR-017: valores inválidos são omitidos (header inválido não cai para 
 
   // Corpo não-JSON em erro: omitido sem lançar exceção de parse.
   globalThis.fetch = (async () => new Response("gateway timeout html<>", { status: 503 })) as typeof fetch;
-  const provider2 = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  const provider2 = createHttpProvider({ baseUrl: "https://api.exemplo/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
   try {
     await provider2.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
     assert.fail("should have thrown");
@@ -250,7 +255,7 @@ test("ADR-017: valores inválidos são omitidos (header inválido não cai para 
 test("ADR-017: sucesso 200 expõe providerRequestId via onMetrics (body.id quando sem header)", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(JSON.stringify({ id: "gen-ok-987", choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
-  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
   let captured: { providerRequestId?: string; providerRequestIdSource?: string } | undefined;
   try {
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (metrics) => { captured = metrics; });
@@ -262,7 +267,7 @@ test("ADR-017: sucesso 200 expõe providerRequestId via onMetrics (body.id quand
 test("ADR-017: id raiz não-string ou ausente é omitido", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(JSON.stringify({ id: 42, choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
-  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
   let captured: { providerRequestId?: string; providerRequestIdSource?: string } | undefined;
   try {
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (metrics) => { captured = metrics; });
@@ -293,7 +298,7 @@ test("fallback MID→HIGH: 503 na tentativa MID re-solicita uma vez em HIGH e re
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
   let captured: FallbackMetrics | undefined;
   try {
-    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (m) => { captured = m; });
+    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }, undefined, (m) => { captured = m; });
   } finally { restore(); }
   assert.deepEqual(models, ["balanced-model", "quality-model"]);
   assert.equal(captured?.retry, 1);
@@ -311,7 +316,7 @@ test("fallback cobre somente status de disponibilidade (408/429/502/503/504); 4x
     const restore = mockSequenceFetch(models, [() => new Response("err", { status }), okResponse]);
     const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
     try {
-      await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
+      await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} });
       assert.deepEqual(models, ["balanced-model", "quality-model"], `${status} deve cair em fallback`);
     } finally { restore(); }
   }
@@ -319,7 +324,7 @@ test("fallback cobre somente status de disponibilidade (408/429/502/503/504); 4x
   const restore = mockSequenceFetch(models, [() => new Response("bad request", { status: 400 }), okResponse]);
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
   try {
-    await assert.rejects(provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-PROVIDER");
+    await assert.rejects(provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-PROVIDER");
     assert.deepEqual(models, ["balanced-model"], "400 (config) não re-solicita");
   } finally { restore(); }
 });
@@ -330,7 +335,7 @@ test("fallback de conexão: fetch falha uma vez e HIGH responde; retry=1 com rea
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
   let captured: FallbackMetrics | undefined;
   try {
-    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (m) => { captured = m; });
+    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }, undefined, (m) => { captured = m; });
   } finally { restore(); }
   assert.deepEqual(models, ["balanced-model", "quality-model"]);
   assert.equal(captured?.retry, 1);
@@ -356,7 +361,7 @@ test("fallback por timeout próprio do provider: reason timeout", async () => {
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 30 });
   let captured: FallbackMetrics | undefined;
   try {
-    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (m) => { captured = m; });
+    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }, undefined, (m) => { captured = m; });
   } finally { globalThis.fetch = originalFetch; }
   assert.deepEqual(models, ["balanced-model", "quality-model"]);
   assert.equal(captured?.retry, 1);
@@ -377,7 +382,7 @@ test("abort externo (fencing) nunca cai em fallback", async () => {
   const controller = new AbortController();
   setTimeout(() => controller.abort(), 20);
   try {
-    await assert.rejects(provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, controller.signal), (error: GenerationError) => error.code === "GEN-PROVIDER");
+    await assert.rejects(provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }, controller.signal), (error: GenerationError) => error.code === "GEN-PROVIDER");
     assert.deepEqual(models, ["balanced-model"], "abort externo não re-solicita");
   } finally { globalThis.fetch = originalFetch; }
 });
@@ -389,7 +394,7 @@ test("GEN-SCHEMA e tarefa HIGH nunca caem em fallback; modelo repetido não re-s
   const schemaProvider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
   try {
     await assert.rejects(schemaProvider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-SCHEMA");
-    assert.deepEqual(schemaModels, ["balanced-model"], "schema nunca cai em fallback");
+    assert.deepEqual(schemaModels, ["quality-model"], "schema nunca cai em fallback");
   } finally { restoreSchema(); }
   // Tarefa HIGH: 503 falha fechado, sem re-solicitação.
   const highModels: string[] = [];
@@ -404,7 +409,7 @@ test("GEN-SCHEMA e tarefa HIGH nunca caem em fallback; modelo repetido não re-s
   const restoreSame = mockSequenceFetch(sameModels, [() => new Response("boom", { status: 503 }), okResponse]);
   const sameProvider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
   try {
-    await assert.rejects(sameProvider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-PROVIDER");
+    await assert.rejects(sameProvider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-PROVIDER");
     assert.deepEqual(sameModels, ["m"], "modelo efetivo igual não re-solicita");
   } finally { restoreSame(); }
 });
@@ -430,4 +435,88 @@ test("PRODUCT_UNDERSTANDING instruction never contradicts the limit with a no-tr
   // reasoning low resolvia o conflito excedendo purchaseBarriers/emotionalBenefits.
   assert.equal(PRODUCT_UNDERSTANDING_INSTRUCTION.includes("sem truncar"), false);
   assert.ok(PRODUCT_UNDERSTANDING_INSTRUCTION.includes("até o limite"));
+  // Fail-closed por item: sem ancora em fato autorizado o campo aceita [], nunca hipótese
+  // (causa do excedente de purchaseBarriers: objeções genéricas inferidas pelo modelo).
+  assert.ok(PRODUCT_UNDERSTANDING_INSTRUCTION.includes("nunca inclua hipóteses"));
+  assert.ok(PRODUCT_UNDERSTANDING_INSTRUCTION.includes("[] em vez de inventar"));
+});
+// ADR-020 adendo 4: PU usa response_format json_schema (maxItems derivados de
+// UNDERSTANDING_CARDINALITY); demais tasks permanecem json_object.
+function captureProviderBodies(bodies: Array<Record<string, unknown>>, responder?: (body: Record<string, unknown>) => Response) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: unknown, init: { body: string }) => {
+    const body = JSON.parse(init.body) as Record<string, unknown>;
+    bodies.push(body);
+    return responder
+      ? responder(body)
+      : new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  return () => { globalThis.fetch = originalFetch; };
+}
+
+test("PU request carries json_schema with maxItems per UNDERSTANDING_CARDINALITY", async () => {
+  const bodies: Array<Record<string, unknown>> = [];
+  const restore = captureProviderBodies(bodies);
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { LOW: "fast", MID: "balanced", HIGH: "quality" }, timeoutMs: 5000 });
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
+  } finally { restore(); }
+  const format = recordOf(bodies[0].response_format);
+  assert.equal(format?.type, "json_schema");
+  const envelope = recordOf(format?.json_schema);
+  assert.equal(envelope?.strict, true, "QA7: strict é o único modo que garante maxItems");
+  const schema = recordOf(envelope?.schema);
+  assert.equal(schema?.additionalProperties, false);
+  const properties = recordOf(schema?.properties);
+  assert.ok(properties);
+  // QA7: category omitida do schema (opcional no validador; additionalProperties:false
+  // impede emissão) — propriedades são EXATAMENTE productId + UNDERSTANDING_FIELDS.
+  assert.deepEqual(Object.keys(properties).sort(), ["productId", ...UNDERSTANDING_FIELDS].sort());
+  const required = Array.isArray(schema?.required) ? schema.required.map(String) : [];
+  assert.deepEqual(required.sort(), ["productId", ...UNDERSTANDING_FIELDS].sort());
+  for (const [field, max] of Object.entries(UNDERSTANDING_CARDINALITY)) {
+    assert.equal(recordOf(properties[field])?.maxItems, max, field);
+  }
+});
+
+test("provider adapter caps only PU cardinality arrays before returning output", async () => {
+  const bodies: Array<Record<string, unknown>> = [];
+  const payload = {
+    productId: "p",
+    purchaseBarriers: Array.from({ length: CARDINALITY_POLICY.purchaseBarriers.max + 1 }, (_, i) => `barrier-${i}`),
+    extraArray: Array.from({ length: CARDINALITY_POLICY.purchaseBarriers.max + 1 }, (_, i) => `extra-${i}`),
+  };
+  const restore = captureProviderBodies(bodies, () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(payload) } }] }), { status: 200, headers: { "content-type": "application/json" } }));
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { LOW: "fast", MID: "balanced", HIGH: "quality" }, timeoutMs: 5000 });
+  try {
+    const understanding = recordOf(await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }));
+    assert.deepEqual(understanding?.purchaseBarriers, payload.purchaseBarriers.slice(0, CARDINALITY_POLICY.purchaseBarriers.max));
+    assert.equal((understanding?.extraArray as string[]).length, payload.extraArray.length, "campos fora da policy não são reduzidos");
+    const brief = recordOf(await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }));
+    assert.equal((brief?.purchaseBarriers as string[]).length, payload.purchaseBarriers.length, "outras tasks mantêm a saída intacta");
+  } finally { restore(); }
+  assert.equal(bodies.length, 2);
+});
+
+test("non-PU tasks keep generic json_object response_format", async () => {
+  const bodies: Array<Record<string, unknown>> = [];
+  const restore = captureProviderBodies(bodies);
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { LOW: "fast", MID: "balanced", HIGH: "quality" }, timeoutMs: 5000 });
+  try {
+    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} });
+  } finally { restore(); }
+  assert.deepEqual(bodies[0].response_format, { type: "json_object" });
+});
+
+test("provider without schema support (HTTP 400) stays fail-closed: explicit error, no silent downgrade", async () => {
+  const bodies: Array<Record<string, unknown>> = [];
+  const statuses: number[] = [];
+  const restore = captureProviderBodies(bodies, () => new Response(JSON.stringify({ error: { message: "response_format json_schema unsupported" } }), { status: 400, headers: { "content-type": "application/json" } }));
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { LOW: "fast", MID: "balanced", HIGH: "quality" }, timeoutMs: 5000 });
+  try {
+    await assert.rejects(() => provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }));
+  } finally { restore(); }
+  assert.equal(bodies.length, 1, "uma única chamada: sem downgrade silencioso para json_object");
+  const format400 = recordOf(bodies[0].response_format);
+  assert.equal(format400?.type, "json_schema", "sem downgrade silencioso de formato");
 });

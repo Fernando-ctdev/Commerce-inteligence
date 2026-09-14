@@ -413,7 +413,7 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 - Reavaliar explicitamente a Strategy quando fatos relevantes mudarem (regra `STALE`); Strategy substituída vira `SUPERSEDED` e contents históricos permanecem vinculados à versão usada.
 - Persistir proveniência completa e aplicar quota/idempotência por job.
 
-**Out of Scope:** Embeddings, banco vetorial, deduplicação semântica sofisticada, LLM-as-judge obrigatório, análise de performance externa, mudança automática de Strategy.
+**Out of Scope:** Embeddings, banco vetorial, similaridade/deduplicação semântica e judge LLM de variedade ou memória, análise de performance externa, mudança automática de Strategy. `CONTENT_QUALITY_JUDGE` interno pertence ao Slice 003: executa após o hard gate, limitado a hook, development, script, CTA e cenas, com repair seletivo (máximo 2 rounds), exact-N e falha fail-closed; não oferece UI, aprovação humana, ranking ou seleção de modelo.
 
 ---
 
