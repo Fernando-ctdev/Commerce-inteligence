@@ -472,6 +472,18 @@
   max-width: 62ch;
 }
 
+.detailTabs {
+  gap: 16px;
+}
+
+/* Estados da aba Cenas: mensagens de contrato, sem detalhes internos. */
+.scenesNote {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0;
+}
+
 /* Seções do Briefing separadas por divisão sutil, não por cards. */
 .detailSection {
   border-top: 1px solid var(--color-border);

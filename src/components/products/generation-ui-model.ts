@@ -164,6 +164,7 @@ export type BriefingItem = {
   script: string;
   cta: string;
   objective: string;
+  scenes: ScenesProjection;
   targetAudience: string;
   pain: string;
   desire: string;
@@ -194,6 +195,7 @@ export function briefingItems(contents: Array<Record<string, unknown>>): Briefin
       status: text(content.status) || "DRAFT",
       hook: text(content.hook),
       development: developmentBullets(content.development),
+      scenes: scenesProjection(content),
       script: text(content.script),
       cta: text(content.cta),
       objective: text(content.objective),
@@ -209,6 +211,27 @@ export function briefingItems(contents: Array<Record<string, unknown>>): Briefin
 /** Roteiro em parágrafos de leitura: uma frase completa por parágrafo, para leitura start-to-end com pausas visuais. */
 export function scriptParagraphs(script: string): string[] {
   return script.split(/(?<=[.!?])["']?\s+/u).map((paragraph) => paragraph.trim()).filter(Boolean);
+}
+
+/** Projeção de cenas do envelope /api/generations (ADR-019): null = não-gerado (conteúdo antigo ou sem row). */
+export type ScenesProjection = { status: "AVAILABLE" | "FILTERED" | "ERROR"; scenes: Array<{ description: string }>; generated: number; dropped: number } | null;
+
+/** Tolerante a payload malformado: forma inválida ou status desconhecido volta como null (não-gerado). */
+export function scenesProjection(content: Record<string, unknown>): ScenesProjection {
+  const raw = content.scenes;
+  if (raw === null || raw === undefined) return null;
+  const v = typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+  if (!v) return null;
+  if (v.status !== "AVAILABLE" && v.status !== "FILTERED" && v.status !== "ERROR") return null;
+  const scenes = Array.isArray(v.scenes)
+    ? v.scenes.map((scene) => text(typeof scene === "object" && scene !== null ? (scene as Record<string, unknown>).description : undefined)).filter(Boolean).map((description) => ({ description }))
+    : [];
+  return {
+    status: v.status,
+    scenes,
+    generated: typeof v.generated === "number" ? v.generated : scenes.length,
+    dropped: typeof v.dropped === "number" ? v.dropped : 0,
+  };
 }
 
 /** Estado de cada fase pública do job, derivado apenas de status + stage. */

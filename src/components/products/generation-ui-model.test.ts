@@ -18,9 +18,18 @@ import {
   phaseStateLabels,
   phaseStates,
   stageMessage,
-  strategyModel,
+  statusMessage,
   scriptParagraphs,
+  scenesProjection,
+  strategyModel,
 } from "./generation-ui-model";
+
+test("banner terminal distingue CANCELLED de FAILED sem diagnóstico técnico", () => {
+  assert.equal(statusMessage("CANCELLED"), "A análise foi cancelada.");
+  const failed = statusMessage("FAILED");
+  assert.equal(failed, "Não foi possível concluir a análise. Seus dados permanecem preservados.");
+  assert.ok(!failed.includes("CANCELLED") && !failed.includes("GEN-"));
+});
 
 test("mapeia estados e stages públicos para mensagens humanas", () => {
   assert.equal(generationStatusLabel("RUNNING"), "Analisando");
@@ -177,7 +186,7 @@ test("briefingItems projeta só campos reais e ordena por posição", () => {
   assert.equal(items[0].targetAudience, "Público A");
   assert.deepEqual(items[0].development, ["Destaque o benefício real", "Demonstre o uso"]);
   assert.equal(items[0].pain, "");
-  assert.equal("scenes" in items[1], false);
+  assert.deepEqual(items[1].scenes, null);
   assert.equal(items[1].objective, "");
 });
 
@@ -186,20 +195,42 @@ test("briefingItems tolera payload ausente e exige development como lista", () =
   assert.deepEqual(items[0].development, []);
   assert.equal(items[0].position, 1);
   assert.equal(items[0].status, "DRAFT");
-  assert.equal("scenes" in items[0], false);
+  assert.deepEqual(items[0].scenes, null);
 });
 
 
 test("development persistido como string[] mantém os bullets separados", () => {
   const items = briefingItems([{ id: "c1", hook: "Hook", development: ["Mostre o produto real em uso", "Comente o benefício principal"], script: "Roteiro", cta: "CTA" }]);
   assert.deepEqual(items[0].development, ["Mostre o produto real em uso", "Comente o benefício principal"]);
-  assert.equal("scenes" in items[0], false);
+  assert.deepEqual(items[0].scenes, null);
 });
 test("labels de status do Content não misturam estados do Estúdio", () => {
   assert.equal(contentStatusLabel("DRAFT"), "Rascunho");
   assert.equal(contentStatusLabel("APPROVED"), "Aprovado");
   assert.equal(contentStatusLabel("DISCARDED"), "Descartado");
   assert.equal(contentStatusLabel("GRAVANDO"), "GRAVANDO");
+});
+
+test("scenesProjection aplica os estados do contrato", () => {
+  assert.deepEqual(scenesProjection({ id: "c1" }), null);
+  assert.deepEqual(scenesProjection({ id: "c1", scenes: null }), null);
+  assert.deepEqual(scenesProjection({ id: "c1", scenes: ["legado"] }), null);
+  assert.deepEqual(scenesProjection({ id: "c1", scenes: { status: "EXISTENTE" } }), null);
+  const available = scenesProjection({
+    id: "c1",
+    scenes: { status: "AVAILABLE", generated: 3, dropped: 2, scenes: [{ description: "Abre em pé na rua" }, { description: " " }, { description: "Close do tecido" }, 42] },
+  });
+  assert.equal(available?.status, "AVAILABLE");
+  assert.deepEqual(available?.scenes, [{ description: "Abre em pé na rua" }, { description: "Close do tecido" }]);
+  assert.equal(available?.generated, 3);
+  assert.equal(available?.dropped, 2);
+  const filtered = scenesProjection({ id: "c1", scenes: { status: "FILTERED", scenes: [], generated: 2, dropped: 2 } });
+  assert.equal(filtered?.status, "FILTERED");
+  const error = scenesProjection({ id: "c1", scenes: { status: "ERROR", scenes: [], generated: 0, dropped: 0 } });
+  assert.equal(error?.status, "ERROR");
+  const defaults = scenesProjection({ id: "c1", scenes: { status: "AVAILABLE", scenes: [{ description: "Close do tecido" }] } });
+  assert.equal(defaults?.generated, 1);
+  assert.equal(defaults?.dropped, 0);
 });
 
 test("scriptParagraphs separa frases completas em parágrafos distintos", () => {

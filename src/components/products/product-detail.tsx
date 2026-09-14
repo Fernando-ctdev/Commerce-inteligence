@@ -25,6 +25,7 @@ import {
   OperationalSummaryCard,
   StrategyView,
 } from "./generation-views";
+import { statusMessage } from "./generation-ui-model";
 import { formatCommission, formatPriceWithCurrency } from "./product-form-model";
 import { ProductCreateForm } from "./product-create-form";
 import { useGenerationJob } from "./use-generation-job";
@@ -368,7 +369,7 @@ export function ProductDetail({ id }: { id: string }) {
             {generation.failed && generation.job && (
               <div className={styles.failureBanner} role="alert">
                 <CircleAlert aria-hidden="true" />
-                <p>A análise foi cancelada. Você pode tentar novamente.</p>
+                <p>{`${statusMessage(generation.job.status)} Você pode tentar novamente.`}</p>
               </div>
             )}
             <div className={styles.overviewLayout}>

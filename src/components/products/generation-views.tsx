@@ -21,10 +21,13 @@ import {
   contentStatusLabel,
   contentsSummaryLabel,
   strategyModel,
-  scriptParagraphs,
   type BriefingItem,
+  scriptParagraphs,
+  scenesProjection,
   type GenerationActionProjection,
+  type ScenesProjection,
 } from "./generation-ui-model";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import styles from "./generation-panel.module.css";
 
 export type GenerationState = {
@@ -52,12 +55,30 @@ function SectionLabel({ icon: Icon, children }: { icon: typeof Mic; children: st
 }
 
 /**
- * Painel do Briefing selecionado: hook dominante, desenvolvimento real em
- * bullets, roteiro oral e CTA sempre visíveis; cenas permanecem fora da UI.
- * Estratégia profunda segue em progressive disclosure ("Por que este conteúdo?").
- * Somente leitura — ações de Edição/Aprovação dependem de capability de
- * backend ainda não exposta.
+ * Painel do Briefing selecionado em duas abas: "Script" (hook dominante,
+ * desenvolvimento real em bullets, roteiro oral em parágrafos e CTA) e
+ * "Cenas" (estados do contrato ADR-019). Estratégia profunda segue em
+ * progressive disclosure ("Por que este conteúdo?").
+ * Somente leitura — nenhum botão de Aprovação/Edição/Regeneração: a curadoria
+ * do quality gate é interna e a capability de backend ainda não foi exposta.
  */
+/** Aba Cenas: estados do contrato ADR-019 — nenhuma ação de geração/regeneração na UI. */
+function ScenesNote({ scenes }: { scenes: ScenesProjection }) {
+  if (!scenes || (scenes.status === "AVAILABLE" && scenes.scenes.length === 0))
+    return <p className={styles.scenesNote}>Cenas entram na próxima análise deste produto.</p>;
+  if (scenes.status === "FILTERED")
+    return <p className={styles.scenesNote}>As ideias de cenas geradas não passaram nos critérios de qualidade.</p>;
+  if (scenes.status === "ERROR")
+    return <p className={styles.scenesNote}>Não foi possível gerar as cenas agora.</p>;
+  return (
+    <ol aria-label="Sugestões de cenas" className={styles.bulletList}>
+      {scenes.scenes.map((scene, index) => (
+        <li key={`${index}-${scene.description.slice(0, 24)}`}>{scene.description}</li>
+      ))}
+    </ol>
+  );
+}
+
 /** Sentinela: usuário pediu explicitamente voltar à lista (mobile). Diferente de "nunca selecionou". */
 const LIST_VIEW = "__list__";
 function BriefingDetail({ index, item, onBack, onNavigate, total }: {
@@ -89,6 +110,12 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
         <h3 className={styles.detailTitle}>{`Conteúdo ${pad2(item.position)}`}</h3>
         <p className={styles.statusTag}>{contentStatusLabel(item.status)}</p>
       </header>
+      <Tabs className={styles.detailTabs} defaultValue="script">
+        <TabsList aria-label="Seções do conteúdo" variant="line">
+          <TabsTrigger value="script">Script</TabsTrigger>
+          <TabsTrigger value="cenas">Cenas</TabsTrigger>
+        </TabsList>
+        <TabsContent value="script">
       <section aria-label="Gancho" className={styles.hookBlock}>
         <p className={styles.sectionLabel}>
           <Mic aria-hidden="true" className={[styles.sectionIcon, styles.sectionIconIntelligence].join(" ")} />
@@ -139,6 +166,11 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
           </div>
         </details>
       )}
+        </TabsContent>
+        <TabsContent value="cenas">
+          <ScenesNote scenes={item.scenes} />
+        </TabsContent>
+      </Tabs>
       <nav aria-label={`Navegação entre conteúdos: conteúdo ${index + 1} de ${total}`} className={styles.contentsNav}>
         <Button disabled={index <= 0} onClick={() => onNavigate(index - 1)} type="button" variant="outline">
           <ChevronLeft aria-hidden="true" />
