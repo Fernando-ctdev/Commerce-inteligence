@@ -120,12 +120,12 @@ Product Importer┘             │                      │
 ### Commerce Intelligence
 
 - Schemas canônicos versionados: `ProductUnderstanding`, `CommercialOpportunity`, `ProductStrategy`, `ContentPlan`, `ContentOpportunity`, `Content`, `ContentBriefVersion`, `ProductMemorySnapshot`, `BriefValidationReport`, `IntelligenceRun`.
-- Job público: `status` (QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED) + `stage` (UNDERSTANDING_PRODUCT → … → FINALIZING) com mensagens humanas mapeadas 1:1 para etapas reais. Sem percentual ou ETA inventados.
+- Job público: `status` (QUEUED/RUNNING/SUCCEEDED/SUCCEEDED_PARTIAL/FAILED/CANCELLED — parcial declarado conforme ADR-021) + `stage` (UNDERSTANDING_PRODUCT → … → FINALIZING) com mensagens humanas mapeadas 1:1 para etapas reais. Sem percentual ou ETA inventados.
 - `IntelligenceRun` registra engine version, skill version, modelo/provider por capability, custo, latência, retries — interno, nunca na UI.
 - Todo Product `ACTIVE` retornado por leitura autenticada inclui `generationAction`: `AVAILABLE` com `reason`/`nextAction` nulos, ou `BLOCKED` com o par `GEN-ACTIVE`/`VIEW_ACTIVE_ANALYSIS` ou `GEN-CAPACITY`/`WAIT_FOR_CAPACITY`. Product `ARCHIVED` não serializa o campo; archive/reactivate retornam mutação mínima e a UI recarrega o Product. Não há novo código de bloqueio. O `POST` revalida e reserva transacionalmente. Ver ADR-016.
 - Capacities seguem `Input Schema → Capability → Output Schema`. LLM nunca decide regra de sistema (estado de job, quota, persistência, versões).
 - Fato ≠ inferência: a engine pode inferir por que alguém compraria; não pode inventar o que o Produto é. Fact Validator classifica claims (`SUPPORTED`, `INFERRED_BUT_SAFE`, `UNSUPPORTED`, `CONTRADICTED`).
-- Gates: hard Quality Gate determinístico por briefing/conjunto (estrutural, factual e variedade) seguido de judge semântico interno obrigatório por hook, development, script, CTA e cenas. Repair substitui somente partes não-PASS, preserva PASS, revalida hard gate e judge em cada composição e bloqueia sucesso após no máximo 2 rounds globais; `ContentSceneSet` continua entidade separada e é condição de sucesso.
+- Gates: hard Quality Gate determinístico por briefing/conjunto (estrutural, factual e variedade) seguido de judge semântico interno obrigatório por hook, development, script, CTA e cenas. Repair substitui somente partes não-PASS, preserva PASS e revalida hard gate e judge em cada composição; após no máximo 2 rounds globais, parte ainda não-PASS reprova o ITEM (nunca publica) — item reprovado é faltante no contrato de entrega do ADR-021 (`SUCCEEDED_PARTIAL` dentro do teto de falhas, `FAILED` fora dele; `SUCCEEDED` pleno mantém exact-N). `ContentSceneSet` continua entidade separada e é condição de sucesso.
 
 ### Model Router
 
@@ -165,7 +165,7 @@ Uma transação curta persiste Product, cria `CommerceIntelligenceJob`, reserva 
 
 ### Segurança de LLM
 
-Prompt orienta, validação obriga. Nenhuma regra crítica vive só em prompt. Contexto mínimo por capability (slices de Strategy/Skill/Memory, não o mundo). Saída de provider é não confiável: schema, tamanho, cardinalidade, duplicatas e factualidade antes de persistir. Sem sucesso parcial silencioso: ou o conjunto fecha consistente, ou o job falha de forma recuperável.
+Prompt orienta, validação obriga. Nenhuma regra crítica vive só em prompt. Contexto mínimo por capability (slices de Strategy/Skill/Memory, não o mundo). Saída de provider é não confiável: schema, tamanho, cardinalidade, duplicatas e factualidade antes de persistir. Sem sucesso parcial **silencioso**: o job fecha completo (`SUCCEEDED`), fecha parcial declarado (`SUCCEEDED_PARTIAL`, somente itens aprovados, variedade revalidada e retry dos faltantes — ADR-021), ou falha de forma recuperável.
 
 ## 9. Requisitos não funcionais mínimos
 

@@ -1,12 +1,38 @@
 export type FactStatus = "SUPPORTED" | "INFERRED_BUT_SAFE" | "UNSUPPORTED" | "CONTRADICTED";
 export type GateDecision = "PASS" | "REPAIR" | "REJECT";
 export class ContractError extends Error { constructor(public readonly code: "GEN-COUNT-REQUIRED" | "GEN-COUNT-RANGE" | "GEN-SCHEMA" | "GEN-FACT" | "GEN-VARIETY" | "GEN-REPAIR-EXHAUSTED" | "GEN-GATE-VERSION" | "GEN-PATTERN", message: string, public readonly field?: string) { super(message); this.name = "ContractError"; } }
+// ADR-021: geração parcial declarada. Teto server-side de falhas por job que
+// ainda permitem fechamento SUCCEEDED_PARTIAL; acima disso o job reprova inteiro.
+export const PARTIAL_FAILURE_CAP = 2;
+// Cascata determinística de diagnóstico por item/round (assinatura residual do
+// repair; nunca payload bruto do provider).
+export type PartialFailureCheckCode =
+  | "factRef_invalid"
+  | "action_stem_missing"
+  | "connector_missing"
+  | "grounding_below_min"
+  | "script_claim_missing"
+  | "feature_list"
+  | "unverified_claim";
+export type FailedItemDiagnostic = {
+  contentId: string;
+  position: number;
+  reason: "HARD_GATE" | "JUDGE" | "VARIETY_CAP";
+  checkCodes: PartialFailureCheckCode[];
+  issues: string[];
+  quality?: Array<{ part: string; round: number; criterion: string; reason: string }>;
+  diagnostic?: { actionPresent: boolean; connectorPresent: boolean; minGroundingExpected: number; minGroundingMatched: number };
+};
+export type EnginePartial = { expectedCount: number; deliveredCount: number; failedCount: number; failedItems: FailedItemDiagnostic[] };
 const text = (v: unknown, field: string, max = 2_000): string => { if (typeof v !== "string" || !v.trim() || v.length > max) throw new ContractError("GEN-SCHEMA", `${field} inválido`, field); return v.trim(); };
 // Política centralizada de cardinalidade por campo: máximo rígido incondicional; mínimo
 // estrutural e mínimo condicional à evidência (minWithEvidence aplica quando existe
 // evidência autorizada). Violação é falha tipada GEN-SCHEMA — nunca truncamento,
 // preenchimento ou invenção (B-003-07/ADR-012).
-export const CARDINALITY_POLICY_VERSION = 1;
+// v2 (decisão Arquiteto, jobs d152286c/177ca166): campos estratégicos do PU
+// aceitam [] sem evidência PERTINENTE ao campo — presença de qualquer ref não
+// é evidência para todos os campos. Bump registrado na execução via eventos.
+export const CARDINALITY_POLICY_VERSION = 2;
 export type CardinalityRule = { min: number; minWithEvidence: number; max: number };
 export const CARDINALITY_POLICY: Record<string, CardinalityRule> = {
   // ProductUnderstanding: arrays estruturais só são exigidos quando há evidência.
@@ -51,10 +77,25 @@ export const CARDINALITY_POLICY: Record<string, CardinalityRule> = {
 const cardinalityRule = (field: string): CardinalityRule => CARDINALITY_POLICY[field] ?? { min: 0, minWithEvidence: 0, max: 20 };
 // hasEvidence: ausência de snapshot ou de refs autorizadas relaxa o mínimo para `min`
 // (sem evidência o provider não pode inventar); com evidência, aplica minWithEvidence.
-const hasEvidence = (evidence?: EvidenceSnapshot): boolean => Boolean(evidence && evidence.refs.length > 0);
+// PERTINENCE_EXCLUDES (decisão Arquiteto/ADR-012): evidência PERTINENTE por campo —
+// os 5 campos estratégicos do PU exigem fato além da identidade do produto
+// (product:name); apenas identidade autorizada = sem evidência pertinente
+// (min relaxado), nunca inventar. coreUseCases/capabilities seguem non-empty.
+const PERTINENCE_EXCLUDES: Record<string, readonly string[]> = {
+  functionalBenefits: ["product:name"],
+  emotionalBenefits: ["product:name"],
+  desiredOutcomes: ["product:name"],
+  purchaseTriggers: ["product:name"],
+  purchaseBarriers: ["product:name"],
+};
+const hasEvidence = (field: string, evidence?: EvidenceSnapshot): boolean => {
+  if (!evidence || evidence.refs.length === 0) return false;
+  const excluded = PERTINENCE_EXCLUDES[field] ?? [];
+  return evidence.refs.some((ref) => !excluded.includes(ref));
+};
 const strings = (v: unknown, field: string, evidence?: EvidenceSnapshot): string[] => {
   const rule = cardinalityRule(field);
-  const min = hasEvidence(evidence) ? rule.minWithEvidence : rule.min;
+  const min = hasEvidence(field, evidence) ? rule.minWithEvidence : rule.min;
   if (!Array.isArray(v) || v.length < min || v.length > rule.max || v.some((x) => typeof x !== "string" || !x.trim() || x.length > 500))
     throw new ContractError("GEN-SCHEMA", `cardinalidade de ${field} fora da política (min ${min}, max ${rule.max})`, field);
   return v.map((x) => (x as string).trim());

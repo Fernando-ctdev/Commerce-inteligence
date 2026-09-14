@@ -312,6 +312,7 @@ export async function failJobAndReleaseReservation(
   ownerId?: string,
   attempt?: number,
   internalDetail?: unknown,
+  failureRun?: { tenantId: string; productId: string; engineVersion: string; platformSkillVersion: string; metadata: Record<string, unknown> },
 ) {
   await prisma.$transaction(async (tx) => {
     const result = await tx.commerceIntelligenceJob.updateMany({
@@ -334,10 +335,29 @@ export async function failJobAndReleaseReservation(
           : { metadata: { internalError: internalDetail } }),
       },
     });
-    if (result.count)
-      await tx.generationUsageReservation.updateMany({
-        where: { jobId, status: "RESERVED" },
-        data: { status: "RELEASED", reason: code },
+    if (!result.count) return;
+    await tx.generationUsageReservation.updateMany({
+      where: { jobId, status: "RESERVED" },
+      data: { status: "RELEASED", reason: code },
+    });
+    // ADR-021: run de falha gravado na MESMA transação do fence de FAILED —
+    // vinculado a leaseOwnerId/attempt exatos; tentativa antiga não grava,
+    // mesmo repetindo o código de erro.
+    if (failureRun)
+      await tx.intelligenceRun.upsert({
+        where: { tenantId_jobId: { tenantId: failureRun.tenantId, jobId } },
+        create: {
+          tenantId: failureRun.tenantId,
+          jobId,
+          productId: failureRun.productId,
+          engineVersion: failureRun.engineVersion,
+          platformSkillVersion: failureRun.platformSkillVersion,
+          metadata: failureRun.metadata as never,
+          inputMemorySnapshot: {},
+        },
+        update: {
+          metadata: failureRun.metadata as never,
+        },
       });
   });
 }
@@ -387,6 +407,38 @@ export function runMetadata(
   } catch {
     return { attempt, engineVersion: ENGINE_VERSION, gateVersion: GATE_POLICY_VERSION, capabilities, repairs, repairCauses: repairCauses.map(({ briefId }) => ({ briefId, causes: ["deterministic_gate_repair"] })), validated, scenes, patternReplacements, understandingReductions, qualityAudits: qualityAudits.map(({ contentId, round, parts }) => ({ contentId, round, parts: parts.map(({ part, status, criterion, reason }) => ({ part, status, criterion, reason: reasonText(reason) })) })), qualityRepairs };
   }
+}
+
+
+// ADR-021: memorySignals ACUMULATIVOS — mecanismos/funções/ângulos entregues
+// fazem merge deduplicado com o snapshot anterior; planner recebe o conjunto
+// histórico para não repetir o já publicado.
+export function mergeMemorySignals(
+  previous: unknown,
+  current: {
+    generatedCount?: number;
+    deliveredHookMechanisms?: string[];
+    deliveredCtaFunctions?: string[];
+    deliveredAngles?: string[];
+    [key: string]: unknown;
+  },
+): Record<string, unknown> {
+  const prev = (previous && typeof previous === "object" && !Array.isArray(previous) ? previous : {}) as Record<string, unknown>;
+  const accumulate = (key: string): string[] => [
+    ...new Set([
+      ...(Array.isArray(prev[key]) ? prev[key].filter((value): value is string => typeof value === "string") : []),
+      ...(Array.isArray(current[key]) ? current[key].filter((value): value is string => typeof value === "string") : []),
+    ]),
+  ];
+  const prevCount = typeof prev.generatedCount === "number" ? prev.generatedCount : 0;
+  return {
+    ...prev,
+    ...current,
+    generatedCount: prevCount + (typeof current.generatedCount === "number" ? current.generatedCount : 0),
+    deliveredHookMechanisms: accumulate("deliveredHookMechanisms"),
+    deliveredCtaFunctions: accumulate("deliveredCtaFunctions"),
+    deliveredAngles: accumulate("deliveredAngles"),
+  };
 }
 
 export async function processGeneration(jobId: string, ownerId: string) {
@@ -524,6 +576,17 @@ export async function processGeneration(jobId: string, ownerId: string) {
       sourceUrl: product.sourceUrl,
     };
     const router = createHttpProvider();
+    // ADR-021: modo "complete" reutiliza a Strategy ACTIVE e o último snapshot
+    // de memória (itens entregues) — o planner não repete o já publicado.
+    const partialMode = (job.metadata as Record<string, unknown> | null)?.mode === "complete";
+    const reuseStrategyRow = partialMode
+      ? await prisma.productStrategy.findFirst({ where: { tenantId: job.tenantId, productId: job.productId, status: "ACTIVE" }, orderBy: { createdAt: "desc" } })
+      : null;
+    const memoryRow = partialMode
+      ? await prisma.productMemorySnapshot.findFirst({ where: { tenantId: job.tenantId, productId: job.productId }, orderBy: { createdAt: "desc" } })
+      : null;
+    const reuseStrategy = reuseStrategyRow?.payload as Record<string, unknown> | undefined;
+    const memorySignals = (memoryRow?.signals as Record<string, unknown> | undefined) ?? {};
     const output = await runFirstGeneration({
       productId: product.id,
       jobId: job.id,
@@ -555,7 +618,8 @@ export async function processGeneration(jobId: string, ownerId: string) {
       // retry técnico reutiliza o mesmo snapshot; GenerationConstraints do Product não
       // substitui preferências de estilo.
       creatorContext: extractJobCreatorContext(job.inputSnapshot),
-      memory: {},
+      memory: memorySignals,
+      ...(reuseStrategy ? { reuseStrategy } : {}),
     });
     if (!(await checkFence()))
       throw new GenerationError(
@@ -649,6 +713,8 @@ export async function processGeneration(jobId: string, ownerId: string) {
       output.qualityRepairs,
       output.understandingReductions,
     );
+    // ADR-021: assinatura residual do parcial vai no metadado do run.
+    const runDataWithPartial = output.partial ? { ...runData, partial: output.partial } : runData;
     emitJobEvent("job.finalizing", {
       jobId: job.id,
       attempt,
@@ -702,15 +768,22 @@ export async function processGeneration(jobId: string, ownerId: string) {
           payload: JSON.parse(JSON.stringify(output.productUnderstanding)),
         },
       });
-      await tx.intelligenceRun.create({
-        data: {
+      // ADR-021: run idempotente por job — persistido também em SUCCEEDED_PARTIAL.
+      await tx.intelligenceRun.upsert({
+        where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } },
+        create: {
           tenantId: job.tenantId,
           jobId: job.id,
           productId: job.productId,
           engineVersion: ENGINE_VERSION,
           platformSkillVersion: String(output.strategy.platformSkillVersion),
-          metadata: runData as never,
+          metadata: runDataWithPartial as never,
           inputMemorySnapshot: {},
+        },
+        update: {
+          engineVersion: ENGINE_VERSION,
+          platformSkillVersion: String(output.strategy.platformSkillVersion),
+          metadata: runDataWithPartial as never,
         },
       });
       for (const [index, opportunity] of output.opportunities.entries())
@@ -733,7 +806,8 @@ export async function processGeneration(jobId: string, ownerId: string) {
           },
         });
       for (const [index, brief] of output.briefs.entries()) {
-        const opportunity = output.opportunities[index];
+        // ADR-021: briefs entregues mantêm a oportunidade do plano original.
+        const opportunity = output.opportunities[output.briefOpportunityPositions?.[index] ?? index];
         const content = await tx.content.create({
           data: {
             id: brief.contentId,
@@ -743,7 +817,8 @@ export async function processGeneration(jobId: string, ownerId: string) {
             planId: plan.id,
             // P0-2: proveniência server-derived — Content vinculado à ContentOpportunity da mesma posição.
             opportunityId: opportunity ? String(opportunity.id) : null,
-            position: index + 1,
+            // ADR-021: posição original no plano (N), não renumerada no subconjunto.
+            position: (output.briefOpportunityPositions?.[index] ?? index) + 1,
             payload: briefPayloadForPersistence(brief),
           },
         });
@@ -812,17 +887,31 @@ export async function processGeneration(jobId: string, ownerId: string) {
           update: {},
         });
       }
+      // ADR-021: snapshot ACUMULATIVO — arrays do planner (mecanismos/funções/
+      // ângulos) fazem merge deduplicado com o snapshot anterior.
+      const previousSnapshot = await tx.productMemorySnapshot.findFirst({
+        where: { tenantId: job.tenantId, productId: job.productId },
+        orderBy: { createdAt: "desc" },
+      });
       await tx.productMemorySnapshot.create({
         data: {
           tenantId: job.tenantId,
           productId: job.productId,
           sourceJobId: job.id,
-          signals: JSON.parse(JSON.stringify(output.memorySignals)),
+          signals: JSON.parse(
+            JSON.stringify(
+              mergeMemorySignals(previousSnapshot?.signals, output.memorySignals),
+            ),
+          ),
         },
       });
+      // ADR-021/ADR-006: parcial confirma D e libera N−D no mês de origem —
+      // capacidade agrega RESERVED+CONFIRMED; a quantidade ajustada libera o resto.
       await tx.generationUsageReservation.updateMany({
         where: { jobId: job.id, status: "RESERVED" },
-        data: { status: "CONFIRMED" },
+        data: output.partial
+          ? { status: "CONFIRMED", quantity: output.partial.deliveredCount }
+          : { status: "CONFIRMED" },
       });
       await tx.commerceIntelligenceJob.updateMany({
         where: {
@@ -832,10 +921,22 @@ export async function processGeneration(jobId: string, ownerId: string) {
           attempt,
         },
         data: {
-          status: "SUCCEEDED",
+          status: output.partial ? "SUCCEEDED_PARTIAL" : "SUCCEEDED",
           stage: "FINALIZING",
           finishedAt: new Date(),
           leaseOwnerId: null,
+          ...(output.partial
+            ? {
+                // ADR-021: parcial é DECLARADO — contagens + assinatura por item.
+                metadata: {
+                  ...((job.metadata as Record<string, unknown> | null) ?? {}),
+                  expectedCount: output.partial.expectedCount,
+                  deliveredCount: output.partial.deliveredCount,
+                  failedCount: output.partial.failedCount,
+                  failedItems: output.partial.failedItems,
+                },
+              }
+            : {}),
           leaseDeadlineAt: null,
         },
       });
@@ -843,7 +944,7 @@ export async function processGeneration(jobId: string, ownerId: string) {
     emitJobEvent("job.terminal", {
       jobId: job.id,
       attempt,
-      errorCode: "SUCCEEDED",
+      errorCode: output.partial ? "SUCCEEDED_PARTIAL" : "SUCCEEDED",
       reservationAction: "CONFIRMED",
     });
   } catch (error) {
@@ -877,7 +978,9 @@ export async function processGeneration(jobId: string, ownerId: string) {
       databaseCode,
       detail: internalError,
     });
-    await failJobAndReleaseReservation(job.id, code, ownerId, attempt, internalError);
+    // ADR-021: IntelligenceRun em FAILED na MESMA transação do fence de FAILED
+    // (leaseOwnerId/attempt exatos) — diagnóstico sem payload bruto; tentativa
+    // antiga não grava, mesmo repetindo o código de erro.
     const rejected =
       detail &&
       typeof detail === "object" &&
@@ -885,6 +988,13 @@ export async function processGeneration(jobId: string, ownerId: string) {
       Array.isArray((detail as { rejected: unknown }).rejected)
         ? projectFailureDiagnostics((detail as { rejected: unknown }).rejected)
         : undefined;
+    await failJobAndReleaseReservation(job.id, code, ownerId, attempt, internalError, {
+      tenantId: job.tenantId,
+      productId: job.productId,
+      engineVersion: ENGINE_VERSION,
+      platformSkillVersion: loadPlatformSkill().version,
+      metadata: { internalError: internalError, diagnostics: rejected ?? null },
+    });
     emitJobEvent("job.terminal", {
       jobId: job.id,
       attempt,

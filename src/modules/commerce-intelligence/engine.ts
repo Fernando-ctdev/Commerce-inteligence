@@ -2,6 +2,7 @@ import {
   assignServerBriefIds,
   CARDINALITY_POLICY_VERSION,
   CARDINALITY_POLICY,
+  PARTIAL_FAILURE_CAP,
   validateCommercialOpportunityMappingEnvelope,
   validateContentBriefDraft,
   validateContentOpportunity,
@@ -20,6 +21,9 @@ import {
   type EvidenceSnapshot,
   type ProductStrategy,
   type ProductUnderstanding,
+  type EnginePartial,
+  type FailedItemDiagnostic,
+  type PartialFailureCheckCode,
   type SceneIdea,
 } from "./contract";
 import {
@@ -35,9 +39,11 @@ import {
   DEVELOPMENT_CONNECTORS,
   DEVELOPMENT_RATIONALE,
   ctaTextFactualIssues,
+  GATE_POLICY_VERSION,
   deliverableHookBuckets,
   developmentGroundingTerms,
   gateSceneSet,
+  diagnoseDevelopmentPoint,
   validDevelopmentPoint,
   validateBriefSet,
   type GatePattern,
@@ -70,6 +76,9 @@ export type EngineInput = {
   allowDeterministicTestFallback?: boolean;
   // Test seam: skill controlada para testar pool elegível vazio (ADR-020).
   skill?: PlatformSkill;
+  // ADR-021: sinais de memória do último snapshot (retry dos faltantes) e
+  // estratégia ACTIVE reutilizada — pula STRATEGY_SYNTHESIS quando presente.
+  reuseStrategy?: Record<string, unknown>;
   targetContentCount: number;
   onStage?: (stage: GenerationStage) => Promise<void> | void;
   signal?: AbortSignal;
@@ -122,6 +131,8 @@ export type EngineResult = {
   qualityAudits: QualityAudit[];
   qualityRepairs: Array<{ contentId: string; part: QualityPart; round: number; criterion: string; outcome: "REPAIRED" }>;
   validated: number;
+  briefOpportunityPositions: number[];
+  partial: EnginePartial | null;
 };
 
 // ADR-019: resultado das cenas por conteúdo. Backfill legado pode ser não-
@@ -986,6 +997,50 @@ export function createCapabilityTracker(opts: {
   return { track, capabilities };
 }
 
+// ADR-021: diagnóstico determinístico por item falho — mapeia issues do gate
+// para a cascata de checkCodes com os MESMOS predicados (sem payload bruto).
+function diagnoseFailure(
+  brief: ContentBriefVersion,
+  report: GateReport,
+  evidence: EvidenceSnapshot,
+  reason: FailedItemDiagnostic["reason"],
+  position: number,
+  quality: FailedItemDiagnostic["quality"],
+): FailedItemDiagnostic {
+  const checkCodes = new Set<PartialFailureCheckCode>();
+  const diagnostic = { actionPresent: true, connectorPresent: true, minGroundingExpected: 2, minGroundingMatched: 2 };
+  for (const issue of report.issues) {
+    if (/duplicata|repetid/.test(issue)) continue;
+    if (/claim sem evidência|sem evidência autorizada|contradito|sem suporte|sem evidência verificável/.test(issue))
+      checkCodes.add("unverified_claim");
+    if (/script contém claim factual/.test(issue)) checkCodes.add("script_claim_missing");
+    if (/orientar comunicação|lista de features|planos de gravação/.test(issue)) {
+      checkCodes.add("feature_list");
+      for (const point of brief.development) {
+        const d = diagnoseDevelopmentPoint(point, evidence);
+        if (!d.actionPresent) checkCodes.add("action_stem_missing");
+        if (d.shotList) checkCodes.add("feature_list");
+        if (!d.connectorPresent) checkCodes.add("connector_missing");
+        if (d.connectorPresent && d.minGroundingMatched < d.minGroundingExpected) checkCodes.add("grounding_below_min");
+        if (d.unverified) checkCodes.add("unverified_claim");
+        if (!d.valid) {
+          diagnostic.actionPresent = diagnostic.actionPresent && d.actionPresent;
+          diagnostic.connectorPresent = diagnostic.connectorPresent && d.connectorPresent;
+          diagnostic.minGroundingMatched = Math.min(diagnostic.minGroundingMatched, d.minGroundingMatched);
+        }
+      }
+    }
+  }
+  return {
+    contentId: brief.contentId,
+    position,
+    reason,
+    checkCodes: [...checkCodes],
+    issues: [...report.issues],
+    ...(quality && quality.length ? { quality } : {}),
+    diagnostic,
+  };
+}
 export async function runFirstGeneration(
   input: EngineInput,
 ): Promise<EngineResult> {
@@ -1165,7 +1220,24 @@ export async function runFirstGeneration(
       ),
     };
     await emit("BUILDING_STRATEGY");
-    strategyOutput = await track(
+    strategyOutput = input.reuseStrategy
+      ? // ADR-021: retry dos faltantes reutiliza a Strategy ACTIVE (decisões
+        // preservadas; vínculo canônico re-carimbado para o job atual).
+        validateProductStrategy(
+          {
+            ...input.reuseStrategy,
+            id: `${input.jobId}-strategy`,
+            productId: input.productId,
+            jobId: input.jobId,
+            version: 1,
+            status: "ACTIVE",
+            platformId: skill.id,
+            platformSkillVersion: skill.version,
+            opportunities: commercialOpportunities,
+          },
+          mappingEvidence,
+        )
+      : await track(
       "STRATEGY_SYNTHESIS",
       strategyContext,
       (onMetrics) =>
@@ -1209,7 +1281,9 @@ export async function runFirstGeneration(
         "CONTENT_PLAN_GENERATION",
         input.creatorContext,
       ),
-      memoryConstraints: {},
+      // ADR-021: retry dos faltantes reutiliza memória — sinais do último
+      // snapshot (entregues) restringem mecanismo/função já publicados.
+      memoryConstraints: input.memory ?? {},
       targetContentCount: count,
     };
     await emit("BUILDING_CONTENT_PLAN");
@@ -1393,7 +1467,7 @@ export async function runFirstGeneration(
         "CONTENT_BRIEF_GENERATION",
         input.creatorContext,
       ),
-      memoryConstraints: {},
+      memoryConstraints: input.memory ?? {},
       skillSlice: projectPlatformSkillSlice(skill, "brief"),
       // ADR-020 adendo 2: requirements server-derived no brief inicial (MID) —
       // alinha a expectativa antes do primeiro repair; orientação, não regra.
@@ -1644,19 +1718,19 @@ export async function runFirstGeneration(
       ),
     });
   }
-  let repaired = candidates.map((c) => c.brief);
-  let finalReports = validateBriefSet(
-    repaired,
+  // ADR-021: partição declarada — somente itens PASS no hard gate seguem para
+  // cenas/judge; falhas viram assinatura residual por item (nunca payload bruto).
+  const candidateReports = validateBriefSet(
+    candidates.map((c) => c.brief),
     evidence,
     "tiktok-commerce",
     skill.version,
     selectedPatterns,
     projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
   );
-  if (
-    repaired.length !== count ||
-    finalReports.some((report) => report.decision !== "PASS")
-  )
+  const hardIdx = candidates.map((_, i) => i).filter((i) => candidateReports[i].decision === "PASS");
+  const hardFailIdx = candidates.map((_, i) => i).filter((i) => candidateReports[i].decision !== "PASS");
+  if (hardIdx.length === 0)
     throw new GenerationError(
       "GEN-REPAIR-EXHAUSTED",
       "Repair não produziu briefing válido",
@@ -1665,18 +1739,17 @@ export async function runFirstGeneration(
         task: "CONTENT_BRIEF_GENERATION",
         rounds: repairRounds,
         expected: count,
-        received: repaired.length,
-        rejected: sanitizeGateReports(
-          finalReports.filter((report) => report.decision !== "PASS"),
-        ),
+        received: 0,
+        rejected: sanitizeGateReports(candidateReports.filter((report) => report.decision !== "PASS")),
       },
     );
+  const hard = hardIdx.map((i) => candidates[i]);
   // ADR-019: cenas são obrigatórias para a curadoria semântica; sets indisponíveis
   // ou com menos de duas cenas válidas bloqueiam o sucesso do job.
   const sceneSets = await generateSceneSetsForBriefs({
     jobId: input.jobId,
     productId: input.productId,
-    briefs: repaired,
+    briefs: hard.map(({ brief }) => brief),
     evidence,
     creatorContext: input.creatorContext,
     router: input.router,
@@ -1688,9 +1761,16 @@ export async function runFirstGeneration(
   });
     const qualityAudits: QualityAudit[] = [];
   const qualityRepairs: Array<{ contentId: string; part: QualityPart; round: number; criterion: string; outcome: "REPAIRED" }> = [];
+  // ADR-021: partições declaradas — índices do subconjunto hard (cenas/judge).
+  const judgeFailIdx = new Set<number>();
+  const compositionFailed = new Set<number>();
+  const varietyDropped = new Set<number>();
+  const compositionDiagnostics: GateReport[] = [];
+  const sceneDiagnostics: GateReport[] = [];
+  let lastQualityAudits: QualityAudit[] = [];
   if (input.router) {
     const judgeContent = async (index: number, round: number): Promise<QualityAudit> => {
-      const candidate = candidates[index];
+      const candidate = hard[index];
       const scenes = sceneSets[index];
       const context = {
         contentId: candidate.brief.contentId,
@@ -1721,9 +1801,9 @@ export async function runFirstGeneration(
       );
     };
     const hardGateComposition = (updatedIndex: number) => {
-      const current = candidates[updatedIndex].brief;
+      const current = hard[updatedIndex].brief;
       const hardReports = validateBriefSet(
-        candidates.map(({ brief }) => brief), evidence, "tiktok-commerce", skill.version,
+        hard.map(({ brief }) => brief), evidence, "tiktok-commerce", skill.version,
         selectedPatterns, projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
       );
       const scene = sceneSets[updatedIndex];
@@ -1737,17 +1817,21 @@ export async function runFirstGeneration(
       const scenesInvalid = gatedScenes.kept.length < 2 || gatedScenes.dropped > 0;
       if (scenesInvalid) rejectedReports.push({
         briefId: `${current.contentId}:${current.briefVersionId}`,
-        decision: "REJECT",
+        gateVersion: GATE_POLICY_VERSION,
+        factualStatus: "SUPPORTED",
+        claimType: "objetivo",
+        evidenceRefs: [],
+        structuralStatus: "PASS",
+        platformStatus: "PASS",
+        varietyStatus: "PASS",
         issues: ["scene_set_invalid"],
+        decision: "REJECT",
       } as typeof hardReports[number]);
-      if (rejectedReports.length)
-        throw new GenerationError("GEN-REPAIR-EXHAUSTED", "Composição reprovada no hard gate", true, {
-          task: "CONTENT_PART_REPAIR", contentId: current.contentId,
-          rejected: sanitizeGateReports(rejectedReports),
-        });
+      // ADR-021: composição reprovada falha o item; reports viram diagnóstico residual.
+      return rejectedReports;
     };
 
-    let currentQualityAudits = await Promise.all(candidates.map((_, index) => judgeContent(index, 0)));
+    let currentQualityAudits = await Promise.all(hard.map((_, index) => judgeContent(index, 0)));
     qualityAudits.push(...currentQualityAudits);
     let qualityRepairRounds = 0;
     for (let round = 1; round <= 2 && currentQualityAudits.some((audit) => qualityPartsToRepair(audit).length); round++) {
@@ -1758,7 +1842,7 @@ export async function runFirstGeneration(
       for (const { index, part } of pending) {
         const judgment = currentQualityAudits[index].parts.find((item) => item.part === part)!;
         if (judgment.status !== "REPAIR") continue;
-        const candidate = candidates[index];
+        const candidate = hard[index];
         const scene = sceneSets[index];
         const oldContent = part === "scenes" ? scene.scenes.map(({ description }) => description) : candidate.brief[part];
         const context = {
@@ -1795,46 +1879,150 @@ export async function runFirstGeneration(
         if (part === "scenes") {
           const repairedScenes = replacement as SceneIdea[];
           sceneSets[index] = { ...scene, status: "AVAILABLE", scenes: repairedScenes, generated: repairedScenes.length, dropped: 0 };
-        } else candidates[index] = { ...candidate, brief: composed.brief };
-        hardGateComposition(index);
+        } else hard[index] = { ...candidate, brief: composed.brief };
+        const compositionReports = hardGateComposition(index);
+        if (compositionReports.length) {
+          // ADR-021: composição reprovada falha o item, não o job.
+          compositionFailed.add(index);
+          compositionDiagnostics.push(...compositionReports);
+          continue;
+        }
         const audit = await judgeContent(index, round);
         currentQualityAudits[index] = audit;
         qualityAudits.push(audit);
         qualityRepairs.push({ contentId: candidate.brief.contentId, part, round, criterion: judgment.criterion, outcome: "REPAIRED" });
       }
     }
-    if (currentQualityAudits.some((audit) => audit.parts.some(({ status }) => status !== "PASS")) || sceneSets.some((set) => set.status !== "AVAILABLE" || set.scenes.length < 2))
-      throw new GenerationError("GEN-REPAIR-EXHAUSTED", "Judge semântico rejeitou parte ou a curadoria esgotou os dois rounds", true, {
-        task: "CONTENT_QUALITY_JUDGE", rounds: qualityRepairRounds,
-        rejected: projectQualityFailures(currentQualityAudits),
-      });
+    for (const [index, audit] of currentQualityAudits.entries())
+      if (audit.parts.some(({ status }) => status !== "PASS")) judgeFailIdx.add(index);
+    lastQualityAudits = currentQualityAudits;
   }
-  repaired = candidates.map((candidate) => candidate.brief);
-  finalReports = validateBriefSet(
-    repaired,
+  sceneSets.forEach((set, index) => {
+    if (set.status !== "AVAILABLE" || set.scenes.length < 2) {
+      judgeFailIdx.add(index);
+      sceneDiagnostics.push({
+        briefId: `${hard[index].brief.contentId}:${hard[index].brief.briefVersionId}`,
+        gateVersion: GATE_POLICY_VERSION,
+        factualStatus: "SUPPORTED",
+        claimType: "objetivo",
+        evidenceRefs: [],
+        structuralStatus: "PASS",
+        platformStatus: "PASS",
+        varietyStatus: "PASS",
+        issues: ["scene_set_invalid"],
+        decision: "REJECT",
+      });
+    }
+  });
+  // ADR-021 decisão 3: variedade do subconjunto entregue com teto ceil(D/K) —
+  // mesmos classificadores do gate; drop determinístico do mais fraco até fechar.
+  let delivered = hard.map((_, i) => i).filter((i) => !judgeFailIdx.has(i) && !compositionFailed.has(i));
+  let deliveredReports = validateBriefSet(
+    delivered.map((i) => hard[i].brief),
     evidence,
     "tiktok-commerce",
     skill.version,
     selectedPatterns,
     projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
   );
-  if (repaired.length !== count || finalReports.some((report) => report.decision !== "PASS"))
-    throw new GenerationError("GEN-REPAIR-EXHAUSTED", "Briefing inválido após curadoria semântica", true, { task: "CONTENT_QUALITY_JUDGE", expected: count, received: repaired.length });
+  const rankOf = (k: number): number[] => {
+    const report = deliveredReports[k];
+    const contentId = hard[delivered[k]].brief.contentId;
+    const lastAudit = qualityAudits.filter((audit) => audit.contentId === contentId).at(-1);
+    const qualityFails = lastAudit?.parts.filter(({ status }) => status !== "PASS").length ?? 0;
+    return [report.issues.length + qualityFails, -report.evidenceRefs.length, hardIdx[delivered[k]]];
+  };
+  while (deliveredReports.some((report) => report.decision !== "PASS")) {
+    const weakest = delivered
+      .map((_, k) => k)
+      .filter((k) => deliveredReports[k].decision !== "PASS")
+      .reduce((worst, k) => {
+        const a = rankOf(k);
+        const b = rankOf(worst);
+        const diff = a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+        return diff > 0 ? k : worst;
+      });
+    varietyDropped.add(delivered[weakest]);
+    delivered = delivered.filter((_, k) => k !== weakest);
+    deliveredReports = validateBriefSet(
+      delivered.map((i) => hard[i].brief),
+      evidence,
+      "tiktok-commerce",
+      skill.version,
+      selectedPatterns,
+      projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
+    );
+  }
+  const failedCount = count - delivered.length;
+  if (delivered.length === 0 || failedCount > PARTIAL_FAILURE_CAP)
+    throw new GenerationError(
+      "GEN-REPAIR-EXHAUSTED",
+      delivered.length === 0 && judgeFailIdx.size > 0
+        ? "Judge semântico rejeitou parte ou a curadoria esgotou os dois rounds"
+        : "Briefing inválido após curadoria semântica",
+      true,
+      {
+        task: "CONTENT_QUALITY_JUDGE",
+        expected: count,
+        received: delivered.length,
+        rejected:
+          compositionDiagnostics.length === 0 && sceneDiagnostics.length === 0
+            ? // Falha dirigida pelo judge: assinatura de curadoria da última rodada.
+              projectQualityFailures(lastQualityAudits.length ? lastQualityAudits : qualityAudits)
+            : // Falha dirigida por hard gate/composição/cena: reports do gate.
+              [
+                ...candidateReports.filter((_, i) => hardFailIdx.includes(i)),
+                ...deliveredReports.filter((report) => report.decision !== "PASS"),
+                ...compositionDiagnostics,
+                ...sceneDiagnostics,
+              ],
+      },
+    );
+  // Assinatura residual por item (ADR-021 decisão 5): checkCodes da cascata +
+  // diagnóstico determinístico; nunca payload do provider.
+  const failedItems: FailedItemDiagnostic[] = [
+    ...hardFailIdx.map((i) => diagnoseFailure(candidates[i].brief, candidateReports[i], evidence, "HARD_GATE", i + 1, [])),
+    ...[...judgeFailIdx].map((i) => ({
+      contentId: hard[i].brief.contentId,
+      position: hardIdx[i] + 1,
+      reason: "JUDGE" as const,
+      checkCodes: [] as PartialFailureCheckCode[],
+      issues: compositionFailed.has(i)
+        ? ["composition_rejected"]
+        : sceneSets[i] && (sceneSets[i].status !== "AVAILABLE" || sceneSets[i].scenes.length < 2)
+          ? ["scene_set_invalid"]
+          : [],
+      quality: projectQualityFailures(qualityAudits.filter((audit) => audit.contentId === hard[i].brief.contentId))
+        .map(({ part, round, criterion, reason }) => ({ part, round, criterion, reason: reasonText(reason) })),
+    })),
+    ...[...varietyDropped].map((i) => ({
+      contentId: hard[i].brief.contentId,
+      position: hardIdx[i] + 1,
+      reason: "VARIETY_CAP" as const,
+      checkCodes: [] as PartialFailureCheckCode[],
+      issues: ["variety_cap_drop"],
+    })),
+  ];
   await emit("FINALIZING");
   return {
     productUnderstanding: understanding ?? {},
     strategy,
     plan,
     opportunities,
-    briefs: repaired,
-    reports: finalReports,
+    briefs: delivered.map((i) => hard[i].brief),
+    reports: deliveredReports,
     patternReplacements,
     understandingReductions,
-    sceneSets,
+    sceneSets: delivered.map((i) => sceneSets[i]),
     memorySignals: {
-      generatedCount: count,
+      generatedCount: delivered.length,
       platformSkillVersion: skill.version,
       cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
+      // ADR-021: mecanismos/funções/ângulos dos D ENTREGUES — o planner do
+      // retry dos faltantes consome via memoryConstraints e evita repetição.
+      deliveredHookMechanisms: delivered.map((i) => String(hard[i].opportunity.hookMechanism)),
+      deliveredCtaFunctions: delivered.map((i) => classifyCtaFunction(hard[i].brief.cta)),
+      deliveredAngles: delivered.map((i) => String(hard[i].opportunity.angle)),
     },
     stage: "FINALIZING",
     capabilities,
@@ -1842,6 +2030,8 @@ export async function runFirstGeneration(
     repairCauses,
     qualityAudits,
     qualityRepairs,
-    validated: candidates.length,
+    validated: delivered.length,
+    briefOpportunityPositions: delivered.map((i) => hardIdx[i]),
+    partial: failedCount > 0 ? { expectedCount: count, deliveredCount: delivered.length, failedCount, failedItems } : null,
   };
 }

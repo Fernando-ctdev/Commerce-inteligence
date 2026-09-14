@@ -281,17 +281,18 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 **Scope:**
 
 - Confirmar o Product persiste e cria automaticamente o `CommerceIntelligenceJob` com a `targetContentCount` resolvida.
-- Execução assíncrona durável: fila no PostgreSQL, worker com lease, estados `QUEUED`/`RUNNING`/`SUCCEEDED`/`FAILED`/`CANCELLED`, stages públicos com mensagens humanas reais e retry idempotente.
+- Execução assíncrona durável: fila no PostgreSQL, worker com lease, estados `QUEUED`/`RUNNING`/`SUCCEEDED`/`SUCCEEDED_PARTIAL`/`FAILED`/`CANCELLED`, stages públicos com mensagens humanas reais e retry idempotente.
 - Um job ativo por usuário: `Analisar produto` desabilitado com explicação enquanto existir job `QUEUED`/`RUNNING`.
 - Indicador global de atividade no App Shell: Produto, etapa real, sucesso, falha recuperável e ação seguinte; sobrevive a navegação e ao fechamento da aba.
 - Primeira análise da engine: Product Understanding → Commercial Opportunity Mapping → ProductStrategy v1 → Content Portfolio Planner → Brief Generator.
 - Carregar a TikTok Commerce Creative Skill versionada como dependência da geração.
 - Roteamento de modelos por tarefa lógica com `IntelligenceTier` (LOW/MID/HIGH) e um provider atrás de adapter; capabilities determinísticas fora do router.
-- Fact Validation, Quality Gate e Variety Gate com Repair Loop limitado; `BriefValidationReport` por briefing; nenhum sucesso parcial silencioso.
+- Fact Validation, Quality Gate e Variety Gate com Repair Loop limitado; `BriefValidationReport` por briefing; nenhum sucesso parcial silencioso — parcial somente como `SUCCEEDED_PARTIAL` declarado, revalidado e com retry dos faltantes (ADR-021).
 - Reservar capacidade mensal na criação do job e confirmar/liberar transacionalmente; sem cobrança duplicada em retry técnico.
 - Persistir Strategy, ContentPlan, ContentOpportunities e `Content` + `ContentBriefVersion` iniciais em `DRAFT`.
 - Strategy consultável depois na página do Produto; readiness do Produto alimenta o filtro `Pendentes`.
 - Falha preserva Product e fatos; retry reutiliza o contexto confirmado.
+- **Responsabilidade única do parcial e do retry dos faltantes (ADR-021):** o Slice 003 é o único responsável por `SUCCEEDED_PARTIAL` — publicação dos aprovados, variedade revalidada, motivo sanitizado por item, quota D confirmada/N−D liberada e a ação `Gerar faltantes` (novo job com reserva F, reusando Strategy e sinais já persistidos). O Slice 008 não implementa nem duplica esse fluxo.
 
 **Out of Scope:** Fila visual de múltiplos jobs, prioridade manual, cancelamento como ação primária, edição/regeneração de briefing, lotes, memória histórica na primeira geração, aprendizado por performance, escolha de provider na UI, exposição de prompts/tiers/modelos.
 
@@ -412,8 +413,9 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 - Variety Gate avalia o conjunto; relevância antes de variedade.
 - Reavaliar explicitamente a Strategy quando fatos relevantes mudarem (regra `STALE`); Strategy substituída vira `SUPERSEDED` e contents históricos permanecem vinculados à versão usada.
 - Persistir proveniência completa e aplicar quota/idempotência por job.
+- `Gerar faltantes` após `SUCCEEDED_PARTIAL` **pertence exclusivamente ao Slice 003** (ADR-021); este slice trata apenas de novas gerações arbitrárias com `targetContentCount` e constraints escolhidos pelo creator.
 
-**Out of Scope:** Embeddings, banco vetorial, similaridade/deduplicação semântica e judge LLM de variedade ou memória, análise de performance externa, mudança automática de Strategy. `CONTENT_QUALITY_JUDGE` interno pertence ao Slice 003: executa após o hard gate, limitado a hook, development, script, CTA e cenas, com repair seletivo (máximo 2 rounds), exact-N e falha fail-closed; não oferece UI, aprovação humana, ranking ou seleção de modelo.
+**Out of Scope:** Embeddings, banco vetorial, similaridade/deduplicação semântica e judge LLM de variedade ou memória, análise de performance externa, mudança automática de Strategy. `CONTENT_QUALITY_JUDGE` interno pertence ao Slice 003: executa após o hard gate, limitado a hook, development, script, CTA e cenas, com repair seletivo (máximo 2 rounds) e falha fail-closed; entrega parcial segue o contrato declarado do ADR-021; não oferece UI, aprovação humana, ranking ou seleção de modelo.
 
 ---
 

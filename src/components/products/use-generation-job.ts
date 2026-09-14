@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   cancelGeneration,
+  completeMissingGeneration,
   createGenerationIdempotencyKey,
   GenerationApiError,
   getCurrentGeneration,
@@ -159,6 +160,23 @@ export function useGenerationJob({ productId, readiness, onProjectionStale }: Us
     }
   }, [busy, job]);
 
+  /** ADR-021: novo job só com os faltantes do parcial; chave idempotente reutilizada no duplo clique. */
+  const generateMissing = useCallback(async () => {
+    if (!job || busy) return;
+    setBusy(true);
+    setError(null);
+    keyRef.current ??= createGenerationIdempotencyKey();
+    try {
+      setJob(await completeMissingGeneration(job.id, keyRef.current));
+      keyRef.current = undefined;
+    } catch (caught) {
+      setError(actionErrorMessage(caught));
+      if (isProjectionConflict(caught)) onProjectionStale?.();
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, job, onProjectionStale]);
+
   return {
     job,
     busy,
@@ -170,5 +188,6 @@ export function useGenerationJob({ productId, readiness, onProjectionStale }: Us
     start,
     retry,
     cancel,
+    generateMissing,
   };
 }

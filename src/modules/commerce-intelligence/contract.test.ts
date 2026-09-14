@@ -40,7 +40,7 @@ test("content opportunity preserves canonical optionals when provided", () => {
   assert.throws(() => validateContentOpportunity({ ...base, proof: 42 }), (e: unknown) => (e as { code?: string }).code === "GEN-SCHEMA");
 });
 test("cardinality policy is versioned and uses MVP limits", () => {
-  assert.equal(CARDINALITY_POLICY_VERSION, 1);
+  assert.equal(CARDINALITY_POLICY_VERSION, 2); // v2: pertinência por campo nos estratégicos do PU
   assert.equal(CARDINALITY_POLICY.coreUseCases.max, 8);
   assert.equal(CARDINALITY_POLICY.evidenceRefs.max, 25);
   assert.deepEqual(CARDINALITY_POLICY.opportunities, { min: 1, minWithEvidence: 3, max: 10 });
@@ -59,6 +59,34 @@ test("understanding minimums are conditional to evidence (no invention without i
   assert.equal(validateProductUnderstanding(empty).coreUseCases.length, 0);
   assert.throws(() => validateProductUnderstanding(empty, { facts: ["Produto"], refs: ["product:name"] }), (error: unknown) => { const e = error as { code?: string }; return e.code === "GEN-SCHEMA"; });
 });
+test("emotionalBenefits aceita [] sem evidência pertinente e mantém min 1 com evidência (decisão Arquiteto)", () => {
+  const semEmocional = { productId: "p1", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: [], desiredOutcomes: ["resultado"], purchaseTriggers: ["gatilho"], purchaseBarriers: ["barreira"], evidenceRefs: ["product:name"] };
+  // Evidência apenas de identidade (product:name): sem evidência pertinente → [] aceito.
+  const apenasNome = validateProductUnderstanding(semEmocional, { facts: ["Produto"], refs: ["product:name"] });
+  assert.equal(apenasNome.emotionalBenefits.length, 0);
+  // Evidência pertinente (fato real do produto) → min 1 volta a valer.
+  const comRefs = { ...semEmocional, evidenceRefs: ["fact:features"] };
+  assert.throws(() => validateProductUnderstanding(comRefs, { facts: ["Tecido leve"], refs: ["fact:features"] }), (error: unknown) => { const e = error as { code?: string }; return e.code === "GEN-SCHEMA"; });
+  const comEmocional = { ...comRefs, emotionalBenefits: ["confiança na escolha"] };
+  assert.equal(validateProductUnderstanding(comEmocional, { facts: ["Tecido leve"], refs: ["fact:features"] }).emotionalBenefits.length, 1);
+});
+
+test("PU v2: estratégicos vazios sem evidência pertinente passam; com evidência falham; núcleo segue non-empty; max fail-closed", () => {
+  const base = { productId: "p1", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: [], emotionalBenefits: [], desiredOutcomes: [], purchaseTriggers: [], purchaseBarriers: [], evidenceRefs: ["product:name"] };
+  // (1) empty strategic sem evidência pertinente (apenas identidade) passa.
+  const apenasIdentidade = validateProductUnderstanding(base, { facts: ["Produto"], refs: ["product:name"] });
+  assert.equal(apenasIdentidade.functionalBenefits.length, 0);
+  assert.equal(apenasIdentidade.purchaseBarriers.length, 0);
+  // (2) empty strategic com evidência pertinente falha (min 1 permanece).
+  assert.throws(() => validateProductUnderstanding(base, { facts: ["Tecido leve"], refs: ["product:name", "fact:features"] }), (error: unknown) => { const e = error as { code?: string; field?: string }; return e.code === "GEN-SCHEMA" && e.field === "functionalBenefits"; });
+  // (3) coreUseCases/capabilities continuam non-empty — identity-only também falha.
+  const semNucleo = { ...base, coreUseCases: [], capabilities: [] };
+  assert.throws(() => validateProductUnderstanding(semNucleo, { facts: ["Produto"], refs: ["product:name"] }), (error: unknown) => { const e = error as { code?: string; field?: string }; return e.code === "GEN-SCHEMA" && e.field === "coreUseCases"; });
+  // (4) máximo continua fail-closed (sem truncamento).
+  const acima = { ...base, functionalBenefits: Array.from({ length: 9 }, (_, i) => `b${i}`), emotionalBenefits: ["confiança"] };
+  assert.throws(() => validateProductUnderstanding(acima, { facts: ["Tecido leve"], refs: ["product:name", "fact:features"] }), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /cardinalidade de functionalBenefits/.test(e.message ?? ""); });
+});
+
 test("mapping envelope opportunity count is capped by policy", () => {
   const commercial = { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] };
   const envelope = { audiences: [], situations: [], pains: [], desires: [], objections: [], opportunities: Array.from({ length: CARDINALITY_POLICY.opportunities.max + 1 }, () => commercial) };

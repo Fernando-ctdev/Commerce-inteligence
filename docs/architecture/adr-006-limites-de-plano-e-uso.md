@@ -24,8 +24,8 @@ Criar um módulo de entitlements/uso no monólito, separado da engine estratégi
 - o plano/entitlement é resolvido no servidor, por tenant, e não é editável pelo cliente;
 - ativar produto verifica o limite em transação;
 - solicitar geração reserva a quantidade pedida antes de enfileirar o job, usando `generation_run.id` como chave idempotente compartilhada entre job e reserva;
-- sucesso confirma o uso pelos conteúdos persistidos; falha ou cancelamento libera a reserva;
-- regenerações e novos lotes consomem a mesma unidade de conteúdo gerado;
+- sucesso confirma o uso pelos conteúdos persistidos; falha ou cancelamento libera a reserva; `SUCCEEDED_PARTIAL` confirma somente os conteúdos entregues e libera o restante no mês UTC de origem (ADR-021);
+- gerações (execuções) são ilimitadas: a quota mede conteúdo entregue, não tentativas; o retry dos faltantes reserva apenas a quantidade faltante (ADR-021);
 - a engine, modelo e qualidade estratégica não variam por plano.
 
 O entitlement default é criado de forma idempotente junto do provisionamento do Tenant. Se a configuração server-side do limite estiver ausente ou inválida, a aplicação falha fechada e não ativa Product; não há fallback controlado pelo cliente. O ciclo posterior de troca de plano, cobrança, upgrade ou downgrade permanece fora deste slice.

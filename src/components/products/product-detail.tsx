@@ -389,6 +389,7 @@ export function ProductDetail({ id }: { id: string }) {
                 <GenerationStatusCard
                   className={styles.statusCard}
                   generationAction={product.generationAction}
+                  onGenerateMissing={() => void generation.generateMissing()}
                   onOpenContents={() => changeTab("contents")}
                   productName={product.name}
                   readiness={generation.readiness}

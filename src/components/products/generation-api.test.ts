@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GenerationApiError, normalizeGeneration, cancelGeneration, getCurrentGenerationForProduct, startGeneration } from "./generation-api";
+import { GenerationApiError, completeMissingGeneration, isRetryableGeneration, normalizeGeneration, cancelGeneration, getCurrentGenerationForProduct, startGeneration } from "./generation-api";
 
 test("normaliza estados e stage canônicos sem aceitar status desconhecido", () => {
   const job = normalizeGeneration({ id: "job-1", productId: "product-1", status: "RUNNING", stage: "BUILDING_STRATEGY", targetContentCount: 3 });
@@ -28,12 +28,49 @@ test("busca o envelope completo após o 202 mínimo de início", async () => {
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test("gerar faltantes chama /complete do parcial com chave idempotente e recarrega envelope", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Request[] = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(typeof input === "string" ? new URL(input, "http://localhost") : input, init);
+    requests.push(request);
+    const novoJob = { id: "job-2", productId: "product-1", status: "QUEUED", stage: "GENERATING_BRIEFS", targetContentCount: 1 };
+    const body = novoJob;
+    return new Response(JSON.stringify(body), { status: request.url.endsWith("/complete") ? 202 : 200 });
+  };
+  try {
+    const result = await completeMissingGeneration("job-1", "client-key");
+  assert.equal(result.status, "QUEUED");
+    assert.equal(requests[0].method, "POST");
+    assert.equal(requests[0].url, "http://localhost/api/generations/job-1/complete");
+    assert.equal(requests[0].headers.get("Idempotency-Key"), "client-key");
+    assert.deepEqual(await requests[0].clone().json(), {});
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("aceita SUCCEEDED com bullets separados e remove scenes legadas da resposta", () => {
   const job = normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: { objective: "Vender" }, plan: { targetContentCount: 1 }, contents: [{ id: "content-1", angle: "Demonstração", hook: "Veja isto", development: ["Mostre o produto"], script: "Mostre o produto", scenes: ["legado"], cta: "Confira agora" }] });
   assert.equal(job.readiness, "READY");
   assert.equal(job.contents.length, job.targetContentCount);
   assert.deepEqual(job.contents[0].development, ["Mostre o produto"]);
   assert.equal("scenes" in job.contents[0], false);
+});
+
+test("aceita SUCCEEDED_PARTIAL com D de N prontos, motivos por item e readiness READY", () => {
+  const brief = { id: "content-1", angle: "a", hook: "h", development: ["ponto"], script: "s", cta: "c" };
+  const job = normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED_PARTIAL", targetContentCount: 3, deliveredCount: 2, failedCount: 1, strategy: {}, plan: {}, contents: [brief, { ...brief, id: "content-2" }], missing: [{ position: 3, reasonCode: "unverified_claim" }, { reasonCode: " " }, 42] });
+  assert.equal(job.status, "SUCCEEDED_PARTIAL");
+  assert.equal(job.readiness, "READY");
+  assert.equal(job.deliveredCount, 2);
+  assert.equal(job.failedCount, 1);
+  assert.deepEqual(job.missing, [{ position: 3, reasonCode: "unverified_claim" }]);
+});
+
+test("rejeita SUCCEEDED_PARTIAL sem deliveredCount consistente e mantém retry só em FAILED/CANCELLED", () => {
+  const brief = { angle: "a", hook: "h", development: ["ponto"], script: "s", cta: "c" };
+  assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED_PARTIAL", targetContentCount: 2, strategy: {}, plan: {}, contents: [brief] }), GenerationApiError);
+  assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED_PARTIAL", targetContentCount: 2, deliveredCount: 2, strategy: {}, plan: {}, contents: [brief] }), GenerationApiError);
+  assert.equal(isRetryableGeneration("SUCCEEDED_PARTIAL"), false);
 });
 
 test("sanitiza erro público sem expor controle de workflow", () => {

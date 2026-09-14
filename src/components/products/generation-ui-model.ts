@@ -41,6 +41,7 @@ export const statusLabels: Record<CommerceJobStatus, string> = {
   QUEUED: "Na fila",
   RUNNING: "Analisando",
   SUCCEEDED: "Pronto",
+  SUCCEEDED_PARTIAL: "Pronto (parcial)",
   FAILED: "Falhou",
   CANCELLED: "Cancelada",
 };
@@ -53,8 +54,35 @@ export function statusMessage(status: CommerceJobStatus, productName?: string) {
   if (status === "QUEUED") return `${productName ? `${productName} foi confirmado. ` : ""}A análise começará em breve.`;
   if (status === "RUNNING") return "A análise continua em segundo plano. Você pode continuar usando a aplicação.";
   if (status === "SUCCEEDED") return "Seu produto está pronto para revisão.";
+  if (status === "SUCCEEDED_PARTIAL") return "Parte dos conteúdos ficou pronta. Você já pode revisar e gerar os faltantes.";
   if (status === "CANCELLED") return "A análise foi cancelada.";
   return "Não foi possível concluir a análise. Seus dados permanecem preservados.";
+}
+
+/** Motivo sanitizado por item faltante (ADR-021): reason code → frase curta pt-BR, sem jargão de engine. */
+export function missingReasonLabel(reasonCode: string): string {
+  const map: Record<string, string> = {
+    unverified_claim: "continha informação não confirmada nos dados do produto",
+    script_claim_missing: "não trouxe os dados confirmados do produto",
+    feature_list: "descreveu o produto fora do permitido",
+    factRef_invalid: "usou um dado inexistente do produto",
+    action_stem_missing: "ficou sem uma demonstração clara",
+    connector_missing: "ficou sem a justificativa do ponto",
+    grounding_below_min: "ficou pouco apoiado nos dados do produto",
+  };
+  return map[reasonCode] ?? "não convergiu nos critérios de qualidade";
+}
+
+/** Leitura da entrega parcial (ADR-021): null fora de SUCCEEDED_PARTIAL. */
+export type PartialDelivery = { delivered: number; expected: number; missing: Array<{ position: number | null; reason: string }> };
+export function partialModel(job: { status: string; targetContentCount: number; deliveredCount: number | null; contents: Array<unknown>; missing: Array<{ position: number | null; reasonCode: string }> } | null): PartialDelivery | null {
+  if (!job || job.status !== "SUCCEEDED_PARTIAL") return null;
+  const delivered = job.deliveredCount ?? job.contents.length;
+  return {
+    delivered,
+    expected: job.targetContentCount,
+    missing: job.missing.map((item) => ({ position: item.position, reason: missingReasonLabel(item.reasonCode) })),
+  };
 }
 
 export const generationStatusLabel = (status: CommerceJobStatus | string) =>

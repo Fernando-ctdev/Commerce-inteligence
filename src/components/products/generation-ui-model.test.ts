@@ -14,13 +14,16 @@ import {
   isCapacityUnavailableError,
   isRetryableGeneration,
   isToastDismissed,
+  missingReasonLabel,
   normalizeGenerationAction,
+  partialModel,
   phaseStateLabels,
   phaseStates,
-  stageMessage,
-  statusMessage,
   scriptParagraphs,
   scenesProjection,
+  stageMessage,
+  statusLabels,
+  statusMessage,
   strategyModel,
 } from "./generation-ui-model";
 
@@ -44,6 +47,16 @@ test("cancelamento seguro existe somente na fila", () => {
   assert.equal(canCancelGeneration("SUCCEEDED"), false);
   assert.equal(canCancelGeneration("CANCELLED"), false);
   assert.equal(canCancelGeneration(null), false);
+});
+
+test("entrega parcial: mensagem, rótulo, motivo sanitizado e modelo D de N", () => {
+  assert.equal(statusMessage("SUCCEEDED_PARTIAL"), "Parte dos conteúdos ficou pronta. Você já pode revisar e gerar os faltantes.");
+  assert.equal(statusLabels.SUCCEEDED_PARTIAL, "Pronto (parcial)");
+  assert.equal(missingReasonLabel("unverified_claim"), "continha informação não confirmada nos dados do produto");
+  assert.equal(missingReasonLabel("desconhecido"), "não convergiu nos critérios de qualidade");
+  const job = { status: "SUCCEEDED_PARTIAL", targetContentCount: 3, deliveredCount: 2, contents: [{}, {}], missing: [{ position: 3, reasonCode: "grounding_below_min" }, { position: null, reasonCode: "zzz" }] };
+  assert.deepEqual(partialModel(job), { delivered: 2, expected: 3, missing: [{ position: 3, reason: "ficou pouco apoiado nos dados do produto" }, { position: null, reason: "não convergiu nos critérios de qualidade" }] });
+  assert.deepEqual(partialModel({ status: "SUCCEEDED", targetContentCount: 3, deliveredCount: 3, contents: [{}, {}, {}], missing: [] }), null);
 });
 
 test("bloqueio preventivo cobre só job ativo; capacidade é pós-clique", () => {

@@ -178,6 +178,7 @@ enum CommerceIntelligenceJobStatus {
   SUCCEEDED
   FAILED
   CANCELLED
+  SUCCEEDED_PARTIAL
 }
 
 enum CommerceIntelligenceStage {

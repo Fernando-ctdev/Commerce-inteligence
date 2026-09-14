@@ -22,7 +22,7 @@ import { ContractError } from "./contract";
 // CARDINALITY_POLICY_VERSION). Reports persistidos carregam a versão sob a qual
 // foram produzidos; revalidação sob versão diferente é GATE-VERSION-MISMATCH,
 // nunca REPAIR falso. 1 = pré-versionamento implícito (histórico).
-export const GATE_POLICY_VERSION = 2;
+export const GATE_POLICY_VERSION = 3; // ADR-021: revalidação de variedade do subconjunto (ceil(D/K))
 
 // Revalidação forense: recusa reclassificar payload validado sob outra política.
 // NULL/ausente = gerado antes do versionamento — também é incompatível.
@@ -511,24 +511,43 @@ export function developmentGroundingTerms(value: string): string[] {
   return [...new Set(normalized.split(/\W+/).filter((term) => term.length > 1 && !stopWords.has(term)))];
 }
 
-export function validDevelopmentPoint(point: string, evidence: EvidenceSnapshot): boolean {
+// ADR-021: diagnóstico determinístico por ponto — MESMOS predicados do gate,
+// expostos para a assinatura residual por item (sem payload bruto).
+export function diagnoseDevelopmentPoint(point: string, evidence: EvidenceSnapshot): {
+  valid: boolean; shotList: boolean; actionPresent: boolean; connectorPresent: boolean;
+  minGroundingExpected: number; minGroundingMatched: number; unverified: boolean;
+} {
   const normalized = attrStems(normalizeForVariety(point));
   const action = DEVELOPMENT_COMMUNICATION_ACTION.exec(normalized);
-  if (DEVELOPMENT_SHOT_LIST.test(normalized) || !action) return false;
+  const shotList = DEVELOPMENT_SHOT_LIST.test(normalized);
   const rationaleAt = normalized.search(DEVELOPMENT_RATIONALE);
   const experienceRationale = DEVELOPMENT_EXPERIENCE_RATIONALE.exec(normalized);
-  if (rationaleAt < 0 && !experienceRationale) return false;
+  // Guardas idênticos aos retornos precoces do gate original.
   const rationaleTerms = new Set(
-    rationaleAt >= 0
-      ? developmentGroundingTerms(normalized.slice(rationaleAt).replace(DEVELOPMENT_RATIONALE, ""))
-      : developmentGroundingTerms(normalized.slice(experienceRationale!.index)),
+    rationaleAt < 0 && !experienceRationale
+      ? []
+      : rationaleAt >= 0
+        ? developmentGroundingTerms(normalized.slice(rationaleAt).replace(DEVELOPMENT_RATIONALE, ""))
+        : developmentGroundingTerms(normalized.slice(experienceRationale!.index)),
   );
-  const experienceContext = experienceRationale
+  const experienceContext = action && experienceRationale
     ? developmentGroundingTerms(normalized.slice(action[0].length, experienceRationale.index)).length > 0
     : false;
-  if (rationaleAt >= 0 && rationaleTerms.size < 2) return false;
-  if (rationaleAt < 0 && !experienceContext) return false;
-  return !unverifiedObjectiveClaims(point, evidence);
+  const unverified = unverifiedObjectiveClaims(point, evidence);
+  const actionPresent = Boolean(action) && !shotList;
+  const connectorPresent = rationaleAt >= 0 || Boolean(experienceRationale);
+  const minGroundingExpected = 2;
+  const minGroundingMatched = Math.min(minGroundingExpected, rationaleTerms.size);
+  const valid =
+    actionPresent &&
+    connectorPresent &&
+    (rationaleAt >= 0 ? rationaleTerms.size >= 2 : experienceContext) &&
+    !unverified;
+  return { valid, shotList, actionPresent, connectorPresent, minGroundingExpected, minGroundingMatched, unverified };
+}
+
+export function validDevelopmentPoint(point: string, evidence: EvidenceSnapshot): boolean {
+  return diagnoseDevelopmentPoint(point, evidence).valid;
 }
 
 export type GatePattern = { id?: string; guidance?: string; type?: string; text?: string };
@@ -597,14 +616,22 @@ export function ctaTextFactualIssues(
 }
 // Claim objetivo sem evidência: valor+unidade ou atributo do léxico exige fato
 // autorizado (exclui product:name). Compartilhado entre development e cenas (ADR-019).
+// Claims promocionais de valor/marca não cobertos pelo léxico de atributos:
+// assertion de valor comercial exige fato autorizado com o mesmo teor.
+const UNSUPPORTED_VALUE_CLAIMS = /\b(valoriza|agrega valor|da valor|vale a pena|marca reconhecida|qualidade premium|referencia de qualidade)\b/;
 function unverifiedObjectiveClaims(text: string, evidence: EvidenceSnapshot): boolean {
+  const normalizedClaimText = normalizeForVariety(text);
+  const unsupportedValueClaim = UNSUPPORTED_VALUE_CLAIMS.test(normalizedClaimText) &&
+    !evidence.facts.some((fact, factIndex) =>
+      evidence.refs[factIndex] !== "product:name" && UNSUPPORTED_VALUE_CLAIMS.test(normalizeForVariety(fact)),
+    );
   const unsupportedToken = techTokens(text).some(({ unit, value }) => !evidence.facts.some((fact, factIndex) =>
     evidence.refs[factIndex] !== "product:name" && techTokens(fact).some((authorized) => authorized.unit === unit && authorized.value === value),
   ));
   const unsupportedAttribute = detectAttributes(text).some((group) => !evidence.facts.some((fact, factIndex) =>
     evidence.refs[factIndex] !== "product:name" && ATTRIBUTE_LEXICON[group].some((stem) => attrStems(fact.toLowerCase()).includes(stem)),
   ));
-  return unsupportedToken || unsupportedAttribute;
+  return unsupportedToken || unsupportedAttribute || unsupportedValueClaim;
 }
 
 // Produção incompatível com creator solo: antipadrões exigem equipamento declarado.

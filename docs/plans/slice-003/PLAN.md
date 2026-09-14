@@ -2,9 +2,9 @@
 
 > **Para agentes de implementação:** execute este plano tarefa a tarefa, preservando os limites do Slice 003. Cada etapa termina com seu teste/gate local antes da próxima.
 
-**Goal:** Depois da confirmação de um Product com `targetContentCount` resolvida, criar uma única execução assíncrona durável e entregar `ProductStrategy`, `ContentPlan` e exatamente a quantidade solicitada de `Content` com `ContentBriefVersion` v1 em `DRAFT`, sem sucesso parcial.
+**Goal:** Depois da confirmação de um Product com `targetContentCount` resolvida, criar uma única execução assíncrona durável e entregar `ProductStrategy`, `ContentPlan` e a quantidade solicitada de `Content` com `ContentBriefVersion` v1 em `DRAFT` — completa em `SUCCEEDED`, ou parcial declarada (`SUCCEEDED_PARTIAL`) publicando somente aprovados com retry explícito dos faltantes, conforme ADR-021; nunca sucesso parcial silencioso.
 
-**Architecture:** O monólito Next.js mantém o domínio em módulos TypeScript: um caso de uso de Commerce Intelligence resolve autorização, quantidade, Entitlement e `CommerceIntelligenceJob`; um worker PostgreSQL executa a pipeline fora de transações longas; a engine usa contratos canônicos, Platform Skill versionada e Model Router; a finalização publica todo o conjunto em uma transação curta. O App Shell consulta o backend e mostra o estado real, sem usar estado local como fonte de verdade.
+**Architecture:** O monólito Next.js mantém o domínio em módulos TypeScript: um caso de uso de Commerce Intelligence resolve autorização, quantidade, Entitlement e `CommerceIntelligenceJob`; um worker PostgreSQL executa a pipeline fora de transações longas; a engine usa contratos canônicos, Platform Skill versionada e Model Router; a finalização publica o conjunto em uma transação curta — completo em `SUCCEEDED` ou declarado em `SUCCEEDED_PARTIAL` (ADR-021). O App Shell consulta o backend e mostra o estado real, sem usar estado local como fonte de verdade.
 
 **Tech Stack:** Next.js 16 App Router/Route Handlers, React 19, TypeScript strict, PostgreSQL, Prisma 6, `tsx --test`, `fetch` nativo para o adapter do provider, CSS Modules e componentes shadcn/ui já presentes.
 
@@ -15,7 +15,7 @@
 ### Incluído
 
 - Confirmação de Product no fluxo de entrada, ou caso de uso equivalente para Product já confirmado, resolvendo `targetContentCount` server-side antes do Job.
-- Job PostgreSQL durável, worker com lease/timeout, reclaim, backoff, limite de tentativas e estados `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED` e `CANCELLED`.
+- Job PostgreSQL durável, worker com lease/timeout, reclaim, backoff, limite de tentativas e estados `QUEUED`, `RUNNING`, `SUCCEEDED`, `SUCCEEDED_PARTIAL`, `FAILED` e `CANCELLED` (ADR-021).
 - Pipeline inicial completa: entendimento do Product, oportunidades comerciais, Strategy v1, ContentPlan, ContentOpportunity, Brief Generator, Fact/Quality/Variety Gates, repair limitado e persistência final.
 - Entitlement mensal de conteúdos, reserva transacional com mês UTC de origem e reconciliação idempotente.
 - Strategy, Plan, Opportunities, Contents, BriefVersions, `BriefValidationReport`, `IntelligenceRun` e sinais estruturados de memória.
@@ -26,9 +26,9 @@
 
 ### Não incluído
 
-Não iniciar geração no simples `Salvar produto` de `/products/new`; não criar novo wizard ou tela permanente de análise; não implementar revisão, edição, regeneração, aprovação, descarte, RecordingBatch, Agenda, Estúdio, memória histórica consultada ou recorrência; não adicionar fila visual, Redis/Kafka, microserviço, embeddings, banco vetorial, judge LLM para aprovação do usuário, variedade ou memória semântica, mídia, publicação, analytics, TikTok OAuth/API, escolha de provider/tier na UI ou alteração de PRD/ADR/SYSTEM-DESIGN/DESIGN/SLICES. A curadoria semântica interna fica limitada a hook, development, script, CTA e cenas: `PASS` preserva, somente `REPAIR` entra em repair seletivo e consome no máximo 2 rounds, e `REJECT` é terminal. Qualquer status final diferente de `PASS` bloqueia sucesso, mantendo exact-N e diagnóstico.
+Não iniciar geração no simples `Salvar produto` de `/products/new`; não criar novo wizard ou tela permanente de análise; não implementar revisão, edição, regeneração, aprovação, descarte, RecordingBatch, Agenda, Estúdio, memória histórica consultada ou recorrência; não adicionar fila visual, Redis/Kafka, microserviço, embeddings, banco vetorial, judge LLM para aprovação do usuário, variedade ou memória semântica, mídia, publicação, analytics, TikTok OAuth/API, escolha de provider/tier na UI ou alteração de PRD/ADR/SYSTEM-DESIGN/DESIGN/SLICES. A curadoria semântica interna fica limitada a hook, development, script, CTA e cenas: `PASS` preserva, somente `REPAIR` entra em repair seletivo e consome no máximo 2 rounds, e `REJECT` é terminal. Qualquer status final diferente de `PASS` impede o item de publicar (faltante no contrato ADR-021); `SUCCEEDED` mantém exact-N e diagnóstico.
 
-A confirmação deve ser conectada ao fluxo de confirmação existente quando ele for disponibilizado. No estado real atual há apenas o modelo `ProductImportAttempt` no Prisma, sem fluxo server-side de importação/Candidate conectado à UI; portanto, o ponto de entrada testável deste slice é um caso de uso que recebe `tenantId` resolvido, `productId` de um Product ativo sem resultado publicado e a quantidade persistida no Product. Product `READY` oferece somente `Revisar conteúdos`; nova geração/recorrência do mesmo Product pertence ao Slice 008. O formulário manual continua apenas salvando Product; a ação contextual `Analisar produto` no detalhe representa a confirmação equivalente sem transformar o salvamento em geração automática.
+A confirmação deve ser conectada ao fluxo de confirmação existente quando ele for disponibilizado. No estado real atual há apenas o modelo `ProductImportAttempt` no Prisma, sem fluxo server-side de importação/Candidate conectado à UI; portanto, o ponto de entrada testável deste slice é um caso de uso que recebe `tenantId` resolvido, `productId` de um Product ativo sem resultado publicado e a quantidade persistida no Product. Product `READY` oferece `Revisar conteúdos` — e, quando o último job for `SUCCEEDED_PARTIAL`, também `Gerar faltantes` (ADR-021); nova geração/recorrência arbitrária do mesmo Product pertence ao Slice 008. O formulário manual continua apenas salvando Product; a ação contextual `Analisar produto` no detalhe representa a confirmação equivalente sem transformar o salvamento em geração automática.
 
 A política archive-only/DELETE não é uma decisão nova deste plano: está ancorada na SPEC aprovada, B-003-14, RI-003-18 e AC 47–49. Este slice rejeita todo DELETE físico e mantém `Arquivar produto` como operação preservativa.
 
@@ -62,7 +62,7 @@ A confirmação inicial resolve `targetContentCount` antes de criar o Job. O val
 
 ### 3.2 Estados e stages
 
-Estados persistidos: `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELLED`. Stages públicos, nesta ordem:
+Estados persistidos: `QUEUED`, `RUNNING`, `SUCCEEDED`, `SUCCEEDED_PARTIAL`, `FAILED`, `CANCELLED` (parcial declarado conforme ADR-021). Stages públicos, nesta ordem:
 
 - `UNDERSTANDING_PRODUCT` → `Entendendo o produto...`
 - `MAPPING_COMMERCIAL_OPPORTUNITIES` → `Mapeando oportunidades comerciais...`
@@ -86,7 +86,7 @@ Criar em `src/modules/commerce-intelligence/contract.ts` tipos e validadores run
 - `ContentBriefBatch`: quantidade limitada de itens, um resultado por oportunidade e nenhum ID persistente atribuído pelo provider.
 - `ContentBriefVersion` v1: `angle`, `hook`, `script`, `scenes`, `cta` obrigatórios; `structure`, `objective`, `targetAudience`, `pain`, `desire`, `objection`, `benefit`, `notes` opcionais.
 - `BriefValidationReport`: `briefId` como nome canônico, derivado de `contentId + briefVersionId`, mais `factualStatus`, `structuralStatus`, `platformStatus`, `varietyStatus`, `issues` e decisão `PASS`, `REPAIR` ou `REJECT`.
-- `CONTENT_QUALITY_JUDGE`: retorna `PASS`, `REPAIR` ou `REJECT` por cada uma das partes `hook`, `development`, `script`, `cta` e `scenes`. Somente `REPAIR` chama `CONTENT_PART_REPAIR` e consome no máximo 2 rounds; `REJECT` é terminal e nunca chama repair. Qualquer status final diferente de `PASS` bloqueia sucesso, mantendo exact-N e diagnóstico.
+- `CONTENT_QUALITY_JUDGE`: retorna `PASS`, `REPAIR` ou `REJECT` por cada uma das partes `hook`, `development`, `script`, `cta` e `scenes`. Somente `REPAIR` chama `CONTENT_PART_REPAIR` e consome no máximo 2 rounds; `REJECT` é terminal e nunca chama repair. Qualquer status final diferente de `PASS` impede o item de publicar (faltante no contrato ADR-021); `SUCCEEDED` mantém exact-N e diagnóstico.
 
 Os validadores devem rejeitar campos desconhecidos de ownership, cardinalidade inválida, IDs externos/persistentes, arrays vazios quando obrigatórios, conteúdo acima dos limites definidos e quantidade diferente de `targetContentCount`. Devem validar relações de `CommercialOpportunity`, evidências de claims, hash de estrutura, quantidade de cenas válida para o formato e alinhamento entre oportunidade e briefing. O adapter do provider não poderá devolver `tenantId`, IDs persistentes, status, quota, provenance ou comandos de workflow; esses valores são derivados pelo servidor.
 
@@ -124,13 +124,13 @@ Criar `src/modules/commerce-intelligence/engine.ts` com uma função de orquestr
 6. Fact Validator com estados `SUPPORTED`, `INFERRED_BUT_SAFE`, `UNSUPPORTED`, `CONTRADICTED`, baseado em fatos/evidências estruturados.
 7. Quality Gate estrutural/factual/plataforma por briefing e Variety Gate determinístico no conjunto.
 8. Repair limitado em batches somente para rejeitados, carregando causas e oportunidade original, preservando Briefings `PASS`.
-9. Resultado final completo, sem preencher quantidade com conteúdo irrelevante.
+9. Resultado final completo em `SUCCEEDED` ou parcial declarado em `SUCCEEDED_PARTIAL` (somente aprovados, variedade revalidada `ceil(D/K)` — ADR-021), sem preencher quantidade com conteúdo irrelevante.
 
 Para `targetContentCount = N`, a linha de base de chamadas é `4 + ceil(N / batchSize)`, com `batchSize` entre 4 e 8, sem contar repair. Não disparar `N` requests simultâneos por padrão; concorrência adicional exige limite explícito, telemetria e teste de rate limit.
 
 Stages são atualizados antes da etapa. O Brief Generator recebe somente a projeção da Strategy, oportunidade, restrições aplicáveis, `Creator Context` e `validationRules` da Skill. Seus prompts instruem separação entre decisão estratégica e fala sugerida, cenas simples, linguagem oral e liberdade para não ler o script literalmente.
 
-A engine não consulta histórico nem memória anterior nesta primeira execução. O `ProductMemorySnapshot` de entrada é vazio; somente sinais estruturados de um resultado `SUCCEEDED` podem ser persistidos na finalização.
+A engine não consulta histórico nem memória anterior nesta primeira execução. O `ProductMemorySnapshot` de entrada é vazio; somente sinais estruturados dos Contents entregues por um resultado `SUCCEEDED` ou `SUCCEEDED_PARTIAL` podem ser persistidos na finalização (ADR-021).
 
 ---
 
@@ -148,10 +148,10 @@ Adicionar relações ao `Tenant` e `Product` e estes modelos; campos de payload 
 - `ProductStrategy`: `id`, `tenantId`, `productId`, `jobId`, `version`, `status`, `platformId`, `platformSkillVersion`, payload canônico e timestamps. Índice parcial único por Product para `status = ACTIVE`.
 - `ContentPlan`: `id`, `tenantId`, `productId`, `jobId`, `strategyId`, version da Strategy, quantidade, plataforma/Skill, payload canônico e timestamps. Unique `(jobId)`.
 - `ContentOpportunity`: `id`, `tenantId`, `productId`, `planId`, `jobId`, campos mínimos estruturados, opcionais e payload. Unique `(planId,id)` e índice por plan.
-- `Content`: `id`, `tenantId`, `productId`, `jobId`, `planId`, `opportunityId` opcional, posição, status `DRAFT`, `currentBriefVersionId` nullable durante a montagem, `approvedBriefVersionId` nullable, payload mínimo e timestamps. Unique `(jobId,position)`; nenhum `approvedBriefVersionId` na primeira geração. A transação curta insere o Content, insere a `ContentBriefVersion` v1 e preenche `currentBriefVersionId` antes de marcar o Job `SUCCEEDED`.
+- `Content`: `id`, `tenantId`, `productId`, `jobId`, `planId`, `opportunityId` opcional, posição, status `DRAFT`, `currentBriefVersionId` nullable durante a montagem, `approvedBriefVersionId` nullable, payload mínimo e timestamps. Unique `(jobId,position)`; nenhum `approvedBriefVersionId` na primeira geração. A transação curta insere somente Contents aprovados, insere a `ContentBriefVersion` v1 e preenche `currentBriefVersionId` antes de marcar o Job `SUCCEEDED` ou `SUCCEEDED_PARTIAL` (ADR-021).
 - `ContentBriefVersion`: `id`, `tenantId`, `productId`, `jobId`, `contentId`, version, payload canônico imutável e timestamps. Unique `(contentId,version)` e índice por `(jobId,contentId)`.
 - `BriefValidationReport`: `id`, `tenantId`, `jobId`, `contentId`, `briefVersionId`, `briefId` derivado de `contentId + briefVersionId`, quatro statuses, decisão, issues JSONB e timestamps. Unique por `briefId`; `briefId` é o mapeamento persistente do nome canônico para a versão imutável.
-- `ProductMemorySnapshot`: `id`, `tenantId`, `productId`, `sourceJobId`, version, sinais estruturados JSONB e timestamps. Unique composto `(tenantId,sourceJobId)` impede snapshots duplicados em replay concorrente. Só recebe uma linha após sucesso; não criar/atualizar em falha ou cancelamento.
+- `ProductMemorySnapshot`: `id`, `tenantId`, `productId`, `sourceJobId`, version, sinais estruturados JSONB e timestamps. Unique composto `(tenantId,sourceJobId)` impede snapshots duplicados em replay concorrente. Só recebe uma linha após sucesso pleno ou parcial (sinais somente dos Contents entregues — ADR-021); não criar/atualizar em falha ou cancelamento.
 
 Todos os modelos Product-scoped devem ter uniques compostos `(tenantId,id)` nas entidades referenciáveis e FKs compostas que incluam `tenantId` e `productId`: Job → Product; reservation → Job; run → Job/Product; Strategy → Job/Product; Plan → Strategy/Job/Product; Content → Plan/Opportunity/Job/Product; BriefVersion/Report → Content/Job/Product; MemorySnapshot → source Job/Product. Quando o Prisma exigir relação alternativa, o caso de uso deve executar lookup e persistência na mesma transação com `tenantId` e `productId` em todos os `where`/`create`. Não usar `ON DELETE CASCADE` para apagar histórico; DELETE físico é rejeitado pela aplicação conforme B-003-14.
 
@@ -163,11 +163,11 @@ Criar `prisma/migrations/<timestamp>_slice003_commerce_intelligence/migration.sq
 2. Criar o índice parcial `UNIQUE (userId) WHERE status IN ('QUEUED','RUNNING')`, uniques compostos tenant-scoped e FKs compostas tenant/product-scoped, impedindo mistura relacional entre Tenants/Products.
 3. Manter valores existentes de `TenantEntitlement`; não inventar limite mensal em migration. A capacidade mensal vem de configuração server-side validada e falha fechada se ausente/inválida.
 4. Armazenar `generatedContentsMonth` como o período UTC calculado na criação; guards/CAS de aplicação usam esse valor em sucesso, falha e cancelamento, nunca o mês do término.
-5. Permitir `NULL` em payloads intermediários e em `Content.currentBriefVersionId` durante montagem; guards/CAS protegem transições e a transação curta protege exact-N, publicação atômica e consistência do conjunto.
+5. Permitir `NULL` em payloads intermediários e em `Content.currentBriefVersionId` durante montagem; guards/CAS protegem transições e a transação curta protege a publicação: exact-N apenas no `SUCCEEDED` pleno; em `SUCCEEDED_PARTIAL` publica somente aprovados com variedade revalidada (ADR-021).
 6. Criar unique `(tenantId,sourceJobId)` para `ProductMemorySnapshot` e não backfillar Strategy, Contents, memória ou provenance com dados inventados.
 7. Não remover tabelas/dados do Slice 001/002 e não criar triggers/policies de transição que não estejam realmente implementados.
 
-A finalização usa `prisma.$transaction` curta para inserir o conjunto, reports, run e memória, preencher `currentBriefVersionId`, confirmar a reserva e marcar o Job `SUCCEEDED`; qualquer falha faz rollback e chama reconciliação CAS-idempotente. Chamadas ao provider, repair e processamento não podem ocorrer dentro dela.
+A finalização usa `prisma.$transaction` curta para inserir o conjunto (completo ou somente aprovados em `SUCCEEDED_PARTIAL`), reports, run e memória, preencher `currentBriefVersionId`, confirmar a reserva pelos Contents entregues (liberando o restante em parcial — ADR-021) e marcar o Job `SUCCEEDED` ou `SUCCEEDED_PARTIAL`; qualquer falha faz rollback e chama reconciliação CAS-idempotente. Chamadas ao provider, repair e processamento não podem ocorrer dentro dela.
 
 ---
 
@@ -206,7 +206,7 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto, reports
 - Implementar `startCommerceIntelligence` em transação curta: resolver Product pelo Tenant, validar Product ativo sem resultado publicado, fatos e quantidade, verificar capacidade mensal, rejeitar Job ativo e criar reservation + Job `QUEUED`; Product `READY` é rejeitado por RI-003-07/AC 46.
 - Replays da mesma chave/fingerprint retornam o mesmo Job; fingerprint divergente não cria nova linha. Retry técnico/reclaim/reconnect reutiliza Job, chave e reserva; retry explícito após `FAILED`/`CANCELLED` cria novo Job/chave/reserva e preserva o terminal.
 - Rejeitar DELETE físico sempre: `PRODUCT_HAS_HISTORY` quando houver histórico e `PRODUCT_DELETE_UNSUPPORTED` quando não houver, ambos com `409` sanitizado e orientação `Arquivar produto`. `archiveProduct` é a única remoção operacional e decrementa `activeProductsUsed` atomicamente apenas em `ACTIVE → ARCHIVED`, conforme B-003-14/AC 47–49.
-- Derivar readiness `PENDING`, `ANALYZING`, `READY`, `FAILED` somente a partir do Product e Jobs/resultados completos.
+- Derivar readiness `PENDING`, `ANALYZING`, `READY`, `FAILED` somente a partir do Product e Jobs/resultados: `READY` deriva de `SUCCEEDED` (completo) ou `SUCCEEDED_PARTIAL` (aprovados publicados, com ação `Gerar faltantes` — ADR-021); `FAILED` de `FAILED`/`CANCELLED` sem resultado.
 
 **Gate:** testes devem provar backfill/contagem de Products ativos, limite e corrida em activate/archive/reactivate, Product novo atômico, Product ativo sem reserva duplicada, `GEN-CAPACITY`, `GEN-PRODUCT-CAPACITY`, `GEN-ACTIVE`, mês UTC, replay, reconciliação CAS repetida, retry técnico versus explícito, Product `READY` bloqueado, DELETE sempre rejeitado, decremento atômico no archive e isolamento entre Tenants.
 
@@ -228,10 +228,10 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto, reports
 - Orquestrar a ordem da primeira pipeline com exatamente quatro chamadas fundacionais (`PRODUCT_UNDERSTANDING`, `COMMERCIAL_OPPORTUNITY_MAPPING`, `STRATEGY_SYNTHESIS`, `CONTENT_PLAN_GENERATION`) e Brief Generator em batches sequenciais de 4–8; emitir stage real antes de cada chamada.
 - Construir e validar `CommercialOpportunityMappingEnvelope` e cada `CommercialOpportunity`; construir Strategy/Plan/ContentOpportunities usando somente projeções de Product facts, restrições, `Creator Context` aplicável ou vazio explícito, Skill e memória vazia; manter fato separado de inferência.
 - Construir o catálogo de evidências com relação 1:1 entre fatos e `evidenceRefs` na mesma posição (`fact:<chave>`; do segundo valor em diante, `fact:<chave>:<n>`), preservando o alinhamento por índice exigido pela proveniência dos gates.
-- Implementar hard gate factual/estrutural determinístico, fora do LLM: Fact Validator baseado em fatos/evidências estruturados; remover/corrigir `UNSUPPORTED`, rejeitar `CONTRADICTED`; validar structure, cenas por formato, hash estrutural e plataforma. Depois do hard gate, o judge semântico interno avalia somente hook, development, script, CTA e cenas. `PASS` preserva; somente `REPAIR` chama repair seletivo e consome no máximo 2 rounds; `REJECT` é terminal. Qualquer status final diferente de `PASS` falha fechado, preserva exact-N e diagnóstico. Não decide aprovação humana, variedade ou memória semântica.
+- Implementar hard gate factual/estrutural determinístico, fora do LLM: Fact Validator baseado em fatos/evidências estruturados; remover/corrigir `UNSUPPORTED`, rejeitar `CONTRADICTED`; validar structure, cenas por formato, hash estrutural e plataforma. Depois do hard gate, o judge semântico interno avalia somente hook, development, script, CTA e cenas. `PASS` preserva; somente `REPAIR` chama repair seletivo e consome no máximo 2 rounds; `REJECT` é terminal. Qualquer status final diferente de `PASS` impede o item de publicar — faltante no contrato ADR-021; `SUCCEEDED` fecha exact-N com diagnóstico. Não decide aprovação humana, variedade ou memória semântica.
 - Fazer Brief Generator receber somente a projeção da Strategy, oportunidade, restrições aplicáveis, `Creator Context` e `validationRules`; validar um resultado por oportunidade e atribuir IDs/posições/versões server-side.
 - Implementar Variety Gate por dimensões estruturadas e normalização determinística; preservar Briefings `PASS`; repair recebe causas e só substitui rejeitados em batches limitados até o limite configurado, sem reiniciar o plano inteiro.
-- Implementar exact-N final: qualquer incapacidade de fechar conjunto consistente gera falha, nunca conteúdo artificial. Para `N`, a linha de base é `4 + ceil(N / batchSize)` chamadas; registrar chamadas de repair separadamente.
+- Implementar exact-N final: incapacidade de fechar conjunto consistente gera falha, nunca conteúdo artificial; itens não convergidos dentro do teto seguem o contrato parcial declarado do ADR-021. Para `N`, a linha de base é `4 + ceil(N / batchSize)` chamadas; registrar chamadas de repair separadamente.
 - Produzir metadata allowlisted por capability/batch e sinais estruturados somente no objeto de resultado para a finalização; não consultar snapshots históricos.
 
 **Gate:** testes cobrem mapping comercial validado, provider in-memory, limite de chamadas, batch sequencial, projeções de contexto, output exact-N, regras qualitativas de Briefing, claims por evidência, duplicata exata/normalizada, hash estrutural, quantidade de cenas inválida, concentração estrutural, repair parcial preservando PASS, repair esgotado e memória vazia/sinais somente em sucesso.
@@ -244,7 +244,7 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto, reports
 - Executar engine/provider fora de transação longa; atualizar stage antes da etapa em transações curtas; executar heartbeat condicional ao mesmo owner/attempt; abortar a tentativa ao perder fencing, cancelar ou atingir deadline.
 - Reclaimar lease expirado com incremento de tentativa, backoff e novo lease; ao atingir limite configurado, marcar `FAILED` com código `GEN-ATTEMPTS` e chamar `reconcileReservation(jobId, reason)` uma única vez. O owner anterior não inicia novo trabalho externo.
 - Finalizar com CAS por `jobId`, status `RUNNING`, owner/lease/attempt atuais. Worker obsoleto não grava resultado, não confirma/libera reservation e não altera estado terminal.
-- Em sucesso, em uma transação curta inserir Strategy, Plan, Opportunities, Contents, BriefVersions, reports, run e sinais; inserir Content com `currentBriefVersionId = NULL`, criar Brief v1, preencher a FK, confirmar reservation e marcar Job `SUCCEEDED` somente após exact-N e consistência do conjunto. Falha em qualquer passo faz rollback integral.
+- Em sucesso pleno ou parcial, em uma transação curta inserir Strategy, Plan, Opportunities, somente os Contents aprovados, BriefVersions, reports, run e sinais; inserir Content com `currentBriefVersionId = NULL`, criar Brief v1, preencher a FK, confirmar reservation pelos entregues (liberar o restante no parcial) e marcar Job `SUCCEEDED` — única saída com exact-N — ou `SUCCEEDED_PARTIAL` (0<D<N dentro do teto reavaliado após drops de variedade, ADR-021). Falha em qualquer passo faz rollback integral.
 - Qualquer falha terminal conhecida de provider, Skill, schema, factualidade, variedade, repair, lease ou persistência passa por `failJobAndReleaseReservation` com seu código específico, capability/stage de origem, mensagem sanitizada e reconciliação da reservation no mês UTC de origem. Repetição não libera duas vezes.
 - Cancelar somente `QUEUED`/`RUNNING` com transição condicional; em `CANCELLED`, chamar a mesma reconciliação CAS; não oferecer cancelamento em `RUNNING` quando não houver interrupção segura.
 - O entrypoint falha fechado somente quando `DATABASE_URL` ou parâmetros essenciais de lease/deadline/tentativa/backoff forem ausentes, inconsistentes ou inválidos. Provider/Skill ausentes ou inválidos permitem boot, mas o Job reivindicado falha de forma recuperável.
@@ -258,8 +258,8 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto, reports
 
 - `POST /api/generations` exige `sameOriginRequest`, sessão, Product ativo sem resultado publicado e `Idempotency-Key` válida; Product `READY` é rejeitado para reanálise. O body só identifica Product; responder `202` com Job mínimo, sem Strategy/provider/prompt.
 - `GET /api/generations/current` retorna somente o Job ativo ou o último terminal acionável do Tenant para o indicador; não confiar em `localStorage`.
-- `GET /api/generations/:id` retorna status/stage/readiness e resultados somente quando `SUCCEEDED`; Job de outro Tenant responde 404 uniforme.
-- `POST /retry` exige Job terminal autorizado e nova chave; `POST /cancel` exige origem/sessão e transição segura. Todas as mutações são CSRF-protected.
+- `GET /api/generations/:id` retorna status/stage/readiness e resultados somente quando `SUCCEEDED` ou `SUCCEEDED_PARTIAL` (estes últimos com deliveredCount/failedCount e motivo sanitizado por item faltante — ADR-021); Job de outro Tenant responde 404 uniforme.
+- `POST /retry` exige Job terminal autorizado e nova chave; `Gerar faltantes` após `SUCCEEDED_PARTIAL` cria novo job com reserva da quantidade faltante (ADR-021); `POST /cancel` exige origem/sessão e transição segura. Todas as mutações são CSRF-protected.
 - DELETE Product retorna `PRODUCT_HAS_HISTORY` ou `PRODUCT_DELETE_UNSUPPORTED` conforme B-003-14, sempre orientando `Arquivar produto`; não expor stack, SQL, provider, modelo, tier, prompt, tokens, segredo, payload bruto ou existência de outro Tenant.
 - Mapear todos os códigos da SPEC para HTTP e mensagens `pt-BR`, preservando contexto editável e sem publicar resultados intermediários.
 
@@ -270,23 +270,23 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto, reports
 **Arquivos:** substituir o contrato antigo em `src/components/products/generation-api.ts`, `generation-ui-model.ts` e `generation-panel.tsx`; modificar `product-detail.tsx`, `product-detail.module.css`, `product-list.tsx`, `product-list.module.css`, `product-api.ts`, `product-shell.tsx`, `product-shell.module.css`; criar `src/components/products/global-activity-indicator.tsx` e CSS se necessário; atualizar testes UI-model/API.
 
 - Remover o formulário antigo de quantidade/objetivo `1–50`, o `localStorage` como ponteiro, o gating `readyForStrategy` e o vocabulário de `Generation`; esses arquivos são dead code no estado atual e podem ser substituídos/removidos sem quebrar call site existente. Usar `CommerceIntelligenceJob`, `targetContentCount` do Product e API server-authoritative.
-- Em Product ativo sem resultado publicado e sem Job, mostrar uma única ação `Analisar produto`; iniciar Job e mostrar `QUEUED`. Product `READY` oferece somente `Revisar conteúdos`; nova geração/recorrência pertence ao Slice 008. Product salvo manualmente não dispara geração no POST de cadastro.
+- Em Product ativo sem resultado publicado e sem Job, mostrar uma única ação `Analisar produto`; iniciar Job e mostrar `QUEUED`. Product `READY` após `SUCCEEDED` oferece uma única ação `Revisar conteúdos`; após `SUCCEEDED_PARTIAL` oferece `Revisar conteúdos` + `Gerar faltantes` (ADR-021); nova geração/recorrência arbitrária pertence ao Slice 008. Product salvo manualmente não dispara geração no POST de cadastro.
 - Nas leituras autenticadas de Product, todo `ActiveProductView` inclui `generationAction`: `{ state: "AVAILABLE", reason: null, nextAction: null }`, ou `BLOCKED` com `{ reason: "GEN-ACTIVE", nextAction: "VIEW_ACTIVE_ANALYSIS" }` ou `{ reason: "GEN-CAPACITY", nextAction: "WAIT_FOR_CAPACITY" }`. Não omitir campos nem serializar este objeto como `null`. `ArchivedProductView` não contém `generationAction`; não criar estado/código adicional. Archive/reactivate preservam a resposta mínima `{ id, version }`, seguida de refetch autenticado. A projeção é calculada server-side para a sessão, não contém plano, saldo, limite, reserva ou ID de outro Job/Tenant e só controla o feedback visual; o `POST /api/generations` preserva a revalidação transacional. Não criar endpoint de preflight separado. Ver ADR-016.
 - Em `QUEUED`/`RUNNING`, mostrar Product e stage real, polling/backoff sem percentual/ETA e sem Briefing parcial; permitir uso das demais rotas e não redirecionar à força.
-- Em `SUCCEEDED`, derivar `READY`, mostrar Strategy/Plan consultáveis e Briefings completos em `DRAFT`, com ação `Revisar conteúdos`; não oferecer edição/aprovação/lote neste slice.
+- Em `SUCCEEDED`, derivar `READY`, mostrar Strategy/Plan consultáveis e Briefings completos em `DRAFT`, com ação `Revisar conteúdos`; não oferecer edição/aprovação/lote neste slice. Em `SUCCEEDED_PARTIAL`, derivar `READY` com "D de N prontos", motivo sanitizado por item faltante e ação `Gerar faltantes` além de `Revisar conteúdos` (ADR-021); conteúdos reprovados permanecem invisíveis.
 - Em `FAILED`/`CANCELLED`, derivar `FAILED`, preservar Product/fatos e Job terminal e oferecer `Tentar novamente` como novo Job.
 - Atualizar cards com badges `Pendente`, `Analisando`, `Pronto`, `Falhou` e adicionar somente o filtro `Pendente`. No estado `blocked` (`GEN-ACTIVE` ou capacidade indisponível), manter `Analisar produto` visível porém desabilitada, com explicação textual e próxima ação.
 - Compor o indicador global no `ProductShell` abaixo da toolbar em desktop/tablet e abaixo do header contextual no mobile; consultar backend após navegação/reload e não depender de aba iniciadora ou `localStorage`.
 - Aplicar `DESIGN.md`: `pt-BR`, labels persistentes, foco-visible, `aria-live`/`aria-busy`, erros textuais associados, alvos mínimos `44×44px`, sem cor única, sem spinner isolado, `prefers-reduced-motion`, layout mobile completo e glass somente em shell, toolbar ou sheet.
 
-**Gate:** testes de normalização/status e smoke em navegador comprovam início somente sem resultado publicado, projeção `AVAILABLE`/`BLOCKED` antes do clique, bloqueio `READY`/recorrência, polling, reload/reentrada, sucesso/falha/retry, estado `blocked`, indicador global, badges, filtro `Pendente`, archive-only e ausência de conteúdo parcial. Uma corrida após `AVAILABLE` ainda deve receber o erro sanitizado do `POST` e recarregar a projeção.
+**Gate:** testes de normalização/status e smoke em navegador comprovam início somente sem resultado publicado, projeção `AVAILABLE`/`BLOCKED` antes do clique, bloqueio `READY`/recorrência, polling, reload/reentrada, sucesso pleno, sucesso parcial (`SUCCEEDED_PARTIAL` com "D de N", motivo sanitizado e `Gerar faltantes`), falha/retry, estado `blocked`, indicador global, badges, filtro `Pendente`, archive-only e ausência de conteúdo reprovado. Uma corrida após `AVAILABLE` ainda deve receber o erro sanitizado do `POST` e recarregar a projeção.
 
 ### Tarefa 9 — Integrar testes, scripts e validação operacional
 
 **Arquivos:** modificar `package.json`; atualizar fixtures/testes existentes que assumem `/api/generations` antigo; criar testes de integração PostgreSQL somente onde necessário.
 
 - Incluir no script `test` os testes de `commerce-intelligence`, Entitlement, Product lifecycle, HTTP, worker, health, Product readiness e UI-model; manter testes de banco identificáveis e executáveis com `DATABASE_URL`.
-- Criar cenário de smoke autenticado com `count=1` e `count=16`: Product confirmado → `Analisar produto` → `QUEUED` → worker → stages reais → quatro chamadas fundacionais → batches 4–8 → gates → `SUCCEEDED` → Strategy/Plan/Contents/BriefVersions; repetir via reload.
+- Criar cenário de smoke autenticado com `count=1` e `count=16`: Product confirmado → `Analisar produto` → `QUEUED` → worker → stages reais → quatro chamadas fundacionais → batches 4–8 → gates → `SUCCEEDED` → Strategy/Plan/Contents/BriefVersions; repetir via reload. Exercitar também o caminho parcial: job que fecha `SUCCEEDED_PARTIAL` com D de N publicados, motivo sanitizado por item e ação `Gerar faltantes` criando novo job com reserva F (ADR-021).
 - Confirmar que salvar manualmente não cria Job/reservation, que editar Product fora do fluxo não altera resultados publicados silenciosamente, que Product `READY` não inicia reanálise e que DELETE sempre retorna código sanitizado archive-only.
 - Registrar metadata operacional allowlisted por capability/batch (task, tier, provider/modelo lógico, versão/hash, duração, bytes, retries, validações, repairs e códigos); redigir textos, URL, prompts, output, cookies e tokens.
 - Executar regressão no Golden Dataset aprovado, medindo factualidade, variedade, naturalidade, custo, latência, taxa de schema inválido e repair; sem fixture/artefato aprovado, manter o gate `BLOCKED` e não declarar a implementação plenamente validada ou pronta para produção.
@@ -300,7 +300,7 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto, reports
 - Toda página autenticada usa `requireSession`; toda API resolve cookie por `resolveSession`; toda consulta/mutação recebe `tenantId` e, quando aplicável, `userId` resolvidos server-side.
 - IDs vindos do cliente são apenas referências para lookup scoped; `tenantId`, `userId`, plano, mês, capacidade, provider, tier, Strategy, Skill e ownership são sempre derivados pelo servidor.
 - `POST`, retry, cancel, archive e DELETE rejeitado exigem `sameOriginRequest`; a presença do cookie não prova intenção. Rejeitar Origin ausente/divergente e não persistir antes da verificação.
-- Product novo, reservation mensal e Job são uma decisão transacional única; Product já ativo e retry não reservam `active_products` novamente. Reservation mensal é única por Job, pertence ao mês UTC de criação e toda saída terminal (`SUCCEEDED`, `FAILED`, `CANCELLED`) confirma ou libera por CAS idempotente.
+- Product novo, reservation mensal e Job são uma decisão transacional única; Product já ativo e retry não reservam `active_products` novamente. Reservation mensal é única por Job, pertence ao mês UTC de criação e toda saída terminal reconcilia por CAS idempotente: `SUCCEEDED` confirma N; `SUCCEEDED_PARTIAL` confirma D e libera N−D no mês de origem (ADR-021); `FAILED`/`CANCELLED` liberam integralmente.
 - Job ativo é protegido pelo índice parcial e por tratamento de conflito; botão desabilitado é somente feedback visual.
 - FKs/uniques compostos e, quando necessário, lookup/persistência transacional com Tenant/Product impedem mistura cross-tenant/cross-product; falhas de autorização respondem 404 uniforme.
 - Provider recebe somente a projeção allowlisted de fatos/contexto necessária à capability, `Creator Context` aplicável e Skill necessária; conteúdo externo/seller permanece em envelope de dados não confiável separado das instruções. Nenhuma saída textual altera autorização, quota, status ou persistência.
@@ -328,9 +328,9 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto, reports
 | Briefing qualitativo | Skill/prompt/resultado com decisão estratégica separada, cenas simples, linguagem oral e leitura não literal | Briefing que mistura orientação e fala ou exige leitura literal |
 | Factualidade | supported/inferred/unsupported/contradicted contra evidências estruturadas | claim inventado/contradito persistido |
 | Variedade | duplicata normalizada, hash estrutural, quantidade de cenas e concentração; repair preserva PASS | conteúdo repetido ou quantidade preenchida artificialmente |
-| Persistência | Strategy única, Plan único, exact-N, Content.currentBriefVersionId nullable→preenchido, Brief v1 imutável, report por `briefId` | sucesso parcial, FK circular, Brief duplicado ou approved preenchido |
+| Persistência | Strategy única, Plan único, exact-N em `SUCCEEDED` e somente aprovados em `SUCCEEDED_PARTIAL` (ADR-021), Content.currentBriefVersionId nullable→preenchido, Brief v1 imutável, report por `briefId` | sucesso parcial **silencioso** (sem declaração/validação), FK circular, Brief duplicado ou approved preenchido |
 | Observabilidade | metadata allowlisted por capability/batch: task, tier, provider/modelo lógico, versão/hash, duração, bytes, retries, validações, repairs e erros | impossível medir custo/latência ou diferenciar provider, schema, repair e persistência |
-| Memória | snapshot inicial vazio, unique `(tenantId,sourceJobId)`, replay concorrente e sinais somente em sucesso | histórico consultado ou snapshots duplicados |
+| Memória | snapshot inicial vazio, unique `(tenantId,sourceJobId)`, replay concorrente e sinais somente dos Contents entregues em sucesso pleno ou parcial (ADR-021) | histórico consultado ou snapshots duplicados |
 | Preservação Product | DELETE com/sem histórico rejeitado, archive decrementa contador uma vez | perda de histórico, DELETE físico ou contador negativo |
 | Falhas terminais | provider HTTP 200 atrasado, timeout, Skill/schema/factualidade/variedade/repair/persistência/cancelamento, com códigos específicos | Job sem `FAILED`/`CANCELLED`, erro mal classificado, reservation não liberada ou liberação duplicada |
 | Autorização | Product/Job/resultado/reservation cross-tenant | vazamento por ID ou Tenant enviado pelo cliente |
@@ -426,7 +426,7 @@ Não criar novas entidades, endpoints, modelos ou dependências.
 - [ ] Mapear as propriedades já entregues por Product, readiness, generationAction, Strategy, Plan, Content e History.
 - [ ] Definir view models locais apenas para apresentação, sem receber `tenantId`, quota, provider, tier ou estado autoritativo do cliente.
 - [ ] Cobrir fixtures de `PENDING`, `QUEUED`, `RUNNING`, `READY`, `FAILED`, `CANCELLED`, `BLOCKED`, loading, empty e reentry.
-- [ ] Garantir que Product `READY` exponha somente `Revisar conteúdos` neste slice.
+- [ ] Garantir que Product `READY` exponha `Revisar conteúdos` — e, após `SUCCEEDED_PARTIAL`, também `Gerar faltantes` (ADR-021) — e nenhuma ação de Slice 004+.
 - [ ] Garantir que ações futuras de Slice 004+ não sejam renderizadas.
 
 ### Tarefa 2 — Recriar shell e navegação
@@ -445,7 +445,7 @@ Não criar novas entidades, endpoints, modelos ou dependências.
 - [ ] Renderizar toast flutuante discreto na região principal, sem deslocar header ou conteúdo.
 - [ ] Manter o toast enquanto o job estiver acionável; dismiss oculta apenas a apresentação local.
 - [ ] Reapresentar o toast quando reentrada ou mudança de rota encontrar estado acionável no backend.
-- [ ] Mostrar somente Product, stage humano, sucesso/falha e uma ação seguinte.
+- [ ] Mostrar somente Product, stage humano e sucesso/falha com as ações qualificadas por estado: `SUCCEEDED` pleno → uma única ação (`Revisar conteúdos`); `SUCCEEDED_PARTIAL` → duas ações (`Revisar conteúdos` + `Gerar faltantes`, ADR-021); `FAILED`/`CANCELLED` → `Tentar novamente`. Nenhuma ação de slice futuro.
 - [ ] Usar `role="status"`/`aria-live="polite"` para atividade e `role="alert"` para falha acionável.
 - [ ] Fornecer `Dispensar` com target mínimo de `44×44px`, foco-visible e sem cancelamento implícito.
 - [ ] Não mostrar percentual, ETA, provider, modelo, tier, prompt, log ou token.
@@ -476,7 +476,7 @@ Não criar novas entidades, endpoints, modelos ou dependências.
 - [ ] Contents desktop: lista/tabela operacional com posição, hook, ângulo, status e abertura.
 - [ ] Contents mobile: cards verticais com disclosure.
 - [ ] Briefing expandido: Hook, Ângulo, objetivo quando disponível, Roteiro, Cenas e CTA.
-- [ ] Renderizar exatamente os Contents retornados após `SUCCEEDED`; não simular conteúdo.
+- [ ] Renderizar exatamente os Contents retornados após `SUCCEEDED` ou `SUCCEEDED_PARTIAL` (somente aprovados); não simular conteúdo.
 - [ ] History: tentativas, readiness, status, timestamp, resultado e retry baseados em dados reais.
 - [ ] Não adicionar editar, regenerar, aprovar, descartar, lote, Agenda, Estúdio ou memória futura.
 

@@ -45,7 +45,7 @@ Padrões apenas quando resolvem problema presente:
 
 ### 6. Teste comportamento, não desenho interno
 
-Prove resultados e invariantes nas bordas de domínio e aplicação: isolamento de tenant, reserva/virada de quota, idempotência de job e retry, validação factual (`SUPPORTED`/`INFERRED_BUT_SAFE`/`UNSUPPORTED`/`CONTRADICTED`), schema/contract de cada capability, snapshot de memória e variedade, transições derivadas do lote, limites do Agent Run e recuperação de falha sem sucesso parcial.
+Prove resultados e invariantes nas bordas de domínio e aplicação: isolamento de tenant, reserva/virada de quota, idempotência de job e retry, validação factual (`SUPPORTED`/`INFERRED_BUT_SAFE`/`UNSUPPORTED`/`CONTRADICTED`), schema/contract de cada capability, snapshot de memória e variedade, transições derivadas do lote, limites do Agent Run e recuperação de falha sem sucesso parcial **silencioso** (parcial declarado e revalidado é aceitável quando o contrato o define, ex. ADR-021).
 
 Capabilities de LLM recebem **contract tests** (input → output schema). Qualidade estratégica é avaliada com o Golden Dataset por engine/Skill/prompt/modelo — eval é teste de regressão de qualidade, não decorativo. Nunca congele nomes de classes, chamadas internas ou estrutura de tabelas.
 

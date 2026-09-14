@@ -6,14 +6,18 @@ import { GenerationError } from "./errors";
 import { validateTargetContentCount } from "./contract";
 import { monthUtc } from "../entitlements/generation";
 
-export async function startCommerceIntelligence(input: { tenantId: string; userId: string; productId: string; idempotencyKey: string }) {
-  const fingerprint = createHash("sha256").update(`${input.tenantId}:${input.productId}`).digest("hex");
+export async function startCommerceIntelligence(input: { tenantId: string; userId: string; productId: string; idempotencyKey: string; targetContentCount?: number; mode?: "standard" | "retry" | "complete" }) {
+  // ADR-021: idempotência por modo/quantidade — mesma chave com modo ou alvo
+  // distinto é rejeitada (GEN-IDEMPOTENCY); replay idêntico devolve o mesmo job.
+  const mode = input.mode ?? "standard";
+  const fingerprint = createHash("sha256").update(`${input.tenantId}:${input.productId}:${mode}:${input.targetContentCount ?? "product-default"}`).digest("hex");
   return prisma.$transaction(async (tx) => {
     const replay = await tx.commerceIntelligenceJob.findFirst({ where: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey } });
     if (replay) { if (replay.fingerprint !== fingerprint) throw new GenerationError("GEN-IDEMPOTENCY", "Chave já utilizada"); return replay; }
     const product = await tx.product.findFirst({ where: { tenantId: input.tenantId, id: input.productId } });
     if (!product || product.lifecycle !== "ACTIVE") throw new GenerationError("GEN-PRODUCT", "Produto não disponível");
-    const count = validateTargetContentCount(product.targetContentCount);
+    // ADR-021: retry dos faltantes reserva somente F (override server-side do job parcial).
+    const count = validateTargetContentCount(input.targetContentCount ?? product.targetContentCount);
     const active = await tx.commerceIntelligenceJob.findFirst({ where: activeJobWhere(input.tenantId, input.userId) });
     if (active) { console.info("[generation-active]", { tenantId: input.tenantId, userId: input.userId, activeJobId: active.id, code: "GEN-ACTIVE" }); throw new GenerationError("GEN-ACTIVE", "Já existe uma análise em andamento"); }
     const ready = await tx.commerceIntelligenceJob.findFirst({ where: { tenantId: input.tenantId, productId: product.id, status: "SUCCEEDED" } });
@@ -32,7 +36,7 @@ export async function startCommerceIntelligence(input: { tenantId: string; userI
     // Slice 011 (ADR-018): snapshot autorizado das preferências no início do Job — gravado
     // no inputSnapshot; retry técnico reutiliza e mutação posterior não altera a execução.
     const { accountContext, creatorPreferences } = await captureJobPreferenceSnapshots(input.tenantId, tx);
-    const job = await tx.commerceIntelligenceJob.create({ data: { tenantId: input.tenantId, userId: input.userId, productId: product.id, idempotencyKey: input.idempotencyKey, fingerprint, targetContentCount: count, generatedContentsMonth: month, status: "QUEUED", stage: "UNDERSTANDING_PRODUCT", inputSnapshot: { accountContext, creatorPreferences } } });
+    const job = await tx.commerceIntelligenceJob.create({ data: { tenantId: input.tenantId, userId: input.userId, productId: product.id, idempotencyKey: input.idempotencyKey, fingerprint, targetContentCount: count, generatedContentsMonth: month, status: "QUEUED", stage: "UNDERSTANDING_PRODUCT", inputSnapshot: { accountContext, creatorPreferences }, ...(mode !== "standard" ? { metadata: { mode } } : {}) } });
     await tx.generationUsageReservation.create({ data: { tenantId: input.tenantId, jobId: job.id, generatedContentsMonth: job.generatedContentsMonth, quantity: count } });
     return job;
   });

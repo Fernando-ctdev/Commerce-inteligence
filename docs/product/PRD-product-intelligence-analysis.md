@@ -484,7 +484,7 @@ O indicador global continua sendo a representação principal da atividade.
 
 ## 16. Conteúdo parcial
 
-Resultados internos parciais podem ser persistidos para permitir recuperação técnica, mas não devem ser apresentados como estratégia ou Briefings concluídos antes de `SUCCEEDED`.
+Resultados internos parciais podem ser persistidos para permitir recuperação técnica, mas não devem ser apresentados como estratégia ou Briefings concluídos antes de `SUCCEEDED` — ou de `SUCCEEDED_PARTIAL` declarado, que publica somente os Briefings aprovados, informa os faltantes com motivo sanitizado e oferece `Gerar faltantes` (ADR-021). Parcial nunca é silencioso: nenhum Briefing reprovado é exibido.
 
 Não mostrar ao usuário:
 

@@ -37,7 +37,7 @@ A partir de um produto, contexto e preferências do creator, o sistema gera e or
 
 A engine estratégica é a mesma para todos os planos.
 
-Os planos comerciais limitam principalmente quantidade de produtos, campanhas, conteúdos, gerações e uso mensal da plataforma.
+Os planos comerciais limitam principalmente quantidade de produtos, campanhas e conteúdos entregues por mês. Gerações de conteúdo são ilimitadas: o creator pode solicitar novos conteúdos de um produto quantas vezes quiser; a quota mede o conteúdo entregue, não as tentativas (ADR-021).
 
 No futuro, planos premium poderão adicionar produção automática por IA, utilizando exatamente a mesma inteligência estratégica já criada pelo core da plataforma.
 
@@ -284,6 +284,8 @@ Na primeira geração, `targetContentCount` precisa estar resolvido antes da cri
 Depois de `Confirmar produto`, não existe uma segunda confirmação obrigatória da estratégia nem um botão obrigatório `Gerar estratégia`: o processamento segue de forma assíncrona até existirem conteúdos úteis para revisão.
 
 Esse ciclo deve poder ser repetido continuamente.
+
+Quando parte de uma geração não atinge a qualidade exigida após os repairs permitidos, o job conclui como **parcial declarado** (`SUCCEEDED_PARTIAL`): o creator recebe imediatamente os conteúdos aprovados, é informado dos faltantes com motivo sanitizado por item, e pode completá-los com a ação `Gerar faltantes`, que reutiliza a Strategy e a memória do produto. Nenhum conteúdo reprovado é publicado; a variedade do conjunto entregue é revalidada; a quota cobra somente o entregue; falhas acima do teto de política ou a inexistência de aprovados reprova o job inteiro como antes (ADR-021).
 
 A plataforma precisa fechar o espaço entre **“tenho ideias aprovadas”** e **“sei o que vou gravar e consigo executar”**.
 
@@ -1173,7 +1175,7 @@ Possíveis limitadores:
 * quantidade de Produtos ativos;
 * conteúdos gerados por mês;
 * campanhas;
-* quantidade de gerações;
+* quantidade de gerações — **não aplicável no modelo vigente**: gerações são ilimitadas e a capacidade mede conteúdo entregue (ADR-021);
 * quantidade de lotes de gravação ativos, se fizer sentido comercialmente;
 * armazenamento/histórico;
 * membros, futuramente;

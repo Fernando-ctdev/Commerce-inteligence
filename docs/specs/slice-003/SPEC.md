@@ -46,9 +46,9 @@ A confirmação do Product precisa levar diretamente ao primeiro valor do produt
 
 ## Goals
 
-- Entregar a primeira `ProductStrategy` e exatamente `targetContentCount` Contents com Briefings iniciais válidos em `DRAFT` após um job bem-sucedido.
+- Entregar a primeira `ProductStrategy` e `targetContentCount` Contents com Briefings iniciais válidos em `DRAFT` após um job bem-sucedido. Quando parte do lote não convergir dentro do repair e do teto de falhas, o job conclui `SUCCEEDED_PARTIAL` publicando somente os itens aprovados, com variedade revalidada e retry explícito dos faltantes (ADR-021).
 - Permitir navegação contínua e reentrada sem perder o estado real do job.
-- Impedir sucesso parcial silencioso, consumo duplicado, duplicação de resultados e uso de dados fora do Tenant autorizado.
+- Impedir sucesso parcial silencioso, consumo duplicado, duplicação de resultados e uso de dados fora do Tenant autorizado. Entrega parcial é permitida somente como `SUCCEEDED_PARTIAL` declarado, revalidado e consentido (ADR-021).
 - Comunicar ao creator Produto, etapa real, sucesso/falha e próxima ação em `pt-BR`, sem expor detalhes técnicos da engine.
 
 ## User Stories
@@ -64,7 +64,7 @@ A confirmação do Product precisa levar diretamente ao primeiro valor do produt
 - Confirmação do Product no fluxo de importação e resolução server-side da `targetContentCount` antes da criação do job.
 - Criação transacional de Product confirmado, validação do limite de `active_products`, reserva de Entitlement mensal e `CommerceIntelligenceJob`.
 - Job persistente em fila PostgreSQL, worker com lease/timeout, reentrada e retry idempotente.
-- Estados do job `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED` e `CANCELLED`.
+- Estados do job `QUEUED`, `RUNNING`, `SUCCEEDED`, `SUCCEEDED_PARTIAL`, `FAILED` e `CANCELLED` (ADR-021).
 - Stages públicos `UNDERSTANDING_PRODUCT`, `MAPPING_COMMERCIAL_OPPORTUNITIES`, `BUILDING_STRATEGY`, `BUILDING_CONTENT_PLAN`, `GENERATING_BRIEFS` e `FINALIZING`, com mensagens humanas correspondentes e atualização antes do trabalho correspondente.
 - Regra de no máximo um job `QUEUED` ou `RUNNING` por usuário.
 - Indicador global no App Shell para job ativo, concluído com ação pendente e falha recuperável.
@@ -89,7 +89,7 @@ A confirmação do Product precisa levar diretamente ao primeiro valor do produt
 - Escolha de provider, modelo ou tier na UI; exposição de prompts, tokens, custos, logs, chain-of-thought ou detalhes da Skill.
 - Publicação, agendamento de publicação, TikTok OAuth/API, analytics externo, ROAS, CTR ou atribuição.
 - Geração ou edição de vídeo, imagem, áudio ou voice-over.
-- Embeddings, banco vetorial, similaridade semântica, deduplicação semântica e judge LLM de variedade ou memória ficam fora do Slice 003; a variedade usa dimensões estruturadas e normalização determinística. `CONTENT_QUALITY_JUDGE` é a exceção interna: executa após o hard gate factual/estrutural, limitado a hook, development, script, CTA e cenas. `PASS` mantém a parte; só `REPAIR` chama `CONTENT_PART_REPAIR` e consome no máximo 2 rounds; `REJECT` é terminal e preserva diagnóstico. Qualquer status final diferente de `PASS` bloqueia sucesso, preserva exact-N e falha fechado.
+- Embeddings, banco vetorial, similaridade semântica, deduplicação semântica e judge LLM de variedade ou memória ficam fora do Slice 003; a variedade usa dimensões estruturadas e normalização determinística. `CONTENT_QUALITY_JUDGE` é a exceção interna: executa após o hard gate factual/estrutural, limitado a hook, development, script, CTA e cenas. `PASS` mantém a parte; só `REPAIR` chama `CONTENT_PART_REPAIR` e consome no máximo 2 rounds; `REJECT` é terminal e preserva diagnóstico. Qualquer status final diferente de `PASS` impede o item de publicar — faltante no contrato ADR-021 (`SUCCEEDED_PARTIAL` dentro do teto, `FAILED` fora), com `SUCCEEDED` preservando exact-N e falhando fechado.
 - Alteração de Strategy durante o job, mudança automática de Strategy por performance e edição de fatos além da confirmação inicial.
 - Alteração de PRD, ADR, `SYSTEM-DESIGN.md`, `DESIGN.md`, `PRINCIPLES.md` ou `SLICES.md`.
 - Criação de PLAN ou implementação de código nesta etapa de especificação.
@@ -104,13 +104,13 @@ A confirmação do Product precisa levar diretamente ao primeiro valor do produt
 | Mensagens de stage | Usar uma mensagem humana estável por stage, em `pt-BR`, refletindo a etapa real; detalhes de copy podem ser refinados sem mudar o contrato | DESIGN e PRDs proíbem simulação por animação e percentual inventado | Não; contrato comportamental |
 | Limite de repair | Usar limite finito, positivo e configurável pelo sistema; o comportamento ao atingir o limite permanece conforme configuração aprovada | As fontes exigem limite, mas não aprovam um número específico; a SPEC não inventa um valor | Não; configuração em aberto |
 | Cancelamento pelo creator | Manter `CANCELLED` no contrato; oferecer ação somente se a infraestrutura suportar cancelamento seguro, em progressive disclosure | PRD suporta o estado, mas não exige cancelamento como ação primária no MVP | Não; configuração em aberto |
-| Conflito sobre gates | Hard gate factual/estrutural e Variety Gate permanecem determinísticos e fora do LLM; `CONTENT_QUALITY_JUDGE` é uma exceção semântica interna após o hard gate, limitada a hook, development, script, CTA e cenas. `PASS` preserva a parte, apenas `REPAIR` chama repair e consome no máximo 2 rounds, e `REJECT` é terminal; qualquer estado final diferente de `PASS` falha fechado preservando exact-N e diagnóstico. Embeddings, similaridade semântica, deduplicação semântica e judges de variedade/memória ficam fora | Explicita a exceção interna sem transferir autoridade factual/estrutural ao LLM nem criar aprovação do usuário | Sim, por ADR-004/SLICES e ADR-020 |
+| Conflito sobre gates | Hard gate factual/estrutural e Variety Gate permanecem determinísticos e fora do LLM; `CONTENT_QUALITY_JUDGE` é uma exceção semântica interna após o hard gate, limitada a hook, development, script, CTA e cenas. `PASS` preserva a parte, apenas `REPAIR` chama repair e consome no máximo 2 rounds, e `REJECT` é terminal; qualquer estado final diferente de `PASS` impede o item de publicar — faltante no contrato ADR-021, com `SUCCEEDED` fechando exact-N e diagnóstico preservados. Embeddings, similaridade semântica, deduplicação semântica e judges de variedade/memória ficam fora | Explicita a exceção interna sem transferir autoridade factual/estrutural ao LLM nem criar aprovação do usuário | Sim, por ADR-004/SLICES, ADR-020 e ADR-021 |
 | Memória na primeira geração | Usar `ProductMemorySnapshot` vazio, sem consultar histórico/recorrência; após sucesso persistir somente sinais estruturados da geração para uso futuro; falha/cancelamento não atualizam memória | O Slice 003 não entrega nova geração, mas deixa o contrato de sinais para o Slice 008 | Sim, decisão desta SPEC |
 | Retry técnico | Reconnect, reentrada e worker recuperado reutilizam o mesmo `job.id`, a mesma chave lógica e a mesma reserva; não criam novo job | Mantém idempotência durante a execução e evita cobrança/resultado duplicado | Sim, decisão desta SPEC |
 | Retry acionado pelo creator | `Tentar novamente` após `FAILED` ou `CANCELLED` cria novo job com nova chave idempotente e nova reserva; preserva o job terminal anterior e reutiliza Product/fatos confirmados | Distingue nova execução de reentrada técnica e preserva histórico de tentativas | Sim, decisão desta SPEC |
 | Mês da reserva | Registrar o período `generated_contents_month` em UTC no momento da criação; liberar/confirmar no mesmo período de origem, mesmo se o job terminar em outro mês | ADR-006 fixa a origem temporal da reserva no mês UTC da criação | Sim, ADR-006 |
 | Versão ativa da Skill | Carregar a versão default server-side da `TikTok Commerce Creative Skill`, registrar a versão e falhar fechado se ausente ou inválida | Skill é dependência versionada e não pode ser escolhida pelo cliente | Sim, ADR-014 |
-| Falha após resultados intermediários | Resultados intermediários podem ser persistidos para recuperação/auditoria, mas somente a conclusão consistente publica Strategy/Plan/Contents para o creator | Evita sucesso parcial e preserva diagnóstico | Sim, ADR-012 |
+| Falha após resultados intermediários | Resultados intermediários podem ser persistidos para recuperação/auditoria; a publicação para o creator ocorre na conclusão consistente — `SUCCEEDED` com N itens ou `SUCCEEDED_PARTIAL` declarado com D itens aprovados e revalidados (ADR-021) | Evita sucesso parcial silencioso e preserva diagnóstico | Sim, ADR-012 + ADR-021 |
 
 
 | Decisão | Padrão adotado | Racional | Confirmada? |
@@ -144,7 +144,7 @@ O deadline global da tentativa deve terminar antes do lease efetivo ou ser prote
 
 Quando o lease expira, o sistema torna o job reivindicável novamente, incrementa a tentativa, aplica o backoff configurado e respeita o limite de tentativas. O owner anterior não pode iniciar novas chamadas após detectar fencing perdido e não pode publicar resultado. Se o limite for atingido sem conclusão, marca o job como `FAILED`, reconcilia a reserva sem duplicá-la e preserva o diagnóstico.
 
-`QUEUED → RUNNING → SUCCEEDED` é o caminho de sucesso. Uma falha recuperável leva a `FAILED`; um cancelamento seguro leva a `CANCELLED`. Estados terminais não voltam a publicar resultado parcial.
+`QUEUED → RUNNING → SUCCEEDED` é o caminho de sucesso completo; `QUEUED → RUNNING → SUCCEEDED_PARTIAL` é o sucesso parcial declarado (0<D<N e F ≤ `PARTIAL_FAILURE_CAP`, ADR-021). Uma falha recuperável leva a `FAILED`; um cancelamento seguro leva a `CANCELLED`. Estados terminais não voltam a publicar resultado parcial.
 
 ### B-003-04 — Pipeline estratégica, composição de chamadas e memória inicial
 
@@ -170,7 +170,7 @@ Capabilities que exigem interpretação solicitam tarefas lógicas ao Model Rout
 
 O provider recebe `reasoning.effort` explicitamente. O padrão inicial para todas as tasks é `low`, configurável somente por configuração server-side allowlisted para testes controlados; a engine não escolhe reasoning por request. O Router registra o reasoning efetivo junto da task/tier/modelo. Reasoning não substitui limites de contexto, schema ou exact-N.
 
-O Router resolve e registra o `IntelligenceTier`, provider lógico, modelo lógico, reasoning efetivo e versão das instruções, mesmo quando o MVP usa um único provider. Provider e modelo não são escolhidos pela capability nem variam por plano comercial. Após o hard gate factual/estrutural, `CONTENT_QUALITY_JUDGE` avalia internamente apenas hook, development, script, CTA e cenas; permite repair seletivo por no máximo 2 rounds e, sem convergência, falha fechado preservando exact-N. Variety Gate e memória não usam judge LLM.
+O Router resolve e registra o `IntelligenceTier`, provider lógico, modelo lógico, reasoning efetivo e versão das instruções, mesmo quando o MVP usa um único provider. Provider e modelo não são escolhidos pela capability nem variam por plano comercial. Após o hard gate factual/estrutural, `CONTENT_QUALITY_JUDGE` avalia internamente apenas hook, development, script, CTA e cenas; permite repair seletivo por no máximo 2 rounds e, sem convergência, reprova o item — faltante no contrato de entrega do ADR-021, nunca publicado; `SUCCEEDED` pleno preserva exact-N. Variety Gate e memória não usam judge LLM.
 
 
 ### B-003-06 — Skill de plataforma
@@ -199,21 +199,21 @@ O `ContentPlan` é criado antes dos Briefings e contém `id`, `productId`, `stra
 
 Cada `ContentOpportunity` exige `id`, `commercialObjective`, `angle`, `coreMessage`, `hookMechanism` e `noveltyTargets`. `audience`, `pain`, `desire`, `objection`, `benefit`, `proof`, `narrativePattern`, `desiredViewerResponse` e `sourceOpportunityId` são opcionais e permanecem ausentes quando não houver evidência ou relação válida. A engine verifica que cada oportunidade está relacionada a uma oportunidade comercial ou decisão estratégica válida.
 
-O resultado final possui exatamente `targetContentCount` Contents, salvo quando o job falhar. Cada `Content` mantém identidade estável, `productId`, `planId`, `opportunityId` quando aplicável, status `DRAFT`, `currentBriefVersionId` e `approvedBriefVersionId` ausente. Cada Content recebe uma `ContentBriefVersion` v1 imutável, independentemente do batch que a produziu.
+O resultado final possui `targetContentCount` Contents no `SUCCEEDED`. Quando 0 < D < N itens aprovados e F = N−D ≤ `PARTIAL_FAILURE_CAP`, o job conclui `SUCCEEDED_PARTIAL`: publica somente os D itens aprovados no hard gate e no judge, revalida o Variety Gate sobre o subconjunto com teto recomputado `ceil(D/K)` (drop determinístico de excedente se necessário), registra `expectedCount`/`deliveredCount`/`failedCount` e assinatura residual por item, e confirma quota pelos D entregues liberando N−D (ADR-021). D=0, F>CAP ou falha anterior aos briefs → `FAILED` como antes. Cada `Content` mantém identidade estável, `productId`, `planId`, `opportunityId` quando aplicável, status `DRAFT`, `currentBriefVersionId` e `approvedBriefVersionId` ausente. Cada Content recebe uma `ContentBriefVersion` v1 imutável, independentemente do batch que a produziu.
 
 Na v1, `angle`, `hook`, `script`, `scenes` e `cta` são obrigatórios; `structure`, `objective`, `targetAudience`, `pain`, `desire`, `objection`, `benefit` e `notes` são opcionais conforme a oportunidade. O Briefing distingue decisão estratégica de fala sugerida, mantém cenas simples para creator comum, usa linguagem oral e não exige leitura literal do script. Aprovação ou descarte pertencem a Content Operations.
 ### B-003-09 — Quality Gate, Variety Gate e repair
 
-Antes da publicação do resultado, cada briefing passa pelo hard gate estrutural, factual e de plataforma, e o conjunto pelo Variety Gate estruturado, todos determinísticos nesta primeira geração. Depois, `CONTENT_QUALITY_JUDGE` avalia hook, development, script, CTA e cenas por parte; somente `REPAIR` entra em `CONTENT_PART_REPAIR` e consome rounds, enquanto `REJECT` é terminal. Qualquer estado final diferente de `PASS` bloqueia sucesso. Devem ser detectáveis campos obrigatórios ausentes, relações/IDs inválidos, quantidade incorreta, claims sem suporte por evidência, claims contraditos, quantidade de cenas válida para o formato, duplicatas exatas/normalizadas, duplicata por hash de estrutura e concentração desnecessária nas dimensões disponíveis.
+Antes da publicação do resultado, cada briefing passa pelo hard gate estrutural, factual e de plataforma, e o conjunto pelo Variety Gate estruturado, todos determinísticos nesta primeira geração. Depois, `CONTENT_QUALITY_JUDGE` avalia hook, development, script, CTA e cenas por parte; somente `REPAIR` entra em `CONTENT_PART_REPAIR` e consome rounds, enquanto `REJECT` é terminal. Qualquer estado final diferente de `PASS` impede o item de publicar — faltante no contrato de entrega do ADR-021. Devem ser detectáveis campos obrigatórios ausentes, relações/IDs inválidos, quantidade incorreta, claims sem suporte por evidência, claims contraditos, quantidade de cenas válida para o formato, duplicatas exatas/normalizadas, duplicata por hash de estrutura e concentração desnecessária nas dimensões disponíveis.
 
 O `BriefValidationReport` registra `factualStatus`, `structuralStatus`, `platformStatus`, `varietyStatus`, `issues` e decisão do hard gate `PASS`, `REPAIR` ou `REJECT`. Sua chave canônica é `briefId`; na persistência versionada deste slice, `briefId` é o identificador estável derivado do par `contentId + briefVersionId`. Briefings que passam no gate são preservados durante repair de outros; o repair recebe as causas determinísticas da rejeição e não reinicia o plano completo sem necessidade. Os status semânticos do judge são por parte: `PASS` preserva, `REPAIR` é reparável e `REJECT` é terminal.
 
 Repair pode solicitar nova geração somente para os itens rejeitados, em batch limitado, carregando as causas rejeitadas e a oportunidade original. Ele não pode alterar IDs, ownership, quota, Strategy ativa ou quantidade do plano. Cada tentativa e cada causa são registradas no `IntelligenceRun`.
 
-O sistema não cria conteúdo irrelevante apenas para atingir a quantidade. Se o limite de repair for atingido, ou se o conjunto não puder fechar com consistência suficiente, o job fica `FAILED`, sem expor sucesso parcial.
+O sistema não cria conteúdo irrelevante apenas para atingir a quantidade. Se o limite de repair for atingido sem nenhum item aprovado, ou as falhas excederem `PARTIAL_FAILURE_CAP`, ou o conjunto não puder fechar com consistência suficiente, o job fica `FAILED`, sem expor sucesso parcial. Dentro do teto, itens não convergidos não derrubam o lote: o job conclui `SUCCEEDED_PARTIAL` e o creator completa os faltantes com a ação `Gerar faltantes` — novo job com `targetContentCount` = F, reusando Strategy ativa e memória, sem duplicar entregues nem consumo (ADR-021).
 ### B-003-10 — Persistência, idempotência e observabilidade
 
-No sucesso, uma transação curta persiste Strategy, Plan, Opportunities, Contents, BriefVersions, relatórios de validação, sinais estruturados da geração, proveniência, `IntelligenceRun` e a confirmação do uso reservado. A persistência não cria duas Strategies `ACTIVE`, dois Plans equivalentes ou Briefings duplicados para o mesmo job.
+No sucesso pleno ou parcial (`SUCCEEDED`/`SUCCEEDED_PARTIAL`), uma transação curta persiste Strategy, Plan, Opportunities, os Contents entregues, BriefVersions, relatórios de validação, sinais estruturados da geração, proveniência, `IntelligenceRun` (incluindo assinatura residual `checkCode` por item/round dos não entregues, sem payload bruto — ADR-021) e a confirmação do uso reservado pelos itens entregues, liberando o restante. A persistência não cria duas Strategies `ACTIVE`, dois Plans equivalentes ou Briefings duplicados para o mesmo job. Em `FAILED`, o `IntelligenceRun` com assinatura residual também é persistido para diagnóstico.
 
 `IntelligenceRun` registra, por capability e batch, task lógica, tier, provider/modelo lógico, versão ou hash das instruções, duração, tamanhos de request/context/response, tentativa, retry, decisão de validação, quantidade de repair e código de erro. Não registra prompts completos, payload bruto, cookies, tokens ou segredos.
 
@@ -245,7 +245,7 @@ Enquanto o job estiver `QUEUED` ou `RUNNING`, o App Shell mostra o nome do Produ
 
 Stages são persistidos antes do trabalho correspondente. A UI não apresenta subetapas internas como concluídas quando foram executadas dentro de uma chamada agrupada.
 
-Em `SUCCEEDED`, mostra que o Product está pronto e oferece somente `Revisar conteúdos`; a liberação refere-se apenas à trava global de job ativo por usuário. Este slice não oferece reanálise do mesmo Product `READY`; nova geração/recorrência do Product pertence ao Slice 008. Em `FAILED`, mostra falha recuperável e oferece `Tentar novamente`. O indicador não mostra percentual inventado, ETA, logs, tokens, prompts, provider, modelo, tiers ou detalhes internos.
+Em `SUCCEEDED`, mostra que o Product está pronto e oferece somente `Revisar conteúdos`; a liberação refere-se apenas à trava global de job ativo por usuário. Em `SUCCEEDED_PARTIAL`, mostra "D de N conteúdos prontos", informa os faltantes com motivo sanitizado por item (reason codes) e oferece `Gerar faltantes` além de `Revisar conteúdos`; conteúdos reprovados permanecem invisíveis. Este slice não oferece reanálise do mesmo Product `READY`; nova geração/recorrência do Product pertence ao Slice 008. Em `FAILED`, mostra falha recuperável e oferece `Tentar novamente`. O indicador não mostra percentual inventado, ETA, logs, tokens, prompts, provider, modelo, tiers ou detalhes internos.
 
 Se o creator estiver no contexto que iniciou a análise, a interface pode encaminhar naturalmente aos Briefings após o sucesso. Se estiver em outra superfície, não deve redirecioná-lo à força; a ação no indicador abre o Product diretamente na área de Conteúdos.
 
@@ -256,11 +256,12 @@ Ao navegar, fechar a aba ou reabrir a aplicação, o estado é recuperado a part
 - Product manual recém-criado, antes de qualquer job: `PENDING`;
 - job `QUEUED` ou `RUNNING`: `ANALYZING`;
 - job `SUCCEEDED` com Strategy, Plan e Contents completos: `READY`;
+- job `SUCCEEDED_PARTIAL` com Strategy, Plan e os D Contents aprovados: `READY` (com ação adicional `Gerar faltantes`, ADR-021);
 - último job sem sucesso (`FAILED` ou `CANCELLED` sem resultado final): `FAILED`.
 
-Essa readiness alimenta os badges dos Product cards e o filtro `Pendente` na lista de Produtos. Product `READY` não oferece reanálise neste slice; `Revisar conteúdos` é a única ação de resultado bem-sucedido, e nova geração/recorrência pertence ao Slice 008.
+Essa readiness alimenta os badges dos Product cards e o filtro `Pendente` na lista de Produtos. Product `READY` não oferece reanálise neste slice. Ações de resultado bem-sucedido, qualificadas por estado: após `SUCCEEDED` pleno, uma única ação `Revisar conteúdos`; após `SUCCEEDED_PARTIAL`, duas ações — `Revisar conteúdos` + `Gerar faltantes` (ADR-021). Nova geração/recorrência arbitrária pertence ao Slice 008.
 
-Um Product em `QUEUED`/`RUNNING` aparece como `Pendente`/`Analisando`; após sucesso aparece como pronto para revisão; após falha ou cancelamento preserva o Product e oferece recuperação. Nenhum resultado parcial é apresentado como Strategy ou Briefing concluído antes de `SUCCEEDED`. Não existe tela permanente de análise nem dependência de memória local do frontend para recuperar o job.
+Um Product em `QUEUED`/`RUNNING` aparece como `Pendente`/`Analisando`; após sucesso pleno ou parcial aparece como pronto para revisão; após falha ou cancelamento preserva o Product e oferece recuperação. Nenhum resultado parcial é apresentado como Strategy ou Briefing concluído antes de `SUCCEEDED` ou `SUCCEEDED_PARTIAL`. Não existe tela permanente de análise nem dependência de memória local do frontend para recuperar o job.
 ### B-003-14 — Exclusão Big Bang e arquivamento do Product
 
 `DELETE /api/products/:id` executa exclusão Big Bang quando o Product pertence ao Tenant da sessão. A operação ocorre em uma única transação interativa, sempre com escopo `(tenantId, productId)`, e remove o Product e todo o grafo relacionado:
@@ -301,12 +302,11 @@ Toda leitura, mutação, job, resultado e uso deve ser escopado ao Tenant resolv
 Para cada usuário, pode existir no máximo um `CommerceIntelligenceJob` em `QUEUED` ou `RUNNING`. A regra é protegida no servidor sob concorrência; o estado visual desabilitado do botão não é a única proteção.
 
 ### RI-003-04 — Quantidade resolvida e exata
-
-`targetContentCount` é um inteiro validado entre `1` e `30` e permanece estável durante o job. Um job bem-sucedido materializa exatamente essa quantidade de Contents e Briefings válidos.
+`targetContentCount` é um inteiro validado entre `1` e `30` e permanece estável durante o job. Um job `SUCCEEDED` materializa exatamente essa quantidade de Contents e Briefings válidos; um job `SUCCEEDED_PARTIAL` materializa somente os D aprovados, dentro do teto de falhas do ADR-021.
 
 ### RI-003-05 — Entitlement transacional, active_products e mês UTC
 
-Antes de criar o job, o sistema verifica em transação o limite de `active_products` e a capacidade de `generated_contents_month`. Para Product novo, valida e reserva a unidade de `active_products`; para Product já ativo e autorizado, inclusive retries, não reserva novamente essa unidade. A ativação do Product novo, a reserva mensal e a criação do job são atômicas: se qualquer limite falhar, não persiste Product novo, não cria job e não cria reserva. A reserva registra o mês UTC da criação; sucesso confirma o uso pelos Contents persistidos no mesmo período; falha ou cancelamento liberam a reserva no período de origem; retry técnico não cria nova reserva.
+Antes de criar o job, o sistema verifica em transação o limite de `active_products` e a capacidade de `generated_contents_month`. Para Product novo, valida e reserva a unidade de `active_products`; para Product já ativo e autorizado, inclusive retries, não reserva novamente essa unidade. A ativação do Product novo, a reserva mensal e a criação do job são atômicas: se qualquer limite falhar, não persiste Product novo, não cria job e não cria reserva. A reserva registra o mês UTC da criação; sucesso confirma o uso pelos Contents persistidos no mesmo período (`SUCCEEDED_PARTIAL` confirma somente os entregues e libera o restante — ADR-021); falha ou cancelamento liberam a reserva no período de origem; retry técnico não cria nova reserva.
 
 ### RI-003-06 — Pipeline e estado determinísticos
 
@@ -325,11 +325,11 @@ Claims factuais precisam ser suportados pelos fatos confirmados. Texto de origem
 
 ### RI-003-10 — Conjunto consistente
 
-O sistema não publica Strategy, Plan ou Briefings parciais como resultado final. Ou o conjunto inicial fecha com consistência suficiente e o job é `SUCCEEDED`, ou o job permanece em processamento/falha de forma recuperável.
+O sistema não publica Strategy, Plan ou Briefings parciais como resultado final **sem declaração**: ou o conjunto inicial fecha completo e o job é `SUCCEEDED`, ou fecha parcial declarado como `SUCCEEDED_PARTIAL` publicando somente aprovados com variedade revalidada (ADR-021), ou o job permanece em processamento/falha de forma recuperável.
 
 ### RI-003-11 — Repair limitado
 
-Repair recebe as causas dos rejeitos, preserva passados válidos e possui limite finito configurável. Ao esgotar o limite, o job falha; nunca preenche a quantidade com Briefing inválido ou irrelevante.
+Repair recebe as causas dos rejeitos, preserva passados válidos e possui limite finito configurável. Ao esgotar o limite, itens não convergidos não publicam: com aprovados dentro do teto o job fecha `SUCCEEDED_PARTIAL`; sem aprovados ou acima do teto, o job falha. Nunca preenche a quantidade com Briefing inválido ou irrelevante (ADR-021).
 
 ### RI-003-12 — Proveniência e observabilidade
 
@@ -349,11 +349,11 @@ Estados do Job, readiness do Product e estado de revisão do Content são dimens
 
 ### RI-003-16 — Retry técnico versus retry explícito
 
-Reconnect, reentrada e reclaim de worker usam o mesmo `job.id`, a mesma chave lógica e a mesma reserva. `Tentar novamente` após `FAILED` ou `CANCELLED` cria novo job, nova chave e nova reserva; o job terminal anterior permanece preservado e o Product/fatos são reutilizados.
+Reconnect, reentrada e reclaim de worker usam o mesmo `job.id`, a mesma chave lógica e a mesma reserva. `Tentar novamente` após `FAILED` ou `CANCELLED` cria novo job, nova chave e nova reserva; o job terminal anterior permanece preservado e o Product/fatos são reutilizados. `Gerar faltantes` após `SUCCEEDED_PARTIAL` cria novo job com reserva apenas da quantidade faltante (ADR-021).
 
 ### RI-003-17 — Memória inicial e sinais
 
-O snapshot de entrada da primeira geração é vazio e não consulta histórico nem recorrência. Somente um job `SUCCEEDED` persiste os sinais estruturados gerados para uso futuro; falha ou cancelamento não atualizam a memória.
+O snapshot de entrada da primeira geração é vazio e não consulta histórico nem recorrência. Somente um job `SUCCEEDED` ou `SUCCEEDED_PARTIAL` persiste os sinais estruturados dos Contents entregues para uso futuro (itens não entregues não sinalizam — ADR-021); falha ou cancelamento não atualizam a memória.
 ### RI-003-18 — Exclusão Big Bang e chave de relatório
 
 `DELETE` de Product é tenant-scoped e transacional. Em sucesso, nenhum Product, Job, Run, reserva, Understanding, Strategy, Plan, Opportunity, Content, Brief Version, relatório, snapshot ou import attempt relacionado permanece. A operação quebra previamente as referências de versão atual/aprovada do Content. O `BriefValidationReport` usa `briefId` como nome canônico, derivado de `contentId + briefVersionId`, até sua exclusão.
@@ -378,10 +378,10 @@ Todo Product `ACTIVE` retornado em leitura autenticada inclui `generationAction`
 | `GEN-USER-RETRY` | `Tentar novamente` após `FAILED`/`CANCELLED` | Criar novo job, chave idempotente e reserva; preservar o job terminal e reutilizar Product/fatos. |
 | `GEN-SKILL` | Skill default ausente, inválida ou sem versão | Falhar de modo recuperável antes de publicar resultado; preservar Product e registrar causa interna. |
 | `GEN-PROVIDER` | Provider indisponível, timeout ou resposta não utilizável | Marcar falha recuperável, preservar contexto confirmado e não publicar parcial. |
-| `GEN-SCHEMA` | Saída não obedece schema canônico | Rejeitar/corrigir dentro do repair limitado; ao esgotar, falhar o job sem sucesso parcial. |
-| `GEN-FACT` | Claim `UNSUPPORTED` ou `CONTRADICTED` | Remover/corrigir o não suportado; rejeitar o contradito e enviar causa ao repair ou falha final. |
-| `GEN-VARIETY` | Duplicata normalizada ou concentração estrutural indevida | Rejeitar o item/conjunto e acionar repair com as dimensões repetidas. |
-| `GEN-REPAIR-EXHAUSTED` | Limite de repair atingido | Marcar `FAILED`, não completar quantidade com conteúdo inválido e manter ação de retry. |
+| `GEN-SCHEMA` | Saída não obedece schema canônico | Rejeitar/corrigir dentro do repair limitado; ao esgotar por item, o item conta como faltante em `SUCCEEDED_PARTIAL` dentro do teto (ADR-021) ou reprova o job fora dele. |
+| `GEN-FACT` | Claim `UNSUPPORTED` ou `CONTRADICTED` | Remover/corrigir o não suportado; rejeitar o contradito e enviar causa ao repair; item não convergido segue a regra de parcial (ADR-021). |
+| `GEN-VARIETY` | Duplicata normalizada ou concentração estrutural indevida | Rejeitar o item/conjunto e acionar repair com as dimensões repetidas; no fechamento parcial, revalidar o subconjunto com `ceil(D/K)` (ADR-021). |
+| `GEN-REPAIR-EXHAUSTED` | Limite de repair atingido | Com D>0 e F ≤ `PARTIAL_FAILURE_CAP`: `SUCCEEDED_PARTIAL` publicando os aprovados e oferecendo `Gerar faltantes`; caso contrário `FAILED`. Nunca completar quantidade com conteúdo inválido (ADR-021). |
 | `GEN-PERSISTENCE` | Falha ao finalizar resultado | Reconciliar a reserva no mês UTC de origem, não expor resultado incompleto e permitir retry técnico idempotente. |
 | `GEN-CANCELLED` | Cancelamento seguro em `QUEUED`/`RUNNING` | Marcar `CANCELLED`, liberar a reserva no mês UTC de origem, preservar Product e não publicar resultado parcial. |
 | `GEN-LEASE-EXPIRED` | Lease expirado sem conclusão | Reclaim, incremento de tentativa, backoff e novo lease dentro do limite; ao esgotar, `FAILED` e reconciliação única da reserva. |
@@ -398,6 +398,7 @@ Erros exibidos ao creator devem usar linguagem humana em `pt-BR`, preservar valo
 | `queued` | Job `QUEUED`: readiness `ANALYZING`; indicador informa que a solicitação foi recebida e não apresenta Content parcial. |
 | `running` | Job `RUNNING`: readiness `ANALYZING`; indicador mostra Product e stage real; aplicação continua utilizável sem percentual, ETA ou Briefing parcial. |
 | `succeeded` | Job `SUCCEEDED` com Strategy, Plan e Contents completos: readiness `READY`; indicador oferece `Revisar conteúdos` e libera nova análise. |
+| `succeeded-partial` | Job `SUCCEEDED_PARTIAL` com D de N Contents aprovados: readiness `READY`; indicador mostra "D de N prontos", motivo sanitizado por item faltante e oferece `Gerar faltantes` além de `Revisar conteúdos` (ADR-021). |
 | `failed` | Último job `FAILED` sem resultado final: readiness `FAILED`; indicador apresenta erro sanitizado, preserva Product/fatos e oferece `Tentar novamente`. |
 | `cancelled` | Último job `CANCELLED` sem resultado final: readiness `FAILED`; cancelamento confirmado, sem resultado parcial, com possibilidade de nova tentativa. |
 | `blocked` | `Analisar produto` permanece visível porém desabilitado quando `generationAction.state` é `BLOCKED`; a UI apresenta explicação e próxima ação a partir do par canônico `reason`/`nextAction`. |
@@ -453,33 +454,31 @@ Requisitos de responsividade e acessibilidade:
 18. **WHEN** uma `ProductUnderstanding` for persistida, **o sistema SHALL** exigir `productId`, os arrays `coreUseCases`, `capabilities`, `functionalBenefits`, `emotionalBenefits`, `desiredOutcomes`, `purchaseTriggers`, `purchaseBarriers` e `evidenceRefs`, preservando `category` quando disponível e permitindo sua ausência sem evidência.
 19. **WHEN** uma `CommercialOpportunity` for persistida, **o sistema SHALL** preservar `id`, público/situação, dor/desejo, capabilities, benefícios, outcome, objeção/prova, argumento, confiança interna e evidências, após validação do contrato canônico.
 20. **WHEN** uma `ContentOpportunity` for persistida, **o sistema SHALL** exigir `id`, `commercialObjective`, `angle`, `coreMessage`, `hookMechanism` e `noveltyTargets`, mantendo `audience`, `pain`, `desire`, `objection`, `benefit`, `proof`, `narrativePattern`, `desiredViewerResponse` e `sourceOpportunityId` opcionais conforme evidência.
-21. **WHEN** um job terminar com sucesso, **o sistema SHALL** persistir exatamente `targetContentCount` Contents com status `DRAFT`.
+21. **WHEN** um job terminar em `SUCCEEDED`, **o sistema SHALL** persistir exatamente `targetContentCount` Contents com status `DRAFT`. **WHEN** terminar em `SUCCEEDED_PARTIAL`, **o sistema SHALL** persistir somente os Contents aprovados (hard gate + judge), revalidar variedade com `ceil(D/K)`, registrar `expectedCount`/`deliveredCount`/`failedCount` com assinatura residual por item, confirmar quota pelos entregues e liberar o restante (ADR-021).
 22. **WHEN** cada Content inicial for persistido, **o sistema SHALL** manter identidade, `productId`, `planId`, `opportunityId` quando aplicável e `currentBriefVersionId`.
 23. **WHEN** cada Content inicial for persistido, **o sistema SHALL** deixar `approvedBriefVersionId` ausente e criar uma `ContentBriefVersion` v1 imutável.
 24. **WHEN** uma versão inicial de Briefing for persistida, **o sistema SHALL** exigir `angle`, `hook`, `script`, `scenes` e `cta`, mantendo `structure`, `objective`, `targetAudience`, `pain`, `desire`, `objection`, `benefit` e `notes` opcionais.
 25. **WHEN** uma capability baseada em LLM for executada, **o sistema SHALL** solicitar tarefa lógica ao Model Router, usando `STRATEGY_SYNTHESIS` e `CONTENT_PLAN_GENERATION` em `HIGH`, `PRODUCT_UNDERSTANDING`, `COMMERCIAL_OPPORTUNITY_MAPPING` e Brief Generator em `MID`, sem exigir uma chamada individual por briefing.
 26. **WHEN** `targetContentCount` for maior que um batch, **o sistema SHALL** gerar Briefings em batches de 4–8 oportunidades, processando um batch por vez salvo limite explícito de concorrência.
-27. **WHEN** schema validation, hard gate factual/estrutural ou Variety Gate forem executados, **o sistema SHALL** tratá-los como determinísticos fora do Model Router; `CONTENT_QUALITY_JUDGE` avalia internamente hook, development, script, CTA e cenas após o hard gate. **IF** uma parte receber `REPAIR`, **o sistema SHALL** repará-la seletivamente em até 2 rounds; **IF** receber `REJECT`, **o sistema SHALL** falhar terminalmente sem chamar repair para essa parte. Qualquer status final diferente de `PASS` bloqueia sucesso, preservando exact-N e diagnóstico. O sistema também SHALL validar `CommercialOpportunity` antes de Strategy/Plan.
+27. **WHEN** schema validation, hard gate factual/estrutural ou Variety Gate forem executados, **o sistema SHALL** tratá-los como determinísticos fora do Model Router; `CONTENT_QUALITY_JUDGE` avalia internamente hook, development, script, CTA e cenas após o hard gate. **IF** uma parte receber `REPAIR`, **o sistema SHALL** repará-la seletivamente em até 2 rounds; **IF** receber `REJECT`, **o sistema SHALL** falhar terminalmente sem chamar repair para essa parte. Qualquer status final diferente de `PASS` impede o item de ser publicado: o item conta como faltante no contrato de entrega do ADR-021 (`SUCCEEDED_PARTIAL` dentro do teto, `FAILED` fora dele), preservando diagnóstico — o job completo em `SUCCEEDED` mantém exact-N. O sistema também SHALL validar `CommercialOpportunity` antes de Strategy/Plan.
 28. **WHEN** o Router resolver uma tarefa, **o sistema SHALL** registrar task, tier, provider/modelo lógico e versão ou hash das instruções, sem expor esses dados na UI.
 29. **WHEN** um briefing contiver claim `UNSUPPORTED` ou `CONTRADICTED`, **o sistema SHALL** avaliá-lo contra fatos/evidências estruturados, remover/corrigir o não suportado, rejeitar o contradito e impedir resultado factual inválido.
 30. **WHEN** o conjunto contiver duplicata exata/normalizada ou repetição estrutural indevida, **o sistema SHALL** acionar repair com as causas, preservando Briefings `PASS` e não inventando oportunidade irrelevante.
-31. **WHILE** o repair estiver abaixo do limite configurado, **o sistema SHALL** reparar somente os rejeitados, em batches limitados, mantendo seus IDs/ownership e registrando tentativa e causa.
-32. **IF** o limite de repair for atingido sem conjunto consistente, **o sistema SHALL** marcar o job como `FAILED` com código de repair e não expor resultado parcial.
+32. **IF** o limite de repair for atingido sem conjunto consistente, **o sistema SHALL** aplicar o contrato de entrega do ADR-021: `SUCCEEDED_PARTIAL` quando houver aprovados dentro do teto (publicando somente aprovados, com variedade revalidada e assinatura residual por item), ou `FAILED` com código de repair — em nenhum caso expondo resultado parcial não declarado.
 33. **WHEN** uma etapa for iniciada, **o sistema SHALL** persistir o stage correspondente antes do trabalho; subetapas agrupadas não podem aparecer como stages concluídos individualmente.
 34. **WHEN** o provider devolver saída de batch, **o sistema SHALL** atribuir server-side IDs, posições, versões e ownership, rejeitando colisões ou referências fora do job.
 35. **WHEN** o job for finalizado, **o sistema SHALL** persistir metadata por capability/batch de duração, tamanhos, retries, validações, repairs e códigos internos, sem prompt completo ou payload bruto.
 36. **WHILE** existir job `QUEUED` ou `RUNNING`, **o sistema SHALL** mostrar no App Shell o Product e o stage real em linguagem humana sem percentual, ETA, logs ou detalhes técnicos.
-37. **WHEN** o job atingir `SUCCEEDED` com resultados completos, **o sistema SHALL** derivar readiness `READY`, disponibilizar os Briefings em `DRAFT` e oferecer `Revisar conteúdos`.
-38. **WHEN** o job atingir `SUCCEEDED`, **o sistema SHALL** tornar Strategy e Plan consultáveis no contexto da página do Product sem exigir sua visualização como gate intermediário.
+37. **WHEN** o job atingir `SUCCEEDED` com resultados completos, **o sistema SHALL** derivar readiness `READY`, disponibilizar os Briefings em `DRAFT` e oferecer `Revisar conteúdos`. **WHEN** atingir `SUCCEEDED_PARTIAL`, **o sistema SHALL** derivar readiness `READY`, disponibilizar somente os D aprovados e oferecer `Gerar faltantes` com motivo sanitizado por item (ADR-021).
+38. **WHEN** o job atingir `SUCCEEDED` ou `SUCCEEDED_PARTIAL`, **o sistema SHALL** tornar Strategy e Plan consultáveis no contexto da página do Product sem exigir sua visualização como gate intermediário.
 39. **WHEN** o último job terminar `FAILED` ou `CANCELLED` sem resultado final, **o sistema SHALL** derivar readiness `FAILED`, preservar Product/fatos e oferecer recuperação sem exibir Strategy parcial.
 40. **WHEN** o Product for manual e ainda não possuir job, **o sistema SHALL** derivar readiness `PENDING`.
 41. **WHEN** o creator navegar, fechar a aba e reabrir a aplicação, **o sistema SHALL** restaurar o estado consultando o backend e não redirecionar o creator à força.
-42. **WHILE** o job não estiver `SUCCEEDED`, **o sistema SHALL** impedir que resultados intermediários sejam apresentados como Strategy ou Briefings finais.
-43. **WHEN** texto de página ou seller contiver instruções, **o sistema SHALL** tratá-lo como dado não confiável separado das instruções do sistema.
+42. **WHILE** o job não estiver `SUCCEEDED` ou `SUCCEEDED_PARTIAL`, **o sistema SHALL** impedir que resultados intermediários sejam apresentados como Strategy ou Briefings finais.
 44. **WHEN** qualquer entidade do job for consultada ou alterada, **o sistema SHALL** aplicar o Tenant resolvido pela sessão server-side e negar outro Tenant.
 45. **WHEN** a interface for usada em mobile, teclado ou tecnologia assistiva, **o sistema SHALL** manter acompanhamento e recuperação completos, foco-visible, labels associadas, feedback textual, CSRF nas mutações e alvos de interação de pelo menos `44×44px`.
 46. **WHEN** o job estiver `QUEUED` ou `RUNNING`, **o sistema SHALL** derivar readiness `ANALYZING`.
-47. **WHEN** um Product estiver `READY` após `SUCCEEDED`, **o sistema SHALL** oferecer somente `Revisar conteúdos` neste slice e não criar reanálise para o mesmo Product; nova geração pertence ao Slice 008.
+47. **WHEN** um Product estiver `READY` após `SUCCEEDED` ou `SUCCEEDED_PARTIAL`, **o sistema SHALL** oferecer `Revisar conteúdos` (e `Gerar faltantes` no parcial, ADR-021) e não criar reanálise para o mesmo Product; nova geração pertence ao Slice 008.
 48. **WHEN** `DELETE` for solicitado para Product autorizado, **o sistema SHALL** apagar em uma única transação interativa e tenant-scoped o Product e todos os dados relacionados — Jobs, Runs, reservas, Understandings, Strategies, Plans, Opportunities, Contents, Brief Versions, Reports, Snapshots e Import Attempts relacionados — retornando `204` somente após o commit.
 49. **WHEN** a transação de DELETE precisar apagar Brief Versions, **o sistema SHALL** nulificar antes `Content.currentBriefVersionId` e `Content.approvedBriefVersionId`, respeitando o ciclo `Content ↔ ContentBriefVersion`; qualquer falha SHALL causar rollback integral.
 50. **IF** qualquer etapa da exclusão Big Bang falhar, **o sistema SHALL** retornar `500 DELETE-FAILED` sanitizado e preservar integralmente o Product e seus dados relacionados.
@@ -496,9 +495,9 @@ Requisitos de responsividade e acessibilidade:
 - Product novo no limite de `active_products` deve falhar antes de persistir Product, reserva ou job; Product já ativo não deve consumir novamente essa unidade.
 - Provider pode devolver JSON parseável, mas semanticamente inválido; schema válido isoladamente não equivale a sucesso.
 - Product sem evidência para um claim deve remover/corrigir o claim ou falhar; não deve completar a quantidade com promessa inventada.
-- Repair pode produzir um briefing válido individualmente, mas o conjunto ainda pode falhar no gate de variedade; o job não publica o conjunto parcial.
+- Repair pode produzir um briefing válido individualmente, mas o conjunto ainda pode falhar no gate de variedade; nesse caso o job não publica o conjunto sem revalidar — parcial só publica como `SUCCEEDED_PARTIAL` com variedade revalidada sobre o entregue (ADR-021).
 - Fechamento da aba durante `QUEUED` ou `RUNNING` não cancela o job.
-- Reentrada após `SUCCEEDED` deve oferecer revisão sem reprocessar automaticamente e manter Strategy/Plan consultáveis.
+- Reentrada após `SUCCEEDED` ou `SUCCEEDED_PARTIAL` deve oferecer revisão (e `Gerar faltantes` no parcial, ADR-021) sem reprocessar automaticamente e manter Strategy/Plan consultáveis.
 - Reentrada após `FAILED` ou `CANCELLED` deve oferecer novo job sem apagar Product, fatos ou o job terminal anterior.
 - Reserva criada perto da virada do mês deve confirmar/liberar no mês UTC registrado na origem, mesmo se o terminal ocorrer em outro mês.
 - Falha/cancelamento não atualiza memória; sucesso persiste somente sinais estruturados da geração.
@@ -551,7 +550,7 @@ Requisitos de responsividade e acessibilidade:
 ## Success Criteria
 
 - [ ] Um Product confirmado inicia uma única geração durável sem confirmação intermediária.
-- [ ] Um job bem-sucedido entrega Strategy, Plan e exatamente a quantidade solicitada de Contents/Briefings em `DRAFT`.
+- [ ] Um job bem-sucedido entrega Strategy, Plan e a quantidade solicitada de Contents/Briefings em `DRAFT` (completa em `SUCCEEDED`; somente aprovados com `Gerar faltantes` em `SUCCEEDED_PARTIAL` — ADR-021).
 - [ ] Strategy e Plan ficam consultáveis no contexto do Product sem bloquear a chegada aos Briefings.
 - [ ] Um job falho preserva Product/fatos, não expõe conteúdo parcial e oferece `Tentar novamente` como novo job, mantendo o terminal anterior.
 - [ ] A linha de base para `count=16` usa no máximo quatro chamadas fundacionais mais quatro batches de briefing quando `batchSize=4`, sem chamadas individuais obrigatórias.
@@ -577,14 +576,14 @@ Requisitos de responsividade e acessibilidade:
 - O MVP permite um job ativo (`QUEUED`/`RUNNING`) por usuário e mantém a ação de nova análise visível, porém desabilitada com explicação.
 - Reconnect, reentrada e recuperação do worker são retry técnico no mesmo `job.id`, chave e reserva; `Tentar novamente` após `FAILED`/`CANCELLED` é nova execução com novo job, chave e reserva, preservando o terminal anterior.
 - A reserva registra o mês UTC de origem e é confirmada/liberada nesse mesmo período.
-- A primeira geração usa snapshot de memória vazio, não consulta histórico/recorrência, persiste sinais estruturados somente após sucesso e não atualiza memória em falha/cancelamento.
-- A primeira geração cria Strategy v1, ContentPlan, oportunidades e exatamente a quantidade solicitada de Contents com BriefVersions v1 iniciais em `DRAFT`; `approvedBriefVersionId` permanece ausente.
+- A primeira geração usa snapshot de memória vazio, não consulta histórico/recorrência, persiste sinais estruturados somente dos Contents entregues após sucesso pleno ou parcial (ADR-021) e não atualiza memória em falha/cancelamento.
+- A primeira geração cria Strategy v1, ContentPlan, oportunidades e a quantidade solicitada de Contents com BriefVersions v1 iniciais em `DRAFT` (completa em `SUCCEEDED`; somente aprovados em `SUCCEEDED_PARTIAL` — ADR-021); `approvedBriefVersionId` permanece ausente.
 - Stages públicos são persistidos antes do trabalho correspondente e refletem a pipeline efetivamente executada, sem simular subetapas agrupadas.
 - Model Router recebe tarefas lógicas; `STRATEGY_SYNTHESIS` e `CONTENT_PLAN_GENERATION` usam `HIGH`, entendimento/mapeamento e Brief Generator usam `MID`; validações determinísticas ficam fora do Router.
 - O Router registra task, tier, provider/modelo lógico e versão/hash das instruções; o MVP continua com um provider/modelo configurável, sem fallback silencioso.
 - IDs persistentes, posições, versões e ownership são derivados pelo servidor; o provider devolve somente dados não confiáveis da capability/batch.
 - Hard gate factual/estrutural, Fact Validator e Variety Gate são determinísticos; claims são avaliados contra evidências estruturadas; repair é limitado, tipado, causal e preserva Briefings `PASS`.
-- O hard gate factual/estrutural e o Variety Gate permanecem fora do LLM. `CONTENT_QUALITY_JUDGE` é a exceção interna limitada após o hard gate: avalia hook, development, script, CTA e cenas; somente `REPAIR` aciona repair seletivo em no máximo 2 rounds, `REJECT` é terminal, e qualquer status final diferente de `PASS` bloqueia sucesso com exact-N e diagnóstico preservados. Embeddings, similaridade semântica, deduplicação semântica e judge de variedade/memória ficam fora.
+- O hard gate factual/estrutural e o Variety Gate permanecem fora do LLM. `CONTENT_QUALITY_JUDGE` é a exceção interna limitada após o hard gate: avalia hook, development, script, CTA e cenas; somente `REPAIR` aciona repair seletivo em no máximo 2 rounds, `REJECT` é terminal, e qualquer status final diferente de `PASS` impede o item de publicar — faltante no contrato ADR-021, com `SUCCEEDED` mantendo exact-N e diagnóstico preservado. Embeddings, similaridade semântica, deduplicação semântica e judge de variedade/memória ficam fora.
 - A TikTok Commerce Creative Skill é carregada por versão e registrada na proveniência, sem controlar workflow ou persistência.
 - O App Shell usa Global Activity Indicator persistente entre navegação e reentrada, sem página permanente de Análise.
 - Strategy e Plan são consultáveis na página/contexto do Product depois de `SUCCEEDED`, mas não são gate intermediário para Briefings.
@@ -640,7 +639,7 @@ O toast de atividade:
 - não bloqueia navegação, foco ou ações da tela;
 - permanece visível enquanto houver job `QUEUED`/`RUNNING`, resultado `SUCCEEDED` acionável ou falha recuperável, até dismiss opcional do usuário;
 - ao ser dispensado, não cancela o job; reentrada e mudança de rota consultam o backend e podem reapresentá-lo quando houver informação acionável;
-- informa Product, stage real em `pt-BR`, sucesso ou falha e uma única ação seguinte (`Revisar conteúdos` ou `Tentar novamente`);
+- informa Product, stage real em `pt-BR`, sucesso ou falha e ações qualificadas por estado: `SUCCEEDED` pleno → uma única ação, `Revisar conteúdos`; `SUCCEEDED_PARTIAL` → duas ações, `Revisar conteúdos` + `Gerar faltantes` (ADR-021); `FAILED`/`CANCELLED` → uma única ação, `Tentar novamente`;
 - não mostra percentual inventado, ETA, provider, modelo, tier, prompt, log ou token;
 - usa `role="status"`/`aria-live="polite"` para atividade não urgente e `role="alert"` somente para falha que exige atenção;
 - possui botão `Dispensar` com nome acessível, foco-visible e alvo mínimo de `44×44px`;
@@ -702,7 +701,7 @@ As regiões internas são `Visão geral`, `Estratégia`, `Conteúdos` e `Histór
 | `PENDING` | badge `Pendente`, ação `Analisar produto` e expectativa clara |
 | `QUEUED`/`RUNNING` | toast persistente até dismiss opcional, Product + stage real, sem ETA/percentual; navegação livre |
 | `SUCCEEDED`/`READY` | toast de sucesso acionável, header pronto, `Revisar conteúdos`, Strategy/Plan consultáveis e Briefings completos |
-| `FAILED`/`CANCELLED` | mensagem única sanitizada, Product/fatos preservados, `Tentar novamente`, sem resultado parcial |
+| `SUCCEEDED_PARTIAL`/`READY` | toast de conclusão parcial acionável, "D de N prontos", motivo sanitizado por item faltante, `Gerar faltantes` + `Revisar conteúdos`, somente Briefings aprovados visíveis (ADR-021) |
 | `BLOCKED` | ação visível desabilitada, razão textual e próxima ação derivada de `generationAction` |
 | Reentrada | backend é fonte de verdade; toast acionável pode reaparecer, sem localStorage como autoridade |
 
@@ -745,8 +744,7 @@ Validar em `375×812`, `390×844`, `768×900`, `1200×900` e `1440×900`. Não p
 6. Toast de atividade mantém `aria-live`, foco, dismiss acessível, sem ETA/percentual inventado e com reduced-motion.
 7. Badges de readiness têm texto e estrutura semântica; cor nunca é o único sinal.
 8. Strategy, Contents e History têm composição distinta e legível.
-9. Contents exibe exatamente os Briefings disponíveis após `SUCCEEDED`, com Hook, Ângulo, Roteiro, Cenas e CTA.
-10. Nenhum controle de edição, aprovação, descarte, lote, Agenda ou Estúdio é introduzido neste slice.
+9. Contents exibe exatamente os Briefings disponíveis após `SUCCEEDED` ou `SUCCEEDED_PARTIAL` (somente aprovados), com Hook, Ângulo, Roteiro, Cenas e CTA.
 11. Loading, empty, queued, running, succeeded, failed, cancelled, blocked e reentry possuem representação coerente e não duplicada.
 12. A experiência é completa em mobile, usa rail no tablet e sidebar no desktop.
 13. Os cinco breakpoints passam sem overflow horizontal acidental.

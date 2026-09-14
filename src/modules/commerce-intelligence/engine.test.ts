@@ -523,31 +523,43 @@ test("ADR-020/blocker2: pool elegível vazio (skill controlada) → GEN-PATTERN 
   assert.equal(planCalls, 0, "zero chamadas CONTENT_PLAN_GENERATION");
   assert.equal(briefCalls, 0, "zero chamadas CONTENT_BRIEF_GENERATION");
 });
-test("ADR-020 adendo 2: factRef fora do snapshot → GEN-SCHEMA por item, não substitui, terminal sem contents", async () => {
+test("ADR-020 adendo 2 + ADR-021: factRef fora do snapshot → GEN-SCHEMA por item, não substitui, parcial publica somente PASS (D=2/F=1)", async () => {
   let repairCalls = 0;
   const router = { describe, complete: async (task: string) => {
     if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
-    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 3 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 3 }, (_, i) => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: `s${i}`, confidence: 0.9, evidenceRefs: ["product:name"] })) };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
-    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c" }] };
-    if (task === "CONTENT_BRIEF_REPAIR") { repairCalls += 1; return { angle: "a", hook: "h2", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "fact-inexistente", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: "s", cta: "c2" }; }
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 3, opportunities: [
+      { commercialObjective: "c", angle: "a1", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] },
+      { commercialObjective: "c", angle: "a2", coreMessage: "m", hookMechanism: "teste demonstrativo do tecido", noveltyTargets: ["n"] },
+      { commercialObjective: "c", angle: "a3", coreMessage: "m", hookMechanism: "mostrando o resultado no tecido", noveltyTargets: ["n"] },
+    ] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [
+      { angle: "a1", hook: "h1", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c1" },
+      { angle: "a2", hook: "h2", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: "c2" },
+      { angle: "a3", hook: "h3", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: "c3" },
+    ] };
+    if (task === "CONTENT_BRIEF_REPAIR") { repairCalls += 1; return { angle: "a1", hook: "h2", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "fact-inexistente", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: "Tecido respiravel", cta: "c2" }; }
     return {};
   } };
-  await assert.rejects(
-    () => runFirstGeneration({ productId: "p", jobId: "j-factref", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }),
-    (error: unknown) => {
-      const e = error as { code?: string; detail?: Record<string, unknown> };
-      assert.equal(e.code, "GEN-REPAIR-EXHAUSTED");
-      assert.equal(e.detail?.received, 1, "provider respondeu 1 item por chamada (parse reprova a parte)");
-      return true;
-    },
-  );
+  const result = await runFirstGeneration({ productId: "p", jobId: "j-factref", name: "Produto", description: "Tecido respirável", targetContentCount: 3, router: withInternalCuration(router) });
   assert.equal(repairCalls, 2, "2 rounds, cada um tentando o item");
+  assert.equal(result.briefs.length, 2, "somente itens PASS são entregues");
+  assert.ok(result.partial, "job fecha SUCCEEDED_PARTIAL");
+  assert.equal(result.partial?.expectedCount, 3);
+  assert.equal(result.partial?.deliveredCount, 2);
+  assert.equal(result.partial?.failedCount, 1);
+  assert.equal(result.partial?.failedItems.length, 1);
+  assert.equal(result.partial?.failedItems[0].reason, "HARD_GATE");
+  assert.equal(result.partial?.failedItems[0].position, 1);
+  assert.ok(result.partial?.failedItems[0].checkCodes.includes("unverified_claim"), "claim sem evidência gera unverified_claim");
+  assert.deepEqual(result.briefOpportunityPositions, [1, 2], "entregues mantêm as oportunidades originais");
+  assert.deepEqual(result.memorySignals.deliveredHookMechanisms, ["teste demonstrativo do tecido", "mostrando o resultado no tecido"], "mecanismos dos D entregues para o planner evitar repetição");
+  assert.equal((result.memorySignals.deliveredCtaFunctions as string[]).length, 2);
+  assert.deepEqual(result.memorySignals.deliveredAngles, ["a2", "a3"]);
   const repairedEvents = collectJobEvents().map((line) => JSON.parse(line) as Record<string, unknown>).filter((event) => event.event === "capability.failed" && event.task === "CONTENT_BRIEF_REPAIR");
-  assert.ok(repairedEvents.every((event) => event.issue === "factRef fora do snapshot autorizado (fact-inexistente)"), "causa acionável por parte");
+  assert.ok(repairedEvents.length >= 2, "falhas do repair por item ficam na telemetria");
 });
-
 test("ADR-020 adendo 2: partes plausíveis NÃO autorizam texto falho (gate é a autoridade)", async () => {
   let repairCalls = 0;
   const router = { describe, complete: async (task: string) => {

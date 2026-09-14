@@ -17,6 +17,7 @@ import {
   stageMessage,
   statusLabels,
   statusMessage,
+  partialModel,
   briefingItems,
   contentStatusLabel,
   contentsSummaryLabel,
@@ -191,7 +192,7 @@ function EmptyRegion({ children }: { children: React.ReactNode }) {
 }
 
 /** Aba Visão geral: estado do job, ação primária, bloqueio preventivo e cancelamento (só QUEUED). */
-export function GenerationStatusCard({ className, productName, targetContentCount, readiness, state, generationAction, onOpenContents }: {
+export function GenerationStatusCard({ className, productName, targetContentCount, readiness, state, generationAction, onOpenContents, onGenerateMissing }: {
   className?: string;
   productName: string;
   targetContentCount: number;
@@ -199,25 +200,25 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
   state: GenerationState;
   generationAction?: GenerationActionProjection;
   onOpenContents: () => void;
+  onGenerateMissing: () => void;
 }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const { job, busy, error, active, failed, blockedByOther, start, retry, cancel } = state;
   const canCancel = !!job && canCancelGeneration(job.status);
+  const partial = partialModel(job);
   /* ADR-016: com a projeção presente, ela é a única fonte do bloqueio preventivo;
      a inferência por GET current é só fallback para payload que ainda não a carrega. */
   const projectedBlocked = generationAction?.state === "BLOCKED" ? generationAction : null;
   const projectedNote = projectedBlocked ? blockedActionCopy(projectedBlocked) : null;
   const fallbackNote = !generationAction && blockedByOther ? BLOCKED_ACTIVE_MESSAGE : null;
-  /* O heading segue exatamente a precedência dos ramos do corpo, para nunca
-     contradizer o estado exibido; a copy futura é exclusiva do idle. */
   const heading = active && job
     ? "Análise em andamento"
     : failed && job
       ? "Análise interrompida"
-      : job?.status === "SUCCEEDED"
+      : job?.status === "SUCCEEDED" || job?.status === "SUCCEEDED_PARTIAL"
         ? "Revisar conteúdos"
         : "Analisar produto";
-  const idleHeading = !active && !failed && job?.status !== "SUCCEEDED";
+  const idleHeading = !active && !failed && job?.status !== "SUCCEEDED" && job?.status !== "SUCCEEDED_PARTIAL";
   return (
     <section aria-busy={busy || active} aria-labelledby="generation-title" className={[styles.panel, className].filter(Boolean).join(" ")}>
       <div className={styles.heading}>
@@ -248,6 +249,31 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
           <div className={styles.actions}>
             <Button disabled={busy} onClick={() => void retry()} type="button">
               {busy ? "Tentando novamente…" : "Tentar novamente"}
+            </Button>
+          </div>
+        </div>
+      ) : partial && job ? (
+        <div aria-live="polite" className={styles.state} role="status">
+          <p className={styles.stateLine}>
+            <strong>{statusLabels[job.status]}</strong> · {`${partial.delivered} de ${partial.expected} conteúdos prontos.`}
+          </p>
+          {partial.missing.length > 0 && (
+            <ul className={styles.missingList}>
+              {partial.missing.map((item, index) => (
+                <li key={`${index}-${item.position ?? "x"}-${item.reason.slice(0, 20)}`}>
+                  {item.position !== null ? `Conteúdo ${pad2(item.position)} ` : "Um conteúdo "}
+                  {item.reason}.
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className={styles.actions}>
+            <Button className={styles.stateAction} onClick={onOpenContents} type="button" variant="outline">
+              <ScrollText aria-hidden="true" />
+              Revisar conteúdos
+            </Button>
+            <Button className={styles.stateAction} disabled={busy} onClick={onGenerateMissing} type="button">
+              {busy ? "Gerando faltantes…" : "Gerar faltantes"}
             </Button>
           </div>
         </div>
@@ -536,14 +562,16 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
       </section>
     );
   }
-  if (!job || job.status !== "SUCCEEDED") {
+  const published = !!job && (job.status === "SUCCEEDED" || job.status === "SUCCEEDED_PARTIAL");
+  if (!job || !published) {
     return (
       <section className={styles.panel} id="generated-contents">
         <p>Os Briefings aparecem aqui quando a análise concluir.</p>
       </section>
     );
   }
-  if (job.contents.length !== job.targetContentCount) {
+  const expectedPublished = job.status === "SUCCEEDED" ? job.targetContentCount : job.deliveredCount ?? -1;
+  if (job.contents.length !== expectedPublished) {
     return (
       <section className={styles.panel} id="generated-contents">
         <p role="alert">Os conteúdos ainda não estão prontos. Nenhum resultado parcial será apresentado. Tente novamente em instantes.</p>
@@ -563,7 +591,7 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
     <section aria-labelledby="contents-title" className={styles.panel} id="generated-contents">
       <header className={styles.contentsHeader}>
         <h2 id="contents-title">Conteúdos</h2>
-        <p>{contentsSummaryLabel(items.length, approved)}</p>
+        <p>{job.status === "SUCCEEDED_PARTIAL" ? `${items.length} de ${job.targetContentCount} conteúdos` : contentsSummaryLabel(items.length, approved)}</p>
       </header>
       <div className={styles.contentsLayout} data-selected={selected ? "true" : "false"}>
         <ol aria-label="Lista de conteúdos" className={styles.contentsList}>

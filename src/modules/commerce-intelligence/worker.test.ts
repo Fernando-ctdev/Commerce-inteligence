@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { attemptDeadlineMsFor, briefPayloadForPersistence, callBudget, fallbackCallBudget, fenceMatches, heartbeatAction, internalFailureMetadata, projectFailureDiagnostics, runMetadata, sceneBackfillLimitFor, sceneCallBudget, semanticQualityCallBudget } from "./worker";
+import { attemptDeadlineMsFor, briefPayloadForPersistence, callBudget, fallbackCallBudget, fenceMatches, heartbeatAction, internalFailureMetadata, mergeMemorySignals, projectFailureDiagnostics, runMetadata, sceneBackfillLimitFor, sceneCallBudget, semanticQualityCallBudget } from "./worker";
 import { ENGINE_VERSION } from "./engine";
 import { GATE_POLICY_VERSION } from "./gates";
 import { collectJobEvents, emitJobEvent, resetJobEvents } from "./observability";
@@ -98,4 +98,34 @@ test("attempt budget covers all semantic judge/part repairs and selected scene b
     const required = (callBudget(targetCount) + fallbackCallBudget(targetCount) + semanticQualityCallBudget(targetCount) + 2 * targetCount + sceneCallBudget(targetCount)) * timeout + margin;
     assert.ok(attemptDeadlineMsFor(targetCount) >= required, `deadline covers provider calls for count=${targetCount}`);
   }
+});
+
+test("mergeMemorySignals acumula com dedupe e não substitui histórico (ADR-021)", () => {
+  const previous = {
+    generatedCount: 4,
+    deliveredHookMechanisms: ["demonstração direta", "prova social"],
+    deliveredCtaFunctions: ["promo", "checkout"],
+    deliveredAngles: ["a1"],
+  };
+  const merged = mergeMemorySignals(previous, {
+    generatedCount: 2,
+    deliveredHookMechanisms: ["prova social", "objeção respondida"],
+    deliveredCtaFunctions: ["promo"],
+    deliveredAngles: ["a2"],
+  });
+  assert.deepEqual(merged.deliveredHookMechanisms, ["demonstração direta", "prova social", "objeção respondida"]);
+  assert.deepEqual(merged.deliveredCtaFunctions, ["promo", "checkout"]);
+  assert.deepEqual(merged.deliveredAngles, ["a1", "a2"]);
+  assert.equal(merged.generatedCount, 6, "contagem entregue é acumulada");
+});
+
+test("mergeMemorySignals sem snapshot anterior inicia o histórico", () => {
+  const merged = mergeMemorySignals(undefined, {
+    generatedCount: 2,
+    deliveredHookMechanisms: ["prova social"],
+    deliveredCtaFunctions: ["promo"],
+    deliveredAngles: ["a1"],
+  });
+  assert.deepEqual(merged.deliveredHookMechanisms, ["prova social"]);
+  assert.equal(merged.generatedCount, 2);
 });
