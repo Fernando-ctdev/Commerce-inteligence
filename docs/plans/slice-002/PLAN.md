@@ -6,9 +6,9 @@
 
 ## 1. Objetivo de implementação
 
-Entregar o fluxo mínimo definido na SPEC: usuário autenticado abre `/products/new` dentro de Produtos, preenche os campos do modal manual e a preparação da primeira geração, salva um `Product` no Tenant da sessão e volta à lista vendo o card criado.
+Entregar o fluxo mínimo definido na SPEC: usuário autenticado abre `/products/new` dentro de Produtos, preenche os fatos e a preparação da primeira geração, salva um `Product` no Tenant da sessão e abre seu resumo factual e de preparação. O creator escolhe explicitamente iniciar análise, editar ou salvar alterações.
 
-O fluxo não terá URL, descoberta automática, Product Importer, LLM, Agent Runner, Browser Harness, Chromium, Docker, `CommerceIntelligenceJob` ou geração de Strategy/Plan/Content/Briefing.
+O salvamento não cria job. A ação explícita `Analisar produto` usa o contrato já pertencente ao Slice 003; não há geração automática, Strategy, Plan, Content ou Briefing no POST de Product.
 
 ## 2. Estado real e áreas afetadas
 
@@ -34,6 +34,7 @@ Reutilizar os campos atuais do modelo `Product`:
 - `name` e `description` preenchidos após validação;
 - `category` obrigatório após validação;
 - `priceAmount` e `priceCurrency` obrigatórios;
+- desconto opcional canônico como `discountType` (`PERCENTAGE|FIXED`) + `discountValue`; `FIXED` usa `priceCurrency`;
 - `features` como lista com ao menos uma característica não vazia;
 - `images` como lista vazia nesta etapa;
 - `brand`, `seller`, `variants`, `submittedUrl` e `sourceUrl` sem entrada na tela;
@@ -47,30 +48,32 @@ Adicionar ao `Product`:
 
 - `generationConstraints Json?` para armazenar as restrições da primeira geração por Product, contendo obrigatoriamente `creatorPresence` e `constraints`; ambos devem ser persistidos com os valores validados da preparação;
 - `createIdempotencyKey String?` para associar a submissão de criação ao Tenant;
+- `discountType String?` e `discountValue Decimal?` para substituir `discountPercentage`; migration faz backfill de registros com percentual para `discountType = PERCENTAGE` e preserva o valor em `discountValue`, usando a moeda já obrigatória do Product.
 - `version Int @default(1)` para tornar a resposta de criação/replay determinística e manter compatibilidade com o contrato cliente existente;
 - índice único composto `tenantId + createIdempotencyKey`, permitindo valores nulos para registros sem chave legada.
 
 No PostgreSQL, o índice único composto permite múltiplas linhas com `createIdempotencyKey = NULL`; portanto, registros legados permanecem com chave nula sem colidir. O POST novo exige uma `Idempotency-Key` válida, então nenhuma nova criação depende de chave ausente.
 
-Manter `targetContentCount` como o campo canônico da quantidade inicial existente. Não criar entidades de geração, job, Strategy, Content ou uma tabela genérica de idempotência neste slice.
+Manter `targetContentCount` como o campo canônico da quantidade inicial existente. Não criar job pelo POST de Product; a ação explícita já contratada no Slice 003 continua responsável por criar o job.
 
-Criar migration aditiva, por exemplo `prisma/migrations/<timestamp>_slice002_manual_product/migration.sql`, sem apagar tabelas ou dados existentes. A migration deve adicionar as colunas e o índice, com defaults seguros para registros existentes (`version = 1`; `generationConstraints` e chave idempotente nulos).
+Criar migration aditiva para `discountType`/`discountValue`, restrições e idempotência; migrar percentuais legados antes do cutover e só remover `discountPercentage` depois que todos os leitores/escritores usarem o par canônico.
 
 ## 4. Sequência de implementação
 
 1. Atualizar `prisma/schema.prisma` com os campos/índice aditivos e gerar a migration correspondente.
 2. Criar um caso de uso Product focado em `createProduct` e `listProducts`:
    - receber `tenantId` resolvido server-side, nunca do body;
-   - validar e normalizar fatos, quantidade, formato, notas e Preço/Moeda;
+   - validar e normalizar fatos, desconto, quantidade, formato, notas e Preço/Moeda;
    - exigir Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações/restrições;
    - aceitar preço não negativo, válido e com no máximo duas casas decimais;
+   - aceitar desconto apenas como par `discountType` + `discountValue`: percentual `0–100` ou valor fixo não superior ao preço na moeda do Product;
    - montar `generationConstraints` somente com os valores de preparação;
    - preencher defaults `targetContentCount = 20` e `creatorPresence = "either"` quando omitidos;
    - persistir Product e retornar o mesmo registro quando a chave idempotente já existir para o Tenant;
    - consultar a lista sempre filtrando por `tenantId`.
 3. Criar `src/app/api/products/route.ts`:
    - `GET` resolve sessão e lista somente Products do Tenant;
-   - `POST` resolve sessão, exige uma `Idempotency-Key` válida, valida JSON e chama o caso de uso; request sem chave ou com chave inválida é rejeitado antes da persistência;
+   - `POST` resolve sessão, exige uma `Idempotency-Key` válida, valida JSON e chama o caso de uso; request sem chave ou com chave inválida é rejeitada antes da persistência;
    - retornar erros de campo em contrato consumível por `product-api.ts`;
    - retornar `id`, `version` e indicação de replay; replay da mesma chave no Tenant retorna o mesmo Product `id` e `version`, sem nova linha;
    - não iniciar qualquer processamento posterior.
@@ -82,12 +85,13 @@ Criar migration aditiva, por exemplo `prisma/migrations/<timestamp>_slice002_man
    - marcar com `*` Quantidade, Formato e Observações/restrições; o asterisco é apenas indicação visual;
    - validar todos os campos obrigatórios no HTML/cliente e servidor;
    - preço em formato pt-BR, não negativo, com no máximo duas casas decimais, e moeda `R$`, `USD` ou `EUR`, ambos obrigatórios;
+   - desconto opcional por seletor `PERCENTAGE|FIXED` e valor; valor fixo usa a moeda do preço;
    - defaults `20`, `Tanto faz` e notas obrigatórias, com limite de `300`;
    - ação `Salvar produto` e cancelamento para `/products`;
+   - após sucesso, usar o `id` retornado para abrir `/products/:id`, mostrando resumo factual e de preparação; não redirecionar automaticamente para a lista;
+   - no resumo `PENDING`, oferecer `Analisar produto` (POST de geração explícito), `Editar produto` e, durante edição, `Salvar alterações`;
+   - GET de geração ausente ou envelope inválido preserva o resumo idle; erro de job existente permanece visível;
    - gerar uma única `Idempotency-Key` quando começar a tentativa lógica daquele formulário, guardar a chave durante a tentativa e reutilizá-la em todo retry após falha; não gerar nova chave a cada novo submit da mesma tentativa; limpar a chave somente após sucesso, cancelamento ou início de um novo formulário;
-   - sem URL, imagens, seller, variantes, preview ou campos estratégicos.
-7. Ajustar `src/components/products/product-list.tsx` para navegar por link até `/products/new` e manter o card do Product, loading, empty e erro já existentes.
-8. Ajustar os tipos/modelos do cliente em `product-form-model.ts` e `product-api.ts` somente para o payload de criação e a resposta necessários; manter o contrato de edição fora do fluxo novo sem ampliá-lo.
 
 ## 5. Segurança e autorização
 
@@ -119,10 +123,10 @@ O formulário deve representar `idle`, `editing`, `invalid`, `saving`, `success`
 
 Adicionar somente os testes necessários às invariantes:
 
-1. **Modelo/validação:** todos os campos obrigatórios (Nome, Descrição, Categoria, Preço, Moeda, ao menos uma característica não vazia e Observações/restrições); preço não negativo, válido e até duas casas decimais; defaults de quantidade `20` e formato `Tanto faz`; faixa `1–30`; notas até `300`; asteriscos sem substituir validação HTML/cliente/servidor; características por linha.
-2. **Caso de uso/API:** cria Product com `tenantId` da sessão, grava `targetContentCount` e `generationConstraints`, não cria job e lista apenas o Tenant atual.
+1. **Modelo/validação:** todos os campos obrigatórios; preço não negativo, válido e até duas casas; desconto percentual ou fixo com tipo/valor consistente; defaults de quantidade `20` e formato `Tanto faz`; faixa `1–30`; notas até `300`.
+2. **Caso de uso/API:** cria Product com `tenantId` da sessão, grava desconto, `targetContentCount` e `generationConstraints`, não cria job e lista apenas o Tenant atual.
 3. **Idempotência:** POST sem chave é rejeitado; duas criações com mesma chave e Tenant retornam mesmo `id`/`version` e uma única linha; chaves iguais em Tenants diferentes não colidem; retry do formulário reutiliza a chave original.
-4. **Cliente/formulário:** payload mantém os campos do modal e preserva entrada/erros; cancelamento não chama criação.
+4. **Cliente/resumo:** criação abre `/products/:id`; resumo `PENDING` preserva idle sem job/envelope inválido, mas mostra erro de job existente; edição só libera preparação antes de job.
 
 Preferir testes determinísticos dos modelos e do caso de uso, reutilizando o padrão `tsx --test` já presente. Não criar testes de importação, browser, LLM, geração ou integração futura.
 
@@ -134,14 +138,14 @@ Após implementação, executar somente:
 2. `npm run lint`;
 3. teste relevante do Slice 002 com `npx tsx --test <arquivos-do-slice-002>`;
 4. `npm run build`;
-5. smoke UI autenticado: abrir Produtos → `Adicionar produto` → `/products/new`, confirmar Breadcrumb/campos/defaults, tentar submissão inválida, salvar um Product, verificar retorno/card e repetir a requisição com a mesma chave sem duplicata.
+5. smoke UI autenticado: abrir Produtos → `Adicionar produto` → `/products/new`, confirmar campos/defaults, tentar submissão inválida, salvar um Product, verificar resumo factual/preparação e ação explícita de análise; repetir a requisição com a mesma chave sem duplicata.
 
 Registrar no handoff quais validações foram executadas e qualquer limitação de ambiente, sem executar suíte ampla além do comando de teste relevante.
 
 ## 9. Limites e não decisões
 
 - Não remover nem refatorar componentes legados do fluxo automatizado fora dos pontos necessários para apontar a criação para `/products/new`.
-- Não criar `SPEC`/`PLAN` de Slice 003 nem iniciar job após salvar.
-- Não implementar edição, arquivamento, exclusão, quotas, geração ou dashboard.
+- Não criar job no salvamento; `Analisar produto` usa o endpoint/contrato já pertencente ao Slice 003.
+- Permitir editar preparação somente antes de qualquer job; não implementar edição de resultado, quotas, geração automática ou dashboard.
 - Não adicionar dependência externa: Breadcrumb deve vir do padrão shadcn/ui já adotado.
 - Se o contrato existente de `provenance` ou a migration revelar incompatibilidade de dados, parar e registrar a divergência para decisão arquitetural antes de ampliar o escopo.

@@ -1,7 +1,7 @@
 import { readCookie, readJsonBody, sameOriginRequest, SESSION_COOKIE, json } from "../identity/http";
 import { resolveSession } from "../identity/service";
 import { startCommerceIntelligence } from "./service";
-import { GenerationError, publicGenerationError } from "./errors";
+import { GenerationError, generationErrorStatus, publicGenerationError } from "./errors";
 import { isValidIdempotencyKey } from "../products/service";
 
 export async function handleStartGeneration(req: Request): Promise<Response> {
@@ -12,5 +12,5 @@ export async function handleStartGeneration(req: Request): Promise<Response> {
   const body = await readJsonBody(req); const productId = body?.productId;
   if (typeof productId !== "string" || !productId) return json(400, { error: "Produto obrigatório", code: "GEN-PRODUCT" });
   try { const job = await startCommerceIntelligence({ tenantId: session.tenantId, userId: session.userId, productId, idempotencyKey: key }); console.info("[generation-start]", { tenantId: session.tenantId, userId: session.userId, activeJobId: job.id, code: null }); return new Response(JSON.stringify({ id: job.id, productId: job.productId, targetContentCount: job.targetContentCount, status: job.status, stage: job.stage }), { status: 202, headers: { "content-type": "application/json", "cache-control": "no-store" } }); }
-  catch (error) { const code = error instanceof GenerationError ? error.code : "GEN-PROVIDER"; console.info("[generation-start]", { tenantId: session.tenantId, userId: session.userId, activeJobId: null, code }); return json(code === "GEN-ACTIVE" || code === "GEN-PRODUCT-CAPACITY" ? 409 : 400, { error: publicGenerationError(code), code }); }
+  catch (error) { const code = error instanceof GenerationError ? error.code : "GEN-PROVIDER"; console.info("[generation-start]", { tenantId: session.tenantId, userId: session.userId, activeJobId: null, code }); return json(generationErrorStatus(code), { error: publicGenerationError(code), code }); }
 }

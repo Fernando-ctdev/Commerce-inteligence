@@ -560,6 +560,111 @@ test("ADR-020 adendo 2 + ADR-021: factRef fora do snapshot → GEN-SCHEMA por it
   const repairedEvents = collectJobEvents().map((line) => JSON.parse(line) as Record<string, unknown>).filter((event) => event.event === "capability.failed" && event.task === "CONTENT_BRIEF_REPAIR");
   assert.ok(repairedEvents.length >= 2, "falhas do repair por item ficam na telemetria");
 });
+
+// Gate 6 (item 4): fronteira do teto de falhas — F == PARTIAL_FAILURE_CAP (2)
+// fecha SUCCEEDED_PARTIAL declarado; F > teto falha fechado (SPEC slice-003:213),
+// mesmo com itens aprovados. Repair determinístico nunca converge os itens
+// reprovados (claim "Suporta 999 kg" persiste após CONTENT_BRIEF_REPAIR).
+test("PARTIAL_FAILURE_CAP: F == 2 fecha parcial declarado; F == 3 falha GEN-REPAIR-EXHAUSTED mesmo com aprovados", async () => {
+  const pipelineRouter = (count: number, failing: number) => ({
+    describe,
+    complete: async (task: string) => {
+      if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
+      if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: count }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
+      if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
+      if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: count, opportunities: Array.from({ length: count }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstração direta", "teste demonstrativo do tecido", "mostrando o resultado no tecido", "prova de resistência do tecido"][i % 4], noveltyTargets: ["n"] })) };
+      if (task === "CONTENT_BRIEF_GENERATION") return { items: Array.from({ length: count }, (_, i) => ({
+        angle: `a${i + 1}`,
+        hook: `h${i + 1}`,
+        development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+        script: i < failing ? "Suporta 999 kg" : "Tecido respiravel",
+        cta: `c${i + 1}`,
+      })) };
+      if (task === "CONTENT_BRIEF_REPAIR") return { angle: "a", hook: "h2", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: "Suporta 999 kg", cta: "c2" };
+      return {};
+    },
+  });
+  // F == teto: D=1, F=2 → SUCCEEDED_PARTIAL declarado (dentro do teto).
+  const dentro = await runFirstGeneration({ productId: "p", jobId: "j-cap-2", name: "Produto", description: "Tecido respirável", targetContentCount: 3, router: withInternalCuration(pipelineRouter(3, 2)) });
+  assert.equal(dentro.briefs.length, 1);
+  assert.ok(dentro.partial, "F == PARTIAL_FAILURE_CAP ainda fecha parcial");
+  assert.equal(dentro.partial?.expectedCount, 3);
+  assert.equal(dentro.partial?.deliveredCount, 1);
+  assert.equal(dentro.partial?.failedCount, 2);
+  assert.equal(dentro.partial?.failedItems.length, 2);
+  // F > teto: D=1, F=3 → FAILED GEN-REPAIR-EXHAUSTED, nunca parcial.
+  await assert.rejects(
+    () => runFirstGeneration({ productId: "p", jobId: "j-cap-3", name: "Produto", description: "Tecido respirável", targetContentCount: 4, router: withInternalCuration(pipelineRouter(4, 3)) }),
+    (error: unknown) => {
+      const e = error as { code?: string; detail?: { expected?: number; received?: number } };
+      assert.equal(e.code, "GEN-REPAIR-EXHAUSTED");
+      assert.equal(e.detail?.expected, 4);
+      assert.equal(e.detail?.received, 1);
+      return true;
+    },
+  );
+});
+
+// Gate 6 (item 5): variedade do subconjunto ENTREGUE (ADR-021 decisão 3) — o
+// teto ceil(D/K) é RECOMPUTADO após falhas do judge e o excedente é dropado
+// deterministicamente (failedItems reason VARIETY_CAP, issues variety_cap_drop),
+// sem derrubar o job. N=6 com 2 CTAs de checkout (cap ceil(6/5)=2); judge
+// rejeita 1 item não-checkout → D=5, cap vira ceil(5/5)=1 → o 2º checkout cai.
+test("variedade do entregue: cap recomputado após falha do judge dropa o excedente como VARIETY_CAP e fecha parcial", async () => {
+  const checkoutCtas = ["Entra no carrinho e confere as condições atuais.", "Toque no carrinho para ver o pedido completo."];
+  const briefFor = (position: number) => ({
+    angle: `a${position}`,
+    hook: `Gancho ${position}`,
+    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+    script: "Tecido respiravel",
+    cta: position === 1 ? checkoutCtas[0] : position === 5 ? checkoutCtas[1] : `cta ${position}`,
+  });
+  const judgeReject = {
+    parts: qualityPass.parts.map((part) => part.part === "script" ? { ...part, status: "REJECT", reason: "unclear" } : part),
+  };
+  let briefCalls = 0;
+  const judgedRejects: unknown[] = [];
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+    if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 6 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
+    if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 6, opportunities: Array.from({ length: 6 }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstração direta", "teste demonstrativo do tecido", "mostrando o resultado no tecido", "prova de resistência do tecido"][i % 4], noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_BRIEF_GENERATION") {
+      briefCalls += 1;
+      const size = [4, 2][briefCalls - 1];
+      return { items: Array.from({ length: size }, (_, offset) => briefFor((briefCalls - 1) * 4 + offset + 1)) };
+    }
+    if (task === "CONTENT_SCENE_IDEAS") {
+      const trusted = recordOf(input?.trustedContext);
+      const brief = recordOf(trusted?.brief);
+      const detail = Array.isArray(brief?.development) && typeof brief.development[0] === "string"
+        ? brief.development[0]
+        : String(brief?.hook ?? "produto");
+      return { scenes: [{ description: `Mostre ${detail}` }, { description: `Pegue o produto e mostre ${detail}` }] };
+    }
+    if (task === "CONTENT_QUALITY_JUDGE") {
+      const contentId = recordOf(input?.trustedContext)?.contentId;
+      if (contentId === "j-content-6") judgedRejects.push(contentId);
+      return contentId === "j-content-6" ? judgeReject : qualityPass;
+    }
+    return {};
+  } };
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 6, router });
+  assert.equal(briefCalls, 2, "batches 4+2");
+  assert.equal(judgedRejects.length, 1, "judge rejeita exatamente o item alvo");
+  assert.equal(result.briefs.length, 4, "6 gerados − 1 judge − 1 drop de variedade");
+  assert.ok(result.partial, "D=4, F=2 ≤ teto → SUCCEEDED_PARTIAL");
+  assert.equal(result.partial?.expectedCount, 6);
+  assert.equal(result.partial?.deliveredCount, 4);
+  assert.equal(result.partial?.failedCount, 2);
+  const judgeItem = result.partial?.failedItems.find(({ reason }) => reason === "JUDGE");
+  const varietyItem = result.partial?.failedItems.find(({ reason }) => reason === "VARIETY_CAP");
+  assert.ok(judgeItem, "falha do judge registrada");
+  assert.equal(judgeItem?.checkCodes.length, 0, "falha de judge não usa checkCodes do gate");
+  assert.ok(varietyItem, "drop determinístico de variedade registrado");
+  assert.equal(varietyItem?.contentId, "j-content-5", "o 2º checkout (excedente do cap recomputado) é dropado");
+  assert.deepEqual(varietyItem?.issues, ["variety_cap_drop"]);
+});
 test("ADR-020 adendo 2: partes plausíveis NÃO autorizam texto falho (gate é a autoridade)", async () => {
   let repairCalls = 0;
   const router = { describe, complete: async (task: string) => {

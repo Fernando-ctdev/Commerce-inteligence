@@ -17,6 +17,7 @@ import {
   missingReasonLabel,
   normalizeGenerationAction,
   partialModel,
+  projectionDegradedModel,
   phaseStateLabels,
   phaseStates,
   scriptParagraphs,
@@ -255,4 +256,31 @@ test("scriptParagraphs separa frases completas em parágrafos distintos", () => 
 test("resumo da aba conta aprovados só quando existem", () => {
   assert.equal(contentsSummaryLabel(5, 0), "5 conteúdos");
   assert.equal(contentsSummaryLabel(20, 8), "20 conteúdos · 8 aprovados");
+});
+
+// Gate 3 item 6 (rev. 4) — modelo de ações do terminal degradado GEN-PROJECTION
+// (RI-003-20): anomalia comunicada, nunca sucesso nem falha de execução.
+test("SUCCEEDED degradado: sem retry e sem revisão — anomalia, não sucesso", () => {
+  const actions = projectionDegradedModel({ code: "GEN-PROJECTION", status: "SUCCEEDED" });
+  assert.equal(actions.degraded, true);
+  assert.equal(actions.retry, false); // /retry responderia 404 (fora da partição)
+  assert.equal(actions.reviewContents, false); // nada projetável para revisar
+  assert.equal(actions.generateMissing, false);
+  // A view troca o heading de sucesso pelo estado de anomalia (branch degradado
+  // em GenerationStatusCard, antes do branch SUCCEEDED de "Revisar conteúdos").
+});
+
+test("SUCCEEDED_PARTIAL degradado: /complete acessível, sem retry e sem revisão", () => {
+  const actions = projectionDegradedModel({ code: "GEN-PROJECTION", status: "SUCCEEDED_PARTIAL" });
+  assert.equal(actions.degraded, true);
+  assert.equal(actions.generateMissing, true); // recuperação dos faltantes não depende da projeção
+  assert.equal(actions.retry, false);
+  assert.equal(actions.reviewContents, false);
+});
+
+test("positivos sem code e terminais de falha não entram no estado degradado", () => {
+  assert.equal(projectionDegradedModel({ code: null, status: "SUCCEEDED" }).degraded, false);
+  assert.equal(projectionDegradedModel({ code: undefined, status: "SUCCEEDED_PARTIAL" }).degraded, false);
+  assert.equal(projectionDegradedModel({ code: "GEN-PROJECTION", status: "FAILED" }).degraded, false);
+  assert.equal(projectionDegradedModel(null).degraded, false);
 });

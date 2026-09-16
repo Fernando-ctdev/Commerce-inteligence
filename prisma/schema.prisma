@@ -101,9 +101,14 @@ model Product {
   priceCurrency      String?
   commissionType     String?
   commissionValue    Decimal?
-  // Desconto factual opcional informado pelo criador, em percentual (0–100).
-  // Null = sem desconto: nunca inventado pela geração (fato entra no contexto só quando presente).
+  // Resquício de dados de desenvolvimento (Gate 5): sem status de contrato.
+  // Não é escrito pelo service nem lido como desconto; null = sem desconto.
   discountPercentage Decimal?
+  // Desconto tipado — contrato oficial (Gate 5): exclusivamente tipado.
+  // PERCENTAGE (0–100) ou FIXED (valor na moeda do produto, não negativo).
+  // Null = sem desconto: nunca inventado pela geração.
+  discountType       String?
+  discountValue      String?
   features           Json
   variants           Json?
   images             Json

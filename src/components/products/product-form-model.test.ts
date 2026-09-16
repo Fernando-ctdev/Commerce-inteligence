@@ -421,7 +421,7 @@ test("comissão: payload envia tipo e valor normalizado apenas quando o par est�
   assert.equal(edicao.commissionValue, "5,00");
 });
 
-test("desconto percentual é opcional, normalizado e validado", () => {
+test("desconto tipado: draft sem discountValue não emite campos; percentual validado 0–100", () => {
   const base = {
     ...emptyProductDraft(),
     name: "P",
@@ -431,21 +431,34 @@ test("desconto percentual é opcional, normalizado e validado", () => {
     currency: "R$",
     characteristics: "x",
   };
-  assert.deepEqual(validateProductManualDraft({ ...base, discountPercentage: "100,01" }, ""), {
-    discountPercentage: "O desconto deve estar entre 0 e 100%.",
+  const emptyPayload = buildManualProductPayload(
+    base,
+    { targetContentCount: 1, creatorPresence: "either" },
+  );
+  assert.equal(emptyPayload.discountType, undefined);
+  assert.equal(emptyPayload.discountValue, undefined);
+  assert.deepEqual(validateProductManualDraft({ ...base, discountValue: "100,01" }, ""), {
+    discountValue: "O desconto percentual deve estar entre 0 e 100.",
   });
   const payload = buildManualProductPayload(
-    { ...base, discountPercentage: "12,50" },
+    { ...base, discountType: "PERCENTAGE", discountValue: "12,50" },
     { targetContentCount: 1, creatorPresence: "either" },
     "idempotency-key",
   );
-  assert.equal(payload.discountPercentage, "12.5");
+  assert.deepEqual(
+    { discountType: payload.discountType, discountValue: payload.discountValue },
+    { discountType: "PERCENTAGE", discountValue: "12,50" },
+  );
   assert.equal(payload.idempotency_key, "idempotency-key");
-  assert.equal(
-    buildManualProductPayload(
-      { ...base, discountPercentage: "" },
-      { targetContentCount: 1, creatorPresence: "either" },
-    ).discountPercentage,
-    null,
+});
+
+test("desconto fixo usa moeda do produto e vai tipado no payload", () => {
+  const payload = buildManualProductPayload(
+    { ...emptyProductDraft(), name: "P", description: "D", category: "C", price: "89.90", currency: "R$", characteristics: "x", discountType: "FIXED", discountValue: "5,00" },
+    { targetContentCount: 1, creatorPresence: "either" },
+  );
+  assert.deepEqual(
+    { discountType: payload.discountType, discountValue: payload.discountValue },
+    { discountType: "FIXED", discountValue: "5,00" },
   );
 });

@@ -61,9 +61,11 @@ export function useGenerationJob({ productId, readiness, onProjectionStale }: Us
   useEffect(() => {
     if (!productId) return;
     let disposed = false;
-    getCurrentGenerationForProduct(productId)
-      .then((next) => { if (!disposed) setJob(next); })
-      .catch(() => { if (!disposed) setError("Não foi possível recuperar o estado da análise agora."); });
+  getCurrentGenerationForProduct(productId)
+    .then((next) => { if (!disposed) setJob(next); })
+    // Sem job comprovado em mãos (nunca houve job ou a leitura falhou), não há
+    // erro de análise a exibir: o card fica ocioso e o POST segue autoritativo.
+    .catch(() => { /* fallback de bloqueio e polling continuam cobrindo o estado */ });
     return () => { disposed = true; };
   }, [productId]);
 

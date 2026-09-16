@@ -6,11 +6,11 @@
 
 ## 1. User Outcome
 
-Depois de confirmar um Product com a quantidade inicial resolvida, o creator recebe, sem aprovar a estratégia ou operar etapas intermediárias, uma `ProductStrategy` e um conjunto completo de `Content` com Briefings do Conteúdo em `DRAFT`, prontos para revisão. O creator pode continuar usando a aplicação enquanto o processamento assíncrono trabalha; navegação ou fechamento da aba não interrompem o job.
+Depois de acionar `Analisar produto` sobre um Product salvo com a quantidade inicial resolvida, o creator recebe, sem aprovar a estratégia ou operar etapas intermediárias, uma `ProductStrategy` e um conjunto completo de `Content` com Briefings do Conteúdo em `DRAFT`, prontos para revisão. O creator pode continuar usando a aplicação enquanto o processamento assíncrono trabalha; navegação ou fechamento da aba não interrompem o job.
 
 ## 2. Contexto
 
-O Slice 002 deixa o Product e as restrições de preparação disponíveis para a primeira geração, mas não inicia geração ao salvar manualmente em `/products/new`. Este slice começa na confirmação do ProductCandidate dentro do fluxo de entrada de Produto, ou em um caso de uso equivalente que receba um Product confirmado e uma `targetContentCount` já resolvida. A confirmação persiste o Product, reserva a capacidade e cria automaticamente o `CommerceIntelligenceJob` na mesma operação transacional.
+O Slice 002 deixa o Product e as restrições de preparação disponíveis para a primeira geração, mas não inicia geração ao salvar manualmente em `/products/new`. O fluxo de entrada vigente é o cadastro manual (ADR-022): a importação URL-first com `ProductCandidate` é direção futura do PRD e não faz parte deste slice. Este slice começa na ação explícita `Analisar produto` sobre um Product salvo — caso de uso que recebe um Product já persistido e uma `targetContentCount` já resolvida. A análise reserva a capacidade e cria automaticamente o `CommerceIntelligenceJob` na mesma operação transacional.
 
 O job executa a primeira análise completa: entendimento do Product, mapeamento de oportunidades comerciais, construção da Strategy, planejamento do portfólio e geração dos Briefings. O resultado inicial materializa `ProductStrategy`, `ContentPlan`, `ContentOpportunity`, `Content` e `ContentBriefVersion` compatíveis com Content Operations. Os Contents começam em `DRAFT`; revisão, edição, regeneração, aprovação, descarte, lotes, Agenda e Estúdio pertencem a slices posteriores.
 
@@ -31,7 +31,7 @@ Fontes de autoridade:
 - `docs/architecture/adr-004-variedade-por-memoria-estruturada.md`;
 - `docs/architecture/adr-005-geracoes-assincronas-e-duraveis.md`;
 - `docs/architecture/adr-006-limites-de-plano-e-uso.md`;
-- `docs/architecture/adr-008-entrada-de-produto-url-first.md`;
+- `docs/architecture/adr-022-entrada-oficial-cadastro-manual.md` (entrada vigente; ADR-008 superseded permanece referência histórica);
 - `docs/architecture/adr-009-identidade-autorizacao-e-tenant-inicial.md`;
 - `docs/architecture/adr-012-contratos-canonicos-da-commerce-intelligence.md`;
 - `docs/architecture/adr-013-model-router-e-intelligence-tier.md`;
@@ -42,7 +42,7 @@ Fontes de autoridade:
 
 ## Problem Statement
 
-A confirmação do Product precisa levar diretamente ao primeiro valor do produto: uma estratégia comercial e Briefings úteis, sem transformar a análise em um wizard. A geração pode envolver chamadas externas, várias capabilities e validações; portanto, precisa ser durável, recuperável, idempotente e transparente apenas no nível operacional que o creator consegue usar.
+A ação explícita `Analisar produto` sobre um Product salvo precisa levar diretamente ao primeiro valor do produto: uma estratégia comercial e Briefings úteis, sem transformar a análise em um wizard. A geração pode envolver chamadas externas, várias capabilities e validações; portanto, precisa ser durável, recuperável, idempotente e transparente apenas no nível operacional que o creator consegue usar.
 
 ## Goals
 
@@ -55,14 +55,14 @@ A confirmação do Product precisa levar diretamente ao primeiro valor do produt
 
 ### P1 — Primeira geração completa e recuperável
 
-**User Story:** Como creator, quero confirmar um Product e receber uma estratégia e Briefings prontos para revisão sem operar a engine passo a passo, para transformar rapidamente um produto em conteúdo gravável.
+**User Story:** Como creator, quero acionar `Analisar produto` sobre um Product salvo e receber uma estratégia e Briefings prontos para revisão sem operar a engine passo a passo, para transformar rapidamente um produto em conteúdo gravável.
 
-**Independent Test:** Confirmar um Product com quantidade válida, observar o job assíncrono até seu estado terminal e verificar o indicador global, a recuperação e o resultado completo ou a falha acionável.
+**Independent Test:** Acionar `Analisar produto` sobre um Product salvo com quantidade válida, observar o job assíncrono até seu estado terminal e verificar o indicador global, a recuperação e o resultado completo ou a falha acionável.
 
 ## 3. In Scope
 
-- Confirmação do Product no fluxo de importação e resolução server-side da `targetContentCount` antes da criação do job.
-- Criação transacional de Product confirmado, validação do limite de `active_products`, reserva de Entitlement mensal e `CommerceIntelligenceJob`.
+- Ação explícita `Analisar produto` sobre um Product salvo (entrada vigente: cadastro manual, ADR-022; ProductCandidate é direção futura) e resolução server-side da `targetContentCount` antes da criação do job.
+- Criação transacional do `CommerceIntelligenceJob` a partir de um Product salvo, com validação do limite de `active_products` e reserva de Entitlement mensal.
 - Job persistente em fila PostgreSQL, worker com lease/timeout, reentrada e retry idempotente.
 - Estados do job `QUEUED`, `RUNNING`, `SUCCEEDED`, `SUCCEEDED_PARTIAL`, `FAILED` e `CANCELLED` (ADR-021).
 - Stages públicos `UNDERSTANDING_PRODUCT`, `MAPPING_COMMERCIAL_OPPORTUNITIES`, `BUILDING_STRATEGY`, `BUILDING_CONTENT_PLAN`, `GENERATING_BRIEFS` e `FINALIZING`, com mensagens humanas correspondentes e atualização antes do trabalho correspondente.
@@ -90,7 +90,7 @@ A confirmação do Product precisa levar diretamente ao primeiro valor do produt
 - Publicação, agendamento de publicação, TikTok OAuth/API, analytics externo, ROAS, CTR ou atribuição.
 - Geração ou edição de vídeo, imagem, áudio ou voice-over.
 - Embeddings, banco vetorial, similaridade semântica, deduplicação semântica e judge LLM de variedade ou memória ficam fora do Slice 003; a variedade usa dimensões estruturadas e normalização determinística. `CONTENT_QUALITY_JUDGE` é a exceção interna: executa após o hard gate factual/estrutural, limitado a hook, development, script, CTA e cenas. `PASS` mantém a parte; só `REPAIR` chama `CONTENT_PART_REPAIR` e consome no máximo 2 rounds; `REJECT` é terminal e preserva diagnóstico. Qualquer status final diferente de `PASS` impede o item de publicar — faltante no contrato ADR-021 (`SUCCEEDED_PARTIAL` dentro do teto, `FAILED` fora), com `SUCCEEDED` preservando exact-N e falhando fechado.
-- Alteração de Strategy durante o job, mudança automática de Strategy por performance e edição de fatos além da confirmação inicial.
+- Alteração de Strategy durante o job, mudança automática de Strategy por performance e edição de fatos além do cadastro inicial.
 - Alteração de PRD, ADR, `SYSTEM-DESIGN.md`, `DESIGN.md`, `PRINCIPLES.md` ou `SLICES.md`.
 - Criação de PLAN ou implementação de código nesta etapa de especificação.
 
@@ -98,8 +98,8 @@ A confirmação do Product precisa levar diretamente ao primeiro valor do produt
 
 | Assumption / decision | Chosen default | Rationale | Confirmed? |
 | --- | --- | --- | --- |
-| Origem que inicia este slice | Confirmação do ProductCandidate ou caso de uso equivalente para Product já confirmado; o salvamento manual isolado de `/products/new` não inicia job | Preserva a fronteira explícita do Slice 002 e o core loop dos PRDs | Sim, pelas fontes canônicas |
-| Autoridade da quantidade inicial | Usar `Product.targetContentCount` validado e as restrições persistidas pelo Slice 002; ausência, não inteiro ou fora do limite é rejeitada server-side | Evita segunda tela e impede que o cliente altere a quantidade depois da confirmação | Sim, por Slice 002 e PRD de análise |
+| Origem que inicia este slice | Ação explícita `Analisar produto` sobre um Product salvo (entrada vigente: cadastro manual, ADR-022; ProductCandidate é direção futura); o salvamento manual isolado de `/products/new` não inicia job | Preserva a fronteira explícita do Slice 002 e o core loop dos PRDs | Sim, pelas fontes canônicas |
+| Autoridade da quantidade inicial | Usar `Product.targetContentCount` validado e as restrições persistidas pelo Slice 002; ausência, não inteiro ou fora do limite é rejeitada server-side | Evita segunda tela e impede que o cliente altere a quantidade depois do salvamento | Sim, por Slice 002 e PRD de análise |
 | Limite numérico da quantidade | `1–10`, sujeito à capacidade do Entitlement | Slice 002 define esse intervalo; a capacidade comercial continua server-side | Sim, por Slice 002/ADR-006 |
 | Mensagens de stage | Usar uma mensagem humana estável por stage, em `pt-BR`, refletindo a etapa real; detalhes de copy podem ser refinados sem mudar o contrato | DESIGN e PRDs proíbem simulação por animação e percentual inventado | Não; contrato comportamental |
 | Limite de repair | Usar limite finito, positivo e configurável pelo sistema; o comportamento ao atingir o limite permanece conforme configuração aprovada | As fontes exigem limite, mas não aprovam um número específico; a SPEC não inventa um valor | Não; configuração em aberto |
@@ -124,17 +124,17 @@ A confirmação do Product precisa levar diretamente ao primeiro valor do produt
 
 ## 5. Comportamentos
 
-### B-003-01 — Confirmação e criação atômica do job
+### B-003-01 — `Analisar produto` e criação atômica do job
 
-Ao confirmar um Product válido, o sistema resolve a quantidade inicial no servidor, verifica o limite transacional de `active_products` e a capacidade mensal de conteúdos, persiste o Product confirmado, registra o mês UTC da reserva, reserva a capacidade e cria um `CommerceIntelligenceJob` `QUEUED` de forma atômica. Não existe etapa obrigatória entre confirmar e enfileirar.
+Ao acionar `Analisar produto` sobre um Product válido já salvo, o sistema resolve a quantidade inicial no servidor, verifica o limite transacional de `active_products` e a capacidade mensal de conteúdos, registra o mês UTC da reserva, reserva a capacidade e cria um `CommerceIntelligenceJob` `QUEUED` de forma atômica. Não existe etapa obrigatória entre acionar e enfileirar.
 
-A ação que somente salva o Product no Slice 002 continua sem iniciar geração. A criação do job deste slice ocorre no fluxo de confirmação que entrega um Product confirmado à primeira geração.
+A ação que somente salva o Product no Slice 002 continua sem iniciar geração: o salvamento entrega um Product salvo e é pré-condição da análise, não uma etapa dela. A criação do job deste slice ocorre apenas na ação explícita `Analisar produto`.
 
 ### B-003-02 — Pré-condições e concorrência
 
-Para Product novo, a operação valida e reserva o limite de Products ativos (`active_products`). Para Product já ativo e autorizado, inclusive em retry explícito, não reserva novamente `active_products`. Em ambos os casos, rejeita quando `targetContentCount` é ausente ou inválida, quando a capacidade mensal não é suficiente ou quando o usuário já possui job `QUEUED`/`RUNNING`. A rejeição não cria Product novo, job ou reserva.
+O Product chega à operação já persistido e `ACTIVE` pelo cadastro manual (Slice 002): o limite de Products ativos (`active_products`) é enforced no cadastro e nas transições de lifecycle (`GEN-PRODUCT-CAPACITY`), não na criação do job. A análise rejeita quando `targetContentCount` é ausente ou inválida, quando o Product não está disponível com fatos mínimos, quando a capacidade mensal não é suficiente (`GEN-CAPACITY`) ou quando o usuário já possui job `QUEUED`/`RUNNING` (`GEN-ACTIVE`). A rejeição não cria job nem reserva.
 
-A validação/ativação do Product novo, a reserva mensal e a criação do job são uma decisão transacional única, protegida contra corridas. A regra de job ativo é por usuário no MVP; como cada usuário possui um Tenant pessoal, consultas e mutações continuam escopadas também ao Tenant.
+Dentro da transação da análise, o advisory lock do usuário (RI-003-03) serializa requests concorrentes; a recontagem de `activeProductsUsed` (com bloqueio do entitlement) e a criação de job + reserva mensal são uma decisão única avaliada pós-lock. A regra de job ativo é por usuário no MVP; como cada usuário possui um Tenant pessoal, consultas e mutações continuam escopadas também ao Tenant.
 
 ### B-003-03 — Fila, lease e ciclo de vida
 
@@ -299,14 +299,14 @@ Toda leitura, mutação, job, resultado e uso deve ser escopado ao Tenant resolv
 
 ### RI-003-03 — Um job ativo
 
-Para cada usuário, pode existir no máximo um `CommerceIntelligenceJob` em `QUEUED` ou `RUNNING`. A regra é protegida no servidor sob concorrência; o estado visual desabilitado do botão não é a única proteção.
+Para cada usuário, pode existir no máximo um `CommerceIntelligenceJob` em `QUEUED` ou `RUNNING`. A proteção é concreta no servidor: a transação de `Analisar produto` adquire um advisory lock de transação do PostgreSQL pelo usuário (`pg_advisory_xact_lock` por `tenantId`+`userId`) — além do lock tenant-wide da quota (RI-003-05) — antes de qualquer leitura, e a checagem de job ativo, a agregação de capacidade e a criação da reserva ocorrem após a aquisição — requests concorrentes com chaves distintas são serializadas e apenas uma cria job. O lease do worker impede execução duplicada do mesmo job; o estado visual desabilitado do botão não é proteção.
 
 ### RI-003-04 — Quantidade resolvida e exata
 `targetContentCount` é um inteiro validado entre `1` e `30` e permanece estável durante o job. Um job `SUCCEEDED` materializa exatamente essa quantidade de Contents e Briefings válidos; um job `SUCCEEDED_PARTIAL` materializa somente os D aprovados, dentro do teto de falhas do ADR-021.
 
 ### RI-003-05 — Entitlement transacional, active_products e mês UTC
 
-Antes de criar o job, o sistema verifica em transação o limite de `active_products` e a capacidade de `generated_contents_month`. Para Product novo, valida e reserva a unidade de `active_products`; para Product já ativo e autorizado, inclusive retries, não reserva novamente essa unidade. A ativação do Product novo, a reserva mensal e a criação do job são atômicas: se qualquer limite falhar, não persiste Product novo, não cria job e não cria reserva. A reserva registra o mês UTC da criação; sucesso confirma o uso pelos Contents persistidos no mesmo período (`SUCCEEDED_PARTIAL` confirma somente os entregues e libera o restante — ADR-021); falha ou cancelamento liberam a reserva no período de origem; retry técnico não cria nova reserva.
+O limite de `active_products` é verificado no cadastro manual e nas transições de lifecycle do Product (`GEN-PRODUCT-CAPACITY`); o Product chega à análise já `ACTIVE` e não consome unidade nova em `Analisar produto` nem em retries. Antes de criar o job, o sistema verifica em transação a capacidade de `generated_contents_month` e a regra de um job ativo por usuário sob dois advisory locks de transação: um **tenant-wide da quota** (`pg_advisory_xact_lock` por `tenantId`), que serializa o par capacidade→reserva (aggregate + create) entre todos os usuários do Tenant — único mecanismo que impede dois usuários distintos de consumir a mesma capacidade — e um **por usuário** (`tenantId`+`userId`), que protege a regra de job ativo e o replay de idempotência. Ambos são adquiridos no início da transação, em ordem fixa (Tenant → usuário), e todo caminho de criação de reserva passa por eles; se qualquer verificação falhar, não cria job e não cria reserva. A reserva é criada na mesma transação do job e registra o mês UTC da criação; sucesso confirma o uso pelos Contents persistidos no mesmo período (`SUCCEEDED_PARTIAL` confirma somente os entregues e libera o restante — ADR-021); falha ou cancelamento liberam a reserva no período de origem; retry técnico não cria nova reserva.
 
 ### RI-003-06 — Pipeline e estado determinísticos
 
@@ -361,6 +361,52 @@ O snapshot de entrada da primeira geração é vazio e não consulta histórico 
 
 Todo Product `ACTIVE` retornado em leitura autenticada inclui `generationAction`, objeto server-authoritative completo: `{ state: "AVAILABLE", reason: null, nextAction: null }`, `{ state: "BLOCKED", reason: "GEN-ACTIVE", nextAction: "VIEW_ACTIVE_ANALYSIS" }` ou `{ state: "BLOCKED", reason: "GEN-CAPACITY", nextAction: "WAIT_FOR_CAPACITY" }`. `reason` e `nextAction` nunca são omitidos e o objeto nunca é `null`. Product `ARCHIVED` é `ArchivedProductView` e não serializa `generationAction`; não recebe novo código ou estado de bloqueio. Archive/reactivate retornam apenas `{ id, version }`; a UI recarrega o Product autenticado após o commit. A projeção é avaliada para o `tenantId` e `userId` da sessão, orienta apenas a UI e nunca autoriza a mutação; `POST /api/generations` revalida sessão, origem, escopo, job ativo e reserva na transação. A projeção não expõe plano, limite, uso, reserva, IDs ou dados de outro Tenant. `GEN-PRODUCT-CAPACITY` pertence à ativação de Product novo e não bloqueia a análise de Product já ativo.
 
+### RI-003-20 — Degradação de projeção (`GEN-PROJECTION`)
+
+`GEN-PROJECTION` é exclusivamente um código de **projeção** (leitura), nunca um status persistido, nunca um erro de mutação e nunca altera o registro do job. Ocorre quando um job terminal positivo não pode ser projetado com integridade. Gatilhos: (a) brief persistido fora do contrato (`projectBriefPayload` → causa interna `GEN-SCHEMA`); (b) scene set corrente presente e inválido — status diferente de `AVAILABLE` ou menos de 2 cenas válidas, mesmo critério de `scene_set_invalid` do engine (`projectScenes` → causa interna `GEN-SCHEMA`); ausência de scene set é legado anterior ao ADR-019 e projeta `scenes: null`, sem degradação; (c) terminal positivo sem conteúdos persistidos (viola exact-N / D>0, ADR-021). Nesses casos `GET /api/generations/[id]` e `/current` respondem envelope degradado fail-closed: preservam do persistido `id`, `productId`, `status`, `stage`, `targetContentCount`, `createdAt`, `startedAt`, `finishedAt` e `attempt` — o estado real nunca é mascarado — e degradam deliberadamente o que é **derivado**: `readiness: "FAILED"`, `error` com mensagem sanitizada fixa, `contents`, `strategy` e `plan` vazios. Como os três gatilhos só avaliam quando o job publica (`publish = SUCCEEDED|SUCCEEDED_PARTIAL`), `GEN-PROJECTION` implica status persistido positivo. Recuperação: `POST /retry` (partição `FAILED|CANCELLED`) responde `404` e a reanálise integral permanece proibida em Produto `READY` (B-003-13, `GEN-READY`) — para `SUCCEEDED` degradado **não existe recuperação self-service** (correção de dados, não reanálise); para `SUCCEEDED_PARTIAL` degradado, `POST /complete` continua disponível (a recuperação dos faltantes não depende da projeção de cenas/brief). O cliente distingue a situação por `code === "GEN-PROJECTION"` + `status` persistido e NÃO oferece `Tentar novamente`; `readiness: "FAILED"` aqui indica anomalia de dados persistida, nunca falha de execução. A distinção é explícita: `status` espelha o banco; `readiness`/`contents` são projeção e, sob `GEN-PROJECTION`, preferem conservadorismo a expor payload não confiável ou sucesso sem conteúdo. A leitura nunca falha por payload de dados (falha de infraestrutura continua propagando); nenhum payload bruto, diagnóstico interno ou dado de outro Tenant é exposto.
+
+### RI-003-21 — Retenção mínima de histórico, versões e memória
+
+Política de retenção vigente (Gate 4 item 1); os gatilhos e modalidades de remoção (archive/exclusão lógica/física) são decisão própria do item seguinte — aqui se define apenas **o que permanece retido e sob quais garantias**, enquanto o Product existir no Tenant.
+
+- **Product History** (sem tabela própria: o histórico do Product é derivado de dados reais): cada tentativa permanece — `CommerceIntelligenceJob` terminal por tentativa (retry técnico reusa o mesmo `job.id` e não multiplica linhas; retry explícito cria novo job preservando o terminal anterior, RI-003-16), `IntelligenceRun` idempotente por job (inclusive `FAILED`, com assinatura residual — B-003-10; o retry técnico no mesmo `job.id` atualiza o run existente com a assinatura da última tentativa, e o contador `attempt` do job preserva o número de tentativas) e `GenerationUsageReservation` reconciliada. Nenhum truncamento, agregação ou expiração do histórico enquanto o Product existir; a aba `Histórico` deriva dessas linhas, nunca de cópia separada.
+- **Versões de conteúdo**: `ContentBriefVersion` é append-only e imutável (ADR-019) — `@@unique([tenantId, contentId, version])`, nenhuma versão é sobrescrita ou reescrita; os únicos campos mutáveis são os ponteiros `Content.currentBriefVersionId`/`approvedBriefVersionId`. `BriefValidationReport` (um por brief version, `briefId = contentId:briefVersionId`) e `ContentSceneSet` (um por brief version, ADR-019) são solidários à versão a que pertencem e retidos junto com ela.
+- **Product Memory**: `ProductMemorySnapshot` é append-only — um snapshot novo por job de sucesso (`@@unique([tenantId, sourceJobId])`), com merge acumulativo deduplicado do anterior gravado em snapshot novo; snapshot anterior nunca é alterado (worker, fechamento transacional). Somente sucesso persiste sinais; falha/cancelamento não atualizam a memória (RI-003-17).
+- **Liberação — dados versus capacidade** (distinção documental): quanto aos **dados retidos** (Jobs, Runs, reservas, versões de brief, reports, scene sets e snapshots de memória), nesta fatia o único gatilho de liberação é a exclusão do Product (`DELETE` transacional Big Bang, RI-003-18); nenhuma purga automática, TTL ou política por idade é introduzida, e o arquivamento vigente não remove nem purga nenhum dado (arquivar não apaga dados). Independente disso, o arquivamento **libera capacidade de Product ativo**: `transitionTenantProduct`/`archiveTenantProduct` decrementa `activeProductsUsed` em `TenantEntitlement` (service.ts), devolvendo a vaga de Product ativo sem qualquer efeito sobre os dados retidos. Modalidades alternativas de remoção/retenção de dados permanecem para decisão no item seguinte do Gate 4.
+
+### RI-003-22 — Modalidade de remoção: archive operacional + exclusão física, sem exclusão lógica
+
+Decisão canônica (Gate 4 item 2), com base na política de retenção RI-003-21. O sistema mantém **duas modalidades, com papéis distintos e não sobrepostos**:
+
+- **Archive é estado operacional, não modalidade de remoção.** `Product.lifecycle` (`ACTIVE` ↔ `ARCHIVED`, reversível via `transitionTenantProduct`) esconde o Product do uso corrente, preserva integralmente os dados retidos (RI-003-21) e libera apenas capacidade (`activeProductsUsed`). Archive responde à pergunta "este Product está em uso?" — nunca à pergunta "estes dados devem deixar de existir?".
+- **Exclusão física é a única modalidade de remoção**: o `DELETE` transacional Big Bang do Product (RI-003-18), iniciado pelo usuário, é o único gatilho que remove os dados retidos — em cascata e atomicamente, sem resíduo.
+- **Exclusão lógica (soft delete) não é introduzida.** Um marcador de remoção (`deletedAt` ou equivalente) duplicaria o papel que o archive já cumpre (ocultar sem apagar), exigiria filtragem em todo caminho de leitura e criaria uma terceira semi-remoção com semântica ambígua — sem que nenhum requisito (PRD, comportamentos B-003, AC) peça retenção oculta pós-exclusão. A exclusão solicitada pelo usuário é física; a ocultação solicitada pelo usuário é archive reversível.
+
+Nenhuma alteração de código é introduzida por esta decisão: ela registra como canônica a arquitetura vigente (archive + DELETE Big Bang). A ADR formal fica para o item próprio do Gate 4.
+
+### RI-003-23 — Rastreabilidade preservada sob retenção obrigatória
+
+Enquanto a retenção for obrigatória (Product existente, RI-003-21; remoção apenas pela exclusão física deliberada, RI-003-22), a rastreabilidade do histórico, das versões e da memória é preservada **por construção**, sem rotinas de limpeza:
+
+- **Escrita append-only**: `ContentBriefVersion`, `BriefValidationReport`, `ProductMemorySnapshot`, `ProductUnderstanding`, `ProductStrategy`, `ContentPlan` e `ContentOpportunity` são somente criados, e `ContentSceneSet` é persistido por create/upsert idempotente — o upsert (chave `tenantId`+`briefVersionId`, ADR-019) tem `update` vazio, de modo que a linha existente não é tocada e o payload nunca é sobrescrito em nenhum caminho de execução. As únicas operações de deleção sobre dados de geração no código de produção são as da transação Big Bang do Product (RI-003-18); nenhuma purga, TTL ou exclusão fora dela existe.
+- **Ponteiros movem, versões permanecem**: os únicos updates em linhas retidas são os ponteiros `Content.currentBriefVersionId`/`approvedBriefVersionId` — movê-los nunca apaga a versão anterior, que continua consultável com seus reports e scene sets solidários.
+- **Runs com fencing**: o `IntelligenceRun` é idempotente por job (ADR-021) — cada tentativa só grava com o fence vigente (`leaseOwnerId`/`attempt`), de modo que uma tentativa antiga nunca sobrescreve o run atual; o contador `attempt` do job preserva o número de tentativas e o retry explícito cria novo job com novo run, mantendo o terminal anterior intacto (RI-003-16).
+- **Memória nunca reescrita**: o merge acumulativo grava sempre um snapshot novo; snapshots anteriores permanecem, permitindo reconstruir a evolução dos sinais por job de sucesso.
+- **Fim de rastreabilidade único e atômico**: a única forma de encerrar a rastreabilidade é a exclusão física do Product, que remove todas as linhas dentro da mesma transação — sem janela de estado parcialmente removido.
+
+Nenhuma alteração de código é introduzida por este requisito: ele registra como contrato os invariantes já garantidos pela implementação.
+
+### RI-003-24 — Integridade referencial após remoção e arquivamento
+
+Verificação canônica (Gate 4 item 4) das relações e referências de Product Memory, History e Content nas duas transições de ciclo de vida:
+
+- **FKs restritivas**: o schema não declara `onDelete` — toda chave estrangeira das tabelas de geração é restritiva por padrão, de modo que nenhuma linha filho pode sobreviver ao pai fora da ordem planejada. A ordem dentro da transação Big Bang (`deleteTenantProduct`) é a garantia e já remove todos os filhos antes dos pais: `productImportAttempt` → ponteiros `Content.currentBriefVersionId`/`approvedBriefVersionId` anulados (quebra o ciclo `Content` ↔ `ContentBriefVersion`) → `ContentSceneSet` → `BriefValidationReport` → `ContentBriefVersion` → `Content` → `ContentOpportunity` → `ContentPlan` → `ProductMemorySnapshot` (FK `sourceJobId`) → `GenerationUsageReservation` → `IntelligenceRun` → `ProductUnderstanding` → `ProductStrategy` → `CommerceIntelligenceJob` → `Product` por último. Tudo na mesma transação: sem janela de referência pendente.
+- **Referências de memória**: `ProductMemorySnapshot` referencia `Product` e `sourceJob` (`CommerceIntelligenceJob`); ambos são removidos na mesma transação que o snapshot — não existe remoção que deixe snapshot órfão. Geração e memória existem apenas para Product `ACTIVE`, garantida em **dois pontos serializados**: no início (`startCommerceIntelligence` rejeita `lifecycle !== "ACTIVE"`) e na execução — `processGeneration` revalida o lifecycle ao carregar o Product (fail-fast que evita gastar provider com Product arquivado; o ponto autoritativo é a finalização) e, novamente, **dentro da transação de finalização com lock de linha** (`SELECT … FOR UPDATE` no Product): a leitura serializa com o `UPDATE` de `transitionTenantProduct`/`archiveTenantProduct` — ou o arquivamento commita antes e a finalização vê `ARCHIVED` (rollback de strategy, plan, contents, briefs, scene sets e memória; job `FAILED` com `GEN-PRODUCT` no caminho de falha de execução, B-003-11; reserva liberada), ou o arquivamento espera o commit da finalização — não existe janela em que o resultado seja persistido para Product `ARCHIVED`, e nenhum snapshot de memória surge de Product não ativo.
+- **Arquivamento**: `archiveTenantProduct`/`transitionTenantProduct` alteram apenas `lifecycle`, `version` e `activeProductsUsed` — nenhuma referência de memória, histórico, versão ou conteúdo é tocada; o estado é integralmente reversível na reativação. Product `ARCHIVED` não inicia nova geração e um job iniciado antes do arquivamento é interrompido na finalização (item anterior) — a reativação restaura o Product, sem recriar dados removidos.
+- **Pós-remoção**: leituras de memória, histórico e conteúdo são escopadas por `tenantId`+`productId`; com o Product removido atomicamente junto com todas as dependências, não existe caminho de leitura que atravesse referência inexistente.
+
+Nenhuma alteração de código é introduzida por este requisito: a integridade verificada já é garantida pelas FKs restritivas e pela ordem transacional vigentes.
+
 
 ## 7. Validações e erros
 
@@ -383,6 +429,7 @@ Todo Product `ACTIVE` retornado em leitura autenticada inclui `generationAction`
 | `GEN-VARIETY` | Duplicata normalizada ou concentração estrutural indevida | Rejeitar o item/conjunto e acionar repair com as dimensões repetidas; no fechamento parcial, revalidar o subconjunto com `ceil(D/K)` (ADR-021). |
 | `GEN-REPAIR-EXHAUSTED` | Limite de repair atingido | Com D>0 e F ≤ `PARTIAL_FAILURE_CAP`: `SUCCEEDED_PARTIAL` publicando os aprovados e oferecendo `Gerar faltantes`; caso contrário `FAILED`. Nunca completar quantidade com conteúdo inválido (ADR-021). |
 | `GEN-PERSISTENCE` | Falha ao finalizar resultado | Reconciliar a reserva no mês UTC de origem, não expor resultado incompleto e permitir retry técnico idempotente. |
+| `GEN-PROJECTION` | Terminal positivo não projetável com integridade: brief inválido, scene set corrente presente e inválido (`!= AVAILABLE` ou < 2 cenas) ou sem conteúdos (RI-003-20) | Degradar a leitura fail-closed preservando o estado persistido (`status`/`stage`/contagens reais), com `readiness: FAILED` e sem expor payload; nunca alterar o registro nem mascarar o status. Sem `Tentar novamente`: `/retry` responde `404` (status persistido positivo fora da partição); em `SUCCEEDED_PARTIAL`, `/complete` segue disponível; o cliente não oferece `Tentar novamente` sob `GEN-PROJECTION` (RI-003-20). |
 | `GEN-CANCELLED` | Cancelamento seguro em `QUEUED`/`RUNNING` | Marcar `CANCELLED`, liberar a reserva no mês UTC de origem, preservar Product e não publicar resultado parcial. |
 | `GEN-LEASE-EXPIRED` | Lease expirado sem conclusão | Reclaim, incremento de tentativa, backoff e novo lease dentro do limite; ao esgotar, `FAILED` e reconciliação única da reserva. |
 | `GEN-MEMORY` | Falha/cancelamento ou sucesso da geração | Não atualizar memória em falha/cancelamento; em sucesso persistir sinais estruturados da geração para uso futuro. |
@@ -397,7 +444,7 @@ Erros exibidos ao creator devem usar linguagem humana em `pt-BR`, preservar valo
 | `idle` | Product manual recém-criado e sem job: readiness `PENDING`; `Analisar produto` disponível quando não houver job ativo e houver capacidade. |
 | `queued` | Job `QUEUED`: readiness `ANALYZING`; indicador informa que a solicitação foi recebida e não apresenta Content parcial. |
 | `running` | Job `RUNNING`: readiness `ANALYZING`; indicador mostra Product e stage real; aplicação continua utilizável sem percentual, ETA ou Briefing parcial. |
-| `succeeded` | Job `SUCCEEDED` com Strategy, Plan e Contents completos: readiness `READY`; indicador oferece `Revisar conteúdos` e libera nova análise. |
+| `succeeded` | Job `SUCCEEDED` com Strategy, Plan e Contents completos: readiness `READY`; indicador oferece `Revisar conteúdos`; reanálise não é oferecida nem aceita server-side neste slice (B-003-13, `GEN-READY`). |
 | `succeeded-partial` | Job `SUCCEEDED_PARTIAL` com D de N Contents aprovados: readiness `READY`; indicador mostra "D de N prontos", motivo sanitizado por item faltante e oferece `Gerar faltantes` além de `Revisar conteúdos` (ADR-021). |
 | `failed` | Último job `FAILED` sem resultado final: readiness `FAILED`; indicador apresenta erro sanitizado, preserva Product/fatos e oferece `Tentar novamente`. |
 | `cancelled` | Último job `CANCELLED` sem resultado final: readiness `FAILED`; cancelamento confirmado, sem resultado parcial, com possibilidade de nova tentativa. |
@@ -419,7 +466,7 @@ Requisitos de responsividade e acessibilidade:
 
 ## 9. Segurança e autorização
 
-- A confirmação, criação, consulta, retry e eventual cancelamento exigem sessão autenticada.
+- A criação (`Analisar produto`), consulta, retry e eventual cancelamento exigem sessão autenticada.
 - O Product, Job, Strategy, Plan, Contents, BriefVersions, runs e Entitlements são carregados por escopo do Tenant resolvido server-side.
 - O cliente não escolhe `tenantId`, `userId`, plano, período, limite, provider, tier, Strategy ativa ou versão de Skill.
 - A regra de um job ativo é enforced server-side e protegida contra corrida entre requests.
@@ -434,7 +481,7 @@ Requisitos de responsividade e acessibilidade:
 ## Acceptance Criteria
 **Acceptance Criteria**
 
-1. **WHEN** um Product confirmado com `targetContentCount` válida for confirmado no fluxo de entrada, **o sistema SHALL** persistir o Product, reservar capacidade e criar atomicamente um `CommerceIntelligenceJob` `QUEUED`.
+1. **WHEN** a ação explícita `Analisar produto` for acionada sobre um Product salvo com `targetContentCount` válida, **o sistema SHALL** validar o Product, reservar capacidade e criar atomicamente um `CommerceIntelligenceJob` `QUEUED`.
 2. **IF** o Product não tiver `targetContentCount` inteira entre `1` e `30`, **o sistema SHALL** rejeitar a operação sem criar job ou reserva.
 3. **IF** o Entitlement não tiver capacidade mensal para a quantidade solicitada, **o sistema SHALL** rejeitar a operação sem criar job ou consumo confirmado.
 4. **WHEN** uma reserva de conteúdo for criada, **o sistema SHALL** registrar o mês UTC de sua criação para confirmar ou liberar a reserva nesse mesmo período de origem.
@@ -489,9 +536,9 @@ Requisitos de responsividade e acessibilidade:
 55. **WHEN** um `BriefValidationReport` for persistido, **o sistema SHALL** identificar `briefId` pelo par estável `contentId + briefVersionId`.
 ## Edge Cases
 
-- Confirmação duplicada por duplo clique ou timeout deve reutilizar o mesmo job lógico; `Tentar novamente` após estado terminal deve criar novo job.
+- `Analisar produto` duplicado por duplo clique ou timeout deve reutilizar o mesmo job lógico; `Tentar novamente` após estado terminal deve criar novo job.
 - Reconnect, reentrada e worker que perde lease devem reutilizar `job.id`, chave e reserva; reclaim aplica tentativa, backoff e limite sem duplicar resultado.
-- Duas requests concorrentes de confirmação do mesmo usuário devem permitir no máximo um job ativo.
+- Duas requests concorrentes de `Analisar produto` do mesmo usuário devem permitir no máximo um job ativo.
 - Product novo no limite de `active_products` deve falhar antes de persistir Product, reserva ou job; Product já ativo não deve consumir novamente essa unidade.
 - Provider pode devolver JSON parseável, mas semanticamente inválido; schema válido isoladamente não equivale a sucesso.
 - Product sem evidência para um claim deve remover/corrigir o claim ou falhar; não deve completar a quantidade com promessa inventada.
@@ -514,7 +561,7 @@ Requisitos de responsividade e acessibilidade:
 
 | Requirement ID | Fonte/tema | Seção desta SPEC | Status |
 | --- | --- | --- | --- |
-| S003-01 | Confirmação cria Product + job + reserva | B-003-01; RI-003-01; AC 1 | Pending |
+| S003-01 | `Analisar produto` sobre Product salvo cria job + reserva | B-003-01; RI-003-01; AC 1 | Pending |
 | S003-02 | Quantidade resolvida e limitada | B-003-01; RI-003-04; AC 2 | Pending |
 | S003-03 | Entitlement, active_products e mês UTC | B-003-01; B-003-02; RI-003-05; AC 3–6 | Pending |
 | S003-04 | Um job ativo por usuário | B-003-02; RI-003-03; AC 7–8 | Pending |
@@ -549,7 +596,7 @@ Requisitos de responsividade e acessibilidade:
 
 ## Success Criteria
 
-- [ ] Um Product confirmado inicia uma única geração durável sem confirmação intermediária.
+- [ ] Um Product salvo inicia, via ação explícita `Analisar produto`, uma única geração durável sem etapa intermediária.
 - [ ] Um job bem-sucedido entrega Strategy, Plan e a quantidade solicitada de Contents/Briefings em `DRAFT` (completa em `SUCCEEDED`; somente aprovados com `Gerar faltantes` em `SUCCEEDED_PARTIAL` — ADR-021).
 - [ ] Strategy e Plan ficam consultáveis no contexto do Product sem bloquear a chegada aos Briefings.
 - [ ] Um job falho preserva Product/fatos, não expõe conteúdo parcial e oferece `Tentar novamente` como novo job, mantendo o terminal anterior.
@@ -567,7 +614,7 @@ Requisitos de responsividade e acessibilidade:
 
 ## 11. Decisões registradas
 
-- O Slice 003 começa na confirmação do Product e não transforma o salvamento manual isolado do Slice 002 em geração automática.
+- O Slice 003 começa na ação explícita `Analisar produto` sobre o Product salvo e não transforma o salvamento manual isolado do Slice 002 em geração automática.
 - `targetContentCount` deve estar resolvida antes da criação do Job, usando o valor validado e persistido no Product.
 - Para Product novo, `active_products`, reserva mensal e criação do Job são uma operação atômica; Product já ativo e retries não reservam novamente Products ativos.
 - O job é durável, assíncrono, enfileirado no PostgreSQL e executado por worker com lease/timeout, deadline por tentativa, heartbeat, reclaim, tentativa, backoff e limite antes de falhar.

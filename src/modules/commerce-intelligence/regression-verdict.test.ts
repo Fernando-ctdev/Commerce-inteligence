@@ -174,3 +174,23 @@ test("platformSkillVersion registrada no registry continua válida; desconhecida
   const unknown = validateBriefSet([brief("p2")], evidence, "tiktok-commerce", "tiktok-commerce@9.9")[0];
   assert.equal(unknown.platformStatus, "FAIL");
 });
+
+// Gate 7 — causas determinísticas do gateSceneSet alimentam o retry guiado
+// (observabilidade e gateFeedback) sem expor conteúdo.
+test("gateSceneSet: causas agregadas por motivo de descarte", () => {
+  const evidence = { facts: ["Fone Space S1 com drivers de 40 mm"], refs: ["fact:features"] };
+  const briefFields = {
+    angle: "a", hook: "h",
+    development: ["Mostre o fone para explicar o uso do fone"],
+    script: "Fale sobre o fone.", cta: "c",
+  };
+  const result = gateSceneSet([
+    { description: "Paisagem da cidade ao amanhecer sem o produto." },
+    { description: "Animação de ondas sonoras em volta do fone." },
+    { description: "Mostre o fone de perto com o próprio celular." },
+    { description: "Pegue o fone e aproxime para mostrar os drivers." },
+  ], briefFields, evidence, {});
+  assert.equal(result.kept.length, 2);
+  assert.equal(result.dropped, 2);
+  assert.ok(result.causes.some((cause) => /^(acao_ausente|ancora_ausente|claim_nao_autorizado|producao_nao_declarada):\d$/.test(cause)), `causes determinísticas presentes: ${result.causes.join(", ")}`);
+});

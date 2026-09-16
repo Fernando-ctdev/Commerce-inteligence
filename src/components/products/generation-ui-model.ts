@@ -73,14 +73,25 @@ export function missingReasonLabel(reasonCode: string): string {
   return map[reasonCode] ?? "não convergiu nos critérios de qualidade";
 }
 
+/**
+ * RI-003-20: terminal positivo não projetável (code GEN-PROJECTION) é ANOMALIA
+ * de dados persistida — nem sucesso (nada para revisar) nem falha de execução
+ * (retry responderia 404). Modelo explícito das ações: sem "Tentar novamente",
+ * sem revisão de conteúdos; /complete só no parcial degradado.
+ */
+export function projectionDegradedModel(job: { code?: string | null; status: string } | null): { degraded: boolean; retry: false; reviewContents: false; generateMissing: boolean } {
+  const degraded = !!job && job.code === "GEN-PROJECTION" && (job.status === "SUCCEEDED" || job.status === "SUCCEEDED_PARTIAL");
+  return { degraded, retry: false, reviewContents: false, generateMissing: degraded && job!.status === "SUCCEEDED_PARTIAL" };
+}
+
 /** Leitura da entrega parcial (ADR-021): null fora de SUCCEEDED_PARTIAL. */
 export type PartialDelivery = { delivered: number; expected: number; missing: Array<{ position: number | null; reason: string }> };
-export function partialModel(job: { status: string; targetContentCount: number; deliveredCount: number | null; contents: Array<unknown>; missing: Array<{ position: number | null; reasonCode: string }> } | null): PartialDelivery | null {
+export function partialModel(job: { status: string; targetContentCount: number; expectedCount?: number | null; deliveredCount: number | null; contents: Array<unknown>; missing: Array<{ position: number | null; reasonCode: string }> } | null): PartialDelivery | null {
   if (!job || job.status !== "SUCCEEDED_PARTIAL") return null;
   const delivered = job.deliveredCount ?? job.contents.length;
   return {
     delivered,
-    expected: job.targetContentCount,
+    expected: job.expectedCount ?? job.targetContentCount,
     missing: job.missing.map((item) => ({ position: item.position, reason: missingReasonLabel(item.reasonCode) })),
   };
 }

@@ -30,7 +30,7 @@ O fluxo permanece reconhecível como `Product → CommerceIntelligenceJob → Pr
 
 ### 4. Casos de uso orquestram ações
 
-Application Services/Use Cases são o ponto de entrada para ações como iniciar importação, confirmar `ProductCandidate`, criar `Product` + `CommerceIntelligenceJob`, consultar status do job, aprovar briefing, criar lote, concluir conteúdo e reservar uso. Eles resolvem tenant, autorização, quota, snapshots, transações e chamadas entre módulos. Não existe camada de serviço universal que apenas repasse métodos.
+Application Services/Use Cases são o ponto de entrada para ações como cadastrar `Product` (cadastro manual vigente), `Analisar produto` (criar `CommerceIntelligenceJob` + reserva), consultar status do job, aprovar briefing, criar lote, concluir conteúdo e reservar uso. Iniciar importação e confirmar `ProductCandidate` são ações da direção futura de importação (ADR-022), sem caso de uso vigente. Eles resolvem tenant, autorização, quota, snapshots, transações e chamadas entre módulos. Não existe camada de serviço universal que apenas repasse métodos.
 
 ### 5. Interfaces somente em fronteiras reais
 

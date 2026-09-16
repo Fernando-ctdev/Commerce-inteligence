@@ -2,7 +2,7 @@ export type CommerceJobStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "SUCCEEDED_
 export type CommerceJobStage = "UNDERSTANDING_PRODUCT" | "MAPPING_COMMERCIAL_OPPORTUNITIES" | "BUILDING_STRATEGY" | "BUILDING_CONTENT_PLAN" | "GENERATING_BRIEFS" | "FINALIZING";
 /** Motivo sanitizado por item faltante (ADR-021): reason code server-side, sem detalhes internos. */
 export type MissingItemReason = { position: number | null; reasonCode: string };
-export type GenerationRecord = { id: string; productId: string; status: CommerceJobStatus; stage: CommerceJobStage | null; targetContentCount: number; error: string | null; strategy: Record<string, unknown> | null; plan: Record<string, unknown> | null; contents: Array<Record<string, unknown>>; readiness: "PENDING" | "ANALYZING" | "READY" | "FAILED"; previousRunId?: string | null; createdAt: string | null; startedAt: string | null; finishedAt: string | null; deliveredCount: number | null; failedCount: number | null; missing: MissingItemReason[]; };
+export type GenerationRecord = { id: string; productId: string; status: CommerceJobStatus; stage: CommerceJobStage | null; targetContentCount: number; error: string | null; code: string | null; strategy: Record<string, unknown> | null; plan: Record<string, unknown> | null; contents: Array<Record<string, unknown>>; readiness: "PENDING" | "ANALYZING" | "READY" | "FAILED"; previousRunId?: string | null; createdAt: string | null; startedAt: string | null; finishedAt: string | null; expectedCount: number | null; deliveredCount: number | null; failedCount: number | null; missing: MissingItemReason[]; };
 export class GenerationApiError extends Error { constructor(readonly status: number, message: string, readonly code?: string) { super(message); this.name = "GenerationApiError"; } }
 const validStages: Record<CommerceJobStage, true> = { UNDERSTANDING_PRODUCT: true, MAPPING_COMMERCIAL_OPPORTUNITIES: true, BUILDING_STRATEGY: true, BUILDING_CONTENT_PLAN: true, GENERATING_BRIEFS: true, FINALIZING: true };
 function object(value: unknown) { return typeof value === "object" && value !== null ? value as Record<string, unknown> : null; }
@@ -19,15 +19,21 @@ export function normalizeGeneration(value: unknown): GenerationRecord {
   if (!(status in { QUEUED: 1, RUNNING: 1, SUCCEEDED: 1, SUCCEEDED_PARTIAL: 1, FAILED: 1, CANCELLED: 1 })) invalid("Resposta da análise inválida.");
   const stage = typeof record.stage === "string" && record.stage in validStages ? record.stage as CommerceJobStage : null;
   const contents = Array.isArray(record.contents)
-    ? record.contents.filter((item): item is Record<string, unknown> => !!object(item)).map((item) => Object.fromEntries(Object.entries(item).filter(([key]) => key !== "scenes")))
+    ? record.contents.filter((item): item is Record<string, unknown> => !!object(item))
     : [];
   const partial = status === "SUCCEEDED_PARTIAL";
+  const expectedCount = typeof record.expectedCount === "number" && Number.isInteger(record.expectedCount) ? record.expectedCount : null;
   const deliveredCount = typeof record.deliveredCount === "number" && Number.isInteger(record.deliveredCount) ? record.deliveredCount : null;
   const failedCount = typeof record.failedCount === "number" && Number.isInteger(record.failedCount) ? record.failedCount : null;
   if (status === "SUCCEEDED" || partial) {
+    // RI-003-20: envelope degradado GEN-PROJECTION — terminal positivo não
+    // projetável chega com strategy/plan {} e contents parcial/vazio, readiness
+    // FAILED e status persistido preservado; é consumível, não GEN-SCHEMA.
+    const degraded = record.code === "GEN-PROJECTION";
     const expectedPublished = partial ? deliveredCount : count;
-    if (!object(record.strategy) || !object(record.plan) || expectedPublished === null || contents.length !== expectedPublished) invalid("O resultado da análise está incompleto.", "GEN-SCHEMA");
-    for (const content of contents) {
+    if (partial && (expectedCount === null || expectedCount !== count || deliveredCount === null || failedCount === null || deliveredCount < 1 || failedCount < 1 || deliveredCount + failedCount !== expectedCount)) invalid("O resultado parcial da análise está incompleto.");
+    if (!degraded && (!object(record.strategy) || !object(record.plan) || expectedPublished === null || contents.length !== expectedPublished)) invalid("O resultado da análise está incompleto.", "GEN-SCHEMA");
+    if (!degraded) for (const content of contents) {
       if (![ "angle", "hook", "script", "cta" ].every((field) => typeof content[field] === "string" && String(content[field]).trim()) || !Array.isArray(content.development) || content.development.length < 1 || content.development.length > 4 || content.development.some((point) => typeof point !== "string" || !point.trim())) invalid("O resultado da análise está incompleto.", "GEN-SCHEMA");
     }
   }
@@ -44,6 +50,7 @@ export function normalizeGeneration(value: unknown): GenerationRecord {
     stage,
     targetContentCount: count,
     error: sanitize(record.error ?? record.publicError),
+    code: typeof record.code === "string" ? record.code : null,
     strategy: object(record.strategy),
     plan: object(record.plan),
     contents,
@@ -54,6 +61,7 @@ export function normalizeGeneration(value: unknown): GenerationRecord {
     createdAt: typeof record.createdAt === "string" ? record.createdAt : null,
     startedAt: typeof record.startedAt === "string" ? record.startedAt : null,
     finishedAt: typeof record.finishedAt === "string" ? record.finishedAt : null,
+    expectedCount,
     deliveredCount,
     failedCount,
     missing,

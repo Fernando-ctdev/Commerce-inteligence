@@ -58,3 +58,28 @@ test("normalized, hook, CTA, and structural duplicates are repaired", () => {
   assert.ok(reports[1].issues.includes("CTA repetido"));
   assert.ok(reports[1].issues.includes("duplicata estrutural"));
 });
+
+// Gate 7 — repro do incidente e6499288 (GEN-REPAIR-EXHAUSTED, 9x factual_issue
+// no brief-1): a instrução de CONTENT_BRIEF_REPAIR proíbe apenas "sempre, nunca,
+// jamais" (provider.ts), mas o gate reprova o predicado completo
+// UNSUPPORTED_ABSOLUTE_CLAIMS — "qualquer", "perfeit[oa]s?", "sem falha", "sem
+// defeito" (gates.ts). Um repair OBEDIENTE à instrução não converge: remove
+// "nunca", mantém "perfeita"/"qualquer" e o gate mantém UNSUPPORTED até esgotar
+// os rounds. Fixture documenta o gap prompt↔gate para o alinhamento mínimo.
+test("regressão e6499288: absoluto fora da lista da instrução de repair mantém UNSUPPORTED", () => {
+  const evidence = { facts: ["Calça Pantalona Duna", "Gênero: Feminino; Modelo: Calça Pantalona; Fechamento: cintura elástica com cordão"], refs: ["product:name", "fact:features"] };
+  const development = ["Destaque a cintura elástica com cordão para conectar o cordão ao ajuste na cintura"];
+  const reportFor = (script: string) => validateBriefSet([{ contentId: "j-content-1", briefVersionId: "j-brief-1", version: 1 as const, angle: "demonstração", hook: "hook", development, script, cta: "cta" }], evidence)[0];
+  const original = reportFor("A pantalona nunca aperta e é perfeita.");
+  assert.equal(original.factualStatus, "UNSUPPORTED");
+  assert.deepEqual(original.issues, ["claim absoluto sem evidência autorizada"]);
+  // Repair obedecendo à instrução vigente (remove sempre/nunca/jamais): o gate
+  // segue UNSUPPORTED — o loop do repair não converge por causa do prompt.
+  const afterLiteralRepair = reportFor("A pantalona é perfeita.");
+  assert.equal(afterLiteralRepair.factualStatus, "UNSUPPORTED");
+  const afterAnyRepair = reportFor("A pantalona serve para qualquer ocasião.");
+  assert.equal(afterAnyRepair.factualStatus, "UNSUPPORTED");
+  // Repair que remove o predicado completo converge.
+  const converged = reportFor("A pantalona tem cintura elástica com cordão.");
+  assert.equal(converged.decision, "PASS");
+});

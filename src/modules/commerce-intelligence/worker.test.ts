@@ -1,9 +1,42 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { attemptDeadlineMsFor, briefPayloadForPersistence, callBudget, fallbackCallBudget, fenceMatches, heartbeatAction, internalFailureMetadata, mergeMemorySignals, projectFailureDiagnostics, runMetadata, sceneBackfillLimitFor, sceneCallBudget, semanticQualityCallBudget } from "./worker";
+import { attemptDeadlineMsFor, briefPayloadForPersistence, callBudget, fallbackCallBudget, fenceMatches, heartbeatAction, internalFailureMetadata, mergeMemorySignals, projectEngineFacts, projectFailureDiagnostics, runMetadata, sceneBackfillLimitFor, sceneCallBudget, semanticQualityCallBudget } from "./worker";
 import { ENGINE_VERSION } from "./engine";
 import { GATE_POLICY_VERSION } from "./gates";
 import { collectJobEvents, emitJobEvent, resetJobEvents } from "./observability";
+
+// Gate 5 (item 3): o worker projeta o desconto SOMENTE do tipado, na chave
+// "discount" — a mesma chave que a engine lê na projeção do mappingContext.
+test("engineFacts projeta o desconto do tipado, sem fallback de discountPercentage", () => {
+  const base = {
+    id: "p1",
+    name: "Produto",
+    description: "D",
+    category: "C",
+    brand: null,
+    priceAmount: null,
+    priceCurrency: "R$",
+    discountType: null,
+    discountValue: null,
+    discountPercentage: null,
+    features: ["x"],
+    variants: null,
+    images: [],
+    seller: null,
+    sourceUrl: null,
+  };
+  // PERCENTAGE → string percentual na chave "discount".
+  assert.equal(projectEngineFacts({ ...base, discountType: "PERCENTAGE", discountValue: "15.5" }).discount, "15.5% de desconto");
+  // FIXED → valor na moeda do produto.
+  assert.equal(projectEngineFacts({ ...base, discountType: "FIXED", discountValue: "10.00", priceCurrency: "R$" }).discount, "R$ 10.00 de desconto");
+  // Sem desconto → undefined: valor nunca inventado.
+  assert.equal(projectEngineFacts(base).discount, undefined);
+  // Resquício legado sem tipado → undefined (contrato exclusivamente tipado).
+  assert.equal(projectEngineFacts({ ...base, discountPercentage: { toString: () => "25.5" } } as never).discount, undefined);
+  // A chave projetada é a mesma lida pela engine no mappingContext.
+  const facts = projectEngineFacts({ ...base, discountType: "PERCENTAGE", discountValue: "15.5" });
+  assert.deepEqual(Object.keys(facts).sort(), ["brand", "category", "description", "discount", "features", "images", "name", "priceAmount", "priceCurrency", "productId", "seller", "sourceUrl", "variants"]);
+});
 
 // Review: IntelligenceRun.metadata registra gateVersion junto do engineVersion.
 test("run metadata carries engineVersion and gateVersion snapshots", () => {

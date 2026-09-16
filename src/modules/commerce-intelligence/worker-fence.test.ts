@@ -1,0 +1,376 @@
+// Gate 6 (itens 1–2): finalização — fence owner+attempt e atomicidade da transação
+// de publicação; lease vencido — ciclo claim→reclaim com incremento único no
+// reclaim, backoff e terminal GEN-LEASE-EXPIRED.
+// A janela entre o CAS inicial e o commit terminal é protegida pelo row lock da
+// própria transação (nenhum reclaim consegue mudar a linha do job no meio); o
+// que é reproduzível — e coberto aqui — é o fencing perdido até a finalização
+// (GEN-FENCED reverte tudo), a falha no meio das escritas (atomicidade: nada é
+// publicado parcialmente) e o ciclo completo de reclaim.
+// Integração exige PostgreSQL em DATABASE_URL; faz skip automático caso contrário.
+// Executar: npx tsx --test src/modules/commerce-intelligence/worker-fence.test.ts
+import assert from "node:assert/strict";
+import test from "node:test";
+import { randomUUID } from "node:crypto";
+import { PrismaClient } from "@prisma/client";
+
+import { claimGeneration, failJobAndReleaseReservation, finalizeGeneration, reclaimExpiredGenerations } from "./worker.js";
+import type { EngineResult } from "./engine.js";
+import { monthUtc } from "../entitlements/generation.js";
+import { collectJobEvents, resetJobEvents } from "./observability.js";
+
+const prisma = new PrismaClient();
+let dbUp = false;
+
+test.after(() => prisma.$disconnect());
+
+test("setup: banco acessível (skip dos testes de integração caso contrário)", async (t) => {
+  try {
+    await prisma.$queryRaw`select 1`;
+    dbUp = true;
+  } catch {
+    t.skip("DATABASE_URL inacessível — testes de integração pulados");
+  }
+});
+
+// Output de engine mínimo (sem briefs/cenas): suficiente para exercitar a
+// transação de finalização ponta a ponta.
+function syntheticOutput(strategyId = `strat-${randomUUID()}`): EngineResult {
+  return {
+    productUnderstanding: { fonte: "teste-fence" },
+    strategy: { id: strategyId, platformId: "tiktok", platformSkillVersion: "test" },
+    plan: { id: `plan-${randomUUID()}`, platformId: "tiktok", platformSkillVersion: "test" },
+    opportunities: [],
+    briefs: [],
+    reports: [],
+    patternReplacements: [],
+    understandingReductions: [],
+    sceneSets: [],
+    memorySignals: { generatedCount: 0 },
+    stage: "FINALIZING",
+    capabilities: [],
+    repairs: 0,
+    repairCauses: [],
+    qualityAudits: [],
+    qualityRepairs: [],
+    validated: 0,
+    briefOpportunityPositions: [],
+    partial: null,
+  };
+}
+
+// Fixtures: user/tenant/product + job QUEUED (attempt 0 = nenhuma tentativa
+// terminada) + reserva RESERVED. O claim é feito com claimGeneration real,
+// dirigido ao job do teste pelo parâmetro opcional jobId.
+async function criarJobQueued() {
+  const email = `fence-${randomUUID()}@teste.local`;
+  const user = await prisma.user.create({ data: { email, passwordHash: "teste" } });
+  const tenant = await prisma.tenant.create({ data: { userId: user.id } });
+  const product = await prisma.product.create({
+    data: { tenantId: tenant.id, name: "Produto fence", features: [], images: [], provenance: {}, targetContentCount: 1 },
+  });
+  const job = await prisma.commerceIntelligenceJob.create({
+    data: {
+      tenantId: tenant.id,
+      userId: user.id,
+      productId: product.id,
+      idempotencyKey: randomUUID(),
+      fingerprint: randomUUID(),
+      targetContentCount: 1,
+      generatedContentsMonth: monthUtc(),
+      status: "QUEUED",
+      stage: "UNDERSTANDING_PRODUCT",
+    },
+  });
+  await prisma.generationUsageReservation.create({
+    data: { tenantId: tenant.id, jobId: job.id, generatedContentsMonth: monthUtc(), quantity: 1 },
+  });
+  const limpar = async () => {
+    await prisma.generationUsageReservation.deleteMany({ where: { jobId: job.id } });
+    await prisma.briefValidationReport.deleteMany({ where: { jobId: job.id } });
+    await prisma.contentBriefVersion.deleteMany({ where: { jobId: job.id } });
+    await prisma.contentSceneSet.deleteMany({ where: { jobId: job.id } });
+    await prisma.content.deleteMany({ where: { jobId: job.id } });
+    await prisma.contentOpportunity.deleteMany({ where: { jobId: job.id } });
+    await prisma.contentPlan.deleteMany({ where: { jobId: job.id } });
+    await prisma.productStrategy.deleteMany({ where: { jobId: job.id } });
+    await prisma.productUnderstanding.deleteMany({ where: { jobId: job.id } });
+    await prisma.intelligenceRun.deleteMany({ where: { jobId: job.id } });
+    await prisma.productMemorySnapshot.deleteMany({ where: { tenantId: tenant.id, productId: product.id } });
+    await prisma.commerceIntelligenceJob.delete({ where: { id: job.id } });
+    await prisma.product.delete({ where: { id: product.id } });
+    await prisma.tenant.delete({ where: { id: tenant.id } });
+    await prisma.user.delete({ where: { id: user.id } });
+  };
+  return { job, limpar };
+}
+
+async function estadoPublicacao(jobId: string, tenantId: string) {
+  const [job, reservation] = await Promise.all([
+    prisma.commerceIntelligenceJob.findUniqueOrThrow({ where: { id: jobId } }),
+    prisma.generationUsageReservation.findFirstOrThrow({ where: { jobId } }),
+  ]);
+  const publicados = {
+    strategies: await prisma.productStrategy.count({ where: { jobId } }),
+    plans: await prisma.contentPlan.count({ where: { jobId } }),
+    understandings: await prisma.productUnderstanding.count({ where: { jobId } }),
+    runs: await prisma.intelligenceRun.count({ where: { jobId } }),
+    snapshots: await prisma.productMemorySnapshot.count({ where: { tenantId } }),
+    contents: await prisma.content.count({ where: { jobId } }),
+  };
+  return { job, reservation, publicados };
+}
+
+// Vence o lease da execução corrente (simula worker morto/sem heartbeat).
+const vencerLease = (jobId: string) =>
+  prisma.commerceIntelligenceJob.update({
+    where: { id: jobId },
+    data: { leaseDeadlineAt: new Date(Date.now() - 1_000) },
+  });
+
+test("fencing perdido até a finalização reverte tudo: GEN-FENCED, nada publicado, reserva intocada", async (t) => {
+  if (!dbUp) return t.skip();
+  const { job, limpar } = await criarJobQueued();
+  try {
+    const claimed = await claimGeneration(new Date(), "fence-owner-a", job.id);
+    assert.ok(claimed);
+    assert.equal(claimed.attempt, 0, "claim executa a tentativa corrente sem incrementar");
+
+    // Reclaim + novo claim concorrentes: owner/attempt da finalização não batem mais.
+    await prisma.commerceIntelligenceJob.update({
+      where: { id: job.id },
+      data: { leaseOwnerId: "fence-owner-b", attempt: { increment: 1 } },
+    });
+
+    await assert.rejects(
+      () => finalizeGeneration(job, "fence-owner-a", 0, syntheticOutput(), [], {}),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /fence|owner\/attempt/i);
+        return true;
+      },
+    );
+
+    const { job: atual, reservation, publicados } = await estadoPublicacao(job.id, job.tenantId);
+    assert.equal(atual.status, "RUNNING", "job não ganha estado terminal do owner antigo");
+    assert.equal(atual.leaseOwnerId, "fence-owner-b");
+    assert.equal(reservation.status, "RESERVED", "capacidade não é confirmada nem liberada");
+    assert.deepEqual(publicados, { strategies: 0, plans: 0, understandings: 0, runs: 0, snapshots: 0, contents: 0 });
+  } finally {
+    await limpar();
+  }
+});
+
+test("fence válido publica tudo na mesma transação: terminal, reserva CONFIRMED, resultado completo", async (t) => {
+  if (!dbUp) return t.skip();
+  const { job, limpar } = await criarJobQueued();
+  try {
+    const claimed = await claimGeneration(new Date(), "fence-owner-a", job.id);
+    assert.ok(claimed);
+
+    await finalizeGeneration(job, "fence-owner-a", claimed.attempt, syntheticOutput(), [], {});
+
+    const { job: atual, reservation, publicados } = await estadoPublicacao(job.id, job.tenantId);
+    assert.equal(atual.status, "SUCCEEDED");
+    assert.equal(atual.leaseOwnerId, null);
+    assert.ok(atual.finishedAt);
+    assert.equal(reservation.status, "CONFIRMED");
+    assert.deepEqual(publicados, { strategies: 1, plans: 1, understandings: 1, runs: 1, snapshots: 1, contents: 0 });
+  } finally {
+    await limpar();
+  }
+});
+
+test("falha no meio das escritas reverte a transação inteira: atomicidade da publicação", async (t) => {
+  if (!dbUp) return t.skip();
+  const { job, limpar } = await criarJobQueued();
+  try {
+    const claimed = await claimGeneration(new Date(), "fence-owner-a", job.id);
+    assert.ok(claimed);
+    // Strategy com id já existente: a escrita falha no meio da transação e o
+    // rollback reverte tudo que veio antes/depois dentro dela.
+    const output = syntheticOutput();
+    await prisma.productStrategy.create({
+      data: {
+        id: String(output.strategy.id),
+        tenantId: job.tenantId,
+        productId: job.productId,
+        jobId: job.id,
+        platformId: "tiktok",
+        platformSkillVersion: "test",
+        payload: {},
+      },
+    });
+
+    await assert.rejects(() => finalizeGeneration(job, "fence-owner-a", claimed.attempt, output, [], {}));
+
+    const { job: atual, reservation, publicados } = await estadoPublicacao(job.id, job.tenantId);
+    assert.equal(atual.status, "RUNNING", "falha no meio não publica estado terminal");
+    assert.equal(reservation.status, "RESERVED");
+    assert.equal(publicados.understandings, 0, "nenhuma escrita parcial visível");
+    assert.equal(publicados.runs, 0);
+    assert.equal(publicados.plans, 0);
+    assert.equal(publicados.strategies, 1, "só a linha pré-existente criada fora da transação");
+  } finally {
+    await limpar();
+  }
+});
+
+// Gate 6 (item 2): ciclo completo com incremento ÚNICO no reclaim (B-003-03).
+// claim não incrementa; cada reclaim contabiliza a tentativa perdida; o limite
+// (GENERATION_MAX_ATTEMPTS=2) permite exatamente 2 execuções e terminaliza.
+test("ciclo claim→reclaim→claim→reclaim: 2 execuções, attempt por estado, backoff, terminal e reserva", async (t) => {
+  if (!dbUp) return t.skip();
+  const { job, limpar } = await criarJobQueued();
+  try {
+    const estadoInicial = await prisma.commerceIntelligenceJob.findUniqueOrThrow({ where: { id: job.id } });
+    assert.equal(estadoInicial.attempt, 0, "job novo nasce com nenhuma tentativa terminada");
+
+    // Execução 1 (tentativa corrente 0): claim não incrementa.
+    const claim1 = await claimGeneration(new Date(), "ciclo-owner-a", job.id);
+    assert.ok(claim1);
+    assert.equal(claim1.attempt, 0);
+    let estado = await prisma.commerceIntelligenceJob.findUniqueOrThrow({ where: { id: job.id } });
+    assert.equal(estado.status, "RUNNING");
+    assert.equal(estado.attempt, 0);
+    assert.ok(estado.leaseOwnerId);
+    assert.ok(estado.leaseDeadlineAt);
+
+    // Tentativa 1 perdida: reclaim contabiliza (0→1) e aplica backoff.
+    await vencerLease(job.id);
+    const antesReclaim1 = new Date();
+    await reclaimExpiredGenerations(antesReclaim1);
+    estado = await prisma.commerceIntelligenceJob.findUniqueOrThrow({ where: { id: job.id } });
+    assert.equal(estado.status, "QUEUED");
+    assert.equal(estado.attempt, 1, "reclaim incrementa a tentativa perdida");
+    assert.equal(estado.leaseOwnerId, null);
+    assert.equal(estado.leaseDeadlineAt, null);
+    assert.ok(estado.nextAttemptAt > antesReclaim1, "backoff impede re-claim imediato");
+    assert.ok(!estado.internalErrorCode, "sem código de erro em rotação");
+    let reservation = await prisma.generationUsageReservation.findFirstOrThrow({ where: { jobId: job.id } });
+    assert.equal(reservation.status, "RESERVED", "job não terminal não mexe na capacidade");
+
+    // Execução 2 (tentativa corrente 1, última permitida com cap=2).
+    const depoisDoBackoff = new Date(estado.nextAttemptAt.getTime() + 1_000);
+    const claim2 = await claimGeneration(depoisDoBackoff, "ciclo-owner-b", job.id);
+    assert.ok(claim2);
+    assert.equal(claim2.attempt, 1);
+    estado = await prisma.commerceIntelligenceJob.findUniqueOrThrow({ where: { id: job.id } });
+    assert.equal(estado.status, "RUNNING");
+    assert.equal(estado.attempt, 1);
+
+    // Tentativa 2 perdida: esgotou o limite → terminal contabiliza (1→2).
+    await vencerLease(job.id);
+    await reclaimExpiredGenerations(new Date());
+    const { job: final, reservation: finalReserva, publicados } = await estadoPublicacao(job.id, job.tenantId);
+    assert.equal(final.status, "FAILED");
+    assert.equal(final.attempt, 2, "terminal registra as 2 tentativas executadas");
+    assert.equal(final.internalErrorCode, "GEN-LEASE-EXPIRED");
+    assert.equal(final.publicErrorMessage, "Não foi possível concluir a análise. Tente novamente.");
+    assert.ok(final.finishedAt);
+    assert.equal(final.leaseOwnerId, null);
+    assert.equal(finalReserva.status, "RELEASED");
+    assert.equal(finalReserva.reason, "GEN-LEASE-EXPIRED", "reason da reserva alinhada ao código da SPEC");
+    assert.deepEqual(publicados, { strategies: 0, plans: 0, understandings: 0, runs: 1, snapshots: 0, contents: 0 });
+  } finally {
+    await limpar();
+  }
+});
+
+// Gate 6 (item 3, rev. 3): falha com fence perdido não emite job.terminal — o
+// evento anunciaria reservationAction RELEASED sem nenhuma persistência.
+test("failJob com CAS perdido: retorna false, nada persiste e NENHUM evento terminal; CAS válido terminaliza com evento", async (t) => {
+  if (!dbUp) return t.skip();
+  const { job, limpar } = await criarJobQueued();
+  try {
+    const claimed = await claimGeneration(new Date(), "fail-owner-a", job.id);
+    assert.ok(claimed);
+
+    resetJobEvents();
+    // Owner errado: CAS {RUNNING, owner-b, attempt} não bate nada.
+    const perdido = await failJobAndReleaseReservation(job.id, "GEN-PROVIDER", "fail-owner-b", claimed.attempt);
+    assert.equal(perdido, false, "CAS perdido não terminaliza");
+    let estado = await prisma.commerceIntelligenceJob.findUniqueOrThrow({ where: { id: job.id } });
+    assert.equal(estado.status, "RUNNING", "job permanece com quem detém o fence");
+    assert.equal(estado.leaseOwnerId, "fail-owner-a");
+    const reservaIntacta = await prisma.generationUsageReservation.findFirstOrThrow({ where: { jobId: job.id } });
+    assert.equal(reservaIntacta.status, "RESERVED", "reserva não é liberada sem terminalização");
+    assert.equal(
+      collectJobEvents().filter((evento) => evento.includes("job.terminal")).length,
+      0,
+      "nenhum job.terminal quando o CAS não persiste",
+    );
+
+    // Owner correto: terminaliza e o evento acompanha a persistência real.
+    const terminalizado = await failJobAndReleaseReservation(job.id, "GEN-PROVIDER", "fail-owner-a", claimed.attempt);
+    assert.equal(terminalizado, true);
+    estado = await prisma.commerceIntelligenceJob.findUniqueOrThrow({ where: { id: job.id } });
+    assert.equal(estado.status, "FAILED");
+    const reservaLiberada = await prisma.generationUsageReservation.findFirstOrThrow({ where: { jobId: job.id } });
+    assert.equal(reservaLiberada.status, "RELEASED");
+    const terminais = collectJobEvents().filter((evento) => evento.includes("job.terminal"));
+    assert.equal(terminais.length, 1, "exatamente um evento terminal, agora com persistência real");
+    const evento = JSON.parse(terminais[0]) as Record<string, unknown>;
+    assert.equal(evento.reservationAction, "RELEASED");
+  } finally {
+    resetJobEvents();
+    await limpar();
+  }
+});
+
+// Gate 6 (item 6): expiração visível nos logs JSONL — rotação emite job.reclaimed
+// e esgotamento emite job.terminal, ambos condicionados ao CAS do reclaim
+// (reclaim sem job expirado não emite nada).
+test("reclaim emite job.reclaimed na rotação e job.terminal no esgotamento; sem expirado não emite", async (t) => {
+  if (!dbUp) return t.skip();
+  const { job, limpar } = await criarJobQueued();
+  try {
+    const claim1 = await claimGeneration(new Date(), "recl-owner-a", job.id);
+    assert.ok(claim1);
+
+    // Rotação da tentativa 0: um job.reclaimed com attempt pós-incremento.
+    resetJobEvents();
+    await vencerLease(job.id);
+    await reclaimExpiredGenerations(new Date());
+    let eventos = collectJobEvents();
+    assert.equal(eventos.length, 1, "exatamente um evento na rotação");
+    const rotacao = JSON.parse(eventos[0]) as Record<string, unknown>;
+    assert.equal(rotacao.event, "job.reclaimed");
+    assert.equal(rotacao.jobId, job.id);
+    assert.equal(rotacao.attempt, 1);
+    assert.equal(rotacao.errorCode, "GEN-LEASE-EXPIRED");
+
+    // Reclaim sem nenhum job expirado (job agora QUEUED): nada é emitido.
+    await reclaimExpiredGenerations(new Date());
+    assert.equal(collectJobEvents().length, 1, "reclaim sem expirado não emite");
+
+    // Segunda execução perdida: esgotamento terminaliza com job.terminal.
+    const estado = await prisma.commerceIntelligenceJob.findUniqueOrThrow({ where: { id: job.id } });
+    const claim2 = await claimGeneration(new Date(estado.nextAttemptAt.getTime() + 1_000), "recl-owner-b", job.id);
+    assert.ok(claim2);
+    resetJobEvents();
+    await vencerLease(job.id);
+    await reclaimExpiredGenerations(new Date());
+    eventos = collectJobEvents();
+    assert.equal(eventos.length, 1, "exatamente um evento no esgotamento");
+    const terminal = JSON.parse(eventos[0]) as Record<string, unknown>;
+    assert.equal(terminal.event, "job.terminal");
+    assert.equal(terminal.attempt, 2);
+    assert.equal(terminal.errorCode, "GEN-LEASE-EXPIRED");
+    assert.equal(terminal.reservationAction, "RELEASED");
+    const reserva = await prisma.generationUsageReservation.findFirstOrThrow({ where: { jobId: job.id } });
+    assert.equal(reserva.status, "RELEASED", "evento acompanha a persistência real");
+
+    // ADR-021 (decisão 5): FAILED também grava IntelligenceRun — diagnóstico
+    // sanitizado na mesma transação do CAS terminal.
+    const run = await prisma.intelligenceRun.findUniqueOrThrow({
+      where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } },
+    });
+    const metadata = run.metadata as { attempt?: number; internalError?: { code?: string; stage?: string | null } };
+    assert.equal(metadata.internalError?.code, "GEN-LEASE-EXPIRED");
+    assert.equal(metadata.attempt, 2);
+    assert.equal(metadata.internalError?.stage, "UNDERSTANDING_PRODUCT", "stage persistido no job no momento do reclaim");
+  } finally {
+    resetJobEvents();
+    await limpar();
+  }
+});

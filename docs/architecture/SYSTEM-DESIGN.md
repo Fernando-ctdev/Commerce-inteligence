@@ -5,12 +5,12 @@
 
 ## 1. Objetivo e escopo
 
-Commerce Intelligence transforma um Produto confirmado em uma `ProductStrategy`, um `ContentPlan` diversificado, `Content` + Briefings revisáveis e organiza a execução em `RecordingBatch`, Agenda e Estúdio. O primeiro valor é o creator indicar um produto do TikTok Shop com o mínimo de entrada manual.
+Commerce Intelligence transforma um Produto confirmado em uma `ProductStrategy`, um `ContentPlan` diversificado, `Content` + Briefings revisáveis e organiza a execução em `RecordingBatch`, Agenda e Estúdio. O primeiro valor é o creator cadastrar os fatos do Produto em `/products/new` e acionar `Analisar produto`.
 
 O MVP cobre:
 
-- entrada URL-first via Product Importer agentic, Browser Harness e Chromium headless, com fallback manual mínimo;
-- `ProductCandidate` factual, confirmação humana como fronteira e proveniência por fato;
+- entrada vigente: **cadastro manual** dos fatos do Produto em `/products/new`, com validação server-side e proveniência (`ADR-022`); a entrada URL-first via Product Importer agentic, Browser Harness e Chromium headless (`ProductCandidate` + confirmação humana) é **direção futura** e não constitui fluxo vigente;
+- ação explícita `Analisar produto` como único momento de criação do `CommerceIntelligenceJob`;
 - `CommerceIntelligenceJob` assíncrono e durável — **um job ativo por usuário no MVP** — com indicador global no App Shell;
 - Commerce Intelligence Engine composta por orchestrator + capabilities com contratos, gates de qualidade e variedade, repair loop e `ProductMemorySnapshot` estruturada;
 - `ProductStrategy` persistente e versionada, reutilizada entre gerações;
@@ -21,11 +21,11 @@ O MVP cobre:
 
 O MVP não cobre: publicação/agendamento externo, analytics externo (ROAS/CTR/atribuição), TikTok OAuth ou TikTok Shop API, scraping universal, outros marketplaces, automação de CAPTCHA/senha, geração de mídia, fila visual de múltiplos jobs, embeddings/banco vetorial obrigatórios, i18n operacional (locale fixo `pt-BR`), colaboração/RBAC/SSO, e microserviços.
 
-Fontes: `docs/product/PRD.md` (produto geral), `PRD-Importation-product.md` (importação), `PRD-commerce-intelligence-engine.md` (engine), `PRD-product-intelligence-analysis.md` (job assíncrono e UX de espera), `PRD-content-briefing.md` (briefing, lotes, agenda, estúdio), `PRD-model-router-inteligence.md` (camada de modelos). ADRs registram decisões; este documento descreve a composição.
+Fontes: `docs/product/PRD.md` (produto geral), `PRD-Importation-product.md` (entrada de Produto — cadastro manual vigente), `PRD-commerce-intelligence-engine.md` (engine), `PRD-product-intelligence-analysis.md` (job assíncrono e UX de espera), `PRD-content-briefing.md` (briefing, lotes, agenda, estúdio), `PRD-model-router-inteligence.md` (camada de modelos). ADRs registram decisões; este documento descreve a composição.
 
 ## 2. Forma do sistema
 
-Monólito modular em TypeScript/Next.js com PostgreSQL/Prisma como fonte de registro. O Product Importer roda como um único componente/container com HTTP API, Agent Runner, Browser Harness, Chromium headless e integração com o Model Router/LLM.
+Monólito modular em TypeScript/Next.js com PostgreSQL/Prisma como fonte de registro. Não há componente de importação no fluxo vigente: Product Importer, Agent Runner, Browser Harness e Chromium headless pertencem à direção futura da importação URL-first (ADR-022) e só entram com novo slice e ADR.
 
 ```text
 Creator → Web/API → Application Use Cases → Domain Modules
@@ -37,31 +37,29 @@ Creator → Web/API → Application Use Cases → Domain Modules
               Commerce Intelligence Orchestrator → Capabilities
                                    ↓
                     Model Router → LLM Gateway → Provider
-
-Creator → Web/API → Product Importer
-                         ↓
-               Agent Runner + Browser Harness
-                         ↓
-                  Chromium headless → ProductCandidate
 ```
 ## 3. Mapa de módulos
 
 | Módulo | Responsabilidade | Não possui |
 |---|---|---|
 | **Identity / Tenant** | sessão server-side, usuário, Tenant/workspace pessoal, autorização | colaboração, RBAC, SSO, billing |
-| **Product Import** | Product Importer, Agent Runner, Browser Harness, Chromium headless, tentativa de importação, normalização, `ProductCandidate`, fallback manual | fatos sem confirmação humana, contexto estratégico |
-| **Product** | fatos confirmados, origem/proveniência, correções do creator, readiness derivada (PENDING/ANALYZING/READY/FAILED) | decisão comercial, browser |
+| **Product (entrada vigente)** | cadastro manual de fatos em `/products/new` com validação server-side, origem/proveniência, correções do creator, readiness derivada (PENDING/ANALYZING/READY/FAILED) | decisão comercial, descoberta automática de fatos |
+| **Product Import (direção futura, ADR-022)** | quando retomado: Product Importer, Agent Runner, Browser Harness, Chromium headless, tentativa de importação, normalização, `ProductCandidate`, fallback manual | fatos sem confirmação humana, contexto estratégico, existência sem slice próprio |
 | **Commerce Intelligence** | `CommerceIntelligenceJob`, `IntelligenceRun`, orchestrator e capabilities (Product Understanding, Commercial Opportunity Mapping, Strategy Builder, Content Portfolio Planner, Brief Generator, Fact Validator, Quality Judge, Variety Gate, Repair), `ProductMemorySnapshot`, Platform Skill | revisão/aprovação, lotes, gravação |
 | **Content Operations** | `Content`, `ContentBriefVersion`, revisão/edição/regeneração/aprovação/descarte, `RecordingBatch` + `RecordingBatchItem`, Agenda e Estúdio | estratégia, chamada direta a modelo |
 | **Entitlements** | limites por plano, reserva/confirmação/liberação transacional, virada mensal | qualidade diferente por plano, cobrança |
 | **Model Router / LLM Gateway** | tarefas lógicas → `IntelligenceTier` → provider adapter, validação de saída | decisão estratégica, regra de negócio |
 
-Módulos são limites de código, não serviços. O Product Importer é um único componente/container da importação; não há Browser Service separado, portal ou microserviço adicional.
+Módulos são limites de código, não serviços. Não há componente de importação no fluxo vigente (ADR-022); quando a importação for retomada, o Product Importer será um único componente/container, sem Browser Service separado, portal ou microserviço adicional.
 
 ## 4. Fluxo do domínio
 
 ```text
-URL → Product Importer → Agent Runner + Browser Harness → Chromium headless → ProductCandidate → Product
+Cadastro manual dos fatos + preparação (/products/new)
+                                                                                         ↓
+                                                                              Product salvo (sem job)
+                                                                                         ↓
+                                                        ação explícita `Analisar produto`
                                                                                          ↓
                                                                              CommerceIntelligenceJob
                                                                                          ↓
@@ -75,13 +73,12 @@ URL → Product Importer → Agent Runner + Browser Harness → Chromium headles
                                                                                          ↓
                                                        Histórico / Product Memory
 
-1. **Product Import:** valida a URL e inicia o Product Importer.
-2. **Extração:** o Agent Runner usa o Browser Harness para observar/interagir seletivamente com Chromium headless e produz `ProductCandidate`; o LLM identifica o produto principal e os fatos relevantes.
-3. **Confirmação:** creator revisa/edita e confirma (ou usa fallback manual com nome e descrição obrigatórios). `targetContentCount` é resolvido na mesma confirmação.
-4. **Job:** confirmar persiste o `Product` ativo e cria o `CommerceIntelligenceJob` automaticamente.
-5. **Engine:** dentro do job, o orchestrator executa Understanding → Opportunity Mapping → Strategy Builder → Portfolio Planner → Brief Generator → gates → persistência.
-6. **Revisão:** contents entram em `DRAFT`; o creator edita/regenera, aprova ou descarta.
-7. **Execução:** aprovados formam um `RecordingBatch` com data planejada; Agenda e Estúdio organizam a execução.
+1. **Cadastro:** o creator preenche os fatos do Produto e a preparação em `/products/new`; validação server-side; `targetContentCount` é resolvido no cadastro.
+2. **Salvamento:** persiste o `Product` ativo, escopado ao Tenant, sem criar job.
+3. **Analisar produto:** ação explícita do creator; único momento de criação do `CommerceIntelligenceJob` (`POST /api/generations` → `startCommerceIntelligence`, transacional com reserva de Entitlement).
+4. **Engine:** dentro do job, o orchestrator executa Understanding → Opportunity Mapping → Strategy Builder → Portfolio Planner → Brief Generator → gates → persistência.
+5. **Revisão:** contents entram em `DRAFT`; o creator edita/regenera, aprova ou descarta.
+6. **Execução:** aprovados formam um `RecordingBatch` com data planejada; Agenda e Estúdio organizam a execução.
 
 Identity/Tenant envolve todo o fluxo. Entitlements autoriza antes do job. Nenhuma camada assume a responsabilidade da outra.
 
@@ -90,28 +87,33 @@ Identity/Tenant envolve todo o fluxo. Entitlements autoriza antes do job. Nenhum
 ```text
 Web/API ───────┐
 Worker ────────┼──> Application Use Cases ───> Domain Rules
-Product Importer┘             │                      │
+                             │                      │
                              └─────────> Ports <────┘
                                                ↑
                                    Infrastructure Adapters
 ```
 
-- Web, worker e Product Importer chamam casos de uso; não acessam banco, CDP, provider ou quota diretamente.
+- Web e worker chamam casos de uso; não acessam banco, CDP, provider ou quota diretamente. (Na direção futura de importação, ADR-022, o Product Importer também chamará casos de uso.)
 - O domínio não conhece Next.js, Prisma, HTTP, CDP, Browser Harness, prompts ou SDKs de provider.
 - Ports existem para persistência, sessão, browser, fila e provider de modelo somente quando há fronteira real.
 - Um módulo não lê tabelas de outro para contornar seu contrato.
 
 ## 6. Domínio, aplicação e infraestrutura
 
-**Domínio:** Product e fatos confirmados com proveniência; Candidate não confiável; `ProductStrategy` versionada (ACTIVE/SUPERSEDED/STALE); `ContentPlan`/`ContentOpportunity`; `Content` + `ContentBriefVersion` imutáveis; `RecordingBatch`/`RecordingBatchItem`; regras derivadas de estado do lote; memória estruturada com pesos `gerado < aprovado < concluído`.
+**Domínio:** Product e fatos confirmados com proveniência (cadastro manual vigente; Candidate não confiável permanece conceito da direção futura de importação — ADR-022); `ProductStrategy` versionada (ACTIVE/SUPERSEDED/STALE); `ContentPlan`/`ContentOpportunity`; `Content` + `ContentBriefVersion` imutáveis; `RecordingBatch`/`RecordingBatchItem`; regras derivadas de estado do lote; memória estruturada com pesos `gerado < aprovado < concluído`.
 
-**Aplicação:** iniciar importação, consultar status, executar o Agent Runner, confirmar Candidate, criar Product + job, expor Strategy/Plan/Briefings, ações de revisão, criar/agendar lote, concluir conteúdo e resolver Entitlements. Chama o provider fora de transação; transações curtas.
+**Aplicação:** cadastrar Product (cadastro manual), `Analisar produto` (criar job + reserva), consultar status, expor Strategy/Plan/Briefings, ações de revisão, criar/agendar lote, concluir conteúdo e resolver Entitlements. Iniciar importação, executar o Agent Runner e confirmar Candidate são casos de uso da direção futura (ADR-022), sem implementação vigente. Chama o provider fora de transação; transações curtas.
 
-**Infraestrutura:** Next.js, sessão server-side, PostgreSQL/Prisma, fila no PostgreSQL, worker, Product Importer (Docker, Chromium headless e Browser Harness), LLM Gateway/adapters de provider. Sem Browser Service separado, portal ou infraestrutura visual.
+**Infraestrutura:** Next.js, sessão server-side, PostgreSQL/Prisma, fila no PostgreSQL, worker, LLM Gateway/adapters de provider. A infraestrutura de importação (Product Importer com Docker, Chromium headless e Browser Harness) pertence à direção futura (ADR-022). Sem Browser Service separado, portal ou infraestrutura visual.
 
 ## 7. Contratos
 
-### Importação
+### Entrada de Product (vigente: cadastro manual, ADR-022)
+
+- Fatos do Produto informados pelo creator em `/products/new` e validados server-side; nenhum campo estratégico; proveniência declarada (`submittedUrl`/`sourceUrl` informados, não verificados).
+- Salvamento nunca cria job; a ação explícita `Analisar produto` é o único momento de criação do `CommerceIntelligenceJob`.
+
+### Importação (direção futura, ADR-022)
 
 - `ProductCandidate` factual: nome, descrição, preço/moeda, categoria, marca, características, imagens, seller, variantes relevantes, `sourceUrl` — lacunas permanecem lacunas; nenhum campo estratégico.
 - Confirmação humana é a única fronteira para `Product` ativo; correções confirmadas prevalecem sobre reextração; proveniência por fato (`browser-extraction | creator-confirmed`).
@@ -151,17 +153,17 @@ Engine Capability → Logical Intelligence Task → Model Router
 
 ### Persistência
 
-PostgreSQL é a fonte de registro: tenants/sessions, products, product_import_attempts/candidates, strategy versions, plans/opportunities, contents/brief versions, recording batches/items, intelligence jobs/runs, memory stats, entitlements/uso. O browser do Product Importer é efêmero na POC; profile persistente condicional é detalhe operacional do MVP e não é exposto ao domínio.
+PostgreSQL é a fonte de registro: tenants/sessions, products, strategy versions, plans/opportunities, contents/brief versions, recording batches/items, intelligence jobs/runs, memory stats, entitlements/uso. `product_import_attempts` permanece no schema como remanescente da importação removida (sem fluxo que a popule — ADR-022); `product_candidates` não existe. A infraestrutura de browser do Product Importer não existe no fluxo vigente e é detalhe operacional da direção futura.
 ### Autorização e isolamento
 
-Cookie opaco → sessão server-side → usuário + Tenant. Todo caso de uso aplica escopo; `tenantId` do cliente nunca é autoridade. Candidate, Product, job e resultados são escopados ao Tenant. O Product Importer valida URL, egress, limites e isolamento do Chromium.
+Cookie opaco → sessão server-side → usuário + Tenant. Todo caso de uso aplica escopo; `tenantId` do cliente nunca é autoridade. Product, job e resultados são escopados ao Tenant (na direção futura de importação, Candidate também será). A validação de URL, egress, limites e isolamento do Chromium pertence ao Product Importer da direção futura (ADR-022).
 
-### Browser headless
+### Browser headless (direção futura, ADR-022)
 
-O Product Importer executa Chromium headless e Agent Runner com Browser Harness. Não há browser interativo, noVNC, portal, handoff ou autenticação manual do creator. Conteúdo da página é dado não confiável; ferramentas, duração, tokens, rede e navegação são limitados. Falha de acesso ou extração é recuperável e nunca produz candidato inventado.
+Nenhum componente de browser existe no fluxo vigente. Quando a importação URL-first for retomada, o Product Importer executará Chromium headless e Agent Runner com Browser Harness — sem browser interativo, noVNC, portal, handoff ou autenticação manual do creator. Conteúdo da página é dado não confiável; ferramentas, duração, tokens, rede e navegação são limitados. Falha de acesso ou extração é recuperável e nunca produz candidato inventado.
 ### Processamento assíncrono
 
-Uma transação curta persiste Product, cria `CommerceIntelligenceJob`, reserva Entitlement e devolve; o worker reivindica com lease, executa a engine fora de transação e finaliza em transação curta. `job.id` é a chave idempotente compartilhada com a reserva; retry técnico não duplica Strategy/Plan/Briefings nem consumo. MVP: um job ativo por usuário — `Analisar produto` fica desabilitado com explicação enquanto `QUEUED`/`RUNNING`. O job sobrevive a navegação e fechamento de aba; reabrir restaura o indicador global. Falha preserva Product e fatos; retry reutiliza o contexto confirmado.
+O salvamento do cadastro manual persiste o Product **sem** criar job. A ação explícita `Analisar produto` executa uma transação curta que cria o `CommerceIntelligenceJob`, reserva Entitlement e devolve; o worker reivindica com lease, executa a engine fora de transação e finaliza em transação curta. `job.id` é a chave idempotente compartilhada com a reserva; retry técnico não duplica Strategy/Plan/Briefings nem consumo. MVP: um job ativo por usuário — `Analisar produto` fica desabilitado com explicação enquanto `QUEUED`/`RUNNING`. O job sobrevive a navegação e fechamento de aba; reabrir restaura o indicador global. Falha preserva Product e fatos; retry reutiliza o contexto confirmado.
 
 ### Segurança de LLM
 
@@ -191,7 +193,8 @@ Fila visual de análises e central de atividades (após validação); notificaç
 | ADR-005 | processamento assíncrono durável — `CommerceIntelligenceJob`, um job ativo por usuário, indicador global |
 | ADR-006 | Entitlements e reserva transacional |
 | ADR-007 | fronteira de produção de mídia futura |
-| ADR-008 | URL-first, Candidate, confirmação e fallback manual |
+| ADR-008 | superseded pelo ADR-022 — URL-first/Candidate é direção futura; princípios de confirmação humana e segurança de URL permanecem referência |
+| ADR-022 | entrada vigente de Product: cadastro manual + ação explícita `Analisar produto`; importação URL-first é direção futura |
 | ADR-009 | identidade, Tenant e autorização |
 | ADR-010 | superseded (API oficial) |
 | ADR-011 | superseded — arquitetura Browser Service/portal/HITL removida |

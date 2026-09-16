@@ -851,18 +851,19 @@ export function gateSceneSet(
   brief: { angle: string; hook: string; development: string[]; script: string; cta: string },
   evidence: EvidenceSnapshot,
   creatorContext: CreatorRecordingContext = {},
-): { kept: SceneIdea[]; dropped: number } {
+): { kept: SceneIdea[]; dropped: number; causes: string[] } {
   const anchors = sceneTerms(attrStems(normalizeForVariety(
     [brief.angle, brief.hook, ...brief.development, brief.script, brief.cta, ...evidence.facts].join(" "),
   )));
+  const causes = new Map<string, number>();
   const kept = scenes.filter(({ description }) => {
     const folded = attrStems(normalizeForVariety(description));
-    if (!SCENE_ACTION_RE.test(folded)) return false;
-    if (![...sceneTerms(folded)].some((term) => anchors.has(term))) return false;
-    if (sceneClaimsUnauthorized(description, evidence)) return false;
-    if (creatorContext.recordsAlone === true && requiresUndeclaredProduction(folded, creatorContext)) return false;
+    if (!SCENE_ACTION_RE.test(folded)) { causes.set("acao_ausente", (causes.get("acao_ausente") ?? 0) + 1); return false; }
+    if (![...sceneTerms(folded)].some((term) => anchors.has(term))) { causes.set("ancora_ausente", (causes.get("ancora_ausente") ?? 0) + 1); return false; }
+    if (sceneClaimsUnauthorized(description, evidence)) { causes.set("claim_nao_autorizado", (causes.get("claim_nao_autorizado") ?? 0) + 1); return false; }
+    if (creatorContext.recordsAlone === true && requiresUndeclaredProduction(folded, creatorContext)) { causes.set("producao_nao_declarada", (causes.get("producao_nao_declarada") ?? 0) + 1); return false; }
     return true;
   });
-  if (kept.length < 2) return { kept: [], dropped: scenes.length };
-  return { kept, dropped: scenes.length - kept.length };
+  if (kept.length < 2) return { kept: [], dropped: scenes.length, causes: [...causes.entries()].map(([cause, count]) => `${cause}:${count}`) };
+  return { kept, dropped: scenes.length - kept.length, causes: [...causes.entries()].map(([cause, count]) => `${cause}:${count}`) };
 }

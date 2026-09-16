@@ -5,8 +5,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
-import { handleLogin, handleLogout, handleRegister } from "./http.js";
-import { SESSION_COOKIE } from "./http.js";
 import {
   AccountExistsError,
   resolveSession,
@@ -14,6 +12,12 @@ import {
   loginUser,
   registerUser,
 } from "./service.js";
+
+// handleRegister/Login/Logout fazem originOk (allowlist APP_ORIGIN, fail-closed
+// vazia) e o tsx --test não carrega .env: a origem precisa existir ANTES do
+// http.js inicializar o conjunto — mesmo padrão de http.test.ts.
+process.env.APP_ORIGIN ??= "http://localhost:3000";
+const { handleLogin, handleLogout, handleRegister, SESSION_COOKIE } = require("./http") as typeof import("./http");
 
 // APP_ORIGIN pode ser lista separada por vírgula; o runtime valida contra o conjunto.
 const ORIGIN = (process.env.APP_ORIGIN ?? "http://localhost:3000").split(",")[0].trim();

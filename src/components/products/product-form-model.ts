@@ -13,7 +13,9 @@ export type ProductDraft = {
   url: string;
   commissionType?: string;
   commission?: string;
-  discountPercentage?: string;
+  /** Desconto tipado — contrato oficial (Gate 5): discountType + discountValue. */
+  discountType?: DiscountType;
+  discountValue?: string;
 };
 
 export type ProductFieldErrors = Partial<Record<keyof ProductDraft, string>>;
@@ -21,6 +23,10 @@ export type ProductFieldErrors = Partial<Record<keyof ProductDraft, string>>;
 export const DEFAULT_PRODUCT_CURRENCY = "R$";
 /** Contrato do backend (service.ts CURRENCIES): símbolos, não códigos ISO. */
 export const SUPPORTED_CURRENCIES = ["R$", "USD", "EUR"] as const;
+/* Desconto tipado — contrato oficial (Gate 5): PERCENTAGE (0–100) ou FIXED
+   (valor na moeda do produto). Exclusivamente tipado; sem campo legado. */
+export const DISCOUNT_TYPES = ["PERCENTAGE", "FIXED"] as const;
+export type DiscountType = (typeof DISCOUNT_TYPES)[number];
 
 
 export type ProductPayload = {
@@ -42,7 +48,8 @@ export type ProductPayload = {
   expectedVersion?: number;
   commissionType?: string;
   commissionValue?: string;
-  discountPercentage?: string | null;
+  discountType?: DiscountType;
+  discountValue?: string;
 };
 
 /* Máscara do Preço: o input exibe pt-BR (10,50) e o draft guarda o
@@ -98,7 +105,20 @@ export function formatCommission(commissionType: string, commission: string, pri
     return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
   return null;
 }
-
+/* Desconto exibido no resumo: percentual literal ou valor na moeda do produto. */
+export function formatDiscount(
+  discountType: string | null | undefined,
+  discountValue: string,
+  currency?: string | null,
+): string | null {
+  const value = discountValue?.trim() ?? "";
+  if (!value) return null;
+  if (discountType === "FIXED") return formatPriceWithCurrency(value, currency);
+  const number = Number(value.replace(",", "."));
+  return Number.isFinite(number)
+    ? `${number.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`
+    : `${value}%`;
+}
 export type ProductManualDraft = {
   name: string;
   description: string;
@@ -110,7 +130,8 @@ export type ProductManualDraft = {
   url?: string;
   commissionType?: string;
   commission?: string;
-  discountPercentage?: string;
+  discountType?: DiscountType;
+  discountValue?: string;
 };
 
 export type ProductManualFieldErrorKey =
@@ -135,11 +156,18 @@ function cleanNullable(value: string) {
 function lines(value: string) {
   return value.split(/\r?\n/).map(clean).filter(Boolean);
 }
-function normalizeDiscountPercentage(value?: string) {
-  const trimmed = value?.trim() ?? "";
-  if (!trimmed) return null;
-  const number = Number(trimmed.replace(",", "."));
-  return Number.isFinite(number) ? String(number) : trimmed;
+/* Desconto tipado no payload: só emite com valor. Sem valor nenhum, nada é
+   enviado e o backend mantém a semântica de limpar (null). */
+function discountFields(draft: {
+  discountType?: DiscountType;
+  discountValue?: string;
+}) {
+  const value = cleanNullable(draft.discountValue ?? "") ?? "";
+  if (!value) return {};
+  return {
+    discountType: draft.discountType === "FIXED" ? ("FIXED" as const) : ("PERCENTAGE" as const),
+    discountValue: formatPriceDisplay(value),
+  };
 }
 
 export function validateProductDraft(
@@ -185,9 +213,7 @@ export function buildProductPayload(
     ...(draft.commissionType && draft.commission
       ? { commissionType: draft.commissionType, commissionValue: formatPriceDisplay(draft.commission) }
       : {}),
-    ...(draft.discountPercentage !== undefined
-      ? { discountPercentage: normalizeDiscountPercentage(draft.discountPercentage) }
-      : {}),
+    ...discountFields(draft),
     ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
     ...(version === undefined ? {} : { expectedVersion: version }),
   };
@@ -219,12 +245,10 @@ export function buildManualProductPayload(
     ...(cleanNullable(draft.commission ?? "") && draft.commissionType
       ? { commissionType: draft.commissionType, commissionValue: formatPriceDisplay(draft.commission ?? "") }
       : {}),
+    ...(constraints ? { constraints } : {}),
     targetContentCount: preparation.targetContentCount,
     creatorPresence: preparation.creatorPresence,
-    ...(constraints ? { constraints } : {}),
-    ...(draft.discountPercentage !== undefined
-      ? { discountPercentage: normalizeDiscountPercentage(draft.discountPercentage) }
-      : {}),
+    ...discountFields(draft),
     ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
   };
 }
@@ -264,11 +288,12 @@ export function validateProductManualDraft(
     errors.commission = "Informe um valor não negativo com até duas casas.";
   else if (commissionType === "PERCENT" && Number(commission.replace(",", ".")) > 100)
     errors.commission = "A comissão percentual deve estar entre 0 e 100.";
-  const discountPercentage = draft.discountPercentage?.trim() ?? "";
-  if (discountPercentage && !/^\d+(?:[.,]\d{1,2})?$/.test(discountPercentage)) {
-    errors.discountPercentage = "Informe um desconto entre 0 e 100%, com até duas casas decimais.";
-  } else if (discountPercentage && Number(discountPercentage.replace(",", ".")) > 100) {
-    errors.discountPercentage = "O desconto deve estar entre 0 e 100%.";
+  const discountType = draft.discountType === "FIXED" ? "FIXED" : "PERCENTAGE";
+  const discountValue = (draft.discountValue?.trim() || "").trim();
+  if (discountValue && !/^\d+(?:[.,]\d{1,2})?$/.test(discountValue)) {
+    errors.discountValue = "Informe um desconto válido e não negativo, com até duas casas decimais.";
+  } else if (discountValue && discountType === "PERCENTAGE" && Number(discountValue.replace(",", ".")) > 100) {
+    errors.discountValue = "O desconto percentual deve estar entre 0 e 100.";
   }
   if (lines(draft.characteristics).length === 0)
     errors.characteristics = "Informe ao menos uma característica.";
@@ -310,6 +335,7 @@ export function emptyProductDraft(): ProductDraft {
     imageReferences: "",
     observations: "",
     url: "",
-    discountPercentage: "",
+    discountType: "PERCENTAGE",
+    discountValue: "",
   };
 }

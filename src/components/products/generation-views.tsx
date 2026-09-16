@@ -14,6 +14,7 @@ import {
   isActiveGeneration,
   phaseStateLabels,
   phaseStates,
+  projectionDegradedModel,
   stageMessage,
   statusLabels,
   statusMessage,
@@ -206,6 +207,10 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
   const { job, busy, error, active, failed, blockedByOther, start, retry, cancel } = state;
   const canCancel = !!job && canCancelGeneration(job.status);
   const partial = partialModel(job);
+  /* RI-003-20: GEN-PROJECTION em terminal positivo é anomalia de dados — a UI
+     comunica o estado degradado em vez de tratar como sucesso; retry suprimido
+     pelo código (/retry responderia 404); /complete só no parcial. */
+  const degraded = projectionDegradedModel(job);
   /* ADR-016: com a projeção presente, ela é a única fonte do bloqueio preventivo;
      a inferência por GET current é só fallback para payload que ainda não a carrega. */
   const projectedBlocked = generationAction?.state === "BLOCKED" ? generationAction : null;
@@ -215,9 +220,11 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
     ? "Análise em andamento"
     : failed && job
       ? "Análise interrompida"
-      : job?.status === "SUCCEEDED" || job?.status === "SUCCEEDED_PARTIAL"
-        ? "Revisar conteúdos"
-        : "Analisar produto";
+      : degraded.degraded && job
+        ? "Resultado da análise indisponível"
+        : job?.status === "SUCCEEDED" || job?.status === "SUCCEEDED_PARTIAL"
+          ? "Revisar conteúdos"
+          : "Analisar produto";
   const idleHeading = !active && !failed && job?.status !== "SUCCEEDED" && job?.status !== "SUCCEEDED_PARTIAL";
   return (
     <section aria-busy={busy || active} aria-labelledby="generation-title" className={[styles.panel, className].filter(Boolean).join(" ")}>
@@ -251,6 +258,19 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
               {busy ? "Tentando novamente…" : "Tentar novamente"}
             </Button>
           </div>
+        </div>
+      ) : degraded.degraded && job ? (
+        <div aria-live="polite" className={styles.state} role="alert">
+          <p className={styles.stateLine}>
+            <strong>{statusLabels[job.status]}</strong> · Não foi possível carregar o resultado desta análise. Seus dados permanecem preservados.
+          </p>
+          {degraded.generateMissing && (
+            <div className={styles.actions}>
+              <Button className={styles.stateAction} disabled={busy} onClick={onGenerateMissing} type="button">
+                {busy ? "Gerando faltantes…" : "Gerar faltantes"}
+              </Button>
+            </div>
+          )}
         </div>
       ) : partial && job ? (
         <div aria-live="polite" className={styles.state} role="status">
@@ -291,11 +311,13 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
         </div>
       ) : (
         <div className={styles.actions}>
-          <Button disabled={busy || readiness !== "PENDING" || blockedByOther || !!projectedBlocked} onClick={() => void start()} type="button">
+          {/* Estado inicial: sem job comprovado em mãos (nunca teve job ou carga falhou),
+              não há erro nem bloqueio — o backend segue autoritativo no POST. */}
+          <Button disabled={busy || blockedByOther || !!projectedBlocked} onClick={() => void start()} type="button">
             {busy ? "Iniciando análise…" : "Analisar produto"}
           </Button>
           {(projectedNote ?? fallbackNote) && <p className={styles.blockedNote}>{projectedNote ?? fallbackNote}</p>}
-          {readiness !== "PENDING" && !projectedBlocked && !blockedByOther && (
+          {job && readiness !== "PENDING" && !projectedBlocked && !blockedByOther && (
             <p className={styles.error}>Este produto não está disponível para uma nova análise.</p>
           )}
         </div>
@@ -591,7 +613,7 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
     <section aria-labelledby="contents-title" className={styles.panel} id="generated-contents">
       <header className={styles.contentsHeader}>
         <h2 id="contents-title">Conteúdos</h2>
-        <p>{job.status === "SUCCEEDED_PARTIAL" ? `${items.length} de ${job.targetContentCount} conteúdos` : contentsSummaryLabel(items.length, approved)}</p>
+        <p>{job.status === "SUCCEEDED_PARTIAL" ? `${items.length} de ${job.expectedCount ?? job.targetContentCount} conteúdos` : contentsSummaryLabel(items.length, approved)}</p>
       </header>
       <div className={styles.contentsLayout} data-selected={selected ? "true" : "false"}>
         <ol aria-label="Lista de conteúdos" className={styles.contentsList}>

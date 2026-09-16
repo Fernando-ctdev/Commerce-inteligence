@@ -36,8 +36,10 @@ test("routes by tier: MID→BALANCED, HIGH→QUALITY, LOW→FAST with existing v
     await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} });
     await provider.complete("STRATEGY_SYNTHESIS", { trustedContext: {} });
     await provider.complete("CONTENT_PLAN_GENERATION", { trustedContext: {} });
+    await provider.complete("CONTENT_SCENE_IDEAS", { trustedContext: {} });
+    await provider.complete("CONTENT_QUALITY_JUDGE", { trustedContext: {} });
   } finally { restore(); }
-  assert.deepEqual(models, ["quality-model", "balanced-model", "quality-model", "quality-model"], "ADR-020 adendo 3: PU roteado a QUALITY");
+  assert.deepEqual(models, ["quality-model", "quality-model", "quality-model", "quality-model", "quality-model", "quality-model"], "capabilities críticas usam QUALITY");
 });
 
 test("falls back only between existing configured variables (BALANCED→FAST→none)", async () => {
@@ -45,7 +47,7 @@ test("falls back only between existing configured variables (BALANCED→FAST→n
   const restore = mockProviderFetch(models);
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { LOW: "fast-model", MID: "fast-model" }, timeoutMs: 5000 });
   try {
-    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} });
+    await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} });
     assert.equal(models[0], "fast-model");
     try {
       await provider.complete("STRATEGY_SYNTHESIS", { trustedContext: {} });
@@ -75,7 +77,7 @@ test("never reads LLM_MODEL_BRIEF: env cannot influence routing through configFr
     const provider = createHttpProvider();
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
     await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} });
-    assert.deepEqual(models, ["quality-model", "balanced-model"]);
+    assert.deepEqual(models, ["quality-model", "quality-model"], "BRIEF roteado a HIGH");
   } finally { restore(); }
 });
 test("sends fixed reasoning effort by logical capability", async () => {
@@ -89,14 +91,18 @@ test("sends fixed reasoning effort by logical capability", async () => {
     await provider.complete("STRATEGY_SYNTHESIS", { trustedContext: {} });
     await provider.complete("CONTENT_PLAN_GENERATION", { trustedContext: {} });
     await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} });
+    await provider.complete("CONTENT_SCENE_IDEAS", { trustedContext: {} });
+    await provider.complete("CONTENT_QUALITY_JUDGE", { trustedContext: {} });
   } finally { globalThis.fetch = originalFetch; }
-  assert.equal(bodies.length, 5);
+  assert.equal(bodies.length, 7);
   assert.deepEqual(bodies.map((body) => body.reasoning), [
     { effort: "low" },
     { effort: "medium" },
     { effort: "high" },
     { effort: "high" },
     { effort: "medium" },
+    { effort: "high" },
+    { effort: "high" },
   ]);
 });
 test("brief provider gets separate selected hook and CTA patterns in a compact context", async () => {
@@ -106,7 +112,7 @@ test("brief provider gets separate selected hook and CTA patterns in a compact c
     request = JSON.parse(init.body);
     return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
-  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { HIGH: "m" }, timeoutMs: 5000 });
   try {
     await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: { productReference: { name: "Calça" }, selectedPatterns: [{ opportunityId: "o1", hook: { id: "problem", text: "Eu não acredito que isso custa tão pouco" }, cta: { id: "details", text: "Confira os detalhes disponíveis" } }] } });
   } finally { globalThis.fetch = originalFetch; }
@@ -298,7 +304,7 @@ test("fallback MID→HIGH: 503 na tentativa MID re-solicita uma vez em HIGH e re
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
   let captured: FallbackMetrics | undefined;
   try {
-    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }, undefined, (m) => { captured = m; });
+    await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} }, undefined, (m) => { captured = m; });
   } finally { restore(); }
   assert.deepEqual(models, ["balanced-model", "quality-model"]);
   assert.equal(captured?.retry, 1);
@@ -316,7 +322,7 @@ test("fallback cobre somente status de disponibilidade (408/429/502/503/504); 4x
     const restore = mockSequenceFetch(models, [() => new Response("err", { status }), okResponse]);
     const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
     try {
-      await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} });
+      await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} });
       assert.deepEqual(models, ["balanced-model", "quality-model"], `${status} deve cair em fallback`);
     } finally { restore(); }
   }
@@ -324,7 +330,7 @@ test("fallback cobre somente status de disponibilidade (408/429/502/503/504); 4x
   const restore = mockSequenceFetch(models, [() => new Response("bad request", { status: 400 }), okResponse]);
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
   try {
-    await assert.rejects(provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-PROVIDER");
+    await assert.rejects(provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-PROVIDER");
     assert.deepEqual(models, ["balanced-model"], "400 (config) não re-solicita");
   } finally { restore(); }
 });
@@ -335,7 +341,7 @@ test("fallback de conexão: fetch falha uma vez e HIGH responde; retry=1 com rea
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
   let captured: FallbackMetrics | undefined;
   try {
-    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }, undefined, (m) => { captured = m; });
+    await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} }, undefined, (m) => { captured = m; });
   } finally { restore(); }
   assert.deepEqual(models, ["balanced-model", "quality-model"]);
   assert.equal(captured?.retry, 1);
@@ -361,7 +367,7 @@ test("fallback por timeout próprio do provider: reason timeout", async () => {
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 30 });
   let captured: FallbackMetrics | undefined;
   try {
-    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }, undefined, (m) => { captured = m; });
+    await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} }, undefined, (m) => { captured = m; });
   } finally { globalThis.fetch = originalFetch; }
   assert.deepEqual(models, ["balanced-model", "quality-model"]);
   assert.equal(captured?.retry, 1);
@@ -382,7 +388,7 @@ test("abort externo (fencing) nunca cai em fallback", async () => {
   const controller = new AbortController();
   setTimeout(() => controller.abort(), 20);
   try {
-    await assert.rejects(provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }, controller.signal), (error: GenerationError) => error.code === "GEN-PROVIDER");
+    await assert.rejects(provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} }, controller.signal), (error: GenerationError) => error.code === "GEN-PROVIDER");
     assert.deepEqual(models, ["balanced-model"], "abort externo não re-solicita");
   } finally { globalThis.fetch = originalFetch; }
 });
@@ -409,7 +415,7 @@ test("GEN-SCHEMA e tarefa HIGH nunca caem em fallback; modelo repetido não re-s
   const restoreSame = mockSequenceFetch(sameModels, [() => new Response("boom", { status: 503 }), okResponse]);
   const sameProvider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
   try {
-    await assert.rejects(sameProvider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-PROVIDER");
+    await assert.rejects(sameProvider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} }), (error: GenerationError) => error.code === "GEN-PROVIDER");
     assert.deepEqual(sameModels, ["m"], "modelo efetivo igual não re-solicita");
   } finally { restoreSame(); }
 });
@@ -492,7 +498,7 @@ test("provider adapter caps only PU cardinality arrays before returning output",
     const understanding = recordOf(await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }));
     assert.deepEqual(understanding?.purchaseBarriers, payload.purchaseBarriers.slice(0, CARDINALITY_POLICY.purchaseBarriers.max));
     assert.equal((understanding?.extraArray as string[]).length, payload.extraArray.length, "campos fora da policy não são reduzidos");
-    const brief = recordOf(await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} }));
+    const brief = recordOf(await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} }));
     assert.equal((brief?.purchaseBarriers as string[]).length, payload.purchaseBarriers.length, "outras tasks mantêm a saída intacta");
   } finally { restore(); }
   assert.equal(bodies.length, 2);
@@ -503,7 +509,7 @@ test("non-PU tasks keep generic json_object response_format", async () => {
   const restore = captureProviderBodies(bodies);
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { LOW: "fast", MID: "balanced", HIGH: "quality" }, timeoutMs: 5000 });
   try {
-    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} });
+    await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} });
   } finally { restore(); }
   assert.deepEqual(bodies[0].response_format, { type: "json_object" });
 });

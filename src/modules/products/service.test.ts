@@ -25,7 +25,10 @@ import {
   reactivateTenantProduct,
   validateManualProductInput,
 } from "./service.js";
-import { failJobAndReleaseReservation } from "../commerce-intelligence/worker.js";
+import { startCommerceIntelligence } from "../commerce-intelligence/service.js";
+import { handleGet, handleRetry } from "../commerce-intelligence/http-status.js";
+import { GenerationError } from "../commerce-intelligence/errors.js";
+import { failJobAndReleaseReservation, lockProductLifecycle, processGeneration } from "../commerce-intelligence/worker.js";
 import { monthUtc } from "../entitlements/generation.js";
 
 // APP_ORIGIN pode ser lista separada por vírgula; o runtime valida contra o conjunto.
@@ -114,52 +117,50 @@ test("validação: campos obrigatórios retornam códigos VAL-*-REQUIRED", () =>
   );
 });
 
-test("validação: discountPercentage é opcional, factual e limitado a 0–100 com até duas casas", () => {
-  // Ausente/vazio → null: produtos existentes sem desconto permanecem compatíveis.
-  assert.equal(validateManualProductInput(validInput).discountPercentage, null);
-  assert.equal(
-    validateManualProductInput({ ...validInput, discountPercentage: "   " })
-      .discountPercentage,
-    null,
-  );
-  // Presente: vírgula vira ponto; 0 e 100 são aceitos (faixa 0–100).
-  assert.equal(
-    validateManualProductInput({ ...validInput, discountPercentage: "12,5" })
-      .discountPercentage,
-    "12.5",
-  );
-  assert.equal(
-    validateManualProductInput({ ...validInput, discountPercentage: "0" })
-      .discountPercentage,
-    "0",
-  );
-  assert.equal(
-    validateManualProductInput({ ...validInput, discountPercentage: "100" })
-      .discountPercentage,
-    "100",
-  );
-  // Campo presente em tipo não-string é rejeitado (desconto factual chega como texto).
-  const formatos: unknown[] = ["abc", "-5", "1,2,3", "20%", 20, { value: 20 }, true];
-  for (const discountPercentage of formatos) {
+test("validação: discountPercentage não faz parte do contrato — entrada ignorada, sem desconto", () => {
+  // Gate 5: o desconto é exclusivamente o tipado. discountPercentage presente
+  // no corpo não é lido nem validado — o produto sai sem desconto.
+  const ignorado = validateManualProductInput({ ...validInput, discountPercentage: "25,5" });
+  assert.equal(ignorado.discountType, null);
+  assert.equal(ignorado.discountValue, null);
+  assert.equal("discountPercentage" in ignorado, false);
+  // Nem formato inválido no campo residual rejeita a requisição: campo não é contrato.
+  const residual = validateManualProductInput({ ...validInput, discountPercentage: "abc" });
+  assert.equal(residual.discountType, null);
+  assert.equal(residual.discountValue, null);
+});
+
+test("validação: desconto tipado PERCENTAGE|FIXED — valor não negativo, moeda obrigatória no FIXED", () => {
+  // PERCENTAGE: 0–100, normalização de vírgula.
+  const percent = validateManualProductInput({ ...validInput, discountType: "PERCENTAGE", discountValue: "15,5" });
+  assert.equal(percent.discountType, "PERCENTAGE");
+  assert.equal(percent.discountValue, "15.5");
+  // FIXED: valor na moeda do produto.
+  const fixed = validateManualProductInput({ ...validInput, priceCurrency: "R$", discountType: "FIXED", discountValue: "20,00" });
+  assert.equal(fixed.discountType, "FIXED");
+  assert.equal(fixed.discountValue, "20.00");
+  // Sem os campos → sem desconto (nulls); o contrato é exclusivamente o tipado.
+  assert.equal(validateManualProductInput(validInput).discountType, null);
+  assert.equal(validateManualProductInput(validInput).discountValue, null);
+
+  const falhas: Array<[Record<string, unknown>, string, string]> = [
+    [{ discountType: "PERCENTAGE", discountValue: "150" }, "discountValue", "VAL-DISCOUNT-RANGE"],
+    [{ discountType: "FIXED", discountValue: "-1" }, "discountValue", "VAL-DISCOUNT-FORMAT"],
+    [{ discountType: "BOBA", discountValue: "10" }, "discountType", "VAL-DISCOUNT-TYPE"],
+    [{ discountType: "PERCENTAGE" }, "discountValue", "VAL-DISCOUNT-FORMAT"],
+    // RI-002 (Gate 5): FIXED não excede o preço do Product (29,90).
+    [{ discountType: "FIXED", discountValue: "29,91" }, "discountValue", "VAL-DISCOUNT-RANGE"],
+  ];
+  // Limite aceito: FIXED igual ao preço.
+  const limite = validateManualProductInput({ ...validInput, discountType: "FIXED", discountValue: "29,90" });
+  assert.equal(limite.discountValue, "29.90");
+  for (const [campo, field, code] of falhas) {
     assert.throws(
-      () =>
-        validateManualProductInput({ ...validInput, discountPercentage }),
+      () => validateManualProductInput({ ...validInput, ...campo }),
       (error: unknown) => {
         assert.ok(error instanceof ProductValidationError);
-        assert.equal(error.code, "VAL-DISCOUNT-FORMAT");
-        assert.ok(error.fieldErrors.discountPercentage);
-        return true;
-      },
-    );
-  }
-  const faixas = ["150", "100.01", "1.234"];
-  for (const discountPercentage of faixas) {
-    assert.throws(
-      () =>
-        validateManualProductInput({ ...validInput, discountPercentage }),
-      (error: unknown) => {
-        assert.ok(error instanceof ProductValidationError);
-        assert.equal(error.code, "VAL-DISCOUNT-RANGE");
+        assert.equal(error.code, code);
+        assert.ok(error.fieldErrors[field]);
         return true;
       },
     );
@@ -667,16 +668,17 @@ test("GET por id retorna o Product do tenant com moeda; inexistente responde 404
   assert.equal(await prisma.product.count({ where: { tenantId } }), 1);
 });
 
-test("discountPercentage: POST persiste, GET expõe, PATCH atualiza e vazio limpa; ausente permanece null", async (t) => {
+test("discountPercentage não é contrato: POST/PATCH com o campo não persistem desconto", async (t) => {
   if (!dbUp) return t.skip();
   const { token, tenantId } = await tenantOf();
 
-  // Compatibilidade: produto criado sem desconto projeta null.
+  // Produto criado sem desconto projeta null.
   const semDesconto = await criarProduct(token);
   const viewSem = (await handleGetProduct(getById(token, semDesconto.id), semDesconto.id).then((r) => r.json())) as { discountPercentage: string | null };
   assert.equal(viewSem.discountPercentage, null);
 
-  // POST com desconto factual persiste e GET expõe o valor normalizado.
+  // Gate 5: POST com discountPercentage (sem tipado) cria SEM desconto —
+  // o campo não é lido e a coluna não é escrita.
   const resPost = await handleCreateProduct(
     post(
       token,
@@ -687,11 +689,11 @@ test("discountPercentage: POST persiste, GET expõe, PATCH atualiza e vazio limp
   assert.equal(resPost.status, 200);
   const criado = (await resPost.json()) as { id: string };
   const row = await prisma.product.findUniqueOrThrow({ where: { id: criado.id } });
-  assert.equal(row.discountPercentage?.toString(), "25.5");
-  const viewPost = (await handleGetProduct(getById(token, criado.id), criado.id).then((r) => r.json())) as { discountPercentage: string | null };
-  assert.equal(viewPost.discountPercentage, "25.5");
+  assert.equal(row.discountPercentage, null);
+  assert.equal(row.discountType, null);
+  assert.equal(row.discountValue, null);
 
-  // PATCH atualiza o desconto (mesmo contrato de fatos do POST).
+  // PATCH com discountPercentage também não persiste o campo residual.
   const resPatch = await handleUpdateProduct(
     patch(token, semDesconto.id, {
       ...validInput,
@@ -701,22 +703,45 @@ test("discountPercentage: POST persiste, GET expõe, PATCH atualiza e vazio limp
     semDesconto.id,
   );
   assert.equal(resPatch.status, 200);
-  const atualizado = (await resPatch.json()) as { version: number };
   const rowPatch = await prisma.product.findUniqueOrThrow({ where: { id: semDesconto.id } });
-  assert.equal(rowPatch.discountPercentage?.toString(), "10");
-
-  // PATCH sem o campo limpa o desconto (fatos são substituídos por completo).
-  const resLimpa = await handleUpdateProduct(
-    patch(token, semDesconto.id, {
-      ...validInput,
-      expectedVersion: atualizado.version,
-    }),
-    semDesconto.id,
-  );
-  assert.equal(resLimpa.status, 200);
-  const rowLimpo = await prisma.product.findUniqueOrThrow({ where: { id: semDesconto.id } });
-  assert.equal(rowLimpo.discountPercentage, null);
+  assert.equal(rowPatch.discountPercentage, null);
   assert.equal(await prisma.product.count({ where: { tenantId } }), 2);
+});
+
+// Gate 5 (RI-002): contrato oficial do desconto tipado — POST persiste, GET expõe
+// discountType/discountValue e FIXED não excede o preço do Product.
+test("desconto tipado: POST/GET expõem discountType+discountValue e FIXED acima do preço é rejeitado", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+
+  // FIXED acima do preço (29,90) é rejeitado na criação.
+  const resExcede = await handleCreateProduct(
+    post(
+      token,
+      { ...validInput, discountType: "FIXED", discountValue: "50,00" },
+      randomBytes(16).toString("base64url"),
+    ),
+  );
+  assert.equal(resExcede.status, 400);
+  const erro = (await resExcede.json()) as { code?: string; fieldErrors?: Record<string, unknown> };
+  assert.equal(erro.code, "VAL-DISCOUNT-RANGE");
+  assert.ok(erro.fieldErrors?.discountValue);
+
+  // FIXED dentro do preço: persiste e a leitura autenticada expõe os campos tipados.
+  const resOk = await handleCreateProduct(
+    post(
+      token,
+      { ...validInput, discountType: "FIXED", discountValue: "10,00" },
+      randomBytes(16).toString("base64url"),
+    ),
+  );
+  assert.equal(resOk.status, 200);
+  const criado = (await resOk.json()) as { id: string };
+  const view = (await handleGetProduct(getById(token, criado.id), criado.id).then((r) => r.json())) as { discountType: string | null; discountValue: string | null; discountPercentage: string | null };
+  assert.equal(view.discountType, "FIXED");
+  assert.equal(view.discountValue, "10.00");
+  assert.equal(view.discountPercentage, null);
+  assert.equal(await prisma.product.count({ where: { tenantId } }), 1);
 });
 
 test("GET/PATCH/DELETE de outro tenant responde 404 sem vazar o Product", async (t) => {
@@ -1370,4 +1395,195 @@ test("reserva do mês consome a projeção: GEN-CAPACITY/WAIT_FOR_CAPACITY sem f
   await withEnv({ GENERATED_CONTENTS_MONTH_LIMIT: "100" }, async () => {
     assert.deepEqual(await read(), AVAILABLE);
   });
+});
+
+// Gate 3 item 3 — alinhamento readiness ↔ status ↔ ações (RI-003-37, B-003-13):
+// parcial declarado é READY na view do Product; reanálise standard sobre parcial
+// é GEN-READY; a recuperação dos faltantes (mode complete) não é bloqueada.
+test("readiness do Product e ações com SUCCEEDED_PARTIAL (ADR-021)", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId, userId } = await tenantOf();
+  const created = await criarProduct(token);
+
+  await prisma.commerceIntelligenceJob.create({
+    data: {
+      tenantId,
+      userId,
+      productId: created.id,
+      idempotencyKey: randomBytes(16).toString("base64url"),
+      fingerprint: "test-partial",
+      targetContentCount: 2,
+      generatedContentsMonth: monthUtc(),
+      status: "SUCCEEDED_PARTIAL",
+      metadata: {
+        expectedCount: 2,
+        deliveredCount: 1,
+        failedCount: 1,
+        failedItems: [{ contentId: "c1", position: 2, reason: "HARD_GATE" }],
+      },
+    },
+  });
+
+  const view = (await handleGetProduct(getById(token, created.id), created.id).then((r) => r.json())) as { readiness: string };
+  assert.equal(view.readiness, "READY");
+
+  await assert.rejects(
+    startCommerceIntelligence({ tenantId, userId, productId: created.id, idempotencyKey: randomBytes(16).toString("base64url") }),
+    (e: unknown) => e instanceof GenerationError && e.code === "GEN-READY",
+  );
+
+  await withEnv({ GENERATED_CONTENTS_MONTH_LIMIT: "100" }, async () => {
+    const job = await startCommerceIntelligence({ tenantId, userId, productId: created.id, idempotencyKey: randomBytes(16).toString("base64url"), mode: "complete", targetContentCount: 1 });
+    assert.equal(job.status, "QUEUED");
+  });
+});
+
+// Gate 3 item 3 (rev. 2) — o terminal MAIS RECENTE decide a readiness (mesma
+// seleção de /api/generations/current): parcial seguido de complete falho é
+// FAILED (Tentar novamente); retry bem-sucedido sobre falha volta a READY.
+test("readiness segue o terminal mais recente (parcial→complete falho→FAILED; retry→READY)", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId, userId } = await tenantOf();
+  const created = await criarProduct(token);
+  const jobData = (status: "SUCCEEDED_PARTIAL" | "FAILED", createdAt: Date, key: string) => ({
+    tenantId,
+    userId,
+    productId: created.id,
+    idempotencyKey: key,
+    fingerprint: `test-${key}`,
+    targetContentCount: 1,
+    generatedContentsMonth: monthUtc(),
+    status,
+    createdAt,
+    ...(status === "SUCCEEDED_PARTIAL"
+      ? { metadata: { expectedCount: 1, deliveredCount: 1, failedCount: 0, failedItems: [] } }
+      : {}),
+  });
+  const read = async () =>
+    ((await handleGetProduct(getById(token, created.id), created.id).then((r) => r.json())) as { readiness: string }).readiness;
+
+  const base = Date.now() - 120000;
+  await prisma.commerceIntelligenceJob.create({ data: jobData("SUCCEEDED_PARTIAL", new Date(base), randomBytes(16).toString("base64url")) });
+  assert.equal(await read(), "READY");
+
+  // 'Gerar faltantes' cria novo job que termina FAILED: Product volta a FAILED.
+  await prisma.commerceIntelligenceJob.create({ data: jobData("FAILED", new Date(base + 60000), randomBytes(16).toString("base64url")) });
+  assert.equal(await read(), "FAILED");
+
+  // 'Tentar novamente' convergindo: Product volta a READY (terminal mais recente).
+  await prisma.commerceIntelligenceJob.create({ data: jobData("SUCCEEDED_PARTIAL", new Date(base + 120000), randomBytes(16).toString("base64url")) });
+  assert.equal(await read(), "READY");
+});
+
+// Gate 3 item 6 (rev. 2) — fim-a-fim: terminal positivo que degrada GEN-PROJECTION
+// preserva o status persistido e NÃO oferece retry: POST /api/generations/[id]/retry
+// responde 404 (SUCCEEDED fora da partição RETRY_ALLOWED_STATUSES). Contrato RI-003-20.
+test("GEN-PROJECTION em terminal positivo não é recuperável por /retry (404 fim-a-fim)", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId, userId } = await tenantOf();
+  const created = await criarProduct(token);
+  const job = await prisma.commerceIntelligenceJob.create({
+    data: {
+      tenantId,
+      userId,
+      productId: created.id,
+      idempotencyKey: randomBytes(16).toString("base64url"),
+      fingerprint: "test-projection",
+      targetContentCount: 2,
+      generatedContentsMonth: monthUtc(),
+      status: "SUCCEEDED", // terminal positivo SEM contents → gatilho (c) da RI-003-20
+    },
+  });
+
+  const genGet = (jobId: string) =>
+    new Request(`${ORIGIN}/api/generations/${jobId}`, {
+      headers: { cookie: `${SESSION_COOKIE}=${token}` },
+    });
+  const genRetry = (jobId: string) =>
+    new Request(`${ORIGIN}/api/generations/${jobId}/retry`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: ORIGIN,
+        "sec-fetch-site": "same-origin",
+        cookie: `${SESSION_COOKIE}=${token}`,
+        "idempotency-key": randomBytes(16).toString("base64url"),
+      },
+      body: "{}",
+    });
+
+  const view = (await handleGet(genGet(job.id), job.id).then((r) => r.json())) as { code?: string; status: string; readiness: string };
+  assert.equal(view.code, "GEN-PROJECTION"); // projeção degradada fail-closed
+  assert.equal(view.status, "SUCCEEDED"); // status persistido preservado, nunca transformado
+  assert.equal(view.readiness, "FAILED");
+
+  const retry = await handleRetry(genRetry(job.id), job.id);
+  assert.equal(retry.status, 404); // fora da partição: sem recuperação self-service
+  assert.equal(((await retry.json()) as { code?: string }).code, "NOT_FOUND");
+  assert.equal(await prisma.commerceIntelligenceJob.count({ where: { tenantId, productId: created.id } }), 1); // nenhum job criado
+});
+
+// RI-003-24: archive durante job em execução — o worker revalida o lifecycle e
+// falha o job (GEN-PRODUCT) sem publicar resultado nem criar memória.
+test("Job em execução sobre Product ARCHIVED falha com GEN-PRODUCT, sem memória nem resultado", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId, userId } = await tenantOf();
+  const created = await criarProduct(token);
+  const job = await prisma.commerceIntelligenceJob.create({
+    data: {
+      tenantId,
+      userId,
+      productId: created.id,
+      idempotencyKey: randomBytes(16).toString("base64url"),
+      fingerprint: "test-archive-running",
+      targetContentCount: 1,
+      generatedContentsMonth: monthUtc(),
+      status: "RUNNING",
+      leaseOwnerId: "worker-archive-test",
+      attempt: 1,
+    },
+  });
+  await prisma.generationUsageReservation.create({ data: { tenantId, jobId: job.id, generatedContentsMonth: monthUtc(), quantity: 1 } });
+  // Archive após o claim: o Product existe, mas lifecycle != ACTIVE.
+  await prisma.product.update({ where: { tenantId_id: { tenantId, id: created.id } }, data: { lifecycle: "ARCHIVED" } });
+
+  const result = await processGeneration(job.id, "worker-archive-test");
+  assert.equal(result, false); // interrompido antes do pipeline
+  const failed = await prisma.commerceIntelligenceJob.findUnique({ where: { id: job.id } });
+  assert.equal(failed?.status, "FAILED");
+  assert.equal(failed?.internalErrorCode, "GEN-PRODUCT"); // mesmo código de "Produto não disponível"
+  const reservation = await prisma.generationUsageReservation.findFirst({ where: { jobId: job.id } });
+  assert.equal(reservation?.status, "RELEASED"); // capacidade devolvida
+  // Nada publicado: nem memória, nem resultado.
+  assert.equal(await prisma.productMemorySnapshot.count({ where: { tenantId, productId: created.id } }), 0);
+  assert.equal(await prisma.productStrategy.count({ where: { tenantId, productId: created.id } }), 0);
+});
+
+// RI-003-24: a leitura de finalização usa SELECT FOR UPDATE na linha do Product
+// (lockProductLifecycle) — o archive (UPDATE) deve esperar o lock: sem isso
+// haveria janela TOCTOU entre a leitura do lifecycle e as escritas do resultado.
+test("Leitura de finalização serializa com archive: FOR UPDATE bloqueia o UPDATE concorrente", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+  const created = await criarProduct(token);
+  const startedAt = Date.now();
+
+  const [finalizacao, archive] = await Promise.all([
+    // Mesma primitiva usada pela transação de finalização do worker:
+    prisma.$transaction(async (tx) => {
+      const lifecycle = await lockProductLifecycle(tx, tenantId, created.id);
+      assert.equal(lifecycle, "ACTIVE"); // leitura com lock vê o valor commitado
+      await new Promise((resolve) => setTimeout(resolve, 400)); // segura o lock
+      return Date.now();
+    }),
+    // Archive concorrente (transitionTenantProduct usa UPDATE na mesma linha):
+    (async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100)); // finalização adquire o lock primeiro
+      await prisma.product.updateMany({ where: { tenantId, id: created.id }, data: { lifecycle: "ARCHIVED" } });
+      return Date.now();
+    })(),
+  ]);
+
+  assert.ok(archive - startedAt >= finalizacao - startedAt, "archive deve esperar o lock da finalização (sem TOCTOU)");
+  assert.equal(await prisma.product.findUnique({ where: { id: created.id } }).then((p) => p?.lifecycle), "ARCHIVED");
 });

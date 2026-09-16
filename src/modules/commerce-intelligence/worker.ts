@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { GenerationError } from "./errors";
 import { ContractError } from "./contract";
-import { emitJobEvent, sanitizeGateReports, type SanitizedGateReport } from "./observability";
+import { emitJobEvent, sanitizeGateReports, type JobEventFields, type SanitizedGateReport } from "./observability";
 import { prisma } from "../db";
 import { extractJobCreatorContext } from "../creator-preferences/service";
 import {
@@ -11,6 +11,8 @@ import {
   ENGINE_VERSION,
   generateSceneSetsForBriefs,
   runFirstGeneration,
+  type EngineResult,
+  type SceneSetOutcome,
   type UnderstandingCardinalityReduction,
 } from "./engine";
 import { loadPlatformSkill } from "./platform-skill";
@@ -22,6 +24,50 @@ import { QUALITY_CRITERIA, QUALITY_PARTS, QUALITY_REASONS, reasonText, type Qual
 import { heartbeat } from "./runtime";
 
 const SAFE_REPAIR_CAUSE_LABELS = ["claim sem suporte", "development invalido"] as const;
+
+/** Fatos essenciais do Product enviados à engine ( Gate 5, item 3). Desconto
+ * entra como fato SOMENTE quando existe no Product, exclusivamente do tipado
+ * (discountType + discountValue): sem fallback de discountPercentage, valor
+ * nunca inventado. Função pura para cobertura factual determinística. */
+export function projectEngineFacts(product: {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  brand: string | null;
+  priceAmount: Prisma.Decimal | null;
+  priceCurrency: string | null;
+  discountType: string | null;
+  discountValue: string | null;
+  discountPercentage: Prisma.Decimal | null;
+  features: unknown;
+  variants: unknown;
+  images: unknown;
+  seller: string | null;
+  sourceUrl: string | null;
+}) {
+  return {
+    productId: product.id,
+    name: product.name,
+    description: product.description,
+    category: product.category,
+    brand: product.brand,
+    priceAmount: product.priceAmount?.toString(),
+    priceCurrency: product.priceCurrency,
+    // Desconto só entra como fato quando existe no Product (nunca inventado).
+    // Contrato exclusivamente tipado (Gate 5): sem fallback de discountPercentage.
+    discount: product.discountType === "PERCENTAGE" && product.discountValue
+      ? `${product.discountValue.toString()}% de desconto`
+      : product.discountType === "FIXED" && product.discountValue
+        ? `${product.priceCurrency ?? ""} ${product.discountValue.toString()} de desconto`.trim()
+        : undefined,
+    features: product.features,
+    variants: product.variants,
+    images: product.images,
+    seller: product.seller,
+    sourceUrl: product.sourceUrl,
+  };
+}
 
 function projectRepairCauses(source: Record<string, unknown>, sanitized: string[]): string[] {
   const causes = Array.isArray(source.issues) ? source.issues : Array.isArray(source.causes) ? source.causes : [];
@@ -139,9 +185,8 @@ function batchSizeForBudget(): number {
 export function callBudget(count: number): number {
   return 4 + Math.ceil(count / batchSizeForBudget());
 }
-// Margem do fallback LOW→MID→HIGH (provider): no pior caso cada chamada MID custa uma
-// brief (MID). Tarefas HIGH não caem em fallback; cenas (LOW) têm orçamento
-// próprio em sceneDeadlineBudgetMs (cadeia LOW→MID→HIGH incluída lá).
+// Margem do fallback MID→HIGH (provider): no pior caso cada chamada MID custa uma
+// brief (MID). Tarefas HIGH não caem em fallback; cenas e juízes agora usam HIGH.
 export function fallbackCallBudget(count: number): number {
   return 2 + Math.ceil(count / batchSizeForBudget());
 }
@@ -217,12 +262,22 @@ export function validateGenerationConfig(): void {
     );
 }
 
+// Ponto ÚNICO de incremento da tentativa é o reclaim (B-003-03:145): o claim
+// executa a tentativa corrente sem incrementar — attempt conta as tentativas
+// já terminadas (rotação/esgotamento), nunca dupla contagem claim+reclaim.
+// O parâmetro opcional jobId dirige o claim a um job específico (testes e
+// operação); sem ele, o claim é global (FIFO por createdAt).
 export async function claimGeneration(
   now = new Date(),
-  ownerId = randomUUID(),
+  ownerId: string = randomUUID(),
+  jobId?: string,
 ) {
   const job = await prisma.commerceIntelligenceJob.findFirst({
-    where: { status: "QUEUED", nextAttemptAt: { lte: now } },
+    where: {
+      status: "QUEUED",
+      nextAttemptAt: { lte: now },
+      ...(jobId ? { id: jobId } : {}),
+    },
     orderBy: { createdAt: "asc" },
   });
   if (!job) return null;
@@ -236,7 +291,6 @@ export async function claimGeneration(
     where: { id: job.id, status: "QUEUED", attempt: job.attempt },
     data: {
       status: "RUNNING",
-      attempt: { increment: 1 },
       leaseOwnerId: ownerId,
       leaseDeadlineAt,
       attemptDeadlineAt,
@@ -247,7 +301,7 @@ export async function claimGeneration(
     ? (() => {
         emitJobEvent("job.claimed", {
           jobId: job.id,
-          attempt: job.attempt + 1,
+          attempt: job.attempt,
           timeoutMs: attemptDeadlineMsFor(job.targetContentCount),
         });
         return {
@@ -255,21 +309,28 @@ export async function claimGeneration(
           ownerId,
           leaseDeadlineAt,
           attemptDeadlineAt,
-          attempt: job.attempt + 1,
+          attempt: job.attempt,
         };
       })()
     : null;
 }
 
+// Gate 6 item 6: expiração visível — rotação emite job.reclaimed e esgotamento
+// emite job.terminal, ambos SOMENTE quando o CAS persiste (mesmo contrato
+// evento ⇔ persistência de failJobAndReleaseReservation).
 export async function reclaimExpiredGenerations(now = new Date()) {
   const cap = maxAttempts();
   const expired = await prisma.commerceIntelligenceJob.findMany({
     where: { status: "RUNNING", leaseDeadlineAt: { lt: now } },
-    select: { id: true, attempt: true },
+    select: { id: true, attempt: true, tenantId: true, productId: true, stage: true },
   });
   for (const job of expired) {
-    await prisma.$transaction(async (tx) => {
-      const terminal = job.attempt >= cap;
+    // B-003-03: incremento ÚNICO por tentativa perdida acontece AQUI (o claim
+    // não incrementa). Rotação e esgotamento contabilizam a tentativa que
+    // terminou; o limite (cap) é o número máximo de execuções: terminal quando
+    // esta é a cap-ésima (attempt pós-incremento >= cap).
+    const terminal = job.attempt + 1 >= cap;
+    const changed = await prisma.$transaction(async (tx) => {
       const changed = await tx.commerceIntelligenceJob.updateMany({
         where: {
           id: job.id,
@@ -281,7 +342,10 @@ export async function reclaimExpiredGenerations(now = new Date()) {
           ? {
               status: "FAILED",
               finishedAt: now,
-              internalErrorCode: "GEN-ATTEMPTS",
+              attempt: { increment: 1 },
+              // SPEC slice-003 (código GEN-LEASE-EXPIRED): lease expirado sem
+              // conclusão, esgotadas as tentativas — reconciliação única.
+              internalErrorCode: "GEN-LEASE-EXPIRED",
               publicErrorMessage:
                 "Não foi possível concluir a análise. Tente novamente.",
               leaseOwnerId: null,
@@ -289,23 +353,63 @@ export async function reclaimExpiredGenerations(now = new Date()) {
             }
           : {
               status: "QUEUED",
+              attempt: { increment: 1 },
               leaseOwnerId: null,
               leaseDeadlineAt: null,
               nextAttemptAt: new Date(
-                now.getTime() + Math.min(300000, 1000 * 2 ** job.attempt),
+                now.getTime() + Math.min(300000, 1000 * 2 ** (job.attempt + 1)),
               ),
             },
       });
-      if (changed.count && terminal)
+      if (changed.count && terminal) {
         await tx.generationUsageReservation.updateMany({
           where: { jobId: job.id, status: "RESERVED" },
-          data: { status: "RELEASED", reason: "GEN-ATTEMPTS" },
+          data: { status: "RELEASED", reason: "GEN-LEASE-EXPIRED" },
         });
+        // ADR-021 (decisão 5): FAILED também preserva IntelligenceRun com
+        // diagnóstico sanitizado — na MESMA transação do CAS terminal, inclusive
+        // no lease-expired do reclaim (mesmo contrato do failJob).
+        const internalError = internalFailureMetadata("GEN-LEASE-EXPIRED", job.stage ?? null, {});
+        const metadata = { attempt: job.attempt + 1, internalError } as never;
+        await tx.intelligenceRun.upsert({
+          where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } },
+          create: {
+            tenantId: job.tenantId,
+            jobId: job.id,
+            productId: job.productId,
+            engineVersion: ENGINE_VERSION,
+            platformSkillVersion: loadPlatformSkill().version,
+            metadata,
+            inputMemorySnapshot: {},
+          },
+          update: { metadata },
+        });
+      }
+      return changed.count;
     });
+    if (!changed) continue;
+    if (terminal)
+      emitJobEvent("job.terminal", {
+        jobId: job.id,
+        attempt: job.attempt + 1,
+        errorCode: "GEN-LEASE-EXPIRED",
+        reservationAction: "RELEASED",
+      });
+    else
+      emitJobEvent("job.reclaimed", {
+        jobId: job.id,
+        attempt: job.attempt + 1,
+        errorCode: "GEN-LEASE-EXPIRED",
+      });
   }
   return expired.length;
 }
 
+// Retorna true somente quando o CAS terminaliza o job (count > 0). Com fence
+// perdido (count = 0) nada é persistido e o evento job.terminal NÃO é emitido —
+// ele anunciaria reservationAction RELEASED sem persistência correspondente. A
+// emissão acontece aqui, condicionada ao CAS real (terminalEvent são os campos
+// extras de diagnóstico do chamador).
 export async function failJobAndReleaseReservation(
   jobId: string,
   code = "GEN-PROVIDER",
@@ -313,8 +417,9 @@ export async function failJobAndReleaseReservation(
   attempt?: number,
   internalDetail?: unknown,
   failureRun?: { tenantId: string; productId: string; engineVersion: string; platformSkillVersion: string; metadata: Record<string, unknown> },
-) {
-  await prisma.$transaction(async (tx) => {
+  terminalEvent?: Pick<JobEventFields, "stage" | "gateReports" | "qualityFailures">,
+): Promise<boolean> {
+  const terminalized = await prisma.$transaction(async (tx) => {
     const result = await tx.commerceIntelligenceJob.updateMany({
       where: {
         id: jobId,
@@ -335,7 +440,7 @@ export async function failJobAndReleaseReservation(
           : { metadata: { internalError: internalDetail } }),
       },
     });
-    if (!result.count) return;
+    if (!result.count) return false;
     await tx.generationUsageReservation.updateMany({
       where: { jobId, status: "RESERVED" },
       data: { status: "RELEASED", reason: code },
@@ -359,7 +464,17 @@ export async function failJobAndReleaseReservation(
           metadata: failureRun.metadata as never,
         },
       });
+    return true;
   });
+  if (terminalized)
+    emitJobEvent("job.terminal", {
+      jobId,
+      attempt,
+      errorCode: code,
+      reservationAction: "RELEASED",
+      ...terminalEvent,
+    });
+  return terminalized;
 }
 
 export function runMetadata(
@@ -441,6 +556,270 @@ export function mergeMemorySignals(
   };
 }
 
+// RI-003-24: leitura do lifecycle com lock de linha (SELECT FOR UPDATE) —
+// serializa com transitionTenantProduct/archiveTenantProduct (o UPDATE do
+// archive adquire o mesmo lock): ou o archive commita antes e a leitura vê
+// ARCHIVED, ou o archive espera o commit da finalização. Um re-SELECT sem
+// lock teria janela TOCTOU entre a leitura e as escritas do resultado.
+export async function lockProductLifecycle(tx: Prisma.TransactionClient, tenantId: string, productId: string): Promise<string | null> {
+  const [row] = await tx.$queryRaw<Array<{ lifecycle: string }>>`
+    SELECT "lifecycle" FROM "products"
+    WHERE "tenantId" = ${tenantId} AND "id" = ${productId}
+    FOR UPDATE`;
+  return row?.lifecycle ?? null;
+}
+
+// Transação curta de finalização (extraída de processGeneration para cobertura
+// determinística — mesmo comportamento, nenhum acesso a provider aqui). Todo o
+// bloqueio de fence usa CAS owner+attempt; qualquer count inesperado lança
+// GEN-FENCED e reverte TODAS as escritas (strategy/plan/contents/run/memória/reserva).
+export async function finalizeGeneration(
+  job: { id: string; tenantId: string; productId: string; targetContentCount: number; metadata: unknown },
+  ownerId: string,
+  attempt: number,
+  output: EngineResult,
+  sceneSets: SceneSetOutcome[],
+  runData: Record<string, unknown>,
+): Promise<void> {
+  // ADR-021: assinatura residual do parcial vai no metadado do run.
+  const runDataWithPartial = output.partial ? { ...runData, partial: output.partial } : runData;
+  await prisma.$transaction(async (tx) => {
+    const fenced = await tx.commerceIntelligenceJob.updateMany({
+      where: {
+        id: job.id,
+        status: "RUNNING",
+        leaseOwnerId: ownerId,
+        attempt,
+      },
+      data: { stage: "FINALIZING" },
+    });
+    if (fenced.count !== 1)
+      throw new GenerationError(
+        "GEN-FENCED",
+        "Job não pertence mais ao owner/attempt na finalização",
+      );
+    // RI-003-24: revalida o lifecycle DENTRO da transação de finalização COM
+    // lock de linha — archive durante o RUNNING ou entre a leitura e as
+    // escritas interrompe a publicação (rollback de strategy/plan/contents/
+    // memória/reserva) ou espera o commit desta transação.
+    if ((await lockProductLifecycle(tx, job.tenantId, job.productId)) !== "ACTIVE")
+      throw new GenerationError("GEN-PRODUCT", "Produto não disponível");
+    const strategy = await tx.productStrategy.create({
+      data: {
+        id: String(output.strategy.id),
+        tenantId: job.tenantId,
+        productId: job.productId,
+        jobId: job.id,
+        platformId: String(output.strategy.platformId),
+        platformSkillVersion: String(output.strategy.platformSkillVersion),
+        payload: JSON.parse(JSON.stringify(output.strategy)),
+      },
+    });
+    const plan = await tx.contentPlan.create({
+      data: {
+        id: String(output.plan.id),
+        tenantId: job.tenantId,
+        productId: job.productId,
+        jobId: job.id,
+        strategyId: strategy.id,
+        strategyVersion: 1,
+        targetContentCount: job.targetContentCount,
+        platformId: String(output.plan.platformId),
+        platformSkillVersion: String(output.plan.platformSkillVersion),
+        payload: JSON.parse(JSON.stringify(output.plan)),
+      },
+    });
+    await tx.productUnderstanding.create({
+      data: {
+        tenantId: job.tenantId,
+        productId: job.productId,
+        jobId: job.id,
+        payload: JSON.parse(JSON.stringify(output.productUnderstanding)),
+      },
+    });
+    // ADR-021: run idempotente por job — persistido também em SUCCEEDED_PARTIAL.
+    await tx.intelligenceRun.upsert({
+      where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } },
+      create: {
+        tenantId: job.tenantId,
+        jobId: job.id,
+        productId: job.productId,
+        engineVersion: ENGINE_VERSION,
+        platformSkillVersion: String(output.strategy.platformSkillVersion),
+        metadata: runDataWithPartial as never,
+        inputMemorySnapshot: {},
+      },
+      update: {
+        engineVersion: ENGINE_VERSION,
+        platformSkillVersion: String(output.strategy.platformSkillVersion),
+        metadata: runDataWithPartial as never,
+      },
+    });
+    for (const [index, opportunity] of output.opportunities.entries())
+      await tx.contentOpportunity.create({
+        data: {
+          id: String(opportunity.id),
+          tenantId: job.tenantId,
+          productId: job.productId,
+          planId: plan.id,
+          jobId: job.id,
+          position: index + 1,
+          commercialObjective: String(opportunity.commercialObjective),
+          angle: String(opportunity.angle),
+          coreMessage: String(opportunity.coreMessage),
+          hookMechanism: String(opportunity.hookMechanism),
+          noveltyTargets: JSON.parse(
+            JSON.stringify(opportunity.noveltyTargets),
+          ),
+          payload: JSON.parse(JSON.stringify(opportunity)),
+        },
+      });
+    for (const [index, brief] of output.briefs.entries()) {
+      // ADR-021: briefs entregues mantêm a oportunidade do plano original.
+      const opportunity = output.opportunities[output.briefOpportunityPositions?.[index] ?? index];
+      const content = await tx.content.create({
+        data: {
+          id: brief.contentId,
+          tenantId: job.tenantId,
+          productId: job.productId,
+          jobId: job.id,
+          planId: plan.id,
+          // P0-2: proveniência server-derived — Content vinculado à ContentOpportunity da mesma posição.
+          opportunityId: opportunity ? String(opportunity.id) : null,
+          // ADR-021: posição original no plano (N), não renumerada no subconjunto.
+          position: (output.briefOpportunityPositions?.[index] ?? index) + 1,
+          payload: briefPayloadForPersistence(brief),
+        },
+      });
+      const version = await tx.contentBriefVersion.create({
+        data: {
+          id: brief.briefVersionId,
+          tenantId: job.tenantId,
+          productId: job.productId,
+          jobId: job.id,
+          contentId: content.id,
+          payload: briefPayloadForPersistence(brief),
+        },
+      });
+      const report = output.reports[index];
+      await tx.content.update({
+        where: { id: content.id },
+        data: { currentBriefVersionId: version.id },
+      });
+      await tx.briefValidationReport.create({
+        data: {
+          id: `${content.id}:${version.id}`,
+          tenantId: job.tenantId,
+          jobId: job.id,
+          productId: job.productId,
+          contentId: content.id,
+          briefVersionId: version.id,
+          briefId: `${content.id}:${version.id}`,
+          gateVersion: GATE_POLICY_VERSION,
+          factualStatus: report.factualStatus,
+          claimType: report.claimType,
+          evidenceRefs: JSON.parse(JSON.stringify(report.evidenceRefs)),
+          structuralStatus: report.structuralStatus,
+          platformStatus: report.platformStatus,
+          varietyStatus: report.varietyStatus,
+          decision: report.decision,
+          issues: report.issues,
+        },
+      });
+    }
+    // ADR-019: persistência dos sets de cenas na mesma transação curta de
+    // FINALIZING (LLM ficou fora); idempotente pelo unique (tenantId, briefVersionId).
+    for (const set of sceneSets) {
+      await tx.contentSceneSet.upsert({
+        where: {
+          tenantId_briefVersionId: {
+            tenantId: job.tenantId,
+            briefVersionId: set.briefVersionId,
+          },
+        },
+        create: {
+          id: `${set.contentId}:${set.briefVersionId}`,
+          tenantId: job.tenantId,
+          jobId: job.id,
+          productId: job.productId,
+          contentId: set.contentId,
+          briefVersionId: set.briefVersionId,
+          status: set.status,
+          gatePolicyVersion: GATE_POLICY_VERSION,
+          backfilled: set.backfilled,
+          payload: {
+            scenes: set.scenes,
+            generated: set.generated,
+            dropped: set.dropped,
+          },
+        },
+        update: {},
+      });
+    }
+    // ADR-021: snapshot ACUMULATIVO — arrays do planner (mecanismos/funções/
+    // ângulos) fazem merge deduplicado com o snapshot anterior.
+    const previousSnapshot = await tx.productMemorySnapshot.findFirst({
+      where: { tenantId: job.tenantId, productId: job.productId },
+      orderBy: { createdAt: "desc" },
+    });
+    await tx.productMemorySnapshot.create({
+      data: {
+        tenantId: job.tenantId,
+        productId: job.productId,
+        sourceJobId: job.id,
+        signals: JSON.parse(
+          JSON.stringify(
+            mergeMemorySignals(previousSnapshot?.signals, output.memorySignals),
+          ),
+        ),
+      },
+    });
+    // ADR-021/ADR-006: parcial confirma D e libera N−D no mês de origem —
+    // capacidade agrega RESERVED+CONFIRMED; a quantidade ajustada libera o resto.
+    await tx.generationUsageReservation.updateMany({
+      where: { jobId: job.id, status: "RESERVED" },
+      data: output.partial
+        ? { status: "CONFIRMED", quantity: output.partial.deliveredCount }
+        : { status: "CONFIRMED" },
+    });
+    // Fence no commit terminal: se o fencing se perdeu depois do CAS inicial
+    // (heartbeat expirou/reclaim reassumiu), count=0 e TODAS as escritas desta
+    // transação são revertidas — owner antigo nunca publica estado terminal.
+    const terminal = await tx.commerceIntelligenceJob.updateMany({
+      where: {
+        id: job.id,
+        status: "RUNNING",
+        leaseOwnerId: ownerId,
+        attempt,
+      },
+      data: {
+        status: output.partial ? "SUCCEEDED_PARTIAL" : "SUCCEEDED",
+        stage: "FINALIZING",
+        finishedAt: new Date(),
+        leaseOwnerId: null,
+        ...(output.partial
+          ? {
+              // ADR-021: parcial é DECLARADO — contagens + assinatura por item.
+              metadata: {
+                ...((job.metadata as Record<string, unknown> | null) ?? {}),
+                expectedCount: output.partial.expectedCount,
+                deliveredCount: output.partial.deliveredCount,
+                failedCount: output.partial.failedCount,
+                failedItems: output.partial.failedItems,
+              },
+            }
+          : {}),
+        leaseDeadlineAt: null,
+      },
+    });
+    if (terminal.count !== 1)
+      throw new GenerationError(
+        "GEN-FENCED",
+        "Job não pertence mais ao owner/attempt no commit terminal",
+      );
+  });
+}
+
 export async function processGeneration(jobId: string, ownerId: string) {
   const job = await prisma.commerceIntelligenceJob.findFirst({
     where: { id: jobId, status: "RUNNING", leaseOwnerId: ownerId },
@@ -449,7 +828,9 @@ export async function processGeneration(jobId: string, ownerId: string) {
   const product = await prisma.product.findFirst({
     where: { tenantId: job.tenantId, id: job.productId },
   });
-  if (!product) {
+  // RI-003-24: geração pertence a Product ACTIVE — inclusive na reentrada de
+  // job já claimed após um archive.
+  if (!product || product.lifecycle !== "ACTIVE") {
     await failJobAndReleaseReservation(
       jobId,
       "GEN-PRODUCT",
@@ -556,25 +937,7 @@ export async function processGeneration(jobId: string, ownerId: string) {
   }, heartbeatMs);
   heartbeatTimer.unref?.();
   try {
-    const engineFacts = {
-      productId: product.id,
-      name: product.name,
-      description: product.description,
-      category: product.category,
-      brand: product.brand,
-      priceAmount: product.priceAmount?.toString(),
-      priceCurrency: product.priceCurrency,
-      // Desconto só entra como fato quando existe no Product (nunca inventado).
-      // Com unidade "%" para o Quality Gate validar claims percentuais contra ele.
-      discountPercentage: product.discountPercentage
-        ? `${product.discountPercentage.toString()}% de desconto`
-        : undefined,
-      features: product.features,
-      variants: product.variants,
-      images: product.images,
-      seller: product.seller,
-      sourceUrl: product.sourceUrl,
-    };
+    const engineFacts = projectEngineFacts(product);
     const router = createHttpProvider();
     // ADR-021: modo "complete" reutiliza a Strategy ACTIVE e o último snapshot
     // de memória (itens entregues) — o planner não repete o já publicado.
@@ -713,234 +1076,14 @@ export async function processGeneration(jobId: string, ownerId: string) {
       output.qualityRepairs,
       output.understandingReductions,
     );
-    // ADR-021: assinatura residual do parcial vai no metadado do run.
-    const runDataWithPartial = output.partial ? { ...runData, partial: output.partial } : runData;
     emitJobEvent("job.finalizing", {
       jobId: job.id,
       attempt,
       stage: "FINALIZING",
     });
-    await prisma.$transaction(async (tx) => {
-      const fenced = await tx.commerceIntelligenceJob.updateMany({
-        where: {
-          id: job.id,
-          status: "RUNNING",
-          leaseOwnerId: ownerId,
-          attempt,
-        },
-        data: { stage: "FINALIZING" },
-      });
-      if (fenced.count !== 1)
-        throw new GenerationError(
-          "GEN-FENCED",
-          "Job não pertence mais ao owner/attempt na finalização",
-        );
-      const strategy = await tx.productStrategy.create({
-        data: {
-          id: String(output.strategy.id),
-          tenantId: job.tenantId,
-          productId: job.productId,
-          jobId: job.id,
-          platformId: String(output.strategy.platformId),
-          platformSkillVersion: String(output.strategy.platformSkillVersion),
-          payload: JSON.parse(JSON.stringify(output.strategy)),
-        },
-      });
-      const plan = await tx.contentPlan.create({
-        data: {
-          id: String(output.plan.id),
-          tenantId: job.tenantId,
-          productId: job.productId,
-          jobId: job.id,
-          strategyId: strategy.id,
-          strategyVersion: 1,
-          targetContentCount: job.targetContentCount,
-          platformId: String(output.plan.platformId),
-          platformSkillVersion: String(output.plan.platformSkillVersion),
-          payload: JSON.parse(JSON.stringify(output.plan)),
-        },
-      });
-      await tx.productUnderstanding.create({
-        data: {
-          tenantId: job.tenantId,
-          productId: job.productId,
-          jobId: job.id,
-          payload: JSON.parse(JSON.stringify(output.productUnderstanding)),
-        },
-      });
-      // ADR-021: run idempotente por job — persistido também em SUCCEEDED_PARTIAL.
-      await tx.intelligenceRun.upsert({
-        where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } },
-        create: {
-          tenantId: job.tenantId,
-          jobId: job.id,
-          productId: job.productId,
-          engineVersion: ENGINE_VERSION,
-          platformSkillVersion: String(output.strategy.platformSkillVersion),
-          metadata: runDataWithPartial as never,
-          inputMemorySnapshot: {},
-        },
-        update: {
-          engineVersion: ENGINE_VERSION,
-          platformSkillVersion: String(output.strategy.platformSkillVersion),
-          metadata: runDataWithPartial as never,
-        },
-      });
-      for (const [index, opportunity] of output.opportunities.entries())
-        await tx.contentOpportunity.create({
-          data: {
-            id: String(opportunity.id),
-            tenantId: job.tenantId,
-            productId: job.productId,
-            planId: plan.id,
-            jobId: job.id,
-            position: index + 1,
-            commercialObjective: String(opportunity.commercialObjective),
-            angle: String(opportunity.angle),
-            coreMessage: String(opportunity.coreMessage),
-            hookMechanism: String(opportunity.hookMechanism),
-            noveltyTargets: JSON.parse(
-              JSON.stringify(opportunity.noveltyTargets),
-            ),
-            payload: JSON.parse(JSON.stringify(opportunity)),
-          },
-        });
-      for (const [index, brief] of output.briefs.entries()) {
-        // ADR-021: briefs entregues mantêm a oportunidade do plano original.
-        const opportunity = output.opportunities[output.briefOpportunityPositions?.[index] ?? index];
-        const content = await tx.content.create({
-          data: {
-            id: brief.contentId,
-            tenantId: job.tenantId,
-            productId: job.productId,
-            jobId: job.id,
-            planId: plan.id,
-            // P0-2: proveniência server-derived — Content vinculado à ContentOpportunity da mesma posição.
-            opportunityId: opportunity ? String(opportunity.id) : null,
-            // ADR-021: posição original no plano (N), não renumerada no subconjunto.
-            position: (output.briefOpportunityPositions?.[index] ?? index) + 1,
-            payload: briefPayloadForPersistence(brief),
-          },
-        });
-        const version = await tx.contentBriefVersion.create({
-          data: {
-            id: brief.briefVersionId,
-            tenantId: job.tenantId,
-            productId: job.productId,
-            jobId: job.id,
-            contentId: content.id,
-            payload: briefPayloadForPersistence(brief),
-          },
-        });
-        const report = output.reports[index];
-        await tx.content.update({
-          where: { id: content.id },
-          data: { currentBriefVersionId: version.id },
-        });
-        await tx.briefValidationReport.create({
-          data: {
-            id: `${content.id}:${version.id}`,
-            tenantId: job.tenantId,
-            jobId: job.id,
-            productId: job.productId,
-            contentId: content.id,
-            briefVersionId: version.id,
-            briefId: `${content.id}:${version.id}`,
-            gateVersion: GATE_POLICY_VERSION,
-            factualStatus: report.factualStatus,
-            claimType: report.claimType,
-            evidenceRefs: JSON.parse(JSON.stringify(report.evidenceRefs)),
-            structuralStatus: report.structuralStatus,
-            platformStatus: report.platformStatus,
-            varietyStatus: report.varietyStatus,
-            decision: report.decision,
-            issues: report.issues,
-          },
-        });
-      }
-      // ADR-019: persistência dos sets de cenas na mesma transação curta de
-      // FINALIZING (LLM ficou fora); idempotente pelo unique (tenantId, briefVersionId).
-      for (const set of sceneSets) {
-        await tx.contentSceneSet.upsert({
-          where: {
-            tenantId_briefVersionId: {
-              tenantId: job.tenantId,
-              briefVersionId: set.briefVersionId,
-            },
-          },
-          create: {
-            id: `${set.contentId}:${set.briefVersionId}`,
-            tenantId: job.tenantId,
-            jobId: job.id,
-            productId: job.productId,
-            contentId: set.contentId,
-            briefVersionId: set.briefVersionId,
-            status: set.status,
-            gatePolicyVersion: GATE_POLICY_VERSION,
-            backfilled: set.backfilled,
-            payload: {
-              scenes: set.scenes,
-              generated: set.generated,
-              dropped: set.dropped,
-            },
-          },
-          update: {},
-        });
-      }
-      // ADR-021: snapshot ACUMULATIVO — arrays do planner (mecanismos/funções/
-      // ângulos) fazem merge deduplicado com o snapshot anterior.
-      const previousSnapshot = await tx.productMemorySnapshot.findFirst({
-        where: { tenantId: job.tenantId, productId: job.productId },
-        orderBy: { createdAt: "desc" },
-      });
-      await tx.productMemorySnapshot.create({
-        data: {
-          tenantId: job.tenantId,
-          productId: job.productId,
-          sourceJobId: job.id,
-          signals: JSON.parse(
-            JSON.stringify(
-              mergeMemorySignals(previousSnapshot?.signals, output.memorySignals),
-            ),
-          ),
-        },
-      });
-      // ADR-021/ADR-006: parcial confirma D e libera N−D no mês de origem —
-      // capacidade agrega RESERVED+CONFIRMED; a quantidade ajustada libera o resto.
-      await tx.generationUsageReservation.updateMany({
-        where: { jobId: job.id, status: "RESERVED" },
-        data: output.partial
-          ? { status: "CONFIRMED", quantity: output.partial.deliveredCount }
-          : { status: "CONFIRMED" },
-      });
-      await tx.commerceIntelligenceJob.updateMany({
-        where: {
-          id: job.id,
-          status: "RUNNING",
-          leaseOwnerId: ownerId,
-          attempt,
-        },
-        data: {
-          status: output.partial ? "SUCCEEDED_PARTIAL" : "SUCCEEDED",
-          stage: "FINALIZING",
-          finishedAt: new Date(),
-          leaseOwnerId: null,
-          ...(output.partial
-            ? {
-                // ADR-021: parcial é DECLARADO — contagens + assinatura por item.
-                metadata: {
-                  ...((job.metadata as Record<string, unknown> | null) ?? {}),
-                  expectedCount: output.partial.expectedCount,
-                  deliveredCount: output.partial.deliveredCount,
-                  failedCount: output.partial.failedCount,
-                  failedItems: output.partial.failedItems,
-                },
-              }
-            : {}),
-          leaseDeadlineAt: null,
-        },
-      });
-    });
+    // Transação curta de finalização extraída (finalizeGeneration): mesmo
+    // bloqueio de fence CAS owner+attempt, rollback total em count inesperado.
+    await finalizeGeneration(job, ownerId, attempt, output, sceneSets, runData);
     emitJobEvent("job.terminal", {
       jobId: job.id,
       attempt,
@@ -988,19 +1131,16 @@ export async function processGeneration(jobId: string, ownerId: string) {
       Array.isArray((detail as { rejected: unknown }).rejected)
         ? projectFailureDiagnostics((detail as { rejected: unknown }).rejected)
         : undefined;
+    // Emissão do job.terminal é interna ao failJob, condicionada ao CAS real —
+    // fence perdido não emite evento terminal (evita RELEASED sem persistência).
     await failJobAndReleaseReservation(job.id, code, ownerId, attempt, internalError, {
       tenantId: job.tenantId,
       productId: job.productId,
       engineVersion: ENGINE_VERSION,
       platformSkillVersion: loadPlatformSkill().version,
       metadata: { internalError: internalError, diagnostics: rejected ?? null },
-    });
-    emitJobEvent("job.terminal", {
-      jobId: job.id,
-      attempt,
+    }, {
       stage: currentStage ?? undefined,
-      errorCode: code,
-      reservationAction: "RELEASED",
       gateReports: rejected?.gateReports,
       qualityFailures: rejected?.qualityFailures,
     });

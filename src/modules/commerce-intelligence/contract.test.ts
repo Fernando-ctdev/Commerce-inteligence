@@ -6,6 +6,7 @@ test("requires a complete brief, keeps strategic development as string[] and dro
 test("normalizes equivalent variety text", () => assert.equal(normalizeForVariety("  Hook  Forte "), "hook forte"));
 test("mapping envelope missing opportunities yields typed GEN-SCHEMA, not generic failure", () => { const envelope = { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], analysis: "longo texto sem oportunidades" }; assert.throws(() => validateCommercialOpportunityMappingEnvelope(envelope), (error: unknown) => { const e = error as { name?: string; code?: string; message?: string }; return e.name === "ContractError" && e.code === "GEN-SCHEMA" && /sem oportunidades/.test(e.message ?? ""); }); });
 test("mapping envelope with one opportunity passes and preserves canonical shape", () => { const commercial = { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }; const envelope = { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [commercial] }; const result = validateCommercialOpportunityMappingEnvelope(envelope, { facts: ["Produto"], refs: ["product:name"] }); assert.equal(result.opportunities.length, 1); assert.equal(result.opportunities[0].sellingArgument, "s"); });
+test("optional opportunity fields accept null and empty string as absence", () => { const commercial = { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"], objection: null, pain: "" }; const result = validateCommercialOpportunityMappingEnvelope({ audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [commercial] }, { facts: ["Produto"], refs: ["product:name"] }); assert.equal(result.opportunities[0].objection, undefined); assert.equal(result.opportunities[0].pain, undefined); });
 test("content opportunity sourceOpportunityId must exist in the allowed server-derived set", () => {
   const valid = { id: "p", commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"], sourceOpportunityId: "j-commercial-1" };
   const allowed = new Set(["j-commercial-1", "j-commercial-2"]);
@@ -40,7 +41,7 @@ test("content opportunity preserves canonical optionals when provided", () => {
   assert.throws(() => validateContentOpportunity({ ...base, proof: 42 }), (e: unknown) => (e as { code?: string }).code === "GEN-SCHEMA");
 });
 test("cardinality policy is versioned and uses MVP limits", () => {
-  assert.equal(CARDINALITY_POLICY_VERSION, 2); // v2: pertinência por campo nos estratégicos do PU
+  assert.equal(CARDINALITY_POLICY_VERSION, 3); // v3: estratégicos do PU aceitam [] sempre
   assert.equal(CARDINALITY_POLICY.coreUseCases.max, 8);
   assert.equal(CARDINALITY_POLICY.evidenceRefs.max, 25);
   assert.deepEqual(CARDINALITY_POLICY.opportunities, { min: 1, minWithEvidence: 3, max: 10 });
@@ -59,27 +60,23 @@ test("understanding minimums are conditional to evidence (no invention without i
   assert.equal(validateProductUnderstanding(empty).coreUseCases.length, 0);
   assert.throws(() => validateProductUnderstanding(empty, { facts: ["Produto"], refs: ["product:name"] }), (error: unknown) => { const e = error as { code?: string }; return e.code === "GEN-SCHEMA"; });
 });
-test("emotionalBenefits aceita [] sem evidência pertinente e mantém min 1 com evidência (decisão Arquiteto)", () => {
-  const semEmocional = { productId: "p1", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: [], desiredOutcomes: ["resultado"], purchaseTriggers: ["gatilho"], purchaseBarriers: ["barreira"], evidenceRefs: ["product:name"] };
-  // Evidência apenas de identidade (product:name): sem evidência pertinente → [] aceito.
-  const apenasNome = validateProductUnderstanding(semEmocional, { facts: ["Produto"], refs: ["product:name"] });
-  assert.equal(apenasNome.emotionalBenefits.length, 0);
-  // Evidência pertinente (fato real do produto) → min 1 volta a valer.
-  const comRefs = { ...semEmocional, evidenceRefs: ["fact:features"] };
-  assert.throws(() => validateProductUnderstanding(comRefs, { facts: ["Tecido leve"], refs: ["fact:features"] }), (error: unknown) => { const e = error as { code?: string }; return e.code === "GEN-SCHEMA"; });
-  const comEmocional = { ...comRefs, emotionalBenefits: ["confiança na escolha"] };
-  assert.equal(validateProductUnderstanding(comEmocional, { facts: ["Tecido leve"], refs: ["fact:features"] }).emotionalBenefits.length, 1);
+test("v3: strategic arrays aceitam [] com ou sem evidência; evidenceRefs segue obrigatório com evidência", () => {
+  const base = { productId: "p1", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: [], emotionalBenefits: [], desiredOutcomes: [], purchaseTriggers: [], purchaseBarriers: [], evidenceRefs: ["product:name"] };
+  const apenasIdentidade = validateProductUnderstanding(base, { facts: ["Produto"], refs: ["product:name"] });
+  assert.equal(apenasIdentidade.emotionalBenefits.length, 0);
+  const comFatos = validateProductUnderstanding({ ...base, evidenceRefs: ["product:name", "fact:features"] }, { facts: ["Tecido leve"], refs: ["product:name", "fact:features"] });
+  assert.equal(comFatos.functionalBenefits.length, 0);
+  assert.equal(comFatos.purchaseBarriers.length, 0);
+  const comEmocional = validateProductUnderstanding({ ...base, emotionalBenefits: ["confiança na escolha"], evidenceRefs: ["product:name", "fact:features"] }, { facts: ["Tecido leve"], refs: ["product:name", "fact:features"] });
+  assert.equal(comEmocional.emotionalBenefits.length, 1);
 });
 
-test("PU v2: estratégicos vazios sem evidência pertinente passam; com evidência falham; núcleo segue non-empty; max fail-closed", () => {
+test("PU v3: estratégicos vazios sempre passam; núcleo segue non-empty; max continua fail-closed", () => {
   const base = { productId: "p1", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: [], emotionalBenefits: [], desiredOutcomes: [], purchaseTriggers: [], purchaseBarriers: [], evidenceRefs: ["product:name"] };
-  // (1) empty strategic sem evidência pertinente (apenas identidade) passa.
-  const apenasIdentidade = validateProductUnderstanding(base, { facts: ["Produto"], refs: ["product:name"] });
-  assert.equal(apenasIdentidade.functionalBenefits.length, 0);
-  assert.equal(apenasIdentidade.purchaseBarriers.length, 0);
-  // (2) empty strategic com evidência pertinente falha (min 1 permanece).
-  assert.throws(() => validateProductUnderstanding(base, { facts: ["Tecido leve"], refs: ["product:name", "fact:features"] }), (error: unknown) => { const e = error as { code?: string; field?: string }; return e.code === "GEN-SCHEMA" && e.field === "functionalBenefits"; });
-  // (3) coreUseCases/capabilities continuam non-empty — identity-only também falha.
+  // (1) empty strategic com evidência pertinente passa (v3).
+  const comFatos = validateProductUnderstanding(base, { facts: ["Tecido leve"], refs: ["product:name", "fact:features"] });
+  assert.equal(comFatos.functionalBenefits.length, 0);
+  // (3) coreUseCases/capabilities continuam non-empty.
   const semNucleo = { ...base, coreUseCases: [], capabilities: [] };
   assert.throws(() => validateProductUnderstanding(semNucleo, { facts: ["Produto"], refs: ["product:name"] }), (error: unknown) => { const e = error as { code?: string; field?: string }; return e.code === "GEN-SCHEMA" && e.field === "coreUseCases"; });
   // (4) máximo continua fail-closed (sem truncamento).

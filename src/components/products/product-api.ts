@@ -1,4 +1,4 @@
-import type { ProductFieldErrors, ProductPayload } from "./product-form-model";
+import type { DiscountType, ProductFieldErrors, ProductPayload } from "./product-form-model";
 import {
   normalizeGenerationAction,
   type GenerationActionProjection,
@@ -17,6 +17,10 @@ export type ProductRecord = {
   commissionType: string;
   commission: string;
   discountPercentage: string;
+  /** Desconto tipado — contrato oficial (Gate 5, exclusivamente tipado).
+      null/ausente = sem desconto; sem derivação a partir de discountPercentage. */
+  discountType: DiscountType | null;
+  discountValue: string;
   characteristics: string[];
   imageReferences: string[];
   observations: string;
@@ -37,7 +41,7 @@ export type ProductMutation = {
 export type ServerFieldErrors = ProductFieldErrors &
   Partial<
     Record<
-      "currency" | "targetContentCount" | "creatorPresence" | "constraints" | "discountPercentage",
+      "currency" | "targetContentCount" | "creatorPresence" | "constraints" | "discountType" | "discountValue",
       string
     >
   >;
@@ -104,7 +108,8 @@ const serverFieldNames: Record<string, string> = {
   priceCurrency: "currency",
   commissionType: "commissionType",
   commissionValue: "commission",
-  discountPercentage: "discountPercentage",
+  discountType: "discountType",
+  discountValue: "discountValue",
   targetContentCount: "targetContentCount",
   creatorPresence: "creatorPresence",
   constraints: "constraints",
@@ -141,6 +146,10 @@ export function normalizeProduct(value: unknown): ProductRecord {
     cents !== null
       ? (cents / 100).toFixed(2).replace(".", ",")
       : nullableString(rawPrice);
+  const discountType: DiscountType | null =
+    record.discountType === "PERCENTAGE" || record.discountType === "FIXED"
+      ? record.discountType
+      : null;
   return {
     id: nullableString(record.id ?? record.product_id),
     version: typeof record.version === "number" ? record.version : 0,
@@ -156,6 +165,8 @@ export function normalizeProduct(value: unknown): ProductRecord {
         : "",
     commission: nullableString(record.commissionValue ?? record.commission),
     discountPercentage: nullableString(record.discountPercentage ?? record.discount_percentage),
+    discountType,
+    discountValue: nullableString(record.discountValue),
     characteristics: listValue(record.features ?? record.characteristics),
     imageReferences: listValue(
       record.imageRefs ?? record.imageReferences ?? record.image_references,
@@ -281,6 +292,10 @@ export async function createProduct(payload: ProductPayload) {
     targetContentCount,
     creatorPresence,
     constraints,
+    commissionType,
+    commissionValue,
+    discountType,
+    discountValue,
   } = payload;
   return mutationFromResponse(
     await request<unknown>("/api/products", {
@@ -296,6 +311,10 @@ export async function createProduct(payload: ProductPayload) {
         priceCurrency,
         features,
         imageRefs,
+        commissionType,
+        commissionValue,
+        discountType,
+        discountValue,
         url,
         targetContentCount,
         creatorPresence,

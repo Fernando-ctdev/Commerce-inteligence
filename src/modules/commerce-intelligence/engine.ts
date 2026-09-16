@@ -103,6 +103,9 @@ export type CapabilityEvent = {
   ok: boolean;
   cardinalityPolicyVersion?: number;
   errorCode?: string;
+  // Gate de cenas (CONTENT_SCENE_IDEAS): kept/dropped do gateSceneSet da tentativa.
+  kept?: number;
+  dropped?: number;
   providerRequestId?: string;
   providerRequestIdSource?: "header" | "body.id";
   fallback?: {
@@ -476,6 +479,12 @@ export async function generateSceneSetsForBriefs(params: {
   backfilled: boolean;
 }): Promise<SceneSetOutcome[]> {
   const outcomes: SceneSetOutcome[] = [];
+  // Feedback determinístico do gateSceneSet para o retry guiado (ADR-020):
+  // requisitos são os MESMOS predicados do gate — nunca critério novo.
+  const sceneGateFeedback = (causes: string[]): string => {
+    const summary = causes.length ? causes.join(", ") : "set descartado";
+    return `O conjunto anterior de cenas foi integralmente descartado pelo gate estrutural (motivos: ${summary}). Cada cena deve: começar com verbo de ação observável (mostre, pegue, vire, abra, calce, teste, compare); citar nominalmente o produto ou parte/objeto citado no briefing (ancora lexical); usar somente fatos de relevantFacts, sem claim objetivo sem suporte; ser gravavel por creator sozinho com celular.`;
+  };
   for (const brief of params.briefs) {
     const empty: SceneSetOutcome = {
       contentId: brief.contentId,
@@ -510,35 +519,61 @@ export async function generateSceneSetsForBriefs(params: {
       ),
       skillSlice: projectPlatformSkillSlice(params.skill, "brief"),
     };
-    try {
-      const draft = await params.track(
-        "CONTENT_SCENE_IDEAS",
-        sceneContext,
+    // ADR-021: retry único por conteúdo — falha de schema/validação re-solicita
+    // com o mesmo contexto; set integralmente descartado pelo gateSceneSet
+    // re-solicita UMA vez guiado pelas causas do gate (mesmo padrão do retry de
+    // schema). Segunda falha de qualquer tipo -> fail-closed (FILTERED/ERROR),
+    // sem inventar cenas.
+    let outcome: SceneSetOutcome | null = null;
+    let lastGate: ReturnType<typeof gateSceneSet> | null = null;
+    for (let sceneAttempt = 0; sceneAttempt < 2 && !outcome; sceneAttempt++) {
+      const attemptContext =
+        lastGate && lastGate.kept.length === 0
+          ? { ...sceneContext, gateFeedback: sceneGateFeedback(lastGate.causes) }
+          : sceneContext;
+      try {
+        const draft = await params.track(
+          "CONTENT_SCENE_IDEAS",
+        attemptContext,
         (onMetrics?: (metrics: ProviderCallMetrics) => void) =>
           callCapability(
             params.router!,
             "CONTENT_SCENE_IDEAS",
-            project("CONTENT_SCENE_IDEAS", sceneContext, {}),
+            project("CONTENT_SCENE_IDEAS", attemptContext, {}),
             params.signal,
             onMetrics,
           ),
-        (output: Record<string, unknown>) =>
-          validateContentSceneSetDraft(output),
-      );
-      const gated = gateSceneSet(
-        draft,
-        brief,
-        params.evidence,
-        projectCreatorContext("CONTENT_SCENE_IDEAS", params.creatorContext),
-      );
-      outcomes.push(
-        gated.kept.length
-          ? { ...empty, status: "AVAILABLE", scenes: gated.kept, generated: draft.length, dropped: gated.dropped }
-          : { ...empty, status: "FILTERED", generated: draft.length, dropped: gated.dropped },
-      );
-    } catch {
-      outcomes.push(empty);
+          (output: Record<string, unknown>) =>
+            validateContentSceneSetDraft(output),
+          // kept/dropped da própria tentativa no capability.completed/run.
+          (validated) => {
+            const gated = gateSceneSet(
+              validated,
+              brief,
+              params.evidence,
+              projectCreatorContext("CONTENT_SCENE_IDEAS", params.creatorContext),
+            );
+            return { kept: gated.kept.length, dropped: gated.dropped };
+          },
+        );
+        const gated = gateSceneSet(
+          draft,
+          brief,
+          params.evidence,
+          projectCreatorContext("CONTENT_SCENE_IDEAS", params.creatorContext),
+        );
+        lastGate = gated;
+        if (gated.kept.length) {
+          outcome = { ...empty, status: "AVAILABLE", scenes: gated.kept, generated: draft.length, dropped: gated.dropped };
+        } else if (sceneAttempt === 1) {
+          // Fail-closed: gate persistente na 2ª tentativa — set descartado.
+          outcome = { ...empty, status: "FILTERED", generated: draft.length, dropped: gated.dropped };
+        }
+      } catch {
+        if (sceneAttempt === 1) outcome = empty;
+      }
     }
+    outcomes.push(outcome ?? empty);
   }
   return outcomes;
 }
@@ -830,6 +865,9 @@ export type TrackFn = <T, R = T>(
   context: unknown,
   run: (onMetrics?: (metrics: ProviderCallMetrics) => void) => Promise<T>,
   validate?: (output: T) => R,
+  // Observabilidade determinística pós-validação (ex.: kept/dropped do
+  // gateSceneSet) — mesclada no CapabilityEvent e no capability.completed.
+  annotate?: (output: R) => { kept?: number; dropped?: number } | undefined,
 ) => Promise<R>;
 export type CapabilityTracker = { track: TrackFn; capabilities: CapabilityEvent[] };
 
@@ -849,6 +887,7 @@ export function createCapabilityTracker(opts: {
       onMetrics?: (metrics: ProviderCallMetrics) => void,
     ) => Promise<T>,
     validate?: (output: T) => R,
+    annotate?: (output: R) => { kept?: number; dropped?: number } | undefined,
   ): Promise<R> => {
     const startedAt = Date.now();
     const contextBytes = Buffer.byteLength(JSON.stringify(context), "utf8");
@@ -874,6 +913,7 @@ export function createCapabilityTracker(opts: {
         : {};
       const durationMs = Date.now() - startedAt;
       const responseBytes = Buffer.byteLength(JSON.stringify(output), "utf8");
+      const extras = annotate?.(output);
       capabilities.push({
         task,
         tier: ROUTER_MAP[task],
@@ -892,6 +932,8 @@ export function createCapabilityTracker(opts: {
         retry: captured?.retry ?? 0,
         ok: true,
         cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
+        kept: extras?.kept,
+        dropped: extras?.dropped,
         providerRequestId: captured?.providerRequestId,
         providerRequestIdSource: captured?.providerRequestIdSource,
         fallback: captured?.fallback,
@@ -916,6 +958,8 @@ export function createCapabilityTracker(opts: {
               ? outputRecord.scenes.length
               : undefined,
         cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
+        kept: extras?.kept,
+        dropped: extras?.dropped,
         providerRequestId: captured?.providerRequestId,
         providerRequestIdSource: captured?.providerRequestIdSource,
       });
@@ -1149,7 +1193,9 @@ export async function runFirstGeneration(
         brand: facts.brand,
         priceAmount: facts.priceAmount,
         priceCurrency: facts.priceCurrency,
-        discountPercentage: facts.discountPercentage,
+        // Fato do desconto (string projetada pelo worker, só quando existe).
+        // Contrato exclusivamente tipado (Gate 5): a chave é "discount".
+        discount: facts.discount,
       },
       understanding: {
         category: understanding?.category,
@@ -1193,7 +1239,11 @@ export async function runFirstGeneration(
     } catch (error) {
       // Retry único e específico: envelope 200 sem `opportunities` é re-solicitado uma vez
       // com o mesmo contexto; qualquer outro erro segue fail-closed. Sem inventar dados.
-      if (!isMissingOpportunitiesError(error)) throw error;
+      // Decisão Arquiteto: qualquer violação de contrato no mapping (envelope
+      // sem opportunities OU campo malformado, ex.: objection inválido) tem UMA
+      // re-solicitação com o mesmo contexto; segunda falha segue fail-closed,
+      // sem sanitizar nem inventar dados.
+      if (!(isMissingOpportunitiesError(error) || error instanceof ContractError)) throw error;
       envelope = await track(
         "COMMERCIAL_OPPORTUNITY_MAPPING",
         mappingContext,
