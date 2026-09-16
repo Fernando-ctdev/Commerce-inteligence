@@ -99,6 +99,50 @@ export const PRODUCT_UNDERSTANDING_JSON_SCHEMA_FORMAT = {
   },
 } as const;
 
+// Job 149034bc: o plano era o único ponto crítico sem enforcement estrutural —
+// o contrato (noveltyTargets 1–4) vivia só na prosa do prompt e a violação no
+// retry único virou falha terminal (GEN-SCHEMA). Mesmo padrão do ADR-020 adendo 4:
+// json_schema estrito deriva de CARDINALITY_POLICY (fonte única com o validador);
+// validador inalterado — qualquer violação que escape permanece fail-closed.
+// Campos opcionais do ContentOpportunity ficam de fora (additionalProperties:false
+// os impede; ausência é aceita pelo validador), como category em PU.
+export const CONTENT_PLAN_JSON_SCHEMA_FORMAT = {
+  type: "json_schema",
+  json_schema: {
+    name: "content_plan",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: {
+        platformId: { type: "string" },
+        opportunities: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            properties: {
+              commercialObjective: { type: "string" },
+              angle: { type: "string" },
+              coreMessage: { type: "string" },
+              hookMechanism: { type: "string" },
+              noveltyTargets: {
+                type: "array",
+                items: { type: "string" },
+                minItems: CARDINALITY_POLICY.noveltyTargets.min,
+                maxItems: CARDINALITY_POLICY.noveltyTargets.max,
+              },
+            },
+            required: ["commercialObjective", "angle", "coreMessage", "hookMechanism", "noveltyTargets"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["platformId", "opportunities"],
+      additionalProperties: false,
+    },
+  },
+} as const;
+
 const UNDERSTANDING_LIMITS = UNDERSTANDING_FIELDS.map(
   (field) => `${field}: ≤ ${CARDINALITY_POLICY[field].max}`,
 ).join(", ");
@@ -220,7 +264,6 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
     model: string,
     endpoint: string,
     failure?: Partial<FallbackFailure>,
-    schemaFormat = false,
   ): Promise<unknown> => {
     const endpointOrigin = new URL(endpoint).origin;
     const startedAt = Date.now();
@@ -265,9 +308,11 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
         temperature: 0.2,
         reasoning: { effort: REASONING_BY_TASK[task] },
         response_format:
-          schemaFormat && task === "PRODUCT_UNDERSTANDING"
+          task === "PRODUCT_UNDERSTANDING"
             ? PRODUCT_UNDERSTANDING_JSON_SCHEMA_FORMAT
-            : { type: "json_object" },
+            : task === "CONTENT_PLAN_GENERATION"
+              ? CONTENT_PLAN_JSON_SCHEMA_FORMAT
+              : { type: "json_object" },
         messages: [
           {
             role: "system",
@@ -582,7 +627,6 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
             attempt.model,
             endpoint,
             attempt.failure,
-            task === "PRODUCT_UNDERSTANDING",
           );
         } catch (error) {
           if (!attempt.failure?.kind) throw error;
