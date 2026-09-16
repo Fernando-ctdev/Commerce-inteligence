@@ -83,3 +83,36 @@ test("regressão e6499288: absoluto fora da lista da instrução de repair mant�
   const converged = reportFor("A pantalona tem cintura elástica com cordão.");
   assert.equal(converged.decision, "PASS");
 });
+
+// ADR-025 §5: fronteira script×cenas — metainstrução inequívoca de montagem ou
+// direção no script é issue reparável (REPAIR), nunca REJECT automático; fala
+// creator-first legítima não deve casar com o detector determinístico.
+test("ADR-025: metainstrução de cena no script vira issue reparável, sem bloquear fala creator-first", () => {
+  const evidence = { facts: ["Calça Pantalona Duna"], refs: ["product:name"] };
+  const reportFor = (script: string) => validateBriefSet([{ contentId: "j-content-1", briefVersionId: "j-brief-1", version: 1 as const, angle: "demonstração", hook: "hook", development: ["Destaque o uso para orientar a conversa sobre o uso"], script, cta: "cta" }], evidence)[0];
+  const metacommentScripts = [
+    "Corte para a etiqueta e mostre o detalhe.",
+    "A câmera se aproxima do tecido enquanto eu falo.",
+    "[mostra a etiqueta por dentro]",
+    "Plano detalhe da costura.",
+    "Enquadramento nas mãos.",
+    "Texto na tela: ajustável.",
+    "Cena 3 abre com o produto na mesa.",
+    "Take 2 do produto girando.",
+  ];
+  for (const script of metacommentScripts) {
+    const report = reportFor(script);
+    assert.ok(report.issues.includes("script contém metainstrução de cena"), script);
+    assert.equal(report.decision, "REPAIR", script);
+  }
+  const creatorFirst = [
+    "Dá um close no tecido e conta o que você sente.",
+    "Mostre o produto e diga o que mudou no seu dia.",
+    "Segura a peça e fala da cintura elástica.",
+    // Fala de produto do nicho beleza: "corte" é substantivo, não direção.
+    "Meu corte seco favorito é esse.",
+    "esse é o corte para cabelos ondulados",
+  ];
+  for (const script of creatorFirst)
+    assert.equal(reportFor(script).issues.includes("script contém metainstrução de cena"), false, script);
+});

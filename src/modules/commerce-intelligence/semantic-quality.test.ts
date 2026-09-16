@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runFirstGeneration } from "./engine";
-import { parseQualityAudit, QUALITY_PARTS, type QualityPart } from "./semantic-quality";
+import { parseQualityAuditBatch, parseQualityRepairBatch, QUALITY_PARTS, type QualityPart } from "./semantic-quality";
 import { internalFailureMetadata } from "./worker";
 
 const parts = QUALITY_PARTS.map((part) => ({
@@ -26,8 +26,19 @@ function routerFor(overrides: Partial<{ judge: (context: Record<string, unknown>
       if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "demonstrar", angle: "demonstracao", coreMessage: "tecido respiravel", hookMechanism: "demonstracao", noveltyTargets: ["demonstracao"] }] };
       if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "demonstracao", hook: "Hook original", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Demonstre o tecido respiravel no produto", cta: "Confira o produto" }] };
       if (task === "CONTENT_SCENE_IDEAS") return overrides.scenes?.() ?? { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
-      if (task === "CONTENT_QUALITY_JUDGE") return overrides.judge?.(context ?? {}, ++judges) ?? judgePass();
-      if (task === "CONTENT_PART_REPAIR") return overrides.repair?.(String(context?.part) as QualityPart, ++repairs) ?? { content: "Veja o tecido respiravel" };
+      if (task === "CONTENT_QUALITY_JUDGE") {
+        // ADR-025: judge em lote — a resposta ecoa o conjunto exato de contentIds.
+        const items = (Array.isArray(context?.items) ? context.items : []) as Array<{ contentId: string }>;
+        const override = overrides.judge?.(context ?? {}, ++judges) as { parts: typeof parts } | undefined;
+        return { audits: items.map(({ contentId }) => ({ contentId, parts: (override ?? judgePass()).parts })) };
+      }
+      if (task === "CONTENT_PART_REPAIR") {
+        // ADR-025: repair em lote — envelope {items:[{contentId, content}]}.
+        const part = String(context?.part) as QualityPart;
+        const batchItems = (Array.isArray(context?.items) ? context.items : []) as Array<{ contentId: string }>;
+        const override = overrides.repair?.(part, ++repairs) as { content: unknown } | undefined;
+        return { items: batchItems.map(({ contentId }) => ({ contentId, content: (override ?? { content: "Veja o tecido respiravel" }).content })) };
+      }
       throw new Error(`task inesperada: ${task}`);
     },
   };
@@ -39,10 +50,33 @@ function run(router: ReturnType<typeof routerFor>["router"]) {
 }
 
 test("judge exige exatamente as cinco partes, uma vez cada, com critério e motivo allowlisted", () => {
-  const audit = parseQualityAudit({ parts }, "content-1", 0);
+  const [audit] = parseQualityAuditBatch({ audits: [{ contentId: "content-1", parts }] }, ["content-1"], 0);
   assert.deepEqual(audit.parts.map(({ part }) => part), [...QUALITY_PARTS]);
-  assert.throws(() => parseQualityAudit({ parts: parts.slice(1) }, "content-1", 0), /contrato inválido/);
-  assert.throws(() => parseQualityAudit({ parts: [...parts, parts[0]] }, "content-1", 0), /contrato inválido/);
+  assert.throws(() => parseQualityAuditBatch({ audits: [{ contentId: "content-1", parts: parts.slice(1) }] }, ["content-1"], 0), /contrato inválido/);
+  assert.throws(() => parseQualityAuditBatch({ audits: [{ contentId: "content-1", parts: [...parts, parts[0]] }] }, ["content-1"], 0), /contrato inválido/);
+});
+
+test("ADR-025: parseQualityAuditBatch exige conjunto exato de contentIds e normaliza a ordem", () => {
+  const auditFor = (contentId: string) => ({ contentId, parts });
+  const expected = ["content-1", "content-2", "content-3"];
+  // Identidade é o contentId, nunca a posição: saída na ordem esperada.
+  const shuffled = { audits: [auditFor("content-3"), auditFor("content-1"), auditFor("content-2")] };
+  assert.deepEqual(parseQualityAuditBatch(shuffled, expected, 1).map(({ contentId, round }) => ({ contentId, round })), expected.map((contentId) => ({ contentId, round: 1 })));
+  assert.throws(() => parseQualityAuditBatch({ audits: [auditFor("content-1"), auditFor("content-2")] }, expected, 0), /contrato inválido/, "faltante");
+  assert.throws(() => parseQualityAuditBatch({ audits: [auditFor("content-1"), auditFor("content-1"), auditFor("content-2")] }, expected, 0), /contrato inválido/, "duplicado");
+  assert.throws(() => parseQualityAuditBatch({ audits: [auditFor("content-1"), auditFor("content-2"), auditFor("content-x")] }, expected, 0), /contrato inválido/, "id fora do conjunto");
+});
+
+test("ADR-025: parseQualityRepairBatch valida o envelope de IDs, não o conteúdo", () => {
+  const expected = ["content-1", "content-2"];
+  const ok = { items: [{ contentId: "content-2", content: 42 }, { contentId: "content-1", content: null }] };
+  assert.deepEqual(parseQualityRepairBatch(ok, expected, "hook"), [
+    { contentId: "content-1", content: null },
+    { contentId: "content-2", content: 42 },
+  ]);
+  assert.throws(() => parseQualityRepairBatch({ items: [{ contentId: "content-1", content: "x" }] }, expected, "hook"), /contrato inválido/, "faltante");
+  assert.throws(() => parseQualityRepairBatch({ items: [{ contentId: "content-1", content: "x" }, { contentId: "content-1", content: "y" }] }, expected, "hook"), /contrato inválido/, "duplicado");
+  assert.throws(() => parseQualityRepairBatch({ items: [{ contentId: "content-9", content: "x" }, { contentId: "content-1", content: "y" }] }, expected, "hook"), /contrato inválido/, "id fora do conjunto");
 });
 
 test("generation audits all five parts and repairs only the rejected part", async () => {
@@ -50,7 +84,7 @@ test("generation audits all five parts and repairs only the rejected part", asyn
   const repairedParts: string[] = [];
   const mock = routerFor({
     judge: (context, call) => {
-      seen.push((context.parts as Array<{ part: string }>).map(({ part }) => part));
+      seen.push((((context.items as Array<{ parts: Array<{ part: string }> }>)[0]).parts).map(({ part }) => part));
       if (call === 1) return { parts: parts.map((item) => item.part === "hook" ? { ...item, status: "REPAIR", reason: "unclear" } : item) };
       return judgePass();
     },

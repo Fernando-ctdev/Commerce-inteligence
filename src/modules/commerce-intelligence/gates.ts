@@ -208,6 +208,50 @@ export const DEVELOPMENT_RATIONALE = /\b(para|porque|pois|assim)\b/;
 const DEVELOPMENT_EXPERIENCE_RATIONALE = /\bque voce (sente|percebe|nota) com\b/;
 const DEVELOPMENT_SHOT_LIST = /\b(close|plano|enquadramento|camera|filme|grave|trip[eé]|iluminacao|take|tomada)\b/;
 const UNSUPPORTED_ABSOLUTE_CLAIMS = /\b(sempre|nunca|jamais|qualquer|perfeit[oa]s?|sem falha|sem defeito)\b/i;
+// ADR-025 §5 — fronteira editorial script×cenas: script é fala/ação performável
+// pelo creator; metainstrução de montagem, enquadramento ou orientação visual
+// pertence a cenas. Detector ESTREITO e reparável: somente padrões inequívocos
+// de metacomentário (direção de câmera/edição, direção entre colchetes, overlay
+// de tela, numeração de cena/take) geram issue — a decisão segue o fluxo normal
+// do gate (REPAIR), NUNCA REJECT automático. Fala creator-first legítima (ex.:
+// "dá um close", "mostra de perto") não casa — regex ampla foi rejeitada no ADR.
+const SCRIPT_SCENE_METACOMMENT = new RegExp(
+  // "corte para/pra/de volta" só como DIREÇÃO (início do script ou após
+  // pontuação): "o corte para cabelos ondulados" e "corte seco" são fala de
+  // produto (nicho beleza) e não podem casar.
+  "((?:^|[.!?;…]\\s+)cortes? (?:para|pra|de volta)"
+  + "|c[aâ]mera (?:mostra|aproxima|se aproxima|afasta|sobe|desce)"
+  + "|plano (?:detalhe|aberto|fechado|geral|americano|sequ[êe]ncia)"
+  + "|enquadra(?:mento)? (?:em|no|na|do|da)"
+  + "|em enquadramento"
+  + "|texto na tela|legenda na tela|escrito na tela|aparece na tela|na tela aparece"
+  + "|cena \\d+|take \\d+"
+  + "|\\[[^\\]\\n]{1,120}\\])",
+  "i",
+);
+export function scriptSceneMetacomment(script: string): string | null {
+  return SCRIPT_SCENE_METACOMMENT.exec(script)?.[0] ?? null;
+}
+// ADR-026 — locators internos de evidência (`fact:*`, `product:*`) são metadados
+// de contexto/relatório e NUNCA texto creator-facing. Locator = token entre
+// colchetes `namespace:token` sem espaço (ex.: [fact:features], [product:name],
+// [fact:features:2]); colchete legítimo de fala ("[mostra a etiqueta]") tem
+// espaço e não casa. Sem strip silencioso: a detecção vira issue/drop
+// determinístico que segue o fluxo do gate (REPAIR por parte / drop da cena).
+const INTERNAL_LOCATOR = /\[[a-z]+:[a-z0-9:_-]+\]/i;
+export function internalLocator(value: string): string | null {
+  return INTERNAL_LOCATOR.exec(value)?.[0] ?? null;
+}
+// ADR-026 — metainstrução de INSERÇÃO editorial: condicional de 1ª pessoa de
+// inserção + dêitico editorial "aqui" + objeto/elemento visual em até 2 tokens
+// ("Eu colocaria aqui um objeto pequeno..."). Estreito por construção; fala
+// legítima não casa: "Eu pegaria esse modelo porque..." (sem dêitico+objeto
+// visual), "aqui cabe no bolso" (sem verbo de inserção), "dá um close".
+const SCRIPT_INSERT_METACOMMENT =
+  /\b(?:eu\s+)?(?:colocaria|poria|porei|meteria|incluiria|acrescentaria|encaixaria)\s+aqui\s+(?:\w+\s+){0,2}(?:objeto|pe[cç]a|item|cena|imagem|v[íi]deo|texto|tela|anima[cç][ãa]o|efeito|produto)\b/i;
+export function scriptInsertMetacomment(script: string): string | null {
+  return SCRIPT_INSERT_METACOMMENT.exec(script)?.[0] ?? null;
+}
 const SOLO_PRODUCTION_ANTIPATTERNS = /\b(360\s*graus|órbita|orbita|orbit|travelling|motion\s*graphics|animação|animacao|vfx|efeitos especiais|chroma\s*key|croma|green\s*screen|drone|operador de câmera|operador de camera|segunda câmera|segunda camera|montagem (rápida|complexa)|montagem (rapida|complexa)|múltiplas locações|multiplas locacoes|múltiplos setups|multiplos setups|estúdio montado|câmera gira|camera gira|câmera começa a orbitar|camera comeca a orbitar)\b/i;
 const DRONE_PRODUCTION = /\bdrone\b/i;
 const CREW_OR_POST_PRODUCTION_ANTIPATTERNS = /\b(motion\s*graphics|animação|animacao|vfx|efeitos especiais|chroma\s*key|croma|green\s*screen|operador de câmera|operador de camera|segunda câmera|segunda camera|montagem (rápida|complexa)|montagem (rapida|complexa)|múltiplas locações|multiplas locacoes|múltiplos setups|multiplos setups|estúdio montado)\b/i;
@@ -745,6 +789,15 @@ export function validateBriefSet(
         return normalizedFact.length >= 4 && evidence.refs[index] !== "product:name" && normalizedScript.includes(normalizedFact) && !developmentText.includes(normalizedFact);
       });
     if (missingScriptClaim) issues.push("script contém claim factual ausente de development");
+    // ADR-025 §5/ADR-026: metainstrução de cena no script (direção de montagem
+    // ou inserção editorial) é issue reparável (issues → REPAIR); nunca REJECT
+    // automático.
+    if (scriptSceneMetacomment(brief.script) || scriptInsertMetacomment(brief.script))
+      issues.push("script contém metainstrução de cena");
+    // ADR-026: locator interno de evidência em campo creator-facing é issue
+    // reparável da PARTE nomeada — refs existem só em contexto/relatório.
+    for (const [field, value] of [["hook", brief.hook], ["script", brief.script], ["cta", brief.cta], ["development", brief.development.join(" ")]] as const)
+      if (internalLocator(value)) issues.push(`locator interno de evidência em ${field}`);
     if (creatorContext.recordsAlone === true && requiresUndeclaredProduction(`${brief.script} ${brief.development.join(" ")}`, creatorContext))
       issues.push("produção incompatível com creator solo");
     // platformSkillVersion é snapshot de geração: versão registrada continua válida
@@ -861,6 +914,9 @@ export function gateSceneSet(
     if (!SCENE_ACTION_RE.test(folded)) { causes.set("acao_ausente", (causes.get("acao_ausente") ?? 0) + 1); return false; }
     if (![...sceneTerms(folded)].some((term) => anchors.has(term))) { causes.set("ancora_ausente", (causes.get("ancora_ausente") ?? 0) + 1); return false; }
     if (sceneClaimsUnauthorized(description, evidence)) { causes.set("claim_nao_autorizado", (causes.get("claim_nao_autorizado") ?? 0) + 1); return false; }
+    // ADR-026: locator interno invalida SOMENTE a cena que o contém; as demais
+    // cenas do set seguem válidas.
+    if (internalLocator(description)) { causes.set("locator_interno", (causes.get("locator_interno") ?? 0) + 1); return false; }
     if (creatorContext.recordsAlone === true && requiresUndeclaredProduction(folded, creatorContext)) { causes.set("producao_nao_declarada", (causes.get("producao_nao_declarada") ?? 0) + 1); return false; }
     return true;
   });

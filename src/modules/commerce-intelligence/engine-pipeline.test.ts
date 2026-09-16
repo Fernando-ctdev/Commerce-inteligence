@@ -22,11 +22,17 @@ const qualityAudit = { parts: [
   { part: "cta", status: "PASS", criterion: "cta_clarity", reason: "meets_criteria" },
   { part: "scenes", status: "PASS", criterion: "scenes_actionable", reason: "meets_criteria" },
 ] };
+// ADR-025: judge em lote — o fake ecoa o conjunto exato de contentIds recebidos.
+const judgeBatchPass = (input?: { trustedContext?: unknown }) => {
+  const items = recordOf(input?.trustedContext)?.items;
+  const list = Array.isArray(items) ? items as Array<Record<string, unknown>> : [];
+  return { audits: list.map(({ contentId }) => ({ contentId, parts: qualityAudit.parts })) };
+};
 const sceneIdeas = { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
 const describe = () => ({ provider: "test", model: "test-model", instructionVersion: "slice-003" });
 test("composes validated provider outputs into the pipeline (4 foundational + batched briefs)", async () => {
   const calls: string[] = [];
-  const router = { describe, complete: async (task: string) => { calls.push(task); if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "demonstração", hook: "Veja", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "Confira" }] }; if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas; if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit; return {}; } };
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => { calls.push(task); if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "demonstração", hook: "Veja", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "Confira" }] }; if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas; if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input); return {}; } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
   const strategy = result.strategy as { opportunities: Array<{ id: string }> };
   const plan = result.plan as { opportunities: Array<{ id: string }> };
@@ -40,7 +46,7 @@ test("composes validated provider outputs into the pipeline (4 foundational + ba
 test("repairs only rejected briefs via per-item CONTENT_BRIEF_REPAIR/HIGH, preserving ids", async () => {
   const taskCalls: string[] = [];
   const repairContexts: Array<Record<string, unknown>> = [];
-  const router = { describe, hash: () => "h", complete: async (task: string, input?: { trustedContext?: unknown }) => { if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") { taskCalls.push(task); return { items: [{ angle: "x", hook: "h", development: ["Carga de 999 kg em teste"], script: "testado com 999 kg de carga", cta: "c" }] }; } if (task === "CONTENT_BRIEF_REPAIR") { taskCalls.push(task); repairContexts.push(input?.trustedContext as Record<string, unknown>); return { angle: "dem", hook: "Veja o produto em uso", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: "Produto com demonstração", cta: "c" }; } if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit; return { scenes: [{ description: "Mostra o produto em uso no ambiente do creator" }, { description: "Pega o produto e aproxima do celular para close" }] }; } };
+  const router = { describe, hash: () => "h", complete: async (task: string, input?: { trustedContext?: unknown }) => { if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") { taskCalls.push(task); return { items: [{ angle: "x", hook: "h", development: ["Carga de 999 kg em teste"], script: "testado com 999 kg de carga", cta: "c" }] }; } if (task === "CONTENT_BRIEF_REPAIR") { taskCalls.push(task); repairContexts.push(input?.trustedContext as Record<string, unknown>); return { angle: "dem", hook: "Veja o produto em uso", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: "Produto com demonstração", cta: "c" }; } if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input); return { scenes: [{ description: "Mostra o produto em uso no ambiente do creator" }, { description: "Pega o produto e aproxima do celular para close" }] }; } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
   assert.deepEqual(taskCalls, ["CONTENT_BRIEF_GENERATION", "CONTENT_BRIEF_REPAIR"], "per-item repair on its own HIGH task");
   assert.equal(result.briefs[0].contentId, "j-content-1");
@@ -86,7 +92,7 @@ test("repair per-item carries each entry's own-position pattern when rejects are
           return { angle: `r${repairCalls}`, hook: `hr${repairCalls}`, development: structuredDevelopment(), script: `Produto com demonstração ${repairCalls}`, cta: `Cr ${repairCalls}` };
     }
     if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
-    if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit;
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 3, router });
@@ -96,7 +102,7 @@ test("repair per-item carries each entry's own-position pattern when rejects are
 });
 test("batches brief generation sequentially with server-derived ids", async () => {
   const calls: string[] = [];
-  const router = { describe, complete: async (task: string) => { calls.push(task); if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity, contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto com demonstração", cta: "c" }, { angle: "a2", hook: "h2", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto na prática", cta: "c2" }] }; if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas; if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit; return {}; } };
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => { calls.push(task); if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity, contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto com demonstração", cta: "c" }, { angle: "a2", hook: "h2", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto na prática", cta: "c2" }] }; if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas; if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input); return {}; } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 2, router });
   assert.equal(result.briefs.length, 2);
   assert.equal(result.briefs[0].contentId, "j-content-1");
@@ -112,7 +118,7 @@ test("mapping context is compact and allowlisted without strategy plan skill or 
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto na prática", cta: "c" }] };
     if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
-    if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit;
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
     return {};
   } };
   await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", facts: { features: ["x"], rawAggregate: ["não enviar"], memoryHistory: ["nada"], discount: "20% de desconto" }, targetContentCount: 1, router });
@@ -137,7 +143,7 @@ test("Meu estilo: creatorContext completo (tone, recordsAlone, restrictions, exe
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
     if (task === "CONTENT_BRIEF_GENERATION") { briefContext = input.trustedContext as Record<string, unknown>; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto na prática", cta: "c" }] }; }
     if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
-    if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit;
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
     return {};
   } };
   const meuEstilo = { tone: "bem-humorado", executionStyle: "natural-venda", recordsAlone: true, restrictions: ["Cenas difíceis de gravar"], recordingEquipment: ["camera"], recordingSupport: ["tripod"] };
@@ -161,7 +167,7 @@ test("plan and brief contexts expose only their explicit allowlisted slices", as
     if (task === "CONTENT_PLAN_GENERATION") { planContext = input.trustedContext as Record<string, unknown>; return { opportunities: [contentOpportunity] }; }
     if (task === "CONTENT_BRIEF_GENERATION") { briefContext = input.trustedContext as Record<string, unknown>; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Calça na prática", cta: "c" }] }; }
     if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
-    if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit;
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
     return {};
   } };
   await runFirstGeneration({ productId: "p", jobId: "j", name: "Calça", description: "Tecido respirável", facts: { features: ["fato"], rawAggregate: ["não enviar"] }, creatorContext: { tone: "direto" }, targetContentCount: 1, router });
@@ -210,7 +216,7 @@ test("never sends commission through any AI context", async () => {
       if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
       if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto na prática", cta: "c" }] };
       if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
-      if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit;
+      if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
       return {};
     },
   };
@@ -233,14 +239,14 @@ test("never sends commission through any AI context", async () => {
 test("mapping: objection vazio é tratado como ausência sem retry", async () => {
   let mappingCalls = 0;
   const bad = { audiences: ["público"], situations: ["situação"], pains: ["dor"], desires: ["desejo"], objections: ["objeção"], opportunities: [{ ...commercial, objection: "" }, { ...commercial, objection: "" }, { ...commercial, objection: "" }] };
-  const router = { describe, complete: async (task: string) => {
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
     if (task === "PRODUCT_UNDERSTANDING") return understanding;
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") { mappingCalls += 1; return mappingCalls === 1 ? bad : envelope; }
     if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto na prática", cta: "c" }] };
     if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
-    if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit;
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
@@ -251,7 +257,7 @@ test("mapping: objection vazio é tratado como ausência sem retry", async () =>
 test("mapping fail-closed: objection com tipo inválido termina GEN-SCHEMA", async () => {
   let mappingCalls = 0;
   const bad = { audiences: ["público"], situations: ["situação"], pains: ["dor"], desires: ["desejo"], objections: ["objeção"], opportunities: [{ ...commercial, objection: 42 }] };
-  const router = { describe, complete: async (task: string) => {
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
     if (task === "PRODUCT_UNDERSTANDING") return understanding;
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") { mappingCalls += 1; return bad; }
     if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
@@ -271,14 +277,14 @@ test("mapping fail-closed: objection com tipo inválido termina GEN-SCHEMA", asy
 test("scenes retry: schema inválido na 1ª chamada re-solicita por conteúdo e conclui", async () => {
   let sceneCalls = 0;
   const badScenes = { scenes: [{ description: "curta" }] };
-  const router = { describe, complete: async (task: string) => {
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
     if (task === "PRODUCT_UNDERSTANDING") return understanding;
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
     if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto na prática", cta: "c" }] };
     if (task === "CONTENT_SCENE_IDEAS") { sceneCalls += 1; return sceneCalls === 1 ? badScenes : sceneIdeas; }
-    if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit;
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
@@ -290,14 +296,14 @@ test("scenes retry: schema inválido na 1ª chamada re-solicita por conteúdo e 
 test("scenes fail-closed: schema inválido persistente derruba o job com GEN-REPAIR-EXHAUSTED", async () => {
   let sceneCalls = 0;
   const badScenes = { scenes: [{ description: "curta" }] };
-  const router = { describe, complete: async (task: string) => {
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
     if (task === "PRODUCT_UNDERSTANDING") return understanding;
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
     if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto na prática", cta: "c" }] };
     if (task === "CONTENT_SCENE_IDEAS") { sceneCalls += 1; return badScenes; }
-    if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit;
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
     return {};
   } };
   await assert.rejects(
@@ -314,14 +320,14 @@ test("scenes fail-closed: schema inválido persistente derruba o job com GEN-REP
 // Gate 7 — observabilidade: kept/dropped do gateSceneSet no capability.completed.
 test("scenes observabilidade: capability.completed de CONTENT_SCENE_IDEAS carrega kept/dropped", async () => {
   resetJobEvents();
-  const router = { describe, complete: async (task: string) => {
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
     if (task === "PRODUCT_UNDERSTANDING") return understanding;
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
     if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto na prática", cta: "c" }] };
     if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
-    if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit;
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
@@ -347,7 +353,7 @@ test("scenes retry guiado: gate derruba o set na 1ª chamada e a 2ª recebe gate
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto na prática", cta: "c" }] };
     if (task === "CONTENT_SCENE_IDEAS") { sceneCalls += 1; sceneContexts.push(recordOf(input?.trustedContext)); return sceneCalls === 1 ? gateRejected : sceneIdeas; }
-    if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit;
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
@@ -363,14 +369,14 @@ test("scenes retry guiado: gate derruba o set na 1ª chamada e a 2ª recebe gate
 test("scenes retry guiado fail-closed: gate persistente esgota as 2 tentativas", async () => {
   let sceneCalls = 0;
   const gateRejected = { scenes: [{ description: "Ambiente iluminado e bonito" }, { description: "Espaço decorado e organizado" }] };
-  const router = { describe, complete: async (task: string) => {
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
     if (task === "PRODUCT_UNDERSTANDING") return understanding;
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
     if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Produto na prática", cta: "c" }] };
     if (task === "CONTENT_SCENE_IDEAS") { sceneCalls += 1; return gateRejected; }
-    if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit;
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
     return {};
   } };
   await assert.rejects(

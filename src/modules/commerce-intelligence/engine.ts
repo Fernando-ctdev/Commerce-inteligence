@@ -59,7 +59,7 @@ import {
 import { emitJobEvent, sanitizeGateReports } from "./observability";
 import { GenerationError } from "./errors";
 import { type GenerationStage } from "./stages";
-import { applyQualityRepair, parseQualityAudit, projectQualityFailures, qualityPartsToRepair, QUALITY_PARTS, reasonText, type QualityAudit, type QualityPart } from "./semantic-quality";
+import { applyQualityRepair, JUDGE_BATCH_MAX, parseQualityAuditBatch, parseQualityRepairBatch, projectQualityFailures, qualityPartsToRepair, QUALITY_PARTS, REPAIR_BATCH_MAX, reasonText, type QualityAudit, type QualityJudgment, type QualityPart } from "./semantic-quality";
 
 // ADR-019: versão real da engine — substitui o literal estático "slice-003" do
 // IntelligenceRun. Bump junto com mudanças comportamentais da engine.
@@ -798,6 +798,8 @@ function contractRepairDetail(
 export type BriefRepairChecklist = {
   developmentAction?: true;
   removeUnsupportedClaim?: true;
+  removeSceneMetacomment?: true;
+  removeLocator?: true;
   ctaVariety?: true;
   soloProduction?: true;
 };
@@ -806,6 +808,8 @@ const BRIEF_CHECKLIST_PREFIXES: ReadonlyArray<readonly [string, keyof BriefRepai
   ["claim", "removeUnsupportedClaim"],
   ["development contém claim sem evidência", "removeUnsupportedClaim"],
   ["script contém claim factual", "removeUnsupportedClaim"],
+  ["script contém metainstrução de cena", "removeSceneMetacomment"],
+  ["locator interno de evidência", "removeLocator"],
   ["atributo objetivo", "removeUnsupportedClaim"],
   ["função de CTA repetida", "ctaVariety"],
   ["CTA usado como hook", "ctaVariety"],
@@ -855,6 +859,13 @@ function isHookVarietyError(error: unknown): error is ContractError {
     error.code === "GEN-VARIETY" &&
     /hookMechanism/.test(error.message)
   );
+}
+// ADR-025 §1 + B-003-11 (fail-closed): falha isolável por lote é SOMENTE a tipada
+// de provider (falha/timeout) ou schema (contrato malformado). Abort/fencing
+// repropagam antes; qualquer outro erro — fatal, infraestrutura, bug — repropaga
+// e falha o job com seu código tipado, nunca vira SUCCEEDED_PARTIAL silencioso.
+function isIsolatableBatchError(error: unknown): error is GenerationError {
+  return error instanceof GenerationError && (error.code === "GEN-SCHEMA" || error.code === "GEN-PROVIDER");
 }
 
 // Tracker de capability extraído de runFirstGeneration (ADR-019): a geração de
@@ -1819,10 +1830,16 @@ export async function runFirstGeneration(
   const sceneDiagnostics: GateReport[] = [];
   let lastQualityAudits: QualityAudit[] = [];
   if (input.router) {
-    const judgeContent = async (index: number, round: number): Promise<QualityAudit> => {
+    // ADR-025: curadoria em lote — transporte apenas, nunca mudança semântica; a
+    // unidade de decisão permanece Content + QualityPart + round. O lote é
+    // homogêneo (mesmo job, evidência, creator context, skill e round) e a
+    // identidade da resposta é o contentId server-derived, NUNCA a posição.
+    const currentQualityAudits: Array<QualityAudit | undefined> = hard.map(() => undefined);
+    const judgeBatchFailed = new Set<number>();
+    const judgeItemContext = (index: number) => {
       const candidate = hard[index];
       const scenes = sceneSets[index];
-      const context = {
+      return {
         contentId: candidate.brief.contentId,
         parts: QUALITY_PARTS.map((part) => ({
           part,
@@ -1833,22 +1850,47 @@ export async function runFirstGeneration(
           commercialObjective: candidate.opportunity.commercialObjective,
           coreMessage: candidate.opportunity.coreMessage,
         },
-        relevantFacts: evidence.facts,
-        creatorContext: projectCreatorContext("CONTENT_QUALITY_JUDGE", input.creatorContext),
-        skillSlice: projectPlatformSkillSlice(skill, "brief"),
       };
-      return track(
-        "CONTENT_QUALITY_JUDGE",
-        context,
-        (onMetrics?: (metrics: ProviderCallMetrics) => void) => callCapability(
-          input.router!,
-          "CONTENT_QUALITY_JUDGE",
-          project("CONTENT_QUALITY_JUDGE", context, {}),
-          input.signal,
-          onMetrics,
-        ),
-        (output) => parseQualityAudit(output, candidate.brief.contentId, round),
-      );
+    };
+    const judgeBatch = async (indices: number[], round: number): Promise<void> => {
+      for (let start = 0; start < indices.length; start += JUDGE_BATCH_MAX) {
+        const chunk = indices.slice(start, start + JUDGE_BATCH_MAX);
+        const items = chunk.map(judgeItemContext);
+        const context = {
+          round,
+          relevantFacts: evidence.facts,
+          creatorContext: projectCreatorContext("CONTENT_QUALITY_JUDGE", input.creatorContext),
+          skillSlice: projectPlatformSkillSlice(skill, "brief"),
+          items,
+        };
+        try {
+          const audits = await track(
+            "CONTENT_QUALITY_JUDGE",
+            context,
+            (onMetrics?: (metrics: ProviderCallMetrics) => void) => callCapability(
+              input.router!,
+              "CONTENT_QUALITY_JUDGE",
+              project("CONTENT_QUALITY_JUDGE", context, {}),
+              input.signal,
+              onMetrics,
+            ),
+            (output) => parseQualityAuditBatch(output, items.map(({ contentId }) => contentId), round),
+          );
+          chunk.forEach((index, position) => {
+            qualityAudits.push(audits[position]);
+            currentQualityAudits[index] = audits[position];
+          });
+        } catch (error) {
+          if (input.signal?.aborted) throw error;
+          // ADR-025 §1 + B-003-11: lote indisponível (GEN-PROVIDER) ou malformado
+          // (GEN-SCHEMA) não aprova os irmãos nem repete o job inteiro — os itens
+          // do lote ficam isolados e não publicam (faltantes no contrato do
+          // ADR-021); a telemetria capability.failed do track registra a causa.
+          // Erro fatal/desconhecido repropaga: fail-closed, sem parcial indevido.
+          if (!isIsolatableBatchError(error)) throw error;
+          for (const index of chunk) judgeBatchFailed.add(index);
+        }
+      }
     };
     const hardGateComposition = (updatedIndex: number) => {
       const current = hard[updatedIndex].brief;
@@ -1881,71 +1923,121 @@ export async function runFirstGeneration(
       return rejectedReports;
     };
 
-    let currentQualityAudits = await Promise.all(hard.map((_, index) => judgeContent(index, 0)));
-    qualityAudits.push(...currentQualityAudits);
-    let qualityRepairRounds = 0;
-    for (let round = 1; round <= 2 && currentQualityAudits.some((audit) => qualityPartsToRepair(audit).length); round++) {
-      qualityRepairRounds = round;
-      const pending = currentQualityAudits.flatMap((audit, index) =>
-        qualityPartsToRepair(audit).map((judgment) => ({ index, part: judgment.part })),
-      ).sort((left, right) => Number(left.part !== "scenes" && sceneSets[left.index].status !== "AVAILABLE") - Number(right.part !== "scenes" && sceneSets[right.index].status !== "AVAILABLE"));
-      for (const { index, part } of pending) {
-        const judgment = currentQualityAudits[index].parts.find((item) => item.part === part)!;
-        if (judgment.status !== "REPAIR") continue;
-        const candidate = hard[index];
-        const scene = sceneSets[index];
-        const oldContent = part === "scenes" ? scene.scenes.map(({ description }) => description) : candidate.brief[part];
-        const context = {
-          contentId: candidate.brief.contentId,
-          part,
-          content: oldContent,
+    // ADR-025 §3: repair em lote SOMENTE da mesma QualityPart e do mesmo round —
+    // hook, script e cta até 3 itens, development até 2, scenes individual
+    // (REPAIR_BATCH_MAX). Resposta {items:[{contentId, content}]} validada contra
+    // o conjunto exato de IDs; conteúdo de cada item validado e recomposto
+    // individualmente, isolando o item sem derrubar os irmãos.
+    const repairPartBatch = async (
+      pending: Array<{ index: number; judgment: QualityJudgment }>,
+      part: QualityPart,
+      round: number,
+      modified: Set<number>,
+    ): Promise<void> => {
+      const batchMax = REPAIR_BATCH_MAX[part];
+      for (let start = 0; start < pending.length; start += batchMax) {
+        const chunk = pending.slice(start, start + batchMax);
+        const items = chunk.map(({ index, judgment }) => ({
+          contentId: hard[index].brief.contentId,
+          content: part === "scenes" ? sceneSets[index].scenes.map(({ description }) => description) : hard[index].brief[part],
           criterion: judgment.criterion,
           reason: reasonText(judgment.reason),
-          opportunity: { angle: candidate.opportunity.angle, commercialObjective: candidate.opportunity.commercialObjective, coreMessage: candidate.opportunity.coreMessage },
+          opportunity: {
+            angle: hard[index].opportunity.angle,
+            commercialObjective: hard[index].opportunity.commercialObjective,
+            coreMessage: hard[index].opportunity.coreMessage,
+          },
+        }));
+        const context = {
+          part,
+          round,
           relevantFacts: evidence.facts,
           creatorContext: projectCreatorContext("CONTENT_PART_REPAIR", input.creatorContext),
           skillSlice: projectPlatformSkillSlice(skill, "brief"),
+          items,
         };
-        const replacement = await track(
-          "CONTENT_PART_REPAIR",
-          context,
-          (onMetrics?: (metrics: ProviderCallMetrics) => void) => callCapability(
-            input.router!, "CONTENT_PART_REPAIR", project("CONTENT_PART_REPAIR", context, {}), input.signal, onMetrics,
-          ),
-          (output) => {
-            if (Object.keys(output).length !== 1 || !Object.hasOwn(output, "content"))
-              throw new GenerationError("GEN-SCHEMA", "Quality repair retornou contrato inválido", true, { task: "CONTENT_PART_REPAIR", part });
-            if (part === "scenes") return validateContentSceneSetDraft({ scenes: output.content });
-            const value = output.content;
-            return validateContentBriefDraft({
-              angle: candidate.brief.angle, hook: part === "hook" ? value : candidate.brief.hook,
-              development: part === "development" ? value : candidate.brief.development,
-              script: part === "script" ? value : candidate.brief.script,
-              cta: part === "cta" ? value : candidate.brief.cta,
-            })[part];
-          },
-        );
-        const composed = applyQualityRepair(candidate.brief, scene.scenes, part, replacement);
-        if (part === "scenes") {
-          const repairedScenes = replacement as SceneIdea[];
-          sceneSets[index] = { ...scene, status: "AVAILABLE", scenes: repairedScenes, generated: repairedScenes.length, dropped: 0 };
-        } else hard[index] = { ...candidate, brief: composed.brief };
-        const compositionReports = hardGateComposition(index);
-        if (compositionReports.length) {
-          // ADR-021: composição reprovada falha o item, não o job.
-          compositionFailed.add(index);
-          compositionDiagnostics.push(...compositionReports);
+        let replacements: Array<{ contentId: string; content: unknown }>;
+        try {
+          replacements = await track(
+            "CONTENT_PART_REPAIR",
+            context,
+            (onMetrics?: (metrics: ProviderCallMetrics) => void) => callCapability(
+              input.router!, "CONTENT_PART_REPAIR", project("CONTENT_PART_REPAIR", context, {}), input.signal, onMetrics,
+            ),
+            (output) => parseQualityRepairBatch(output, items.map(({ contentId }) => contentId), part),
+          );
+        } catch (error) {
+          if (input.signal?.aborted) throw error;
+          // ADR-025 §1 + B-003-11: somente falha/timeout de provider (GEN-PROVIDER)
+          // ou contrato malformado (GEN-SCHEMA) isola o lote — os itens permanecem
+          // não-PASS e não publicam (ADR-021), sem repetir o job. Erro fatal ou
+          // desconhecido repropaga: fail-closed, sem parcial indevido.
+          if (!isIsolatableBatchError(error)) throw error;
           continue;
         }
-        const audit = await judgeContent(index, round);
-        currentQualityAudits[index] = audit;
-        qualityAudits.push(audit);
-        qualityRepairs.push({ contentId: candidate.brief.contentId, part, round, criterion: judgment.criterion, outcome: "REPAIRED" });
+        for (const { contentId, content } of replacements) {
+          const index = chunk.find((item) => hard[item.index].brief.contentId === contentId)!.index;
+          const candidate = hard[index];
+          // ADR-025 §1: validação individual da parte retornada — falha isola o
+          // item (a parte permanece não-PASS), nunca os irmãos do lote.
+          let replacement: unknown;
+          try {
+            replacement = part === "scenes"
+              ? validateContentSceneSetDraft({ scenes: content })
+              : validateContentBriefDraft({
+                  angle: candidate.brief.angle, hook: part === "hook" ? content : candidate.brief.hook,
+                  development: part === "development" ? content : candidate.brief.development,
+                  script: part === "script" ? content : candidate.brief.script,
+                  cta: part === "cta" ? content : candidate.brief.cta,
+                })[part];
+          } catch (error) {
+            // B-003-11: somente violação de contrato do validador server-side isola
+            // o item; qualquer outro erro repropaga (fail-closed).
+            if (!(error instanceof ContractError)) throw error;
+            continue;
+          }
+          const composed = applyQualityRepair(candidate.brief, sceneSets[index].scenes, part, replacement);
+          if (part === "scenes") {
+            const repairedScenes = replacement as SceneIdea[];
+            sceneSets[index] = { ...sceneSets[index], status: "AVAILABLE", scenes: repairedScenes, generated: repairedScenes.length, dropped: 0 };
+          } else hard[index] = { ...candidate, brief: composed.brief };
+          const compositionReports = hardGateComposition(index);
+          if (compositionReports.length) {
+            // ADR-021: composição reprovada falha o item, não o job.
+            compositionFailed.add(index);
+            compositionDiagnostics.push(...compositionReports);
+            continue;
+          }
+          modified.add(index);
+          const judgment = chunk.find((item) => item.index === index)!.judgment;
+          qualityRepairs.push({ contentId, part, round, criterion: judgment.criterion, outcome: "REPAIRED" });
+        }
       }
+    };
+    // ADR-025 §2: o judge roda UMA vez para os itens hard-valid e volta a rodar
+    // apenas para os itens modificados do round concluído.
+    await judgeBatch(hard.map((_, index) => index), 0);
+    let qualityRepairRounds = 0;
+    const hasPendingRepairs = () =>
+      currentQualityAudits.some((audit, index) =>
+        audit && !judgeBatchFailed.has(index) && qualityPartsToRepair(audit).length);
+    for (let round = 1; round <= 2 && hasPendingRepairs(); round++) {
+      qualityRepairRounds = round;
+      const modified = new Set<number>();
+      for (const part of QUALITY_PARTS) {
+        const pending = currentQualityAudits.flatMap((audit, index) =>
+          audit && !judgeBatchFailed.has(index)
+            ? qualityPartsToRepair(audit)
+              .filter((judgment) => judgment.part === part)
+              .map((judgment) => ({ index, judgment }))
+            : []);
+        if (pending.length) await repairPartBatch(pending, part, round, modified);
+      }
+      if (modified.size) await judgeBatch([...modified], round);
     }
     for (const [index, audit] of currentQualityAudits.entries())
-      if (audit.parts.some(({ status }) => status !== "PASS")) judgeFailIdx.add(index);
-    lastQualityAudits = currentQualityAudits;
+      if (!audit || audit.parts.some(({ status }) => status !== "PASS")) judgeFailIdx.add(index);
+    lastQualityAudits = currentQualityAudits.filter((audit): audit is QualityAudit => Boolean(audit));
   }
   sceneSets.forEach((set, index) => {
     if (set.status !== "AVAILABLE" || set.scenes.length < 2) {

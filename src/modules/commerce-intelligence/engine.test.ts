@@ -27,11 +27,15 @@ const qualityPass = { parts: [
   { part: "cta", status: "PASS", criterion: "cta_clarity", reason: "meets_criteria" },
   { part: "scenes", status: "PASS", criterion: "scenes_actionable", reason: "meets_criteria" },
 ] };
+const judgeItems = (input?: { trustedContext?: unknown }): Array<Record<string, unknown>> => {
+  const items = recordOf(input?.trustedContext)?.items;
+  return Array.isArray(items) ? items as Array<Record<string, unknown>> : [];
+};
 function withInternalCuration(router: ModelRouter): ModelRouter {
   return {
     ...router,
     complete: async (task, input, signal, onMetrics) => {
-      if (task === "CONTENT_QUALITY_JUDGE") return qualityPass;
+      if (task === "CONTENT_QUALITY_JUDGE") return { audits: judgeItems(input).map(({ contentId }) => ({ contentId, parts: qualityPass.parts })) };
       if (task === "CONTENT_SCENE_IDEAS") {
         const context = recordOf(input?.trustedContext);
         const brief = recordOf(context?.brief);
@@ -643,9 +647,12 @@ test("variedade do entregue: cap recomputado após falha do judge dropa o excede
       return { scenes: [{ description: `Mostre ${detail}` }, { description: `Pegue o produto e mostre ${detail}` }] };
     }
     if (task === "CONTENT_QUALITY_JUDGE") {
-      const contentId = recordOf(input?.trustedContext)?.contentId;
-      if (contentId === "j-content-6") judgedRejects.push(contentId);
-      return contentId === "j-content-6" ? judgeReject : qualityPass;
+      return {
+        audits: judgeItems(input).map(({ contentId }) => {
+          if (contentId === "j-content-6") judgedRejects.push(contentId);
+          return { contentId, parts: contentId === "j-content-6" ? judgeReject.parts : qualityPass.parts };
+        }),
+      };
     }
     return {};
   } };
@@ -664,6 +671,226 @@ test("variedade do entregue: cap recomputado após falha do judge dropa o excede
   assert.ok(varietyItem, "drop determinístico de variedade registrado");
   assert.equal(varietyItem?.contentId, "j-content-5", "o 2º checkout (excedente do cap recomputado) é dropado");
   assert.deepEqual(varietyItem?.issues, ["variety_cap_drop"]);
+});
+
+// ADR-025 §2: judge em lote — 5 Contents viram 2 chamadas (chunks de 3 e 2,
+// JUDGE_BATCH_MAX); a identidade da resposta é o contentId (ordem embaralhada é
+// aceita) e um lote malformado isola os SEUS itens sem aprovar irmãos nem
+// repetir o job → SUCCEEDED_PARTIAL.
+test("ADR-025: judge em lote (3+2) com identidade por contentId; lote malformado isola itens e fecha parcial", async () => {
+  const briefFor = (position: number) => ({
+    angle: `a${position}`,
+    hook: `Gancho ${position}`,
+    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+    script: "Tecido respiravel",
+    cta: `cta ${position}`,
+  });
+  const judgeCallSizes: number[] = [];
+  let judgeCalls = 0;
+  let briefCalls = 0;
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+    if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 5 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
+    if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 5, opportunities: Array.from({ length: 5 }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstração direta", "teste demonstrativo do tecido", "mostrando o resultado no tecido", "prova de resistência do tecido"][i % 4], noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_BRIEF_GENERATION") {
+      briefCalls += 1;
+      const size = [4, 1][briefCalls - 1];
+      return { items: Array.from({ length: size }, (_, offset) => briefFor((briefCalls - 1) * 4 + offset + 1)) };
+    }
+    if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
+    if (task === "CONTENT_QUALITY_JUDGE") {
+      judgeCalls += 1;
+      const items = judgeItems(input);
+      judgeCallSizes.push(items.length);
+      if (judgeCalls === 2) return { audits: [...items.map(({ contentId }) => ({ contentId, parts: qualityPass.parts })), { contentId: "j-content-extra", parts: qualityPass.parts }] };
+      // ordem embaralhada: identidade é o contentId, não a posição
+      return { audits: [...items].reverse().map(({ contentId }) => ({ contentId, parts: qualityPass.parts })) };
+    }
+    return {};
+  } };
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 5, router });
+  assert.deepEqual(judgeCallSizes, [3, 2], "chunks de 3 e 2 (JUDGE_BATCH_MAX)");
+  assert.equal(result.briefs.length, 3, "lote malformado isola os 2 itens; irmãos aprovam");
+  assert.equal(result.partial?.deliveredCount, 3);
+  assert.equal(result.partial?.failedCount, 2);
+  assert.deepEqual(result.partial?.failedItems.map(({ contentId }) => contentId), ["j-content-4", "j-content-5"]);
+});
+
+// ADR-025 §3: repair em lote agrupa SOMENTE a mesma QualityPart+round (hook:
+// 3+2 por REPAIR_BATCH_MAX), o conjunto exato de contentIds é ecoado, os itens
+// reparados voltam ao judge no round seguinte e o job fecha SUCCEEDED.
+test("ADR-025: repair em lote da mesma parte (hook 3+2), re-judge dos modificados e sucesso completo", async () => {
+  const briefFor = (position: number) => ({
+    angle: `a${position}`,
+    hook: `Gancho ${position}`,
+    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+    script: "Tecido respiravel",
+    cta: `cta ${position}`,
+  });
+  const judgeCallSizes: number[] = [];
+  const repairCallSizes: number[] = [];
+  let judgeCalls = 0;
+  let briefCalls = 0;
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+    if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 5 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
+    if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 5, opportunities: Array.from({ length: 5 }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstração direta", "teste demonstrativo do tecido", "mostrando o resultado no tecido", "prova de resistência do tecido"][i % 4], noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_BRIEF_GENERATION") {
+      briefCalls += 1;
+      const size = [4, 1][briefCalls - 1];
+      return { items: Array.from({ length: size }, (_, offset) => briefFor((briefCalls - 1) * 4 + offset + 1)) };
+    }
+    if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
+    if (task === "CONTENT_QUALITY_JUDGE") {
+      judgeCalls += 1;
+      const items = judgeItems(input);
+      judgeCallSizes.push(items.length);
+      const parts = judgeCalls <= 2
+        ? qualityPass.parts.map((part) => part.part === "hook" ? { ...part, status: "REPAIR", reason: "unclear" } : part)
+        : qualityPass.parts;
+      return { audits: items.map(({ contentId }) => ({ contentId, parts })) };
+    }
+    if (task === "CONTENT_PART_REPAIR") {
+      const context = recordOf(input?.trustedContext);
+      const items = Array.isArray(context?.items) ? context.items as Array<Record<string, unknown>> : [];
+      repairCallSizes.push(items.length);
+      return { items: items.map(({ contentId }) => ({ contentId, content: `Gancho reparado do ${contentId}` })) };
+    }
+    return {};
+  } };
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 5, router });
+  assert.deepEqual(judgeCallSizes, [3, 2, 3, 2], "judge round 0 (3+2) e re-judge dos modificados no round 1 (3+2)");
+  assert.deepEqual(repairCallSizes, [3, 2], "hook em chunks de 3 e 2 (REPAIR_BATCH_MAX.hook)");
+  assert.equal(result.briefs.length, 5, "todos os itens reparados e aprovados");
+  assert.ok(!result.partial, "SUCCEEDED completo");
+  assert.ok(result.briefs.every(({ hook }) => String(hook).startsWith("Gancho reparado do j-content-")));
+  assert.equal(result.qualityRepairs.filter(({ part }) => part === "hook").length, 5);
+});
+
+// ADR-025 §1/§3: envelope de repair malformado (ID extra) NÃO aprova os itens
+// do lote nem derruba os irmãos — os itens do lote permanecem não-PASS e não
+// publicam; os irmãos PASS publicam → SUCCEEDED_PARTIAL.
+test("ADR-025: envelope de repair malformado isola os itens do lote e fecha parcial", async () => {
+  const briefFor = (position: number) => ({
+    angle: `a${position}`,
+    hook: `Gancho ${position}`,
+    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+    script: "Tecido respiravel",
+    cta: `cta ${position}`,
+  });
+  const judgeCallSizes: number[] = [];
+  const repairCallSizes: number[] = [];
+  let briefCalls = 0;
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+    if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 5 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
+    if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 5, opportunities: Array.from({ length: 5 }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstração direta", "teste demonstrativo do tecido", "mostrando o resultado no tecido", "prova de resistência do tecido"][i % 4], noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_BRIEF_GENERATION") {
+      briefCalls += 1;
+      const size = [4, 1][briefCalls - 1];
+      return { items: Array.from({ length: size }, (_, offset) => briefFor((briefCalls - 1) * 4 + offset + 1)) };
+    }
+    if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
+    if (task === "CONTENT_QUALITY_JUDGE") {
+      const items = judgeItems(input);
+      judgeCallSizes.push(items.length);
+      return {
+        audits: items.map(({ contentId }) => ({
+          contentId,
+          parts: Number(String(contentId).slice(-1)) <= 3
+            ? qualityPass.parts
+            : qualityPass.parts.map((part) => part.part === "hook" ? { ...part, status: "REPAIR", reason: "unclear" } : part),
+        })),
+      };
+    }
+    if (task === "CONTENT_PART_REPAIR") {
+      const context = recordOf(input?.trustedContext);
+      const items = Array.isArray(context?.items) ? context.items as Array<Record<string, unknown>> : [];
+      repairCallSizes.push(items.length);
+      return { items: [...items.map(({ contentId }) => ({ contentId, content: `Gancho do ${contentId}` })), { contentId: "j-content-extra", content: "extra" }] };
+    }
+    return {};
+  } };
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 5, router });
+  assert.deepEqual(judgeCallSizes, [3, 2]);
+  assert.deepEqual(repairCallSizes, [2, 2], "repair reexecuta no round 2, mas o envelope continua malformado");
+  assert.equal(result.briefs.length, 3, "itens 4 e 5 (lote de repair falho) não publicam; irmãos 1-3 aprovam");
+  assert.equal(result.partial?.deliveredCount, 3);
+  assert.equal(result.partial?.failedCount, 2);
+  assert.deepEqual(result.partial?.failedItems.map(({ contentId }) => contentId), ["j-content-4", "j-content-5"]);
+});
+
+// ADR-025 §3: limites por parte — development agrupa no máximo 2 (chunks 2+1)
+// e scenes é sempre individual (1 por chamada), mesmo com 3 itens pendentes.
+test("ADR-025: repair de development agrupa 2+1 e scenes é individual", async () => {
+  const briefFor = (position: number) => ({
+    angle: `a${position}`,
+    hook: `Gancho ${position}`,
+    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+    script: "Tecido respiravel",
+    cta: `cta ${position}`,
+  });
+  const judgeCallSizes: number[] = [];
+  const repairCallSizes: number[] = [];
+  let judgeCalls = 0;
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+    if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 3 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
+    if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 3, opportunities: Array.from({ length: 3 }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstração direta", "teste demonstrativo do tecido", "mostrando o resultado no tecido"][i], noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: Array.from({ length: 3 }, (_, offset) => briefFor(offset + 1)) };
+    if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
+    if (task === "CONTENT_QUALITY_JUDGE") {
+      judgeCalls += 1;
+      const items = judgeItems(input);
+      judgeCallSizes.push(items.length);
+      const parts = judgeCalls === 1
+        ? qualityPass.parts.map((part) => part.part === "development" || part.part === "scenes" ? { ...part, status: "REPAIR", reason: "unclear" } : part)
+        : qualityPass.parts;
+      return { audits: items.map(({ contentId }) => ({ contentId, parts })) };
+    }
+    if (task === "CONTENT_PART_REPAIR") {
+      const context = recordOf(input?.trustedContext);
+      const items = Array.isArray(context?.items) ? context.items as Array<Record<string, unknown>> : [];
+      repairCallSizes.push(items.length);
+      return {
+        items: items.map(({ contentId }) => ({
+          contentId,
+          content: String(context?.part) === "scenes"
+            ? [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }]
+            : ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+        })),
+      };
+    }
+    return {};
+  } };
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 3, router });
+  assert.deepEqual(judgeCallSizes, [3, 3], "judge round 0 e re-judge dos modificados, um chunk cada");
+  assert.deepEqual(repairCallSizes, [2, 1, 1, 1, 1], "development em 2+1 (REPAIR_BATCH_MAX.development); scenes sempre 1");
+  assert.equal(result.briefs.length, 3);
+  assert.ok(!result.partial);
+});
+
+// B-003-11/ADR-025: erro tipado porém FATAL no lote do judge (não provider/schema)
+// repropaga e falha o job — nunca vira SUCCEEDED_PARTIAL silencioso.
+test("ADR-025: erro fatal do judge (não isolável) repropaga fail-closed", async () => {
+  const router = { describe, complete: async (task: string) => {
+    if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
+    if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: "c" }] };
+    if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
+    if (task === "CONTENT_QUALITY_JUDGE") throw Object.assign(new Error("falha de datasource no judge"), { code: "GEN-DATASOURCE" });
+    return {};
+  } };
+  await assert.rejects(
+    () => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }),
+    (error: unknown) => error instanceof GenerationError && error.code === "GEN-DATASOURCE",
+  );
 });
 test("ADR-020 adendo 2: partes plausíveis NÃO autorizam texto falho (gate é a autoridade)", async () => {
   let repairCalls = 0;
