@@ -610,6 +610,7 @@ export async function finalizeGeneration(
   output: EngineResult,
   sceneSets: SceneSetOutcome[],
   runData: Record<string, unknown>,
+  reusedStrategyId?: string | null,
 ): Promise<void> {
   // ADR-021: assinatura residual do parcial vai no metadado do run.
   const runDataWithPartial = output.partial ? { ...runData, partial: output.partial } : runData;
@@ -634,7 +635,18 @@ export async function finalizeGeneration(
     // memória/reserva) ou espera o commit desta transação.
     if ((await lockProductLifecycle(tx, job.tenantId, job.productId)) !== "ACTIVE")
       throw new GenerationError("GEN-PRODUCT", "Produto não disponível");
-    const strategy = await tx.productStrategy.create({
+    // ADR-021/SPEC B-003-10: uma única Strategy ACTIVE por produto (índice
+    // parcial único). O modo complete reutiliza a linha ACTIVE existente — o
+    // novo plano vincula a ela e a proveniência original da Strategy é
+    // preservado; nunca cria uma segunda ACTIVE.
+    const reusedStrategy = reusedStrategyId
+      ? await tx.productStrategy.findFirst({
+          where: { tenantId: job.tenantId, productId: job.productId, id: reusedStrategyId, status: "ACTIVE" },
+        })
+      : null;
+    if (reusedStrategyId && !reusedStrategy)
+      throw new GenerationError("GEN-PERSISTENCE", "Strategy ACTIVE do job parcial não encontrada para reuso", false);
+    const strategy = reusedStrategy ?? await tx.productStrategy.create({
       data: {
         id: String(output.strategy.id),
         tenantId: job.tenantId,
@@ -1113,7 +1125,9 @@ export async function processGeneration(jobId: string, ownerId: string) {
     });
     // Transação curta de finalização extraída (finalizeGeneration): mesmo
     // bloqueio de fence CAS owner+attempt, rollback total em count inesperado.
-    await finalizeGeneration(job, ownerId, attempt, output, sceneSets, runData);
+    // ADR-021: no modo complete o plano vincula à Strategy ACTIVE reutilizada
+    // (row carregada no claim); finalize NÃO cria uma segunda ACTIVE.
+    await finalizeGeneration(job, ownerId, attempt, output, sceneSets, runData, reuseStrategyRow?.id ?? null);
     emitJobEvent("job.terminal", {
       jobId: job.id,
       attempt,
