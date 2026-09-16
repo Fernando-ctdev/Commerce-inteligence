@@ -13,7 +13,9 @@ import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 
-import { claimGeneration, failJobAndReleaseReservation, finalizeGeneration, reclaimExpiredGenerations } from "./worker.js";
+import { buildFailureRun, claimGeneration, failJobAndReleaseReservation, finalizeGeneration, reclaimExpiredGenerations } from "./worker.js";
+import { runFirstGeneration } from "./engine.js";
+import { GenerationError } from "./errors.js";
 import type { EngineResult } from "./engine.js";
 import { monthUtc } from "../entitlements/generation.js";
 import { collectJobEvents, resetJobEvents } from "./observability.js";
@@ -371,6 +373,123 @@ test("reclaim emite job.reclaimed na rotação e job.terminal no esgotamento; se
     assert.equal(metadata.internalError?.stage, "UNDERSTANDING_PRODUCT", "stage persistido no job no momento do reclaim");
   } finally {
     resetJobEvents();
+    await limpar();
+  }
+});
+
+// ADR-026 (pós-job ace9e417): o caminho FAILED do worker persiste a telemetria
+// de cenas (sceneOutcomes sanitizados por contentId) no IntelligenceRun, na
+// MESMA transação do CAS de FAILED; fence perdido NÃO persiste. O engine roda
+// com provider fake (cenas gate-reprovadas), o terminal usa failJob real.
+function sceneFailRouter() {
+  const developmentOk = ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"];
+  const qualityPass = { parts: [
+    { part: "hook", status: "PASS", criterion: "hook_clarity", reason: "meets_criteria" },
+    { part: "development", status: "PASS", criterion: "development_coherence", reason: "meets_criteria" },
+    { part: "script", status: "PASS", criterion: "script_naturalness", reason: "meets_criteria" },
+    { part: "cta", status: "PASS", criterion: "cta_clarity", reason: "meets_criteria" },
+    { part: "scenes", status: "PASS", criterion: "scenes_actionable", reason: "meets_criteria" },
+  ] };
+  return {
+    describe: () => ({ provider: "test", model: "test", instructionVersion: "test" }),
+    complete: async (task: string, input?: { trustedContext?: unknown }) => {
+      const context = input?.trustedContext as Record<string, unknown> | undefined;
+      if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["barreira"], evidenceRefs: ["product:name"] };
+      if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:description"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:description"] }] };
+      if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
+      if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] }] };
+      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "Gancho", development: developmentOk, script: "Tecido respiravel", cta: "cta" }] };
+      if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Ambiente iluminado e bonito" }, { description: "Espaço decorado e organizado" }] };
+      if (task === "CONTENT_QUALITY_JUDGE") {
+        const items = Array.isArray(context?.items) ? context.items as Array<{ contentId: string }> : [];
+        return { audits: items.map(({ contentId }) => ({ contentId, parts: qualityPass.parts })) };
+      }
+      return {};
+    },
+  };
+}
+
+test("falha de cenas persiste sceneOutcomes sanitizados no IntelligenceRun (mesma transação CAS)", async (t) => {
+  if (!dbUp) return t.skip();
+  const { job, limpar } = await criarJobQueued();
+  try {
+    const claimed = await claimGeneration(new Date(), "scene-owner", job.id);
+    assert.ok(claimed);
+    let captured: GenerationError | undefined;
+    await assert.rejects(
+      () => runFirstGeneration({ productId: job.productId, jobId: job.id, name: "Produto", description: "Tecido respirável", targetContentCount: 1, router: sceneFailRouter() }),
+      (error: unknown) => {
+        captured = error as GenerationError;
+        return error instanceof GenerationError && error.code === "GEN-REPAIR-EXHAUSTED";
+      },
+    );
+    assert.ok(captured, "engine falhou como esperado");
+    const failureRun = buildFailureRun(captured!.code, "GENERATING_BRIEFS", captured!.detail);
+    const terminalized = await failJobAndReleaseReservation(job.id, captured!.code, "scene-owner", claimed.attempt, failureRun.internalError, {
+      tenantId: job.tenantId,
+      productId: job.productId,
+      engineVersion: "teste-fence",
+      platformSkillVersion: "tiktok-commerce@1.2",
+      metadata: { internalError: failureRun.internalError, diagnostics: failureRun.diagnostics },
+    }, {
+      stage: "GENERATING_BRIEFS",
+      gateReports: failureRun.diagnostics?.gateReports,
+      qualityFailures: failureRun.diagnostics?.qualityFailures,
+    });
+    assert.equal(terminalized, true, "CAS terminaliza e persiste o run de falha");
+    const run = await prisma.intelligenceRun.findUniqueOrThrow({ where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } } });
+    const diagnostics = (run.metadata as { diagnostics?: { sceneOutcomes?: Array<Record<string, unknown>> } }).diagnostics;
+    assert.ok(diagnostics, "diagnostics persistidos no run");
+    const outcomes = diagnostics!.sceneOutcomes ?? [];
+    assert.equal(outcomes.length, 1);
+    assert.equal(outcomes[0].contentId, `${job.id}-content-1`);
+    assert.equal(outcomes[0].status, "FILTERED");
+    assert.deepEqual(outcomes[0].causes, ["acao_ausente:2"]);
+    assert.equal((outcomes[0].attempts as unknown[]).length, 2);
+    assert.ok(!JSON.stringify(run.metadata).includes("iluminado") && !JSON.stringify(run.metadata).includes("decorado"), "nenhuma descrição de cena persistida");
+    const estado = await estadoPublicacao(job.id, job.tenantId);
+    assert.equal(estado.job.status, "FAILED");
+    assert.equal(estado.job.internalErrorCode, "GEN-REPAIR-EXHAUSTED");
+    assert.equal(estado.reservation.status, "RELEASED");
+    assert.equal(estado.publicados.contents, 0);
+  } finally {
+    await limpar();
+  }
+});
+
+test("fence perdido: sceneOutcomes NÃO persistem no IntelligenceRun pelo owner vencido", async (t) => {
+  if (!dbUp) return t.skip();
+  const { job, limpar } = await criarJobQueued();
+  try {
+    const claimed = await claimGeneration(new Date(), "owner-a", job.id);
+    assert.ok(claimed);
+    await prisma.commerceIntelligenceJob.update({
+      where: { id: job.id },
+      data: { leaseOwnerId: "owner-b", attempt: { increment: 1 } },
+    });
+    const failureRun = buildFailureRun("GEN-REPAIR-EXHAUSTED", "GENERATING_BRIEFS", {
+      task: "CONTENT_QUALITY_JUDGE",
+      expected: 1,
+      received: 0,
+      sceneOutcomes: [{ contentId: `${job.id}-content-1`, status: "FILTERED", generated: 2, dropped: 2, causes: ["acao_ausente:2"], attempts: [] }],
+      rejected: [],
+    });
+    const terminalized = await failJobAndReleaseReservation(job.id, "GEN-REPAIR-EXHAUSTED", "owner-a", claimed.attempt, failureRun.internalError, {
+      tenantId: job.tenantId,
+      productId: job.productId,
+      engineVersion: "teste-fence",
+      platformSkillVersion: "tiktok-commerce@1.2",
+      metadata: { internalError: failureRun.internalError, diagnostics: failureRun.diagnostics },
+    }, {});
+    assert.equal(terminalized, false, "CAS perdido não terminaliza nem persiste");
+    const run = await prisma.intelligenceRun.findUnique({ where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } } });
+    assert.equal(run, null, "nenhum run de falha gravado pelo owner vencido");
+    const atual = await prisma.commerceIntelligenceJob.findUniqueOrThrow({ where: { id: job.id } });
+    assert.equal(atual.status, "RUNNING");
+    assert.equal(atual.leaseOwnerId, "owner-b");
+    const reserva = await prisma.generationUsageReservation.findFirstOrThrow({ where: { jobId: job.id } });
+    assert.equal(reserva.status, "RESERVED", "capacidade intocada");
+  } finally {
     await limpar();
   }
 });

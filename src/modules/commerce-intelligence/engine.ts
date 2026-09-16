@@ -48,6 +48,7 @@ import {
   validateBriefSet,
   type GatePattern,
   type GateReport,
+  type SceneGateResult,
 } from "./gates";
 import {
   assertProviderOutput,
@@ -148,6 +149,11 @@ export type SceneSetOutcome = {
   generated: number;
   dropped: number;
   backfilled: boolean;
+  // Telemetria de falha (pós-job ace9e417): códigos agregados do gateSceneSet e
+  // status/duração/código por tentativa de CONTENT_SCENE_IDEAS — sempre
+  // sanitizados antes de persistir; NUNCA payload/descrição de cena.
+  causes?: string[];
+  attempts?: Array<{ attempt: number; status: "completed" | "failed"; kept?: number; dropped?: number; errorCode?: string; durationMs: number }>;
 };
 
 function batchSize(): number {
@@ -525,12 +531,17 @@ export async function generateSceneSetsForBriefs(params: {
     // schema). Segunda falha de qualquer tipo -> fail-closed (FILTERED/ERROR),
     // sem inventar cenas.
     let outcome: SceneSetOutcome | null = null;
-    let lastGate: ReturnType<typeof gateSceneSet> | null = null;
+    let lastGate: SceneGateResult | null = null;
+    // Telemetria por tentativa (correlação pelo contentId do set): duração,
+    // código de erro do provider/schema e kept/dropped do gate — mesma
+    // vocabulary allowlisted dos capability events; nunca conteúdo de cena.
+    const attempts: NonNullable<SceneSetOutcome["attempts"]> = [];
     for (let sceneAttempt = 0; sceneAttempt < 2 && !outcome; sceneAttempt++) {
       const attemptContext =
         lastGate && lastGate.kept.length === 0
           ? { ...sceneContext, gateFeedback: sceneGateFeedback(lastGate.causes) }
           : sceneContext;
+      const attemptStartedAt = Date.now();
       try {
         const draft = await params.track(
           "CONTENT_SCENE_IDEAS",
@@ -563,14 +574,21 @@ export async function generateSceneSetsForBriefs(params: {
           projectCreatorContext("CONTENT_SCENE_IDEAS", params.creatorContext),
         );
         lastGate = gated;
+        attempts.push({ attempt: sceneAttempt + 1, status: "completed", kept: gated.kept.length, dropped: gated.dropped, durationMs: Date.now() - attemptStartedAt });
         if (gated.kept.length) {
-          outcome = { ...empty, status: "AVAILABLE", scenes: gated.kept, generated: draft.length, dropped: gated.dropped };
+          outcome = { ...empty, status: "AVAILABLE", scenes: gated.kept, generated: draft.length, dropped: gated.dropped, causes: gated.causes, attempts };
         } else if (sceneAttempt === 1) {
           // Fail-closed: gate persistente na 2ª tentativa — set descartado.
-          outcome = { ...empty, status: "FILTERED", generated: draft.length, dropped: gated.dropped };
+          outcome = { ...empty, status: "FILTERED", generated: draft.length, dropped: gated.dropped, causes: gated.causes, attempts };
         }
-      } catch {
-        if (sceneAttempt === 1) outcome = empty;
+      } catch (error) {
+        attempts.push({
+          attempt: sceneAttempt + 1,
+          status: "failed",
+          errorCode: String(error instanceof GenerationError || error instanceof ContractError ? error.code : "GEN-PROVIDER").slice(0, 100),
+          durationMs: Date.now() - attemptStartedAt,
+        });
+        if (sceneAttempt === 1) outcome = { ...empty, attempts };
       }
     }
     outcomes.push(outcome ?? empty);
@@ -2107,6 +2125,16 @@ export async function runFirstGeneration(
         task: "CONTENT_QUALITY_JUDGE",
         expected: count,
         received: delivered.length,
+        // ADR-026: telemetria de cenas no caminho de falha — apenas status/
+        // contagens/causas agregadas por contentId; NUNCA payload de cena.
+        sceneOutcomes: sceneSets.map(({ contentId, status, generated, dropped, causes, attempts }) => ({
+          contentId,
+          status,
+          generated,
+          dropped,
+          causes: causes ?? [],
+          attempts: attempts ?? [],
+        })),
         rejected:
           compositionDiagnostics.length === 0 && sceneDiagnostics.length === 0
             ? // Falha dirigida pelo judge: assinatura de curadoria da última rodada.

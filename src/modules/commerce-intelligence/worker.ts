@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { GenerationError } from "./errors";
 import { ContractError } from "./contract";
-import { emitJobEvent, sanitizeGateReports, type JobEventFields, type SanitizedGateReport } from "./observability";
+import { emitJobEvent, projectSceneOutcomes, sanitizeGateReports, type JobEventFields, type SanitizedGateReport, type SanitizedSceneOutcome } from "./observability";
 import { prisma } from "../db";
 import { extractJobCreatorContext } from "../creator-preferences/service";
 import {
@@ -149,6 +149,36 @@ export function internalFailureMetadata(code: string, stage: string | null, deta
     } : {}),
     ...(diagnostics.qualityFailures.length ? { qualityFailures: diagnostics.qualityFailures } : {}),
   };
+}
+
+// Montagem pura do run de falha (ADR-021/ADR-026): internalError sanitizado +
+// diagnostics com gateReports/causes/qualityFailures e sceneOutcomes — usada
+// pelo catch do processGeneration e testável sem worker rodando.
+export function buildFailureRun(code: string, stage: string | null, detail: unknown): {
+  internalError: Record<string, unknown>;
+  diagnostics: {
+    gateReports: SanitizedGateReport[];
+    causes: Array<{ briefId: string; causes: string[] }>;
+    qualityFailures: QualityFailure[];
+    sceneOutcomes?: SanitizedSceneOutcome[];
+  } | null;
+} {
+  const internalError = internalFailureMetadata(code, stage, detail);
+  const rejected =
+    detail &&
+    typeof detail === "object" &&
+    "rejected" in detail &&
+    Array.isArray((detail as { rejected: unknown }).rejected)
+      ? projectFailureDiagnostics((detail as { rejected: unknown }).rejected)
+      : undefined;
+  // ADR-026 (pós-job ace9e417): telemetria de cenas sobrevive ao caminho de
+  // falha — status/contagens/causas agregadas por contentId, nunca payload.
+  const detailRecord = detail && typeof detail === "object" && !Array.isArray(detail) ? detail as Record<string, unknown> : null;
+  const sceneOutcomes = detailRecord && Array.isArray(detailRecord.sceneOutcomes) ? projectSceneOutcomes(detailRecord.sceneOutcomes) : [];
+  const diagnostics = rejected || sceneOutcomes.length
+    ? { ...(rejected ?? { gateReports: [], causes: [], qualityFailures: [] }), sceneOutcomes }
+    : null;
+  return { internalError, diagnostics };
 }
 
 // Decisão pura do heartbeat por tick: nunca renovar além do deadline da tentativa.
@@ -1112,37 +1142,30 @@ export async function processGeneration(jobId: string, ownerId: string) {
           : error instanceof Error
             ? { errorName: error.name, message: error.message }
           : String(error);
-    const internalError = internalFailureMetadata(code, currentStage, detail);
+    const failureRun = buildFailureRun(code, currentStage, detail);
     console.info("[generation-worker] job failed", {
       tenantId: job.tenantId,
       userId: job.userId,
       jobId: job.id,
       code,
       databaseCode,
-      detail: internalError,
+      detail: failureRun.internalError,
     });
     // ADR-021: IntelligenceRun em FAILED na MESMA transação do fence de FAILED
     // (leaseOwnerId/attempt exatos) — diagnóstico sem payload bruto; tentativa
     // antiga não grava, mesmo repetindo o código de erro.
-    const rejected =
-      detail &&
-      typeof detail === "object" &&
-      "rejected" in detail &&
-      Array.isArray((detail as { rejected: unknown }).rejected)
-        ? projectFailureDiagnostics((detail as { rejected: unknown }).rejected)
-        : undefined;
     // Emissão do job.terminal é interna ao failJob, condicionada ao CAS real —
     // fence perdido não emite evento terminal (evita RELEASED sem persistência).
-    await failJobAndReleaseReservation(job.id, code, ownerId, attempt, internalError, {
+    await failJobAndReleaseReservation(job.id, code, ownerId, attempt, failureRun.internalError, {
       tenantId: job.tenantId,
       productId: job.productId,
       engineVersion: ENGINE_VERSION,
       platformSkillVersion: loadPlatformSkill().version,
-      metadata: { internalError: internalError, diagnostics: rejected ?? null },
+      metadata: { internalError: failureRun.internalError, diagnostics: failureRun.diagnostics },
     }, {
       stage: currentStage ?? undefined,
-      gateReports: rejected?.gateReports,
-      qualityFailures: rejected?.qualityFailures,
+      gateReports: failureRun.diagnostics?.gateReports,
+      qualityFailures: failureRun.diagnostics?.qualityFailures,
     });
     return false;
   } finally {
