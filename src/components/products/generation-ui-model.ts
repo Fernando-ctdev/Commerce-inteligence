@@ -41,6 +41,7 @@ export const statusLabels: Record<CommerceJobStatus, string> = {
   QUEUED: "Na fila",
   RUNNING: "Analisando",
   SUCCEEDED: "Pronto",
+  SUCCEEDED_PARTIAL: "Pronto (parcial)",
   FAILED: "Falhou",
   CANCELLED: "Cancelada",
 };
@@ -53,8 +54,46 @@ export function statusMessage(status: CommerceJobStatus, productName?: string) {
   if (status === "QUEUED") return `${productName ? `${productName} foi confirmado. ` : ""}A análise começará em breve.`;
   if (status === "RUNNING") return "A análise continua em segundo plano. Você pode continuar usando a aplicação.";
   if (status === "SUCCEEDED") return "Seu produto está pronto para revisão.";
+  if (status === "SUCCEEDED_PARTIAL") return "Parte dos conteúdos ficou pronta. Você já pode revisar e gerar os faltantes.";
   if (status === "CANCELLED") return "A análise foi cancelada.";
   return "Não foi possível concluir a análise. Seus dados permanecem preservados.";
+}
+
+/** Motivo sanitizado por item faltante (ADR-021): reason code → frase curta pt-BR, sem jargão de engine. */
+export function missingReasonLabel(reasonCode: string): string {
+  const map: Record<string, string> = {
+    unverified_claim: "continha informação não confirmada nos dados do produto",
+    script_claim_missing: "não trouxe os dados confirmados do produto",
+    feature_list: "descreveu o produto fora do permitido",
+    factRef_invalid: "usou um dado inexistente do produto",
+    action_stem_missing: "ficou sem uma demonstração clara",
+    connector_missing: "ficou sem a justificativa do ponto",
+    grounding_below_min: "ficou pouco apoiado nos dados do produto",
+  };
+  return map[reasonCode] ?? "não convergiu nos critérios de qualidade";
+}
+
+/**
+ * RI-003-20: terminal positivo não projetável (code GEN-PROJECTION) é ANOMALIA
+ * de dados persistida — nem sucesso (nada para revisar) nem falha de execução
+ * (retry responderia 404). Modelo explícito das ações: sem "Tentar novamente",
+ * sem revisão de conteúdos; /complete só no parcial degradado.
+ */
+export function projectionDegradedModel(job: { code?: string | null; status: string } | null): { degraded: boolean; retry: false; reviewContents: false; generateMissing: boolean } {
+  const degraded = !!job && job.code === "GEN-PROJECTION" && (job.status === "SUCCEEDED" || job.status === "SUCCEEDED_PARTIAL");
+  return { degraded, retry: false, reviewContents: false, generateMissing: degraded && job!.status === "SUCCEEDED_PARTIAL" };
+}
+
+/** Leitura da entrega parcial (ADR-021): null fora de SUCCEEDED_PARTIAL. */
+export type PartialDelivery = { delivered: number; expected: number; missing: Array<{ position: number | null; reason: string }> };
+export function partialModel(job: { status: string; targetContentCount: number; expectedCount?: number | null; deliveredCount: number | null; contents: Array<unknown>; missing: Array<{ position: number | null; reasonCode: string }> } | null): PartialDelivery | null {
+  if (!job || job.status !== "SUCCEEDED_PARTIAL") return null;
+  const delivered = job.deliveredCount ?? job.contents.length;
+  return {
+    delivered,
+    expected: job.expectedCount ?? job.targetContentCount,
+    missing: job.missing.map((item) => ({ position: item.position, reason: missingReasonLabel(item.reasonCode) })),
+  };
 }
 
 export const generationStatusLabel = (status: CommerceJobStatus | string) =>
@@ -164,6 +203,7 @@ export type BriefingItem = {
   script: string;
   cta: string;
   objective: string;
+  scenes: ScenesProjection;
   targetAudience: string;
   pain: string;
   desire: string;
@@ -194,6 +234,7 @@ export function briefingItems(contents: Array<Record<string, unknown>>): Briefin
       status: text(content.status) || "DRAFT",
       hook: text(content.hook),
       development: developmentBullets(content.development),
+      scenes: scenesProjection(content),
       script: text(content.script),
       cta: text(content.cta),
       objective: text(content.objective),
@@ -209,6 +250,27 @@ export function briefingItems(contents: Array<Record<string, unknown>>): Briefin
 /** Roteiro em parágrafos de leitura: uma frase completa por parágrafo, para leitura start-to-end com pausas visuais. */
 export function scriptParagraphs(script: string): string[] {
   return script.split(/(?<=[.!?])["']?\s+/u).map((paragraph) => paragraph.trim()).filter(Boolean);
+}
+
+/** Projeção de cenas do envelope /api/generations (ADR-019): null = não-gerado (conteúdo antigo ou sem row). */
+export type ScenesProjection = { status: "AVAILABLE" | "FILTERED" | "ERROR"; scenes: Array<{ description: string }>; generated: number; dropped: number } | null;
+
+/** Tolerante a payload malformado: forma inválida ou status desconhecido volta como null (não-gerado). */
+export function scenesProjection(content: Record<string, unknown>): ScenesProjection {
+  const raw = content.scenes;
+  if (raw === null || raw === undefined) return null;
+  const v = typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+  if (!v) return null;
+  if (v.status !== "AVAILABLE" && v.status !== "FILTERED" && v.status !== "ERROR") return null;
+  const scenes = Array.isArray(v.scenes)
+    ? v.scenes.map((scene) => text(typeof scene === "object" && scene !== null ? (scene as Record<string, unknown>).description : undefined)).filter(Boolean).map((description) => ({ description }))
+    : [];
+  return {
+    status: v.status,
+    scenes,
+    generated: typeof v.generated === "number" ? v.generated : scenes.length,
+    dropped: typeof v.dropped === "number" ? v.dropped : 0,
+  };
 }
 
 /** Estado de cada fase pública do job, derivado apenas de status + stage. */

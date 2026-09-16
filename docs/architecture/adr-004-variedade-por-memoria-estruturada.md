@@ -4,7 +4,7 @@
 
 Aceito — heurística inicial do MVP, com limite conhecido.
 
-> **Revisão (PRDs vigentes):** a memória opera como `ProductMemorySnapshot` consistente por geração, com pesos de sinal `gerado < aprovado < concluído` e **descarte como sinal** (evita insistência cega na mesma direção). Continua sem embeddings, banco vetorial ou LLM-as-judge no MVP. Detalhes de contrato no [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md).
+> **Revisão (PRDs vigentes):** a memória opera como `ProductMemorySnapshot` consistente por geração, com pesos de sinal `gerado < aprovado < concluído` e **descarte como sinal** (evita insistência cega na mesma direção). Continua sem embeddings, banco vetorial e sem judge LLM de variedade ou memória. A exceção limitada é o `CONTENT_QUALITY_JUDGE` interno por partes do Slice 003, após o hard gate; ele não é aprovação humana nem julga variedade ou memória. Detalhes de contrato no [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md).
 
 ## Contexto
 
@@ -26,7 +26,7 @@ Implementar variedade como uma restrição do domínio baseada em memória estru
 
 A distribuição do plano é consequência do contexto e da cobertura, não uma tabela fixa para todos os produtos. A taxonomia pode crescer como dado versionado, mas o algoritmo não dependerá de uma lista fixa na interface.
 
-Não usar embeddings, similaridade semântica, LLM-as-judge ou aprendizado de performance no MVP.
+Não usar embeddings, similaridade semântica, deduplicação semântica, judge LLM de variedade/memória ou aprendizado de performance no MVP. `CONTENT_QUALITY_JUDGE` do Slice 003 é exceção interna limitada às partes do conteúdo após o hard gate; não oferece aprovação humana nem avalia variedade ou memória.
 
 ## Rationale
 

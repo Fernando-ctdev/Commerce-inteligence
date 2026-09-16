@@ -1,13 +1,20 @@
 import { createHash } from "node:crypto";
 import { GenerationError } from "./errors";
 export type IntelligenceTier = "LOW" | "MID" | "HIGH";
-export type LogicalTask = "PRODUCT_UNDERSTANDING" | "COMMERCIAL_OPPORTUNITY_MAPPING" | "STRATEGY_SYNTHESIS" | "CONTENT_PLAN_GENERATION" | "CONTENT_BRIEF_GENERATION";
+export type LogicalTask = "PRODUCT_UNDERSTANDING" | "COMMERCIAL_OPPORTUNITY_MAPPING" | "STRATEGY_SYNTHESIS" | "CONTENT_PLAN_GENERATION" | "CONTENT_BRIEF_GENERATION" | "CONTENT_BRIEF_REPAIR" | "CONTENT_SCENE_IDEAS" | "CONTENT_QUALITY_JUDGE" | "CONTENT_PART_REPAIR";
 export const ROUTER_MAP: Record<LogicalTask, IntelligenceTier> = {
-  PRODUCT_UNDERSTANDING: "MID",
+  // ADR-020 adendo 3: PU é a fronteira factual canônica — 3 incidentes Qwen
+  // (purchaseBarriers) vs nenhum OpenAI observado → roteado direto a QUALITY.
+  PRODUCT_UNDERSTANDING: "HIGH",
   COMMERCIAL_OPPORTUNITY_MAPPING: "MID",
   STRATEGY_SYNTHESIS: "HIGH",
   CONTENT_PLAN_GENERATION: "HIGH",
-  CONTENT_BRIEF_GENERATION: "MID",
+  // ADR-013 (decisão Arquiteto): briefs exigem ancoragem factual forte — roteado a QUALITY.
+  CONTENT_BRIEF_GENERATION: "HIGH",
+  CONTENT_BRIEF_REPAIR: "HIGH",
+  CONTENT_SCENE_IDEAS: "HIGH",
+  CONTENT_QUALITY_JUDGE: "HIGH",
+  CONTENT_PART_REPAIR: "HIGH",
 };
 // Envelope de contexto projetado, separando instruções confiáveis de fatos/contexto confirmado
 // e de dados externos não confiáveis. Cada capability recebe apenas a projeção que precisa.

@@ -5,7 +5,7 @@ test("reports configured OpenAI-compatible provider without exposing credentials
   const result = providerRuntimeConfig({
     baseUrl: "https://openrouter.ai/api/v1",
     apiKey: "secret",
-    models: { MID: "model" },
+    models: { HIGH: "model" },
     timeoutMs: 1000,
   });
   assert.deepEqual(result, {
@@ -22,7 +22,7 @@ test("sanitizes unavailable provider smoke error", async () => {
       createHttpProvider({
         baseUrl: "http://127.0.0.1:1/v1",
         apiKey: "secret",
-        models: { MID: "model" },
+        models: { HIGH: "model" },
         timeoutMs: 50,
       }).complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }),
     (error: unknown) =>

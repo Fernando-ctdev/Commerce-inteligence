@@ -50,6 +50,14 @@ const commercial = { relevantCapabilities: ["cap"], benefits: ["benefício"], pr
 const envelope = { audiences: ["público"], situations: ["situação"], pains: ["dor"], desires: ["desejo"], objections: ["objeção"], opportunities: [commercial, commercial, commercial] };
 const strategyPayload = { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.0", primaryPositioning: "posicionamento", audiences: ["público"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["arg"], priorityAngles: ["ângulo"], communicationPrinciples: ["cp"] };
 const contentOpportunity = { commercialObjective: "vender", angle: "demonstração", coreMessage: "benefício", hookMechanism: "prova", noveltyTargets: ["angle"] };
+const qualityAudit = { parts: [
+  { part: "hook", status: "PASS", criterion: "hook_clarity", reason: "meets_criteria" },
+  { part: "development", status: "PASS", criterion: "development_coherence", reason: "meets_criteria" },
+  { part: "script", status: "PASS", criterion: "script_naturalness", reason: "meets_criteria" },
+  { part: "cta", status: "PASS", criterion: "cta_clarity", reason: "meets_criteria" },
+  { part: "scenes", status: "PASS", criterion: "scenes_actionable", reason: "meets_criteria" },
+] };
+const sceneIdeas = { scenes: [{ description: "Mostre o tecido duna leve e macio em uso" }, { description: "Pegue o tecido duna leve e macio e aproxime para demonstrar" }] };
 
 test("pipeline entrega a projeção exata por capability, sem creatorContext no understanding", async () => {
   const expected: Record<string, Record<string, unknown>> = {
@@ -68,6 +76,8 @@ test("pipeline entrega a projeção exata por capability, sem creatorContext no 
       if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
       if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
       if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso"], script: "O tecido duna leve e macio", cta: "c" }] };
+      if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
+      if (task === "CONTENT_QUALITY_JUDGE") return qualityAudit;
       return {};
     },
   };

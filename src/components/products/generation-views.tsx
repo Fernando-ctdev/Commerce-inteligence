@@ -14,17 +14,22 @@ import {
   isActiveGeneration,
   phaseStateLabels,
   phaseStates,
+  projectionDegradedModel,
   stageMessage,
   statusLabels,
   statusMessage,
+  partialModel,
   briefingItems,
   contentStatusLabel,
   contentsSummaryLabel,
   strategyModel,
-  scriptParagraphs,
   type BriefingItem,
+  scriptParagraphs,
+  scenesProjection,
   type GenerationActionProjection,
+  type ScenesProjection,
 } from "./generation-ui-model";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import styles from "./generation-panel.module.css";
 
 export type GenerationState = {
@@ -52,12 +57,30 @@ function SectionLabel({ icon: Icon, children }: { icon: typeof Mic; children: st
 }
 
 /**
- * Painel do Briefing selecionado: hook dominante, desenvolvimento real em
- * bullets, roteiro oral e CTA sempre visíveis; cenas permanecem fora da UI.
- * Estratégia profunda segue em progressive disclosure ("Por que este conteúdo?").
- * Somente leitura — ações de Edição/Aprovação dependem de capability de
- * backend ainda não exposta.
+ * Painel do Briefing selecionado em duas abas: "Script" (hook dominante,
+ * desenvolvimento real em bullets, roteiro oral em parágrafos e CTA) e
+ * "Cenas" (estados do contrato ADR-019). Estratégia profunda segue em
+ * progressive disclosure ("Por que este conteúdo?").
+ * Somente leitura — nenhum botão de Aprovação/Edição/Regeneração: a curadoria
+ * do quality gate é interna e a capability de backend ainda não foi exposta.
  */
+/** Aba Cenas: estados do contrato ADR-019 — nenhuma ação de geração/regeneração na UI. */
+function ScenesNote({ scenes }: { scenes: ScenesProjection }) {
+  if (!scenes || (scenes.status === "AVAILABLE" && scenes.scenes.length === 0))
+    return <p className={styles.scenesNote}>Cenas entram na próxima análise deste produto.</p>;
+  if (scenes.status === "FILTERED")
+    return <p className={styles.scenesNote}>As ideias de cenas geradas não passaram nos critérios de qualidade.</p>;
+  if (scenes.status === "ERROR")
+    return <p className={styles.scenesNote}>Não foi possível gerar as cenas agora.</p>;
+  return (
+    <ol aria-label="Sugestões de cenas" className={styles.bulletList}>
+      {scenes.scenes.map((scene, index) => (
+        <li key={`${index}-${scene.description.slice(0, 24)}`}>{scene.description}</li>
+      ))}
+    </ol>
+  );
+}
+
 /** Sentinela: usuário pediu explicitamente voltar à lista (mobile). Diferente de "nunca selecionou". */
 const LIST_VIEW = "__list__";
 function BriefingDetail({ index, item, onBack, onNavigate, total }: {
@@ -89,6 +112,12 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
         <h3 className={styles.detailTitle}>{`Conteúdo ${pad2(item.position)}`}</h3>
         <p className={styles.statusTag}>{contentStatusLabel(item.status)}</p>
       </header>
+      <Tabs className={styles.detailTabs} defaultValue="script">
+        <TabsList aria-label="Seções do conteúdo" variant="line">
+          <TabsTrigger value="script">Script</TabsTrigger>
+          <TabsTrigger value="cenas">Cenas</TabsTrigger>
+        </TabsList>
+        <TabsContent value="script">
       <section aria-label="Gancho" className={styles.hookBlock}>
         <p className={styles.sectionLabel}>
           <Mic aria-hidden="true" className={[styles.sectionIcon, styles.sectionIconIntelligence].join(" ")} />
@@ -139,6 +168,11 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
           </div>
         </details>
       )}
+        </TabsContent>
+        <TabsContent value="cenas">
+          <ScenesNote scenes={item.scenes} />
+        </TabsContent>
+      </Tabs>
       <nav aria-label={`Navegação entre conteúdos: conteúdo ${index + 1} de ${total}`} className={styles.contentsNav}>
         <Button disabled={index <= 0} onClick={() => onNavigate(index - 1)} type="button" variant="outline">
           <ChevronLeft aria-hidden="true" />
@@ -159,7 +193,7 @@ function EmptyRegion({ children }: { children: React.ReactNode }) {
 }
 
 /** Aba Visão geral: estado do job, ação primária, bloqueio preventivo e cancelamento (só QUEUED). */
-export function GenerationStatusCard({ className, productName, targetContentCount, readiness, state, generationAction, onOpenContents }: {
+export function GenerationStatusCard({ className, productName, targetContentCount, readiness, state, generationAction, onOpenContents, onGenerateMissing }: {
   className?: string;
   productName: string;
   targetContentCount: number;
@@ -167,25 +201,31 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
   state: GenerationState;
   generationAction?: GenerationActionProjection;
   onOpenContents: () => void;
+  onGenerateMissing: () => void;
 }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const { job, busy, error, active, failed, blockedByOther, start, retry, cancel } = state;
   const canCancel = !!job && canCancelGeneration(job.status);
+  const partial = partialModel(job);
+  /* RI-003-20: GEN-PROJECTION em terminal positivo é anomalia de dados — a UI
+     comunica o estado degradado em vez de tratar como sucesso; retry suprimido
+     pelo código (/retry responderia 404); /complete só no parcial. */
+  const degraded = projectionDegradedModel(job);
   /* ADR-016: com a projeção presente, ela é a única fonte do bloqueio preventivo;
      a inferência por GET current é só fallback para payload que ainda não a carrega. */
   const projectedBlocked = generationAction?.state === "BLOCKED" ? generationAction : null;
   const projectedNote = projectedBlocked ? blockedActionCopy(projectedBlocked) : null;
   const fallbackNote = !generationAction && blockedByOther ? BLOCKED_ACTIVE_MESSAGE : null;
-  /* O heading segue exatamente a precedência dos ramos do corpo, para nunca
-     contradizer o estado exibido; a copy futura é exclusiva do idle. */
   const heading = active && job
     ? "Análise em andamento"
     : failed && job
       ? "Análise interrompida"
-      : job?.status === "SUCCEEDED"
-        ? "Revisar conteúdos"
-        : "Analisar produto";
-  const idleHeading = !active && !failed && job?.status !== "SUCCEEDED";
+      : degraded.degraded && job
+        ? "Resultado da análise indisponível"
+        : job?.status === "SUCCEEDED" || job?.status === "SUCCEEDED_PARTIAL"
+          ? "Revisar conteúdos"
+          : "Analisar produto";
+  const idleHeading = !active && !failed && job?.status !== "SUCCEEDED" && job?.status !== "SUCCEEDED_PARTIAL";
   return (
     <section aria-busy={busy || active} aria-labelledby="generation-title" className={[styles.panel, className].filter(Boolean).join(" ")}>
       <div className={styles.heading}>
@@ -219,6 +259,44 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
             </Button>
           </div>
         </div>
+      ) : degraded.degraded && job ? (
+        <div aria-live="polite" className={styles.state} role="alert">
+          <p className={styles.stateLine}>
+            <strong>{statusLabels[job.status]}</strong> · Não foi possível carregar o resultado desta análise. Seus dados permanecem preservados.
+          </p>
+          {degraded.generateMissing && (
+            <div className={styles.actions}>
+              <Button className={styles.stateAction} disabled={busy} onClick={onGenerateMissing} type="button">
+                {busy ? "Gerando faltantes…" : "Gerar faltantes"}
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : partial && job ? (
+        <div aria-live="polite" className={styles.state} role="status">
+          <p className={styles.stateLine}>
+            <strong>{statusLabels[job.status]}</strong> · {`${partial.delivered} de ${partial.expected} conteúdos prontos.`}
+          </p>
+          {partial.missing.length > 0 && (
+            <ul className={styles.missingList}>
+              {partial.missing.map((item, index) => (
+                <li key={`${index}-${item.position ?? "x"}-${item.reason.slice(0, 20)}`}>
+                  {item.position !== null ? `Conteúdo ${pad2(item.position)} ` : "Um conteúdo "}
+                  {item.reason}.
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className={styles.actions}>
+            <Button className={styles.stateAction} onClick={onOpenContents} type="button" variant="outline">
+              <ScrollText aria-hidden="true" />
+              Revisar conteúdos
+            </Button>
+            <Button className={styles.stateAction} disabled={busy} onClick={onGenerateMissing} type="button">
+              {busy ? "Gerando faltantes…" : "Gerar faltantes"}
+            </Button>
+          </div>
+        </div>
       ) : job?.status === "SUCCEEDED" ? (
         <div aria-live="polite" className={styles.state} role="status">
           <p className={styles.stateLine}>
@@ -233,11 +311,13 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
         </div>
       ) : (
         <div className={styles.actions}>
-          <Button disabled={busy || readiness !== "PENDING" || blockedByOther || !!projectedBlocked} onClick={() => void start()} type="button">
+          {/* Estado inicial: sem job comprovado em mãos (nunca teve job ou carga falhou),
+              não há erro nem bloqueio — o backend segue autoritativo no POST. */}
+          <Button disabled={busy || blockedByOther || !!projectedBlocked} onClick={() => void start()} type="button">
             {busy ? "Iniciando análise…" : "Analisar produto"}
           </Button>
           {(projectedNote ?? fallbackNote) && <p className={styles.blockedNote}>{projectedNote ?? fallbackNote}</p>}
-          {readiness !== "PENDING" && !projectedBlocked && !blockedByOther && (
+          {job && readiness !== "PENDING" && !projectedBlocked && !blockedByOther && (
             <p className={styles.error}>Este produto não está disponível para uma nova análise.</p>
           )}
         </div>
@@ -504,14 +584,16 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
       </section>
     );
   }
-  if (!job || job.status !== "SUCCEEDED") {
+  const published = !!job && (job.status === "SUCCEEDED" || job.status === "SUCCEEDED_PARTIAL");
+  if (!job || !published) {
     return (
       <section className={styles.panel} id="generated-contents">
         <p>Os Briefings aparecem aqui quando a análise concluir.</p>
       </section>
     );
   }
-  if (job.contents.length !== job.targetContentCount) {
+  const expectedPublished = job.status === "SUCCEEDED" ? job.targetContentCount : job.deliveredCount ?? -1;
+  if (job.contents.length !== expectedPublished) {
     return (
       <section className={styles.panel} id="generated-contents">
         <p role="alert">Os conteúdos ainda não estão prontos. Nenhum resultado parcial será apresentado. Tente novamente em instantes.</p>
@@ -531,7 +613,7 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
     <section aria-labelledby="contents-title" className={styles.panel} id="generated-contents">
       <header className={styles.contentsHeader}>
         <h2 id="contents-title">Conteúdos</h2>
-        <p>{contentsSummaryLabel(items.length, approved)}</p>
+        <p>{job.status === "SUCCEEDED_PARTIAL" ? `${items.length} de ${job.expectedCount ?? job.targetContentCount} conteúdos` : contentsSummaryLabel(items.length, approved)}</p>
       </header>
       <div className={styles.contentsLayout} data-selected={selected ? "true" : "false"}>
         <ol aria-label="Lista de conteúdos" className={styles.contentsList}>

@@ -25,7 +25,8 @@ import {
   OperationalSummaryCard,
   StrategyView,
 } from "./generation-views";
-import { formatCommission, formatPriceWithCurrency } from "./product-form-model";
+import { statusMessage } from "./generation-ui-model";
+import { formatCommission, formatDiscount, formatPriceWithCurrency } from "./product-form-model";
 import { ProductCreateForm } from "./product-create-form";
 import { useGenerationJob } from "./use-generation-job";
 import styles from "./product-detail.module.css";
@@ -37,12 +38,18 @@ const hashToTab = (hash: string): ProductTab | null =>
 
 /* Vislumbre do produto: imagem + fatos essenciais. O form completo só
    aparece quando o usuário pede edição — a aba abre em modo leitura. */
+
 function ProductSummaryPanel({ product }: { product: ProductRecord }) {
   const imageUrl = product.imageReferences[0];
   const commission = formatCommission(
     product.commissionType,
     product.commission,
     product.price,
+    product.priceCurrency,
+  );
+  const discount = formatDiscount(
+    product.discountType,
+    product.discountValue,
     product.priceCurrency,
   );
   return (
@@ -85,6 +92,12 @@ function ProductSummaryPanel({ product }: { product: ProductRecord }) {
               <dd>{commission}</dd>
             </div>
           )}
+          {discount && (
+            <div className={styles.summaryFact}>
+              <dt>Desconto</dt>
+              <dd>{discount}</dd>
+            </div>
+          )}
           <div className={styles.summaryFact}>
             <dt>Descrição</dt>
             <dd className={styles.summaryDescription} tabIndex={0}>{product.description}</dd>
@@ -119,6 +132,14 @@ function ProductSummaryPanel({ product }: { product: ProductRecord }) {
                 {product.url}
               </a>
             </dd>
+          </div>
+        </dl>
+      )}
+      {product.observations && (
+        <dl className={styles.summaryFacts}>
+          <div className={styles.summaryFact}>
+            <dt>Observações para os conteúdos</dt>
+            <dd className={styles.summaryDescription} tabIndex={0}>{product.observations}</dd>
           </div>
         </dl>
       )}
@@ -368,7 +389,7 @@ export function ProductDetail({ id }: { id: string }) {
             {generation.failed && generation.job && (
               <div className={styles.failureBanner} role="alert">
                 <CircleAlert aria-hidden="true" />
-                <p>A análise foi cancelada. Você pode tentar novamente.</p>
+                <p>{`${statusMessage(generation.job.status)} Você pode tentar novamente.`}</p>
               </div>
             )}
             <div className={styles.overviewLayout}>
@@ -388,6 +409,7 @@ export function ProductDetail({ id }: { id: string }) {
                 <GenerationStatusCard
                   className={styles.statusCard}
                   generationAction={product.generationAction}
+                  onGenerateMissing={() => void generation.generateMissing()}
                   onOpenContents={() => changeTab("contents")}
                   productName={product.name}
                   readiness={generation.readiness}
@@ -407,7 +429,7 @@ export function ProductDetail({ id }: { id: string }) {
                   {editing && (
                     <Button className={styles.saveAction} form="product-edit-form" type="submit" variant="ghost">
                       <Save aria-hidden="true" />
-                      Salvar alterações
+                      Salvar apenas
                     </Button>
                   )}
                   {/* Alternância editar/cancelar no mesmo slot: o foco nunca
@@ -463,16 +485,16 @@ export function ProductDetail({ id }: { id: string }) {
               </aside>
             </div>
           </SectionSwitcherContent>
-          <SectionSwitcherContent value="contents">
+          <SectionSwitcherContent className={styles.tabContent} value="contents">
             <ContentsView
               active={generation.active}
               job={generation.job}
             />
           </SectionSwitcherContent>
-          <SectionSwitcherContent value="strategy">
+          <SectionSwitcherContent className={styles.tabContent} value="strategy">
             <StrategyView job={generation.job} onOpenContents={() => changeTab("contents")} />
           </SectionSwitcherContent>
-          <SectionSwitcherContent value="history">
+          <SectionSwitcherContent className={styles.tabContent} value="history">
             <HistoryView job={generation.job} />
           </SectionSwitcherContent>
         </SectionSwitcher>

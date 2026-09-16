@@ -30,7 +30,7 @@ O fluxo permanece reconhecível como `Product → CommerceIntelligenceJob → Pr
 
 ### 4. Casos de uso orquestram ações
 
-Application Services/Use Cases são o ponto de entrada para ações como iniciar importação, confirmar `ProductCandidate`, criar `Product` + `CommerceIntelligenceJob`, consultar status do job, aprovar briefing, criar lote, concluir conteúdo e reservar uso. Eles resolvem tenant, autorização, quota, snapshots, transações e chamadas entre módulos. Não existe camada de serviço universal que apenas repasse métodos.
+Application Services/Use Cases são o ponto de entrada para ações como cadastrar `Product` (cadastro manual vigente), `Analisar produto` (criar `CommerceIntelligenceJob` + reserva), consultar status do job, aprovar briefing, criar lote, concluir conteúdo e reservar uso. Iniciar importação e confirmar `ProductCandidate` são ações da direção futura de importação (ADR-022), sem caso de uso vigente. Eles resolvem tenant, autorização, quota, snapshots, transações e chamadas entre módulos. Não existe camada de serviço universal que apenas repasse métodos.
 
 ### 5. Interfaces somente em fronteiras reais
 
@@ -45,7 +45,7 @@ Padrões apenas quando resolvem problema presente:
 
 ### 6. Teste comportamento, não desenho interno
 
-Prove resultados e invariantes nas bordas de domínio e aplicação: isolamento de tenant, reserva/virada de quota, idempotência de job e retry, validação factual (`SUPPORTED`/`INFERRED_BUT_SAFE`/`UNSUPPORTED`/`CONTRADICTED`), schema/contract de cada capability, snapshot de memória e variedade, transições derivadas do lote, limites do Agent Run e recuperação de falha sem sucesso parcial.
+Prove resultados e invariantes nas bordas de domínio e aplicação: isolamento de tenant, reserva/virada de quota, idempotência de job e retry, validação factual (`SUPPORTED`/`INFERRED_BUT_SAFE`/`UNSUPPORTED`/`CONTRADICTED`), schema/contract de cada capability, snapshot de memória e variedade, transições derivadas do lote, limites do Agent Run e recuperação de falha sem sucesso parcial **silencioso** (parcial declarado e revalidado é aceitável quando o contrato o define, ex. ADR-021).
 
 Capabilities de LLM recebem **contract tests** (input → output schema). Qualidade estratégica é avaliada com o Golden Dataset por engine/Skill/prompt/modelo — eval é teste de regressão de qualidade, não decorativo. Nunca congele nomes de classes, chamadas internas ou estrutura de tabelas.
 

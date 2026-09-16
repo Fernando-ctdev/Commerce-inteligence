@@ -2,7 +2,9 @@
 
 ## Status
 
-Aceito — base de entrada factual; os detalhes do Product Importer, Chromium headless e Agent Runner estão no ADR-016.
+Superseded — o fluxo oficial de entrada vigente é o cadastro manual, registrado no ADR-022. Os princípios de confirmação humana de dados externos e de segurança de URL permanecem referência para a retomada futura da importação.
+
+> Nota factual: este documento referenciava os detalhes do Product Importer no "ADR-016" (Product Importer, Agent Runner, Browser Harness e Chromium headless), ADR que não existe mais na numeração atual — a cadeia de ADRs da importação (ADR-010, ADR-011) está superseded e a implementação do importador foi removida.
 
 ## Contexto
 

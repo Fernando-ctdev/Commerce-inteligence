@@ -26,12 +26,12 @@ Adotar os schemas canônicos conceituais como contrato de domínio entre caso de
 Regras de contrato:
 
 - Fato ≠ inferência. A engine pode inferir por que alguém compraria; não pode inventar o que o Produto é ou faz. O Fact Validator classifica claims como `SUPPORTED`, `INFERRED_BUT_SAFE`, `UNSUPPORTED` ou `CONTRADICTED`; `UNSUPPORTED` corrige/remove, `CONTRADICTED` rejeita.
-- Nenhum briefing é válido só porque um LLM devolveu JSON: Quality Gate (estrutural + factual + avaliação semântica quando necessária) e Variety Gate no conjunto (variedade subordinada à relevância).
-- Repair recebe as causas da rejeição, preserva briefings aprovados no gate e tem limite de tentativas; esgotado, o job falha de forma recuperável — nunca sucesso parcial silencioso.
+- Nenhum briefing é válido só porque um LLM devolveu JSON: o hard gate estrutural/factual roda primeiro; depois, `CONTENT_QUALITY_JUDGE` interno é obrigatório por parte no Slice 003. Só `REPAIR` chama repair seletivo e consome até 2 rounds; `REJECT` é terminal. O Variety Gate continua determinístico; judge de variedade/memória fica fora do MVP.
+- Repair recebe as causas da rejeição, preserva briefings aprovados no gate e tem limite de tentativas; esgotado, o item é faltante e o job segue o contrato de entrega: `SUCCEEDED_PARTIAL` declarado quando há aprovados dentro do teto de falhas (com variedade revalidada e retry explícito dos faltantes), ou `FAILED` — nunca sucesso parcial silencioso (ADR-021).
 - Retry técnico é idempotente: não cria duas Strategies ativas, planos duplicados, briefings repetidos nem consumo duplicado.
 - Novas gerações reutilizam a Strategy ativa e a memória; reconstrução integral acontece só quando a Strategy fica `STALE` ou há regeneração explícita.
 - Conteúdo extraído de páginas de Produto é dado não confiável, nunca instrução: toda capability que usa LLM separa explicitamente system instructions, contexto confiável da engine e conteúdo do Produto (defesa contra prompt injection).
-- Resultados intermediários podem ser persistidos para recuperação e auditoria, mas nunca aparecem como resultado final antes de `SUCCEEDED` do job.
+- Resultados intermediários podem ser persistidos para recuperação e auditoria, mas nunca aparecem como resultado final antes de `SUCCEEDED` ou `SUCCEEDED_PARTIAL` declarado do job (ADR-021).
 
 A implementação da engine só é aceita com o Golden Dataset (produtos reais de categorias variadas) permitindo avaliar factualidade, variedade e naturalidade entre versões.
 
@@ -64,7 +64,7 @@ A cardinalidade dos arrays de cada contrato canônico é centralizada em uma pol
 ## Consequências negativas e riscos
 
 - Volume de schemas e validação é o maior custo de engenharia do MVP.
-- Gates determinísticos não capturam toda paráfrase; variedade semântica depende de judge e tem custo.
+- Gates determinísticos não capturam toda paráfrase; avaliação semântica de variedade ou memória exigiria judge e custo, portanto permanece fora do MVP.
 - Schemas podem evoluir; toda mudança exige versionamento explícito para não invalidar histórico.
 
 ## Segurança / Operação

@@ -1460,16 +1460,12 @@ ou
 REJECT
 ```
 
-O Quality Gate combina:
+O Quality Gate combina o hard gate determinístico existente com uma curadoria semântica interna obrigatória antes da persistência:
 
 ```text
-regras determinísticas
+hard gate estrutural, factual e de variedade
 +
-validação estrutural
-+
-validação factual
-+
-avaliação semântica quando necessária
+judge semântico interno de hook, development, script, CTA e cenas por conteúdo
 ```
 
 ---
@@ -2826,3 +2822,4 @@ E, no contexto do TikTok:
 O objetivo não é produzir o conteúdo mais sofisticado.
 
 O objetivo é produzir **a próxima ideia comercial certa, de forma executável, sem repetir continuamente o que já foi explorado**.
+O judge compara o resultado com `Meu estilo` e padrões de creator commerce para TikTok/TikTok Shop. A resposta é estruturada por parte (`PASS`, `REPAIR` ou `REJECT`), com criterion allowlisted e motivo sanitizado. Isto é curadoria da engine; não é aprovação/reprovação do creator, UI ou API de Content Operations. Repair recompõe somente a parte reprovada, preserva as partes PASS e revalida o conjunto no hard gate e no judge. No máximo 2 rounds globais; exaustão bloqueia `SUCCEEDED` e não publica resultado parcial. Cenas continuam em `ContentSceneSet`, mas são requisito de sucesso.

@@ -14,13 +14,26 @@ import {
   isCapacityUnavailableError,
   isRetryableGeneration,
   isToastDismissed,
+  missingReasonLabel,
   normalizeGenerationAction,
+  partialModel,
+  projectionDegradedModel,
   phaseStateLabels,
   phaseStates,
-  stageMessage,
-  strategyModel,
   scriptParagraphs,
+  scenesProjection,
+  stageMessage,
+  statusLabels,
+  statusMessage,
+  strategyModel,
 } from "./generation-ui-model";
+
+test("banner terminal distingue CANCELLED de FAILED sem diagnóstico técnico", () => {
+  assert.equal(statusMessage("CANCELLED"), "A análise foi cancelada.");
+  const failed = statusMessage("FAILED");
+  assert.equal(failed, "Não foi possível concluir a análise. Seus dados permanecem preservados.");
+  assert.ok(!failed.includes("CANCELLED") && !failed.includes("GEN-"));
+});
 
 test("mapeia estados e stages públicos para mensagens humanas", () => {
   assert.equal(generationStatusLabel("RUNNING"), "Analisando");
@@ -35,6 +48,16 @@ test("cancelamento seguro existe somente na fila", () => {
   assert.equal(canCancelGeneration("SUCCEEDED"), false);
   assert.equal(canCancelGeneration("CANCELLED"), false);
   assert.equal(canCancelGeneration(null), false);
+});
+
+test("entrega parcial: mensagem, rótulo, motivo sanitizado e modelo D de N", () => {
+  assert.equal(statusMessage("SUCCEEDED_PARTIAL"), "Parte dos conteúdos ficou pronta. Você já pode revisar e gerar os faltantes.");
+  assert.equal(statusLabels.SUCCEEDED_PARTIAL, "Pronto (parcial)");
+  assert.equal(missingReasonLabel("unverified_claim"), "continha informação não confirmada nos dados do produto");
+  assert.equal(missingReasonLabel("desconhecido"), "não convergiu nos critérios de qualidade");
+  const job = { status: "SUCCEEDED_PARTIAL", targetContentCount: 3, deliveredCount: 2, contents: [{}, {}], missing: [{ position: 3, reasonCode: "grounding_below_min" }, { position: null, reasonCode: "zzz" }] };
+  assert.deepEqual(partialModel(job), { delivered: 2, expected: 3, missing: [{ position: 3, reason: "ficou pouco apoiado nos dados do produto" }, { position: null, reason: "não convergiu nos critérios de qualidade" }] });
+  assert.deepEqual(partialModel({ status: "SUCCEEDED", targetContentCount: 3, deliveredCount: 3, contents: [{}, {}, {}], missing: [] }), null);
 });
 
 test("bloqueio preventivo cobre só job ativo; capacidade é pós-clique", () => {
@@ -177,7 +200,7 @@ test("briefingItems projeta só campos reais e ordena por posição", () => {
   assert.equal(items[0].targetAudience, "Público A");
   assert.deepEqual(items[0].development, ["Destaque o benefício real", "Demonstre o uso"]);
   assert.equal(items[0].pain, "");
-  assert.equal("scenes" in items[1], false);
+  assert.deepEqual(items[1].scenes, null);
   assert.equal(items[1].objective, "");
 });
 
@@ -186,20 +209,42 @@ test("briefingItems tolera payload ausente e exige development como lista", () =
   assert.deepEqual(items[0].development, []);
   assert.equal(items[0].position, 1);
   assert.equal(items[0].status, "DRAFT");
-  assert.equal("scenes" in items[0], false);
+  assert.deepEqual(items[0].scenes, null);
 });
 
 
 test("development persistido como string[] mantém os bullets separados", () => {
   const items = briefingItems([{ id: "c1", hook: "Hook", development: ["Mostre o produto real em uso", "Comente o benefício principal"], script: "Roteiro", cta: "CTA" }]);
   assert.deepEqual(items[0].development, ["Mostre o produto real em uso", "Comente o benefício principal"]);
-  assert.equal("scenes" in items[0], false);
+  assert.deepEqual(items[0].scenes, null);
 });
 test("labels de status do Content não misturam estados do Estúdio", () => {
   assert.equal(contentStatusLabel("DRAFT"), "Rascunho");
   assert.equal(contentStatusLabel("APPROVED"), "Aprovado");
   assert.equal(contentStatusLabel("DISCARDED"), "Descartado");
   assert.equal(contentStatusLabel("GRAVANDO"), "GRAVANDO");
+});
+
+test("scenesProjection aplica os estados do contrato", () => {
+  assert.deepEqual(scenesProjection({ id: "c1" }), null);
+  assert.deepEqual(scenesProjection({ id: "c1", scenes: null }), null);
+  assert.deepEqual(scenesProjection({ id: "c1", scenes: ["legado"] }), null);
+  assert.deepEqual(scenesProjection({ id: "c1", scenes: { status: "EXISTENTE" } }), null);
+  const available = scenesProjection({
+    id: "c1",
+    scenes: { status: "AVAILABLE", generated: 3, dropped: 2, scenes: [{ description: "Abre em pé na rua" }, { description: " " }, { description: "Close do tecido" }, 42] },
+  });
+  assert.equal(available?.status, "AVAILABLE");
+  assert.deepEqual(available?.scenes, [{ description: "Abre em pé na rua" }, { description: "Close do tecido" }]);
+  assert.equal(available?.generated, 3);
+  assert.equal(available?.dropped, 2);
+  const filtered = scenesProjection({ id: "c1", scenes: { status: "FILTERED", scenes: [], generated: 2, dropped: 2 } });
+  assert.equal(filtered?.status, "FILTERED");
+  const error = scenesProjection({ id: "c1", scenes: { status: "ERROR", scenes: [], generated: 0, dropped: 0 } });
+  assert.equal(error?.status, "ERROR");
+  const defaults = scenesProjection({ id: "c1", scenes: { status: "AVAILABLE", scenes: [{ description: "Close do tecido" }] } });
+  assert.equal(defaults?.generated, 1);
+  assert.equal(defaults?.dropped, 0);
 });
 
 test("scriptParagraphs separa frases completas em parágrafos distintos", () => {
@@ -211,4 +256,31 @@ test("scriptParagraphs separa frases completas em parágrafos distintos", () => 
 test("resumo da aba conta aprovados só quando existem", () => {
   assert.equal(contentsSummaryLabel(5, 0), "5 conteúdos");
   assert.equal(contentsSummaryLabel(20, 8), "20 conteúdos · 8 aprovados");
+});
+
+// Gate 3 item 6 (rev. 4) — modelo de ações do terminal degradado GEN-PROJECTION
+// (RI-003-20): anomalia comunicada, nunca sucesso nem falha de execução.
+test("SUCCEEDED degradado: sem retry e sem revisão — anomalia, não sucesso", () => {
+  const actions = projectionDegradedModel({ code: "GEN-PROJECTION", status: "SUCCEEDED" });
+  assert.equal(actions.degraded, true);
+  assert.equal(actions.retry, false); // /retry responderia 404 (fora da partição)
+  assert.equal(actions.reviewContents, false); // nada projetável para revisar
+  assert.equal(actions.generateMissing, false);
+  // A view troca o heading de sucesso pelo estado de anomalia (branch degradado
+  // em GenerationStatusCard, antes do branch SUCCEEDED de "Revisar conteúdos").
+});
+
+test("SUCCEEDED_PARTIAL degradado: /complete acessível, sem retry e sem revisão", () => {
+  const actions = projectionDegradedModel({ code: "GEN-PROJECTION", status: "SUCCEEDED_PARTIAL" });
+  assert.equal(actions.degraded, true);
+  assert.equal(actions.generateMissing, true); // recuperação dos faltantes não depende da projeção
+  assert.equal(actions.retry, false);
+  assert.equal(actions.reviewContents, false);
+});
+
+test("positivos sem code e terminais de falha não entram no estado degradado", () => {
+  assert.equal(projectionDegradedModel({ code: null, status: "SUCCEEDED" }).degraded, false);
+  assert.equal(projectionDegradedModel({ code: undefined, status: "SUCCEEDED_PARTIAL" }).degraded, false);
+  assert.equal(projectionDegradedModel({ code: "GEN-PROJECTION", status: "FAILED" }).degraded, false);
+  assert.equal(projectionDegradedModel(null).degraded, false);
 });

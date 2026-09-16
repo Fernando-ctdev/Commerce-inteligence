@@ -9,11 +9,11 @@ Cada slice entrega uma capacidade utilizável, observável e testável ponta a p
 Os slices respeitam o fluxo canônico do produto:
 
 ```text
-Product Import (URL → Candidate)
+Cadastro manual dos fatos + preparação (/products/new)
 ↓
-Confirmação humana dos fatos + quantidade inicial resolvida
+Salvamento do Product (sem criar job)
 ↓
-Product
+Ação explícita `Analisar produto`
 ↓
 CommerceIntelligenceJob (assíncrono, 1 ativo por usuário)
 ↓
@@ -36,7 +36,7 @@ Nova geração reutilizando Strategy + Memory
 
 Um slice não precisa atravessá-lo inteiro; corta somente a parte necessária para entregar seu comportamento de usuário.
 
-O primeiro valor do MVP é o creator indicar um Produto do TikTok Shop, confirmar os fatos encontrados e, sem preencher formulário estratégico ou operar a engine passo a passo, receber **Briefings do Conteúdo úteis e prontos para revisão**.
+O primeiro valor do MVP é o creator cadastrar os fatos do Produto em `/products/new`, acionar `Analisar produto` e, sem preencher formulário estratégico ou operar a engine passo a passo, receber **Briefings do Conteúdo úteis e prontos para revisão**.
 
 Este documento é um mapa de construção. Não é PRD, ADR, SPEC ou PLAN e não introduz decisões de produto ou arquitetura.
 
@@ -44,11 +44,11 @@ Este documento é um mapa de construção. Não é PRD, ADR, SPEC ou PLAN e não
 
 * **Comportamento antes de camada:** nenhum slice existe apenas para criar Database, Frontend, API, Auth, Worker, Product Importer ou Model Router.
 * **Verticalidade suficiente:** cada slice atravessa somente os domínios necessários para entregar um comportamento real e verificável.
-* **Infraestrutura just-in-time:** Product Importer, Chromium headless, Browser Harness e Agent Runner entram com a importação; job assíncrono durável, Model Router e validação de limites entram quando a primeira geração realmente precisa deles.
-* **Fonte factual separada de inteligência:** Product Import encontra fatos e produz `ProductCandidate`. A Commerce Intelligence interpreta o Produto confirmado e produz Strategy, Plan, Opportunities e Briefings. Nenhuma assume o papel da outra.
-* **Primeira geração sem wizard estratégico:** depois da confirmação dos fatos e da resolução da quantidade inicial, o `CommerceIntelligenceJob` começa automaticamente. Não existe aprovação obrigatória de Strategy nem botão intermediário.
+* **Infraestrutura just-in-time:** a infraestrutura da importação (Product Importer, Chromium headless, Browser Harness, Agent Runner) só entra quando a importação URL-first for retomada como slice (direção futura, ADR-022); job assíncrono durável, Model Router e validação de limites entram quando a primeira geração realmente precisa deles.
+* **Fonte factual separada de inteligência:** o cadastro factual (vigente: manual em `/products/new`; futura: importação URL-first) produz os fatos confirmados do Product. A Commerce Intelligence interpreta o Produto confirmado e produz Strategy, Plan, Opportunities e Briefings. Nenhuma assume o papel da outra.
+* **Primeira geração sem wizard estratégico:** depois do salvamento e com a quantidade inicial já resolvida, a ação explícita `Analisar produto` inicia o `CommerceIntelligenceJob` automaticamente. Não existe aprovação obrigatória de Strategy nem botão intermediário.
 * **Processamento assíncrono é parte da experiência:** um job ativo por usuário no MVP; o creator continua usando a aplicação e o App Shell comunica o estado pelo indicador global.
-* **Extração agentic limitada:** o Agent Runner compreende a página com Browser Harness; ferramentas, duração, tokens, rede e navegação permanecem limitados e configuráveis.
+* **Extração agentic limitada (direção futura):** quando a importação URL-first for retomada, o Agent Runner compreende a página com Browser Harness; ferramentas, duração, tokens, rede e navegação permanecem limitados e configuráveis. Não há extração agentic no fluxo vigente.
 * **Content possui identidade e Briefing possui versão:** editar, regenerar e aprovar preservam `Content` como identidade estável e criam versões rastreáveis de `ContentBriefVersion`; a versão aprovada é fixada.
 * **Aprovação e execução são etapas diferentes:** aprovar não coloca em gravação; contents aprovados são selecionados para formar um `RecordingBatch`.
 * **Lote significa gravação:** `RecordingBatch` é a unidade operacional do Estúdio; seus estados (`Aguardando`, `Gravando`, `Concluído`) são derivados do progresso. `lote` nunca significa nova geração de conteúdos.
@@ -60,60 +60,45 @@ Este documento é um mapa de construção. Não é PRD, ADR, SPEC ou PLAN e não
 
 ## Jornadas principais
 
+> Fluxo de entrada vigente: **cadastro manual** (`/products/new`) com início de análise apenas pela ação explícita `Analisar produto` (ADR-022). A importação URL-first com `ProductCandidate` descrita no PRD principal é **direção futura** e não constitui jornada oficial enquanto não houver slice e ADR que a retomem.
+
 ### Ativação
 
 ```text
 Criar conta
 ↓
-colar URL do primeiro Produto
+cadastrar o primeiro Produto em /products/new (fatos + preparação)
 ↓
-Product Importer abre a página em Chromium headless
+salvar Product (sem criar job)
 ↓
-Agent Runner extrai fatos
+resumo factual e de preparação
 ↓
-ProductCandidate
+`Analisar produto`
 ↓
-confirmar ou corrigir fatos + resolver quantidade inicial
-↓
-Product persistido
-↓
-CommerceIntelligenceJob iniciado automaticamente
+CommerceIntelligenceJob iniciado
 ↓
 Briefings ficam disponíveis
 ↓
 revisar primeiro Content
 ```
 
-### Reutilização da sessão
+### Próximos Produtos
 
 ```text
 Adicionar Produto
 ↓
-colar URL
+/products/new (fatos + preparação)
 ↓
-executar Product Importer com browser efêmero
+salvar Product
 ↓
-extrair fatos
-↓
-confirmar + quantidade
+`Analisar produto`
 ↓
 iniciar geração
 ```
-### Recuperação de importação
 
-```text
-importação automática falha
-↓
-apresentar falha recuperável
-↓
-tentar novamente ou adicionar manualmente os fatos mínimos
-↓
-confirmar Produto
-↓
-seguir para geração
-```
+### Direção futura — importação URL-first (não vigente)
 
-Uma falha de acesso ou extração não pode bloquear permanentemente a entrada do Produto; o fallback manual permanece disponível.
+As jornadas a seguir pertencem à visão do PRD principal (`colar URL → Product Importer → ProductCandidate → confirmação humana`, com fallback manual quando a extração falhar) e permanecem sem implementação e sem slice agendado. A retomada exige novo slice com SPEC/PLAN e novo ADR (ADR-022); nenhum comportamento desta direção pode ser assumido como existente.
 
 ### Primeira geração
 
@@ -230,7 +215,7 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 **Status:** `Done`
 
 
-**User Outcome:** O creator abre a subpágina `/products/new` dentro de Produtos, cadastra manualmente os fatos do Product com todos os campos obrigatórios, salva o registro escopado ao Tenant e vê seu card na lista de Produtos. As preferências da primeira geração ficam registradas como restrições, sem iniciar geração nesta etapa.
+**User Outcome:** O creator abre a subpágina `/products/new` dentro de Produtos, cadastra manualmente os fatos do Product com todos os campos obrigatórios, salva o registro escopado ao Tenant e abre seu resumo factual e de preparação. A análise só começa quando o creator aciona `Analisar produto`; editar e salvar alterações permanecem disponíveis antes dessa ação.
 
 **Depends On:** Slice 001
 
@@ -239,16 +224,16 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 **Scope:**
 
 - Disponibilizar a subpágina autenticada `/products/new` dentro de Produtos.
-- Preservar os campos e o conteúdo do modal manual existente: Nome do produto, Descrição, Categoria, Preço, Moeda, Características — uma por linha — e a seção Preparação dos conteúdos.
+- Preservar os campos e o conteúdo do modal manual existente: Nome do produto, Descrição, Categoria, Preço, Moeda, Características — uma por linha — Desconto opcional por percentual ou valor fixo, e a seção Preparação dos conteúdos.
 - Exigir Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições.
 - Validar Preço como valor não negativo, válido e com no máximo duas casas decimais; Preço e Moeda são ambos obrigatórios.
+- Modelar desconto opcional como `discountType` (`PERCENTAGE` ou `FIXED`), `discountValue` e a moeda do Product; tipo e valor são informados juntos.
 - Exibir `*` em Quantidade inicial de conteúdos, Formato do creator e Observações ou restrições; o asterisco é apenas indicação visual.
 - Iniciar Preparação dos conteúdos com quantidade default `5`, intervalo inteiro `1–10`, formato default `Tanto faz` e notas/restrições obrigatórias até `300` caracteres.
 - Validar todos os campos obrigatórios no HTML/cliente e no servidor.
 - Persistir as preferências de preparação como restrições da primeira geração, sem iniciar geração nesta etapa.
 - Salvar um `Product` com os fatos preenchidos, escopado ao `Tenant` resolvido pela sessão server-side.
-- Impedir acesso a Products de outro Tenant e evitar duplicidade em retry da mesma submissão.
-- Retornar à lista de Produtos após salvar e exibir um card do Product criado.
+- Após salvar, abrir o resumo do Product com fatos e preparação; o creator escolhe `Analisar produto`, `Editar produto` ou, durante edição, `Salvar alterações`.
 - Manter validação, mensagens de erro, estado de salvamento, acessibilidade e experiência mobile alinhados ao `DESIGN.md`.
 
 **Out of Scope:** URL, serviço automatizado de descoberta de produto, LLM, Model Router, Agent Runner, Browser Harness, Chromium, browser headless ou interativo, Docker, descoberta automática de dados, geração de Strategy, Plan, Content ou Briefing, criação/execução de `CommerceIntelligenceJob`, publicação, agendamento, analytics, sincronização de catálogo, outros marketplaces, campos estratégicos, upload de arquivos, captura de mídia, criação de SPEC ou PLAN.
@@ -256,14 +241,14 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 **Critérios necessários:**
 
 1. `/products/new` é acessível a partir de Produtos para usuário autenticado.
-2. O formulário apresenta os campos e a seção de preparação do modal manual existente.
+2. O formulário apresenta os campos factuais, o desconto opcional por percentual ou valor fixo e a seção de preparação do modal manual existente.
 3. Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições obrigatoriamente preenchidos bloqueiam o salvamento quando ausentes, vazios ou inválidos.
-4. Preço deve ser não negativo, válido e ter no máximo duas casas decimais; Moeda deve ser informada.
+4. Preço deve ser não negativo, válido e ter no máximo duas casas decimais; Moeda deve ser informada; desconto exige tipo e valor consistentes.
 5. A preparação usa defaults `5`, `1–10` e `Tanto faz`; Quantidade e Formato aparecem com `*`, e Observações ou restrições são obrigatórias e limitadas a `300` caracteres.
 6. O asterisco é apenas indicação visual; HTML/cliente e servidor validam os campos obrigatórios.
 7. O salvamento persiste os fatos preenchidos e as restrições da primeira geração sem iniciar geração ou criar job.
 8. O Product é escopado ao Tenant da sessão e não é visível para outro Tenant.
-9. Após salvar, o card do Product aparece na lista de Produtos.
+9. Após salvar, o creator abre o resumo factual e de preparação; `Analisar produto` é uma ação explícita e não um efeito do salvamento.
 10. Cancelar não cria Product; erros mantêm os valores preenchidos e permitem nova tentativa.
 
 ---
@@ -272,7 +257,7 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 **Status:** `Pendente`
 
 
-**User Outcome:** Depois de confirmar o Produto, o creator recebe, sem etapas intermediárias, uma Strategy comercial e um conjunto consistente de Briefings em `DRAFT` prontos para revisão — podendo continuar usando a aplicação enquanto a análise trabalha.
+**User Outcome:** Depois de acionar `Analisar produto` sobre o Produto salvo, o creator recebe, sem etapas intermediárias, uma Strategy comercial e um conjunto consistente de Briefings em `DRAFT` prontos para revisão — podendo continuar usando a aplicação enquanto a análise trabalha.
 
 **Depends On:** Slice 002
 
@@ -280,18 +265,19 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 
 **Scope:**
 
-- Confirmar o Product persiste e cria automaticamente o `CommerceIntelligenceJob` com a `targetContentCount` resolvida.
-- Execução assíncrona durável: fila no PostgreSQL, worker com lease, estados `QUEUED`/`RUNNING`/`SUCCEEDED`/`FAILED`/`CANCELLED`, stages públicos com mensagens humanas reais e retry idempotente.
+- A ação explícita `Analisar produto` sobre o Product salvo cria automaticamente o `CommerceIntelligenceJob` com a `targetContentCount` resolvida.
+- Execução assíncrona durável: fila no PostgreSQL, worker com lease, estados `QUEUED`/`RUNNING`/`SUCCEEDED`/`SUCCEEDED_PARTIAL`/`FAILED`/`CANCELLED`, stages públicos com mensagens humanas reais e retry idempotente.
 - Um job ativo por usuário: `Analisar produto` desabilitado com explicação enquanto existir job `QUEUED`/`RUNNING`.
 - Indicador global de atividade no App Shell: Produto, etapa real, sucesso, falha recuperável e ação seguinte; sobrevive a navegação e ao fechamento da aba.
 - Primeira análise da engine: Product Understanding → Commercial Opportunity Mapping → ProductStrategy v1 → Content Portfolio Planner → Brief Generator.
 - Carregar a TikTok Commerce Creative Skill versionada como dependência da geração.
 - Roteamento de modelos por tarefa lógica com `IntelligenceTier` (LOW/MID/HIGH) e um provider atrás de adapter; capabilities determinísticas fora do router.
-- Fact Validation, Quality Gate e Variety Gate com Repair Loop limitado; `BriefValidationReport` por briefing; nenhum sucesso parcial silencioso.
+- Fact Validation, Quality Gate e Variety Gate com Repair Loop limitado; `BriefValidationReport` por briefing; nenhum sucesso parcial silencioso — parcial somente como `SUCCEEDED_PARTIAL` declarado, revalidado e com retry dos faltantes (ADR-021).
 - Reservar capacidade mensal na criação do job e confirmar/liberar transacionalmente; sem cobrança duplicada em retry técnico.
 - Persistir Strategy, ContentPlan, ContentOpportunities e `Content` + `ContentBriefVersion` iniciais em `DRAFT`.
 - Strategy consultável depois na página do Produto; readiness do Produto alimenta o filtro `Pendentes`.
 - Falha preserva Product e fatos; retry reutiliza o contexto confirmado.
+- **Responsabilidade única do parcial e do retry dos faltantes (ADR-021):** o Slice 003 é o único responsável por `SUCCEEDED_PARTIAL` — publicação dos aprovados, variedade revalidada, motivo sanitizado por item, quota D confirmada/N−D liberada e a ação `Gerar faltantes` (novo job com reserva F, reusando Strategy e sinais já persistidos). O Slice 008 não implementa nem duplica esse fluxo.
 
 **Out of Scope:** Fila visual de múltiplos jobs, prioridade manual, cancelamento como ação primária, edição/regeneração de briefing, lotes, memória histórica na primeira geração, aprendizado por performance, escolha de provider na UI, exposição de prompts/tiers/modelos.
 
@@ -412,8 +398,9 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 - Variety Gate avalia o conjunto; relevância antes de variedade.
 - Reavaliar explicitamente a Strategy quando fatos relevantes mudarem (regra `STALE`); Strategy substituída vira `SUPERSEDED` e contents históricos permanecem vinculados à versão usada.
 - Persistir proveniência completa e aplicar quota/idempotência por job.
+- `Gerar faltantes` após `SUCCEEDED_PARTIAL` **pertence exclusivamente ao Slice 003** (ADR-021); este slice trata apenas de novas gerações arbitrárias com `targetContentCount` e constraints escolhidos pelo creator.
 
-**Out of Scope:** Embeddings, banco vetorial, deduplicação semântica sofisticada, LLM-as-judge obrigatório, análise de performance externa, mudança automática de Strategy.
+**Out of Scope:** Embeddings, banco vetorial, similaridade/deduplicação semântica e judge LLM de variedade ou memória, análise de performance externa, mudança automática de Strategy. `CONTENT_QUALITY_JUDGE` interno pertence ao Slice 003: executa após o hard gate, limitado a hook, development, script, CTA e cenas, com repair seletivo (máximo 2 rounds) e falha fail-closed; entrega parcial segue o contrato declarado do ADR-021; não oferece UI, aprovação humana, ranking ou seleção de modelo.
 
 ---
 
@@ -494,7 +481,7 @@ O `DESIGN.md` mantém sua lista fixa como baseline visual, mas a decisão explí
 
 ```text
 001 Workspace
- └─ 002 Importação com confirmação
+ └─ 002 Entrada de Product: cadastro manual + ação explícita `Analisar produto`
      └─ 003 Primeira geração (job + engine + briefings)
          ├─ 004 Revisão e controle de Content
          │   ├─ 005 Regeneração contextual
@@ -513,9 +500,9 @@ Nenhuma alteração deste mapa antecipa código, SPEC ou PLAN de um slice futuro
 | Requisito/capacidade (PRD) | Slice |
 |---|---|
 | §31 Onboarding: conta, workspace, primeira ação clara | 001 |
-| §31–32, §58 (1–2): URL → Candidate → confirmação | 002 |
-| §10, §58 (2): fallback manual | 002 |
-| §8, §58 (3): quantidade inicial resolvida na confirmação | 002 |
+| §31–32, §58 (1–2): URL → Candidate → confirmação | Direção futura do PRD principal (ADR-022) — sem slice vigente; a entrada entregue no Slice 002 é o cadastro manual |
+| §10, §58 (2): entrada/fallback manual | 002 |
+| §8, §58 (3): quantidade inicial resolvida no cadastro | 002 |
 | §58 (4): Product persistido + job automático | 003 |
 | §29 (analysis): job assíncrono, 1 ativo/usuário, indicador global, recuperação | 003 |
 | §12–18 (PRD): análise, públicos, dores, desejos, objeções, benefícios, ângulos | 003 |

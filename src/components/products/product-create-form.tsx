@@ -32,6 +32,7 @@ import {
   type ProductRecord,
   updateProduct,
 } from "./product-api";
+import { createGenerationIdempotencyKey, startGeneration } from "./generation-api";
 import { createIdempotencyKey } from "./product-create-model";
 import {
   buildManualProductPayload,
@@ -40,7 +41,9 @@ import {
   DEFAULT_PRODUCT_CURRENCY,
   digitsToPrice,
   formatCommission,
+  formatDiscount,
   formatPriceDisplay,
+  formatPriceWithCurrency,
   preparationIsWithinLimits,
   validateProductManualDraft,
   type ProductManualDraft,
@@ -58,7 +61,8 @@ const emptyDraft: ProductManualDraft = {
   commissionType: "",
   commission: "",
   characteristics: "",
-  discountPercentage: "",
+  discountType: "PERCENTAGE",
+  discountValue: "",
   imageReferences: "",
   url: "",
 };
@@ -114,14 +118,13 @@ const creatorPresenceOptions = [
   },
   {
     value: "either",
-    label: "Ambos",
+    label: "Em câmera + Mão e produto",
     description:
       "Os conteúdos podem alternar entre apresentação em câmera e demonstração do produto.",
   },
 ] as const;
-
 type ImageSource = "links" | "files";
-type FormStep = "facts" | "preparation";
+type FormStep = "facts" | "preparation" | "summary";
 type UploadedImage = { name: string; reference: string };
 
 function imageReferenceLines(value: string) {
@@ -142,7 +145,9 @@ function draftFromProduct(product?: ProductRecord): ProductManualDraft {
     commissionType: product.commissionType,
     characteristics: product.characteristics.join("\n"),
     commission: product.commission,
-    discountPercentage: product.discountPercentage,
+    /* O ProductRecord já normaliza: registro legado chega como PERCENTAGE + valor. */
+    discountType: product.discountType ?? "PERCENTAGE",
+    discountValue: product.discountValue,
     imageReferences: product.imageReferences.join("\n"),
     url: product.url,
   };
@@ -166,7 +171,8 @@ const errorFieldOrder: Array<keyof ProductManualFieldErrors> = [
   "commissionType",
   "commission",
   "characteristics",
-  "discountPercentage",
+  "discountType",
+  "discountValue",
   "imageReferences",
   "url",
   "targetContentCount",
@@ -416,6 +422,86 @@ function CommissionField({
   );
 }
 
+const discountTypeOptions = [
+  { value: "PERCENTAGE", label: "% Porcentagem" },
+  { value: "FIXED", label: "R$ Valor fixo" },
+] as const;
+
+function DiscountField({
+  currency,
+  value,
+  type,
+  onChangeType,
+  onChangeValue,
+  typeError,
+  valueError,
+}: {
+  currency: string;
+  value: string;
+  type: string;
+  onChangeType: (value: string) => void;
+  onChangeValue: (value: string) => void;
+  typeError?: string;
+  valueError?: string;
+}) {
+  const typeErrorId = `${fieldId("discountType")}-error`;
+  const valueErrorId = `${fieldId("discountValue")}-error`;
+  const describedBy =
+    [typeError ? typeErrorId : undefined, valueError ? valueErrorId : undefined]
+      .filter(Boolean)
+      .join(" ") || undefined;
+  return (
+    <div className={styles.field}>
+      <label htmlFor={fieldId("discountValue")}>Desconto (opcional)</label>
+      <div className={styles.commissionRow}>
+        <Select
+          items={discountTypeOptions}
+          onValueChange={(next) => onChangeType(next ?? "PERCENTAGE")}
+          value={type || "PERCENTAGE"}
+        >
+          <SelectTrigger
+            aria-describedby={typeError ? typeErrorId : undefined}
+            aria-invalid={Boolean(typeError)}
+            aria-label="Tipo de desconto"
+            className={styles.commissionTypeTrigger}
+            id={fieldId("discountType")}
+          >
+            <SelectValue placeholder="Tipo" />
+          </SelectTrigger>
+          <SelectContent className={styles.currencyContent}>
+            {discountTypeOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <input
+          aria-describedby={valueError ? valueErrorId : undefined}
+          aria-invalid={Boolean(valueError)}
+          className={styles.commissionInput}
+          id={fieldId("discountValue")}
+          inputMode="decimal"
+          name={fieldId("discountValue")}
+          onChange={(event) => onChangeValue(event.target.value)}
+          placeholder={type === "FIXED" ? `Ex.: 5,00 (${currency})` : "Ex.: 15,5"}
+          value={value}
+        />
+      </div>
+      {typeError && (
+        <p className={styles.fieldError} id={typeErrorId} role="alert">
+          {typeError}
+        </p>
+      )}
+      {valueError && (
+        <p className={styles.fieldError} id={valueErrorId} role="alert">
+          {valueError}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function CategoryField({
   value,
   onChange,
@@ -481,6 +567,89 @@ function CategoryField({
   );
 }
 
+const creatorPresenceLabels: Record<
+  ContentPreparationPreferences["creatorPresence"],
+  string
+> = {
+  on_camera: "Em câmera",
+  hands_only_product: "Mão e produto",
+  either: "Em câmera + Mão e produto",
+};
+
+function ProductReviewSummary({
+  draft,
+  quantity,
+  creatorPresence,
+  notes,
+}: {
+  draft: ProductManualDraft;
+  quantity: number;
+  creatorPresence: ContentPreparationPreferences["creatorPresence"];
+  notes: string;
+}) {
+  const discount = formatDiscount(
+    draft.discountType,
+    draft.discountValue ?? "",
+    draft.currency,
+  );
+  return (
+    <section aria-labelledby="product-review-title" className={styles.section}>
+      <div className={styles.sectionHeading}>
+        <h2 className={styles.sectionTitle} id="product-review-title">
+          Resumo
+        </h2>
+        <p>Confira os dados antes de salvar o produto.</p>
+      </div>
+      <dl className={styles.reviewFacts}>
+        <div>
+          <dt>Produto</dt>
+          <dd>{draft.name}</dd>
+        </div>
+        <div>
+          <dt>Categoria</dt>
+          <dd>{draft.category}</dd>
+        </div>
+        <div>
+          <dt>Preço</dt>
+          <dd>{formatPriceWithCurrency(draft.price, draft.currency)}</dd>
+        </div>
+        {discount && (
+          <div>
+            <dt>Desconto</dt>
+            <dd>{discount}</dd>
+          </div>
+        )}
+        <div>
+          <dt>Descrição</dt>
+          <dd>{draft.description}</dd>
+        </div>
+        <div>
+          <dt>Características</dt>
+          <dd>
+            <ul className={styles.reviewList}>
+              {imageReferenceLines(draft.characteristics).map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </dd>
+        </div>
+        <div>
+          <dt>Quantidade de conteúdos</dt>
+          <dd>{quantity}</dd>
+        </div>
+        <div>
+          <dt>Formato do creator</dt>
+          <dd>{creatorPresenceLabels[creatorPresence]}</dd>
+        </div>
+        <div>
+          <dt>Observações ou restrições</dt>
+          <dd>{notes.trim() || "Nenhuma observação informada."}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
 export function ProductCreateForm({
   mode = "create",
   product,
@@ -497,6 +666,7 @@ export function ProductCreateForm({
   const [creatorPresence, setCreatorPresence] = useState<
     ContentPreparationPreferences["creatorPresence"]
   >(product?.creatorPresence ?? "either");
+  const submitIntent = useRef<"save" | "analyze">("save");
   const [notes, setNotes] = useState(product?.observations ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -656,10 +826,45 @@ export function ProductCreateForm({
     setFormStep("preparation");
   }
 
+
+  function continueToSummary() {
+    setValidationVisible(true);
+    const validation = validateProductManualDraft(draft, notes);
+    delete validation.constraints;
+    delete validation.targetContentCount;
+    delete validation.creatorPresence;
+    if (Object.keys(validation).length > 0) {
+      setFieldErrors(validation);
+      setFormStep("facts");
+      setError("Revise os fatos destacados para continuar.");
+      focusFirstError(validation);
+      return;
+    }
+    if (!preparationIsWithinLimits(contentPreferences)) {
+      const preparationErrors: ProductManualFieldErrors = {};
+      if (quantity < 1 || quantity > 10 || !Number.isInteger(quantity)) {
+        preparationErrors.targetContentCount =
+          "Escolha uma quantidade entre 1 e 10.";
+      }
+      if (!creatorPresence) {
+        preparationErrors.creatorPresence = "Escolha um formato.";
+      }
+      if (notes.length > 300) {
+        preparationErrors.constraints = "Use no máximo 300 caracteres.";
+      }
+      setFieldErrors(preparationErrors);
+      setError("Revise a preparação dos conteúdos antes de continuar.");
+      return;
+    }
+    setFieldErrors({});
+    setError(null);
+    setFormStep("summary");
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
-    setValidationVisible(true);
+    const shouldAnalyze = submitIntent.current === "analyze";
+    submitIntent.current = "save";
     const validation = validateProductManualDraft(draft, notes);
     if (isEdit) {
       delete validation.constraints;
@@ -692,7 +897,7 @@ export function ProductCreateForm({
     }
 
     setSaving(true);
-    setError(null);
+    let createdId: string | null = null;
     setFieldErrors({});
     const key = idempotencyKey.current ?? createIdempotencyKey();
     idempotencyKey.current = key;
@@ -720,11 +925,20 @@ export function ProductCreateForm({
           router.back();
         }
       } else {
-        await createProduct(payload);
+        createdId = (await createProduct(payload)).id;
+        if (shouldAnalyze && createdId) {
+          await startGeneration(createdId, createGenerationIdempotencyKey());
+        }
       }
-      toast.success(isEdit ? "Alterações salvas." : "Produto salvo.");
+      toast.success(
+        shouldAnalyze
+          ? "Produto salvo. Análise iniciada."
+          : isEdit
+            ? "Alterações salvas."
+            : "Produto salvo.",
+      );
       idempotencyKey.current = undefined;
-      if (!isEdit) router.push("/products");
+      if (!isEdit && createdId) router.push(`/products/${createdId}`);
     } catch (caught) {
       if (caught instanceof ProductApiError) {
         const apiErrors: ProductManualFieldErrors = {
@@ -738,7 +952,8 @@ export function ProductCreateForm({
           targetContentCount: caught.fieldErrors.targetContentCount,
           creatorPresence: caught.fieldErrors.creatorPresence,
           constraints: caught.fieldErrors.constraints,
-          discountPercentage: caught.fieldErrors.discountPercentage,
+          discountType: caught.fieldErrors.discountType,
+          discountValue: caught.fieldErrors.discountValue,
         };
         setFieldErrors(apiErrors);
         setError(caught.message);
@@ -805,6 +1020,10 @@ export function ProductCreateForm({
           <li aria-current={formStep === "preparation" ? "step" : undefined}>
             <span aria-hidden="true">2</span>
             <strong>Preparação dos conteúdos</strong>
+          </li>
+          <li aria-current={formStep === "summary" ? "step" : undefined}>
+            <span aria-hidden="true">3</span>
+            <strong>Resumo</strong>
           </li>
         </ol>
       )}
@@ -875,14 +1094,14 @@ export function ProductCreateForm({
               value={draft.commission ?? ""}
               valueError={combinedErrors.commission}
             />
-            <TextField
-              error={combinedErrors.discountPercentage}
-              id={fieldId("discountPercentage")}
-              inputMode="decimal"
-              label="Desconto (%)"
-              onChange={(value) => update("discountPercentage", value)}
-              placeholder="Ex.: 15,5"
-              value={draft.discountPercentage ?? ""}
+            <DiscountField
+              currency={draft.currency}
+              onChangeType={(value) => update("discountType", value)}
+              onChangeValue={(value) => update("discountValue", value)}
+              type={draft.discountType ?? "PERCENTAGE"}
+              typeError={combinedErrors.discountType}
+              value={draft.discountValue ?? ""}
+              valueError={combinedErrors.discountValue}
             />
           </div>
           <TextField
@@ -1194,6 +1413,14 @@ export function ProductCreateForm({
           />
         </section>
       )}
+      {!isEdit && formStep === "summary" && (
+        <ProductReviewSummary
+          creatorPresence={creatorPresence}
+          draft={draft}
+          notes={notes}
+          quantity={quantity}
+        />
+      )}
 
       <div className={styles.submitBar}>
         {!isEdit && formStep === "facts" && (
@@ -1201,10 +1428,12 @@ export function ProductCreateForm({
             Continuar
           </Button>
         )}
-        {!isEdit && formStep === "preparation" && (
+        {!isEdit && (formStep === "preparation" || formStep === "summary") && (
           <Button
             disabled={saving}
-            onClick={() => setFormStep("facts")}
+            onClick={() =>
+              setFormStep(formStep === "preparation" ? "facts" : "preparation")
+            }
             type="button"
             variant="outline"
           >
@@ -1213,13 +1442,28 @@ export function ProductCreateForm({
         )}
         {!isEdit && (
           <>
-            {(formStep === "preparation") && (
-              <Button disabled={saving} type="submit">
-                {saving ? "Salvar produto — salvando" : "Salvar produto"}
+            {formStep === "preparation" && (
+              <Button disabled={saving} onClick={continueToSummary} type="button">
+                Continuar
               </Button>
             )}
-            {/* Cancelar bloqueado durante o salvamento: navegar com POST em
-                voo poderia persistir um Product após o cancelamento (B-006). */}
+            {formStep === "summary" && (
+              <>
+                <Button
+                  className={styles.analysisButton}
+                  disabled={saving}
+                  onClick={() => {
+                    submitIntent.current = "analyze";
+                  }}
+                  type="submit"
+                >
+                  {saving ? "Iniciando análise…" : "Analisar produto"}
+                </Button>
+                <Button disabled={saving} type="submit">
+                  {saving ? "Salvar produto — salvando" : "Salvar produto"}
+                </Button>
+              </>
+            )}
             {saving ? (
               <Button disabled type="button" variant="outline">
                 Cancelar

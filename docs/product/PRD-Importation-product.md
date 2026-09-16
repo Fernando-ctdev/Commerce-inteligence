@@ -15,10 +15,12 @@ Preencher fatos do Product
 ↓
 Salvar produto
 ↓
-Product aparece na lista de Produtos
+Resumo factual e de preparação
+↓
+Creator escolhe iniciar análise ou editar
 ```
 
-O cadastro deve manter a complexidade da plataforma fora do formulário. A primeira geração de conteúdos é responsabilidade do slice seguinte e não começa ao salvar o Product nesta etapa.
+O cadastro deve manter a complexidade da plataforma fora do formulário. Salvar não cria job nem inicia análise; a ação explícita `Analisar produto` aciona o fluxo de primeira geração.
 
 ## 2. Problema
 
@@ -39,12 +41,12 @@ Preencher o formulário
 ↓
 Salvar produto
 ↓
-Voltar para Produtos
+Abrir resumo factual e de preparação
 ↓
-Exibir o card do Product criado
+Creator escolhe `Analisar produto` ou `Editar produto`
 ```
 
-O creator pode cancelar sem criar um Product. Ao salvar, a aplicação valida os campos, persiste o Product no Tenant resolvido pela sessão e atualiza a lista de Produtos.
+O creator pode cancelar sem criar um Product. Ao salvar, a aplicação valida os campos, persiste o Product no Tenant resolvido pela sessão e abre seu resumo; não inicia geração por efeito colateral.
 
 ## 4. Rota e contexto
 
@@ -68,10 +70,9 @@ O formulário deve preservar os campos e o conteúdo do modal manual existente:
 | Preço                           | Obrigatório; deve ser válido, não negativo e ter no máximo duas casas decimais.     |
 | Moeda                           | Obrigatória; opções preservadas: `R$` (R$ Reais), `USD` ($ Dólar) e `EUR` (€ Euro). |
 | Características — uma por linha | Obrigatórias; deve haver ao menos uma linha não vazia.                              |
+| Desconto                        | Opcional; quando informado, exige `discountType` `PERCENTAGE` ou `FIXED`, `discountValue` e a moeda do Product. |
 
-Preço e moeda são fatos obrigatórios e devem ser informados conjuntamente; não há par opcional.
-
-Cada linha não vazia de Características representa uma característica.
+Preço e moeda são fatos obrigatórios e devem ser informados conjuntamente; não há par opcional. Desconto `PERCENTAGE` fica entre `0` e `100`; `FIXED` usa a moeda do Product e não pode exceder seu preço.
 
 ### Preparação dos conteúdos
 
@@ -106,16 +107,17 @@ Informações estratégicas não pertencem ao cadastro factual do Product. O for
 - Impedir leitura ou alteração de Products pertencentes a outro Tenant.
 - A criação deve ser idempotente quando a mesma submissão for repetida por retry técnico, sem criar Products duplicados.
 
-## 8. Lista de Produtos
+## 8. Resumo pós-cadastro
 
-Depois do salvamento:
+Depois do salvamento, abrir o resumo do Product no seu contexto:
 
-- retornar para a lista de Produtos;
-- exibir um card correspondente ao Product recém-criado;
-- mostrar ao menos o nome do Product e a próxima ação contextual, conforme o Product card definido em `DESIGN.md`;
-- manter o Product dentro do escopo do Tenant atual.
+- mostrar fatos, quantidade inicial, formato do creator e observações/restrições;
+- mostrar `Analisar produto` como ação explícita enquanto não houver job;
+- permitir `Editar produto` e, durante edição, `Salvar alterações`;
+- `GET` de geração sem job ou com envelope inválido preserva o resumo idle; não inventa análise;
+- erro de job existente permanece visível e acionável.
 
-O card não é um painel de métricas e não deve inventar estado de geração, Strategy, Content ou progresso que ainda não exista.
+O resumo não é painel de métricas e não deve inventar estado de geração, Strategy, Content ou progresso que ainda não exista.
 
 ## 9. Fora do escopo
 
@@ -131,7 +133,7 @@ Esta frente não inclui:
 - descoberta automática de dados, normalização de origem externa ou estado intermediário de dados;
 - caminhos alternativos de cadastro;
 - geração de Strategy, ContentPlan, ContentOpportunity, Content ou Briefing;
-- criação ou execução de `CommerceIntelligenceJob`;
+- criação ou execução automática de `CommerceIntelligenceJob` como efeito de salvar; a ação explícita de análise usa o slice responsável.
 - publicação, agendamento, analytics ou sincronização de catálogo;
 - outros marketplaces;
 - campos estratégicos no cadastro;
@@ -141,17 +143,19 @@ Esta frente não inclui:
 ## 10. Critérios de aceite
 
 1. Usuário autenticado consegue acessar `/products/new` a partir de Produtos.
-2. A tela apresenta os campos Nome, Descrição, Categoria, Preço, Moeda e Características, além da seção Preparação dos conteúdos do modal manual existente.
+2. A tela apresenta os campos Nome, Descrição, Categoria, Preço, Moeda, Características, Desconto opcional e a seção Preparação dos conteúdos.
 3. Nome, Descrição, Categoria, Preço, Moeda, Características (com ao menos uma linha não vazia) e Observações ou restrições impedem o salvamento quando ausentes, vazios ou inválidos.
 4. Preço e Moeda são obrigatórios; ambos devem ser informados e o preço deve ser válido, não negativo e ter no máximo duas casas decimais.
-5. A preparação inicia com quantidade `5`, aceita somente valores inteiros de `1` a `10`, inicia com formato `Tanto faz` e limita notas a `300` caracteres; esses campos aparecem com `*`.
-6. O asterisco é apenas indicação visual; HTML/cliente e servidor validam todos os campos obrigatórios.
-7. O salvamento persiste os fatos preenchidos e as preferências de preparação como restrições da primeira geração.
-8. Salvar não inicia geração, não cria job e não produz Strategy, Plan, Content ou Briefing.
-9. O Product salvo pertence ao Tenant resolvido pela sessão e não fica acessível a outro Tenant.
-10. Após salvar, o Product aparece como card na lista de Produtos.
-11. Cancelar não persiste o Product e retorna para Produtos.
-12. Erro de validação ou persistência mantém os dados preenchidos e oferece correção ou nova tentativa.
+5. Desconto informado exige tipo `PERCENTAGE` ou `FIXED`, valor válido e moeda do Product; percentual respeita `0–100` e valor fixo não excede o preço.
+6. A preparação inicia com quantidade `5`, aceita somente valores inteiros de `1` a `10`, inicia com formato `Tanto faz` e limita notas a `300` caracteres; esses campos aparecem com `*`.
+7. O asterisco é apenas indicação visual; HTML/cliente e servidor validam todos os campos obrigatórios.
+8. O salvamento persiste os fatos preenchidos e as preferências de preparação como restrições da primeira geração.
+9. Salvar não inicia geração, não cria job e não produz Strategy, Plan, Content ou Briefing.
+10. O Product salvo pertence ao Tenant resolvido pela sessão e não fica acessível a outro Tenant.
+11. Após salvar, o resumo mostra dados factuais e de preparação; o creator escolhe iniciar análise, editar ou salvar alterações.
+12. GET de geração inexistente ou envelope inválido não derruba o resumo idle; falha de job existente continua acionável.
+13. Cancelar não persiste o Product e retorna para Produtos.
+14. Erro de validação ou persistência mantém os dados preenchidos e oferece correção ou nova tentativa.
 
 ## 11. Fronteira com a primeira geração
 

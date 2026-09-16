@@ -43,7 +43,8 @@ const FIELD_CODE_PRIORITY = [
   "priceCurrency",
   "commissionType",
   "commissionValue",
-  "discountPercentage",
+  "discountType",
+  "discountValue",
   "features",
   "imageRefs",
   "url",
@@ -180,45 +181,6 @@ function normalizePriceAmount(price: string): string {
   return price;
 }
 // Desconto factual opcional, em percentual: null = sem desconto; presente, na faixa 0–100.
-const DISCOUNT_MAX = 100;
-function validateDiscountPercentage(
-  input: ManualProductInput,
-  fail: Fail,
-): string | null {
-  const raw = input.discountPercentage;
-  // Ausente ou null = sem desconto (compatibilidade). Campo presente em outro
-  // tipo (número, objeto) é rejeitado: o desconto é factual e chega como texto.
-  if (raw == null) return null;
-  if (typeof raw !== "string") {
-    fail(
-      "discountPercentage",
-      "Informe um desconto válido e não negativo, com até duas casas decimais.",
-      "VAL-DISCOUNT-FORMAT",
-    );
-    return null;
-  }
-  const value = raw.trim();
-  if (!value) return null;
-  if (!PRICE_PATTERN.test(value)) {
-    fail(
-      "discountPercentage",
-      "Informe um desconto válido e não negativo, com até duas casas decimais.",
-      "VAL-DISCOUNT-FORMAT",
-    );
-    return null;
-  }
-  const amount = Number(normalizePriceAmount(value));
-  if (amount < 0 || amount > DISCOUNT_MAX) {
-    fail(
-      "discountPercentage",
-      `O desconto percentual deve estar entre 0 e ${DISCOUNT_MAX}.`,
-      "VAL-DISCOUNT-RANGE",
-    );
-    return null;
-  }
-  return normalizePriceAmount(value);
-}
-
 function validateCommission(
   input: ManualProductInput,
   fail: Fail,
@@ -242,6 +204,45 @@ function validateCommission(
   }
   return { commissionType, commissionValue };
 }
+// Desconto (contrato oficial, Gate 5): exclusivamente tipado — PERCENTAGE
+// (0–100) ou FIXED (valor na moeda do produto, não negativo). Ausentes = sem
+// desconto; discountPercentage não faz parte do contrato.
+type DiscountType = "PERCENTAGE" | "FIXED";
+const DISCOUNT_TYPES: readonly DiscountType[] = ["PERCENTAGE", "FIXED"];
+function validateDiscount(
+  input: ManualProductInput,
+  priceCurrency: string,
+  fail: Fail,
+): { discountType: DiscountType | null; discountValue: string | null } {
+  const rawType = asTrimmedString(input.discountType)?.toUpperCase() ?? "";
+  const rawValue = asTrimmedString(input.discountValue) ?? "";
+  if (!rawType && !rawValue) return { discountType: null, discountValue: null };
+  let discountType: DiscountType | null = null;
+  if ((DISCOUNT_TYPES as readonly string[]).includes(rawType)) {
+    discountType = rawType as DiscountType;
+  } else {
+    fail("discountType", "Informe um tipo de desconto válido.", "VAL-DISCOUNT-TYPE");
+  }
+  if (!rawValue || !PRICE_PATTERN.test(rawValue)) {
+    fail("discountValue", "Informe um desconto válido e não negativo, com até duas casas decimais.", "VAL-DISCOUNT-FORMAT");
+    return { discountType, discountValue: null };
+  }
+  const discountValue = normalizePriceAmount(rawValue);
+  if (discountType === "PERCENTAGE" && Number(discountValue) > 100) {
+    fail("discountValue", "O desconto percentual deve estar entre 0 e 100.", "VAL-DISCOUNT-RANGE");
+  }
+  if (discountType === "FIXED" && !priceCurrency) {
+    fail("discountValue", "Moeda do produto é obrigatória para desconto de valor fixo.", "VAL-DISCOUNT-CURRENCY");
+  }
+  // RI-002 (SPEC-002): FIXED não excede o preço do Product.
+  if (discountType === "FIXED" && discountValue) {
+    const price = Number(normalizePriceAmount(asTrimmedString(input.price) ?? ""));
+    if (Number.isFinite(price) && Number(discountValue) > price) {
+      fail("discountValue", "O desconto de valor fixo não pode exceder o preço do produto.", "VAL-DISCOUNT-RANGE");
+    }
+  }
+  return { discountType, discountValue };
+}
 
 type ValidatedFacts = {
   name: string;
@@ -251,7 +252,8 @@ type ValidatedFacts = {
   priceCurrency: string;
   commissionType: CommissionType | null;
   commissionValue: string | null;
-  discountPercentage: string | null;
+  discountType: DiscountType | null;
+  discountValue: string | null;
   features: string[];
   imageRefs: string[];
 };
@@ -381,7 +383,7 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
 
   const imageRefs = validateImageRefs(input.imageRefs, fail);
   const commission = validateCommission(input, fail);
-  const discountPercentage = validateDiscountPercentage(input, fail);
+  const discount = validateDiscount(input, priceCurrency, fail);
 
   return {
     name,
@@ -390,7 +392,7 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
     priceAmount: normalizePriceAmount(price),
     priceCurrency,
     ...commission,
-    discountPercentage,
+    ...discount,
     features,
     imageRefs,
   };
@@ -537,7 +539,8 @@ export async function createManualProduct(
         priceCurrency: data.priceCurrency,
         commissionType: data.commissionType,
         commissionValue: data.commissionValue,
-        discountPercentage: data.discountPercentage,
+        discountType: data.discountType,
+        discountValue: data.discountValue,
         features: data.features,
         images: data.imageRefs,
         submittedUrl: data.submittedUrl,
@@ -592,8 +595,8 @@ export async function getTenantProduct(
 export async function updateTenantProduct(
   tenantId: string,
   id: string,
-  expectedVersion: number,
   input: ManualProductInput,
+  expectedVersion: number,
 ): Promise<Product> {
   const facts = validateProductFacts(input);
   try {
@@ -608,7 +611,8 @@ export async function updateTenantProduct(
         priceCurrency: facts.priceCurrency,
         commissionType: facts.commissionType,
         commissionValue: facts.commissionValue,
-        discountPercentage: facts.discountPercentage,
+        discountType: facts.discountType,
+        discountValue: facts.discountValue,
         features: facts.features,
         images: facts.imageRefs,
         submittedUrl: facts.submittedUrl,
@@ -743,6 +747,10 @@ export async function deleteTenantProduct(
     await tx.content.updateMany({
       where: { tenantId, productId: id },
       data: { currentBriefVersionId: null, approvedBriefVersionId: null },
+    });
+    // ADR-019: sets de cenas referenciam brief versions/contents — apagar antes.
+    await tx.contentSceneSet.deleteMany({
+      where: { tenantId, productId: id },
     });
     await tx.briefValidationReport.deleteMany({
       where: { tenantId, productId: id },

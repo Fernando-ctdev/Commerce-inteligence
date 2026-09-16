@@ -44,6 +44,9 @@ export type ProductView = {
   commissionValue: string | null;
   // Desconto factual em percentual; null = sem desconto (compatível com produtos antigos).
   discountPercentage: string | null;
+  // Desconto tipado (contrato oficial, Gate 5): PERCENTAGE|FIXED + valor; null = sem desconto tipado.
+  discountType: string | null;
+  discountValue: string | null;
   features: string[];
   imageRefs: string[];
   notes: string;
@@ -103,13 +106,16 @@ function constraintsCreatorPresence(
 async function productReadiness(tenantId: string, productId: string): Promise<ProductView["readiness"]> {
   const active = await prisma.commerceIntelligenceJob.findFirst({ where: { tenantId, productId, status: { in: ["QUEUED", "RUNNING"] } } });
   if (active) return "ANALYZING";
-  const succeeded = await prisma.commerceIntelligenceJob.findFirst({ where: { tenantId, productId, status: "SUCCEEDED" }, orderBy: { createdAt: "desc" } });
-  if (succeeded) return "READY";
-  const failed = await prisma.commerceIntelligenceJob.findFirst({ where: { tenantId, productId, status: { in: ["FAILED", "CANCELLED"] } }, orderBy: { createdAt: "desc" } });
-  return failed ? "FAILED" : "PENDING";
+  // Mesma seleção de /api/generations/current: o TERMINAL mais recente decide,
+  // não a categoria — ex. parcial seguido de complete falho é FAILED (Tentar
+  // novamente), e retry bem-sucedido sobre falha é READY (RI-003-37/B-003-13).
+  // Parcial declarado também é READY: D conteúdos publicados + 'Gerar faltantes'.
+  const terminal = await prisma.commerceIntelligenceJob.findFirst({ where: { tenantId, productId, status: { in: ["SUCCEEDED", "SUCCEEDED_PARTIAL", "FAILED", "CANCELLED"] } }, orderBy: { createdAt: "desc" } });
+  if (!terminal) return "PENDING";
+  return terminal.status === "SUCCEEDED" || terminal.status === "SUCCEEDED_PARTIAL" ? "READY" : "FAILED";
 }
 function toProductView(product: Product, readiness: ProductView["readiness"] = "PENDING"): ProductView {
-  return { id: product.id, version: product.version, name: product.name, description: product.description ?? "", category: product.category ?? "", price: product.priceAmount ? product.priceAmount.toString() : "", priceCurrency: product.priceCurrency ?? "", commissionType: product.commissionType, commissionValue: product.commissionValue?.toString() ?? null, discountPercentage: product.discountPercentage?.toString() ?? null, features: stringList(product.features), imageRefs: stringList(product.images), notes: constraintsNotes(product.generationConstraints), url: product.sourceUrl ?? product.submittedUrl ?? "", targetContentCount: product.targetContentCount, creatorPresence: constraintsCreatorPresence(product.generationConstraints), active: product.lifecycle === "ACTIVE", readiness };
+  return { id: product.id, version: product.version, name: product.name, description: product.description ?? "", category: product.category ?? "", price: product.priceAmount ? product.priceAmount.toString() : "", priceCurrency: product.priceCurrency ?? "", commissionType: product.commissionType, commissionValue: product.commissionValue?.toString() ?? null, discountPercentage: product.discountPercentage?.toString() ?? null, discountType: product.discountType, discountValue: product.discountValue, features: stringList(product.features), imageRefs: stringList(product.images), notes: constraintsNotes(product.generationConstraints), url: product.sourceUrl ?? product.submittedUrl ?? "", targetContentCount: product.targetContentCount, creatorPresence: constraintsCreatorPresence(product.generationConstraints), active: product.lifecycle === "ACTIVE", readiness };
 }
 
 export async function handleListProducts(req: Request): Promise<Response> {
@@ -173,8 +179,8 @@ export async function handleUpdateProduct(
     const product = await updateTenantProduct(
       session.tenantId,
       id,
-      body.expectedVersion,
       body,
+      body.expectedVersion,
     );
     return jsonBody(200, { id: product.id, version: product.version });
   } catch (error) {

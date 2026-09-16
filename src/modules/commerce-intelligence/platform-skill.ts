@@ -123,3 +123,50 @@ export function loadPlatformSkill(version: string = TIKTOK_COMMERCE_SKILL.versio
   if (!skill) throw new GenerationError<"GEN-SKILL">("GEN-SKILL", "Skill indisponivel");
   return skill;
 }
+
+// ─── Classificação determinística de buckets (ADR-019) ────────────────────────
+// Espaço comum para variedade: mecanismos de hook do plano e textos do catálogo
+// são classificados nos MESMOS buckets por regex fechada (sem embeddings/LLM,
+// ADR-004). Usado pela regra ceil(N/M) do plano, pela seleção estratificada de
+// padrões e pelo gate de variedade funcional de CTA.
+
+export type HookMechanismBucket = "problem" | "discovery" | "demonstration" | "objection" | "price-value" | "other";
+const HOOK_BUCKET_RULES: ReadonlyArray<readonly [HookMechanismBucket, RegExp]> = [
+  ["problem", /problem|dor|cansad|sofr|difici|frustra|chatead|evitar/],
+  ["discovery", /descobr|achei|achad|nao sabia|curios|surpres|viraliz|entendi/],
+  ["demonstration", /demonstr|prova|teste|testar|antes e depois|resultad|funciona|mostr/],
+  ["objection", /objec|duvid|receio|achava|milagre|modinha|cetic|sera que/],
+  ["price-value", /prec|barat|caro|valor|custa|dinheiro|gast|pagar/],
+];
+
+export function classifyHookMechanism(text: string): HookMechanismBucket {
+  const folded = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  for (const [bucket, pattern] of HOOK_BUCKET_RULES) if (pattern.test(folded)) return bucket;
+  return "other";
+}
+
+export type CtaFunction = "promo" | "checkout" | "price" | "interaction" | "recommendation" | "discovery";
+// Função assumida quando nenhuma regra casa com o texto: ausência de função
+// identificada, não uma função real — concentração funcional exige evidência.
+export const UNCLASSIFIED_CTA_FUNCTION: CtaFunction = "discovery";
+const CTA_FUNCTION_RULES: ReadonlyArray<readonly [CtaFunction, RegExp]> = [
+  ["promo", /descont|frete|oferta|cupom|promoc/],
+  ["checkout", /carrinh|compr|garant|pedid|shop|link|coloc/],
+  ["price", /prec|valor|quanto|barat|caro|dinheiro|gast|pagar/],
+  ["interaction", /coment|me conta|me fala|pergunta|respond|fala se|quer que eu|deixa um/],
+  ["recommendation", /vale|recomend|faz sentido|pena|considera/],
+];
+
+export function classifyCtaFunction(text: string): CtaFunction {
+  const folded = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  for (const [fn, pattern] of CTA_FUNCTION_RULES) if (pattern.test(folded)) return fn;
+  return UNCLASSIFIED_CTA_FUNCTION;
+}
+
+// K do teto ceil(N/K) do gate de CTA: buckets realmente presentes no catálogo.
+export const CTA_FUNCTION_BUCKET_COUNT = new Set(
+  CREATIVE_CATALOG.ctas.map(({ text }) => classifyCtaFunction(text)),
+).size;
+
+// M do teto ceil(N/M) do plano: buckets do espaço comum de mecanismos.
+export const HOOK_BUCKET_COUNT = HOOK_BUCKET_RULES.length + 1;

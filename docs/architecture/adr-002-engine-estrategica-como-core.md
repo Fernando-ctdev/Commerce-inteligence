@@ -99,7 +99,7 @@ A aplicação deve associar a saída à execução, ao snapshot de entrada e à 
 
 ## Fora do MVP
 
-Aprendizado automático de preferências, otimização baseada em vendas, LLM-as-judge, personalização por performance, treinamento de modelo próprio e produção de vídeo, imagem ou voice-over.
+Aprendizado automático de preferências, otimização baseada em vendas, judge LLM de variedade ou memória, personalização por performance, treinamento de modelo próprio e produção de vídeo, imagem ou voice-over. `CONTENT_QUALITY_JUDGE` interno por partes do Slice 003 é uma exceção limitada após o hard gate; não é aprovação humana nem judge de variedade/memória.
 
 ## Gatilhos de revisão
 

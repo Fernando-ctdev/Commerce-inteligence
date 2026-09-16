@@ -22,6 +22,7 @@ Engine Capability → Logical Intelligence Task → Model Router
 ```
 
 - Toda tarefa lógica (ex.: `PRODUCT_UNDERSTANDING`, `AUDIENCE_DISCOVERY`, `STRATEGY_SYNTHESIS`, `CONTENT_PLAN_GENERATION`, `CONTENT_BRIEF_GENERATION`, `HOOK_REGENERATION`, `CTA_REGENERATION`, `VARIETY_AUDIT`) possui um `IntelligenceTier` padrão, evoluível por evals reais de qualidade/custo/latência — não por benchmarks genéricos.
+- A curadoria semântica interna usa `CONTENT_QUALITY_JUDGE`/HIGH e `CONTENT_PART_REPAIR`/HIGH. O judge avalia hook, development, script, CTA e cenas por conteúdo com contrato allowlisted; falha de judge não vira PASS nem usa fallback. Ela não é aprovação do creator nem uma capability de Content Operations.
 - Estratégia de custo: **HIGH decide o conjunto, MID executa, HIGH audita**. O modelo mais forte não escreve individualmente todo o volume.
 - Capabilities determinísticas (orquestração, estado, persistência, idempotência, schema validation, contagens, quota) **não passam pelo router**.
 - Regenerações locais reutilizam contexto persistido: CTA → LOW; hook → LOW/MID; script → MID; trocar ângulo → MID; replanejar conjunto → HIGH. Nenhuma alteração local recalcula toda a inteligência do Produto.

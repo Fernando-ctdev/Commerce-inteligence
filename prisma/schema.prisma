@@ -41,6 +41,7 @@ model Tenant {
   contents Content[]
   briefs ContentBriefVersion[]
   reports BriefValidationReport[]
+  sceneSets ContentSceneSet[]
   memorySnapshots ProductMemorySnapshot[]
   @@map("tenants")
 }
@@ -100,9 +101,14 @@ model Product {
   priceCurrency      String?
   commissionType     String?
   commissionValue    Decimal?
-  // Desconto factual opcional informado pelo criador, em percentual (0–100).
-  // Null = sem desconto: nunca inventado pela geração (fato entra no contexto só quando presente).
+  // Resquício de dados de desenvolvimento (Gate 5): sem status de contrato.
+  // Não é escrito pelo service nem lido como desconto; null = sem desconto.
   discountPercentage Decimal?
+  // Desconto tipado — contrato oficial (Gate 5): exclusivamente tipado.
+  // PERCENTAGE (0–100) ou FIXED (valor na moeda do produto, não negativo).
+  // Null = sem desconto: nunca inventado pela geração.
+  discountType       String?
+  discountValue      String?
   features           Json
   variants           Json?
   images             Json
@@ -131,6 +137,7 @@ model Product {
   opportunities ContentOpportunity[]
   contents Content[]
   briefs ContentBriefVersion[]
+  sceneSets ContentSceneSet[]
   memorySnapshots ProductMemorySnapshot[]
   reports BriefValidationReport[]
   @@unique([tenantId, createIdempotencyKey])
@@ -176,6 +183,7 @@ enum CommerceIntelligenceJobStatus {
   SUCCEEDED
   FAILED
   CANCELLED
+  SUCCEEDED_PARTIAL
 }
 
 enum CommerceIntelligenceStage {
@@ -227,9 +235,10 @@ model CommerceIntelligenceJob {
   contents Content[]
   briefs ContentBriefVersion[]
   reports BriefValidationReport[]
+  sceneSets ContentSceneSet[]
   memorySnapshots ProductMemorySnapshot[]
-  @@unique([tenantId, id])
   @@unique([tenantId, idempotencyKey])
+  @@unique([tenantId, id])
   @@index([tenantId, status])
   @@index([status, nextAttemptAt, leaseDeadlineAt])
   @@index([tenantId, productId, createdAt])
@@ -376,6 +385,7 @@ model Content {
   opportunity ContentOpportunity? @relation(fields: [tenantId, opportunityId], references: [tenantId, id])
   briefs ContentBriefVersion[]
   reports BriefValidationReport[]
+  sceneSets ContentSceneSet[]
   currentBriefVersion ContentBriefVersion? @relation("CurrentBrief", fields: [tenantId, currentBriefVersionId], references: [tenantId, id])
   @@unique([tenantId, id])
   @@unique([tenantId, jobId, position])
@@ -397,6 +407,7 @@ model ContentBriefVersion {
   job CommerceIntelligenceJob @relation(fields: [tenantId, jobId], references: [tenantId, id])
   content Content @relation(fields: [tenantId, contentId], references: [tenantId, id])
   reports BriefValidationReport[]
+  sceneSets ContentSceneSet[]
   currentFor Content[] @relation("CurrentBrief")
   @@unique([tenantId, id])
   @@unique([tenantId, contentId, version])
@@ -411,6 +422,10 @@ model BriefValidationReport {
   productId String
   contentId String
   briefVersionId String
+  // ADR-019: versão da política de gates sob a qual o report foi produzido.
+  // NULL = pré-versionamento (histórico); revalidação sob versão diferente é
+  // GATE-VERSION-MISMATCH, nunca REPAIR falso.
+  gateVersion Int?
   briefId String @unique
   factualStatus String
   claimType String?
@@ -427,6 +442,34 @@ model BriefValidationReport {
   content Content @relation(fields: [tenantId, contentId], references: [tenantId, id])
   briefVersion ContentBriefVersion @relation(fields: [tenantId, briefVersionId], references: [tenantId, id])
   @@map("brief_validation_reports")
+}
+
+// ADR-019 — ContentSceneSet: sugestões visuais read-only derivadas do briefing
+// completo, SEPARADAS de ContentBriefVersion (imutabilidade do brief preservada).
+// 1 row por (tenantId, briefVersionId): payload ordenado {scenes[], generated, dropped}.
+// status distingue AVAILABLE (cenas mantidas) / FILTERED (tudo dropado pelo gate) /
+// ERROR (falha da capability) — ausência de row = não-gerado (empty state honesto).
+model ContentSceneSet {
+  id               String   @id @default(uuid())
+  tenantId         String
+  jobId            String
+  productId        String
+  contentId        String
+  briefVersionId   String
+  status           String
+  gatePolicyVersion Int
+  backfilled       Boolean  @default(false)
+  payload          Json
+  createdAt        DateTime @default(now())
+  tenant           Tenant                @relation(fields: [tenantId], references: [id])
+  product          Product               @relation(fields: [tenantId, productId], references: [tenantId, id])
+  job              CommerceIntelligenceJob @relation(fields: [tenantId, jobId], references: [tenantId, id])
+  content          Content               @relation(fields: [tenantId, contentId], references: [tenantId, id])
+  briefVersion     ContentBriefVersion   @relation(fields: [tenantId, briefVersionId], references: [tenantId, id])
+
+  @@unique([tenantId, briefVersionId])
+  @@index([tenantId, productId])
+  @@map("content_scene_sets")
 }
 
 model ProductMemorySnapshot {

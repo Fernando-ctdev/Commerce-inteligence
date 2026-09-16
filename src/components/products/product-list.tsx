@@ -20,7 +20,7 @@ import {
   Video,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { phaseStates, stageMessage } from "./generation-ui-model";
+import { stageMessage } from "./generation-ui-model";
 
 import {
   DropdownMenu,
@@ -295,23 +295,20 @@ export function ProductList() {
             const analyzing = generation
               ? isActiveGeneration(generation.status)
               : product.readiness === "ANALYZING";
+            const projectionDegraded = generation?.code === "GEN-PROJECTION" &&
+              (generation.status === "SUCCEEDED" || generation.status === "SUCCEEDED_PARTIAL");
             const ready =
-              generation?.status === "SUCCEEDED" ||
-              (!generation && product.readiness === "READY");
+              !projectionDegraded &&
+              ((generation?.status === "SUCCEEDED" || generation?.status === "SUCCEEDED_PARTIAL") ||
+              (!generation && product.readiness === "READY"));
             const failed =
-              generation?.status === "FAILED" ||
+              !projectionDegraded &&
+              (generation?.status === "FAILED" ||
               generation?.status === "CANCELLED" ||
-              (!generation && product.readiness === "FAILED");
+              (!generation && product.readiness === "FAILED"));
             const approved =
               generation?.contents.filter((content) => content.status === "APPROVED")
                 .length ?? 0;
-            const phases = generation
-              ? phaseStates(generation.status, generation.stage)
-              : [];
-            const completedPhases = phases.filter((phase) => phase.state === "done").length;
-            const progressPercent = phases.length
-              ? Math.round((completedPhases / phases.length) * 100)
-              : 0;
             const currentStage = generation?.stage
               ? stageMessage(generation.stage)
               : "Preparando a análise...";
@@ -376,18 +373,13 @@ export function ProductList() {
                     <div className={styles.cardProgress} aria-label={`Progresso da análise: ${currentStage}`}>
                       <div className={styles.cardProgressHeader}>
                         <span>{currentStage}</span>
-                        <strong>{progressPercent}%</strong>
-                      </div>
-                      <div
-                        aria-valuemax={100}
-                        aria-valuemin={0}
-                        aria-valuenow={progressPercent}
-                        className={styles.cardProgressTrack}
-                        role="progressbar"
-                      >
-                        <span style={{ width: `${progressPercent}%` }} />
                       </div>
                     </div>
+                  ) : projectionDegraded ? (
+                    <p className={styles.cardError}>
+                      <AlertTriangle aria-hidden="true" />
+                      Resultado da análise indisponível.
+                    </p>
                   ) : failed ? (
                     <p className={styles.cardError}>
                       <AlertTriangle aria-hidden="true" />
@@ -397,6 +389,7 @@ export function ProductList() {
                     <>
                       <div aria-label="Resumo operacional" className={styles.cardMetrics}>
                         <span><FileText aria-hidden="true" /><strong>{generation.contents.length}</strong> conteúdos</span>
+                        {generation.status === "SUCCEEDED_PARTIAL" && <span><AlertTriangle aria-hidden="true" /><strong>{generation.missing.length}</strong> faltantes</span>}
                         <span><CheckCircle2 aria-hidden="true" /><strong>{approved}</strong> aprovados</span>
                         <span><Video aria-hidden="true" /><strong>4</strong> gravados</span>
                       </div>
