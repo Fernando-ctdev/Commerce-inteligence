@@ -11,3 +11,10 @@
 - `node --test --import tsx src/modules/commerce-intelligence/engine.test.ts src/modules/commerce-intelligence/engine-pipeline.test.ts` — PASS (53/53).
 - `git diff --check` — PASS.
 - Typecheck/lint/build e suíte ampla — não executados; fora do escopo focado solicitado.
+
+## Rodada 2/5
+
+- Base: `be9158e` (`fix(slice-003): close semantic judge composition gaps`).
+- Correção: erro terminal de validação objetiva agora usa `task: HARD_GATE`, sem rotular composição/cena/variedade como Judge.
+- Assertion observável: teste `PARTIAL_FAILURE_CAP: F == 2 fecha parcial declarado; F == 3 falha GEN-REPAIR-EXHAUSTED mesmo com aprovados` verifica `HARD_GATE` e rejeita `CONTENT_QUALITY_JUDGE` no diagnóstico.
+- Resultados: `node --test --import tsx src/modules/commerce-intelligence/engine.test.ts src/modules/commerce-intelligence/engine-pipeline.test.ts` — PASS (53/53).

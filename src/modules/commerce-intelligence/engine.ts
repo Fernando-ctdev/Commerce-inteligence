@@ -2095,7 +2095,7 @@ export async function runFirstGeneration(
       "Validação objetiva não aprovou itens suficientes",
       true,
       {
-        task: "CONTENT_QUALITY_JUDGE",
+        task: "HARD_GATE",
         expected: count,
         received: delivered.length,
         // A curadoria semântica é consultiva e nunca derruba item: toda falha

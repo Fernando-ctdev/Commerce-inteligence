@@ -600,10 +600,12 @@ test("PARTIAL_FAILURE_CAP: F == 2 fecha parcial declarado; F == 3 falha GEN-REPA
   await assert.rejects(
     () => runFirstGeneration({ productId: "p", jobId: "j-cap-3", name: "Produto", description: "Tecido respirável", targetContentCount: 4, router: withInternalCuration(pipelineRouter(4, 3)) }),
     (error: unknown) => {
-      const e = error as { code?: string; detail?: { expected?: number; received?: number } };
+      const e = error as { code?: string; detail?: { expected?: number; received?: number; task?: string } };
       assert.equal(e.code, "GEN-REPAIR-EXHAUSTED");
       assert.equal(e.detail?.expected, 4);
       assert.equal(e.detail?.received, 1);
+      assert.notEqual(e.detail?.task, "CONTENT_QUALITY_JUDGE");
+      assert.equal(e.detail?.task, "HARD_GATE");
       return true;
     },
   );
