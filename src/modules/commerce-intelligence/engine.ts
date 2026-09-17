@@ -1823,7 +1823,7 @@ export async function runFirstGeneration(
     const qualityAudits: QualityAudit[] = [];
   const qualityRepairs: Array<{ contentId: string; part: QualityPart; round: number; criterion: string; outcome: "REPAIRED" }> = [];
   // ADR-021: partições declaradas — índices do subconjunto hard (cenas/judge).
-  const judgeFailIdx = new Set<number>();
+  const objectiveFailureIdx = new Set<number>();
   const compositionFailed = new Set<number>();
   const varietyDropped = new Set<number>();
   const compositionDiagnostics: GateReport[] = [];
@@ -1904,7 +1904,10 @@ export async function runFirstGeneration(
         evidence,
         projectCreatorContext("CONTENT_SCENE_IDEAS", input.creatorContext),
       );
-      const rejectedReports = hardReports.filter((report) => report.decision !== "PASS");
+      const compositionReport = hardReports[updatedIndex];
+      const rejectedReports = compositionReport && compositionReport.decision !== "PASS"
+        ? [compositionReport]
+        : [];
       const scenesInvalid = gatedScenes.kept.length < 2 || gatedScenes.dropped > 0;
       if (scenesInvalid) rejectedReports.push({
         briefId: `${current.contentId}:${current.briefVersionId}`,
@@ -2005,6 +2008,7 @@ export async function runFirstGeneration(
           if (compositionReports.length) {
             // ADR-021: composição reprovada falha o item, não o job.
             compositionFailed.add(index);
+            objectiveFailureIdx.add(index);
             compositionDiagnostics.push(...compositionReports);
             continue;
           }
@@ -2033,7 +2037,7 @@ export async function runFirstGeneration(
   }
   sceneSets.forEach((set, index) => {
     if (set.status !== "AVAILABLE" || set.scenes.length < 2) {
-      judgeFailIdx.add(index);
+      objectiveFailureIdx.add(index);
       sceneDiagnostics.push({
         briefId: `${hard[index].brief.contentId}:${hard[index].brief.briefVersionId}`,
         gateVersion: GATE_POLICY_VERSION,
@@ -2050,7 +2054,7 @@ export async function runFirstGeneration(
   });
   // ADR-021 decisão 3: variedade do subconjunto entregue com teto ceil(D/K) —
   // mesmos classificadores do gate; drop determinístico do mais fraco até fechar.
-  let delivered = hard.map((_, i) => i).filter((i) => !judgeFailIdx.has(i) && !compositionFailed.has(i));
+  let delivered = hard.map((_, i) => i).filter((i) => !objectiveFailureIdx.has(i) && !compositionFailed.has(i));
   let deliveredReports = validateBriefSet(
     delivered.map((i) => hard[i].brief),
     evidence,
@@ -2061,10 +2065,7 @@ export async function runFirstGeneration(
   );
   const rankOf = (k: number): number[] => {
     const report = deliveredReports[k];
-    const contentId = hard[delivered[k]].brief.contentId;
-    const lastAudit = qualityAudits.filter((audit) => audit.contentId === contentId).at(-1);
-    const qualityFails = lastAudit?.parts.filter(({ status }) => status !== "PASS").length ?? 0;
-    return [report.issues.length + qualityFails, -report.evidenceRefs.length, hardIdx[delivered[k]]];
+    return [report.issues.length, -report.evidenceRefs.length, hardIdx[delivered[k]]];
   };
   while (deliveredReports.some((report) => report.decision !== "PASS")) {
     const weakest = delivered
@@ -2111,10 +2112,10 @@ export async function runFirstGeneration(
   // diagnóstico determinístico; nunca payload do provider.
   const failedItems: FailedItemDiagnostic[] = [
     ...hardFailIdx.map((i) => diagnoseFailure(candidates[i].brief, candidateReports[i], evidence, "HARD_GATE", i + 1, [])),
-    ...[...judgeFailIdx].map((i) => ({
+    ...[...objectiveFailureIdx].map((i) => ({
       contentId: hard[i].brief.contentId,
       position: hardIdx[i] + 1,
-      reason: "JUDGE" as const,
+      reason: "HARD_GATE" as const,
       checkCodes: [] as PartialFailureCheckCode[],
       issues: compositionFailed.has(i)
         ? ["composition_rejected"]

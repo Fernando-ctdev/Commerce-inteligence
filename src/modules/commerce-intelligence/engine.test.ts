@@ -609,12 +609,9 @@ test("PARTIAL_FAILURE_CAP: F == 2 fecha parcial declarado; F == 3 falha GEN-REPA
   );
 });
 
-// Gate 6 (item 5): variedade do subconjunto ENTREGUE (ADR-021 decisão 3) — o
-// teto ceil(D/K) é RECOMPUTADO após falhas do judge e o excedente é dropado
-// deterministicamente (failedItems reason VARIETY_CAP, issues variety_cap_drop),
-// sem derrubar o job. N=6 com 2 CTAs de checkout (cap ceil(6/5)=2); judge
-// rejeita 1 item não-checkout → D=5, cap vira ceil(5/5)=1 → o 2º checkout cai.
-test("variedade do entregue: cap recomputado após falha do judge dropa o excedente como VARIETY_CAP e fecha parcial", async () => {
+// Semantic REVIEW is advisory: an unsuccessful repair falls back to the
+// original part and does not create a partial result.
+test("semantic REVIEW sem repair preserva o item e mantém DRAFT completo", async () => {
   const checkoutCtas = ["Entra no carrinho e confere as condições atuais.", "Toque no carrinho para ver o pedido completo."];
   const briefFor = (position: number) => ({
     angle: `a${position}`,
@@ -623,8 +620,8 @@ test("variedade do entregue: cap recomputado após falha do judge dropa o excede
     script: "Tecido respiravel",
     cta: position === 1 ? checkoutCtas[0] : position === 5 ? checkoutCtas[1] : `cta ${position}`,
   });
-  const judgeReject = {
-    parts: qualityPass.parts.map((part) => part.part === "script" ? { ...part, status: "REJECT", reason: "unclear" } : part),
+  const judgeReview = {
+    parts: qualityPass.parts.map((part) => part.part === "script" ? { ...part, status: "REVIEW", reason: "unclear" } : part),
   };
   let briefCalls = 0;
   const judgedRejects: unknown[] = [];
@@ -650,7 +647,7 @@ test("variedade do entregue: cap recomputado após falha do judge dropa o excede
       return {
         audits: judgeItems(input).map(({ contentId }) => {
           if (contentId === "j-content-6") judgedRejects.push(contentId);
-          return { contentId, parts: contentId === "j-content-6" ? judgeReject.parts : qualityPass.parts };
+          return { contentId, parts: contentId === "j-content-6" ? judgeReview.parts : qualityPass.parts };
         }),
       };
     }
@@ -659,25 +656,47 @@ test("variedade do entregue: cap recomputado após falha do judge dropa o excede
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 6, router });
   assert.equal(briefCalls, 2, "batches 4+2");
   assert.equal(judgedRejects.length, 1, "judge rejeita exatamente o item alvo");
-  assert.equal(result.briefs.length, 4, "6 gerados − 1 judge − 1 drop de variedade");
-  assert.ok(result.partial, "D=4, F=2 ≤ teto → SUCCEEDED_PARTIAL");
-  assert.equal(result.partial?.expectedCount, 6);
-  assert.equal(result.partial?.deliveredCount, 4);
-  assert.equal(result.partial?.failedCount, 2);
-  const judgeItem = result.partial?.failedItems.find(({ reason }) => reason === "JUDGE");
-  const varietyItem = result.partial?.failedItems.find(({ reason }) => reason === "VARIETY_CAP");
-  assert.ok(judgeItem, "falha do judge registrada");
-  assert.equal(judgeItem?.checkCodes.length, 0, "falha de judge não usa checkCodes do gate");
-  assert.ok(varietyItem, "drop determinístico de variedade registrado");
-  assert.equal(varietyItem?.contentId, "j-content-5", "o 2º checkout (excedente do cap recomputado) é dropado");
-  assert.deepEqual(varietyItem?.issues, ["variety_cap_drop"]);
+  assert.equal(result.briefs.length, 6, "REVIEW sem repair não remove o item");
+  assert.equal(result.partial, null, "fallback semântico não cria partial");
+  assert.equal(result.qualityAudits.length, 6);
+});
+
+test("dois REVIEW: repair inválido deixa somente o candidato objetivo inválido no partial", async () => {
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+    if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [
+      { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] },
+      { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] },
+    ] };
+    if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 2, opportunities: [
+      { commercialObjective: "c", angle: "a1", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] },
+      { commercialObjective: "c", angle: "a2", coreMessage: "m", hookMechanism: "prova de resistência do tecido", noveltyTargets: ["n"] },
+    ] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [1, 2].map((i) => ({ angle: `a${i}`, hook: `Gancho ${i}`, development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: `cta ${i}` })) };
+    if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
+    if (task === "CONTENT_QUALITY_JUDGE") {
+      const items = recordOf(input?.trustedContext)?.items as Array<Record<string, unknown>>;
+      return { audits: items.map(({ contentId }) => ({ contentId, parts: qualityPass.parts.map((part) => part.part === "hook" ? { ...part, status: "REVIEW", reason: "unclear" } : part) })) };
+    }
+    if (task === "CONTENT_PART_REPAIR") {
+      const items = recordOf(input?.trustedContext)?.items as Array<Record<string, unknown>>;
+      return { items: items.map(({ contentId }) => ({ contentId, content: String(contentId).endsWith("content-1") ? "Suporta 999 kg" : "Gancho reparado" })) };
+    }
+    return {};
+  } };
+  const result = await runFirstGeneration({ productId: "p", jobId: "j-two-review", name: "Produto", description: "Tecido respirável", targetContentCount: 2, router });
+  assert.deepEqual(result.briefs.map(({ contentId }) => contentId), ["j-two-review-content-2"]);
+  assert.equal(result.partial?.failedCount, 1);
+  assert.deepEqual(result.partial?.failedItems.map(({ contentId }) => contentId), ["j-two-review-content-1"]);
+  assert.equal(result.partial?.failedItems[0].reason, "HARD_GATE");
+  assert.deepEqual(result.partial?.failedItems[0].issues, ["composition_rejected"]);
 });
 
 // ADR-025 §2: judge em lote — 5 Contents viram 2 chamadas (chunks de 3 e 2,
 // JUDGE_BATCH_MAX); a identidade da resposta é o contentId (ordem embaralhada é
-// aceita) e um lote malformado isola os SEUS itens sem aprovar irmãos nem
-// repetir o job → SUCCEEDED_PARTIAL.
-test("ADR-025: judge em lote (3+2) com identidade por contentId; lote malformado isola itens e fecha parcial", async () => {
+// aceita) e um lote malformado preserva os itens sem criar partial.
+test("ADR-025: judge em lote (3+2) com identidade por contentId; lote malformado faz fallback", async () => {
   const briefFor = (position: number) => ({
     angle: `a${position}`,
     hook: `Gancho ${position}`,
@@ -711,16 +730,14 @@ test("ADR-025: judge em lote (3+2) com identidade por contentId; lote malformado
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 5, router });
   assert.deepEqual(judgeCallSizes, [3, 2], "chunks de 3 e 2 (JUDGE_BATCH_MAX)");
-  assert.equal(result.briefs.length, 3, "lote malformado isola os 2 itens; irmãos aprovam");
-  assert.equal(result.partial?.deliveredCount, 3);
-  assert.equal(result.partial?.failedCount, 2);
-  assert.deepEqual(result.partial?.failedItems.map(({ contentId }) => contentId), ["j-content-4", "j-content-5"]);
+  assert.equal(result.briefs.length, 5, "lote malformado mantém os 2 itens em fallback");
+  assert.equal(result.partial, null, "falha semântica de lote não cria partial");
 });
 
 // ADR-025 §3: repair em lote agrupa SOMENTE a mesma QualityPart+round (hook:
 // 3+2 por REPAIR_BATCH_MAX), o conjunto exato de contentIds é ecoado, os itens
-// reparados voltam ao judge no round seguinte e o job fecha SUCCEEDED.
-test("ADR-025: repair em lote da mesma parte (hook 3+2), re-judge dos modificados e sucesso completo", async () => {
+// reparados não voltam ao judge e o job fecha SUCCEEDED.
+test("ADR-025: repair em lote da mesma parte (hook 3+2), sem re-judge", async () => {
   const briefFor = (position: number) => ({
     angle: `a${position}`,
     hook: `Gancho ${position}`,
@@ -747,9 +764,7 @@ test("ADR-025: repair em lote da mesma parte (hook 3+2), re-judge dos modificado
       judgeCalls += 1;
       const items = judgeItems(input);
       judgeCallSizes.push(items.length);
-      const parts = judgeCalls <= 2
-        ? qualityPass.parts.map((part) => part.part === "hook" ? { ...part, status: "REPAIR", reason: "unclear" } : part)
-        : qualityPass.parts;
+      const parts = qualityPass.parts.map((part) => part.part === "hook" ? { ...part, status: "REVIEW", reason: "unclear" } : part);
       return { audits: items.map(({ contentId }) => ({ contentId, parts })) };
     }
     if (task === "CONTENT_PART_REPAIR") {
@@ -761,7 +776,7 @@ test("ADR-025: repair em lote da mesma parte (hook 3+2), re-judge dos modificado
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 5, router });
-  assert.deepEqual(judgeCallSizes, [3, 2, 3, 2], "judge round 0 (3+2) e re-judge dos modificados no round 1 (3+2)");
+  assert.deepEqual(judgeCallSizes, [3, 2], "judge único em chunks de 3 e 2");
   assert.deepEqual(repairCallSizes, [3, 2], "hook em chunks de 3 e 2 (REPAIR_BATCH_MAX.hook)");
   assert.equal(result.briefs.length, 5, "todos os itens reparados e aprovados");
   assert.ok(!result.partial, "SUCCEEDED completo");
@@ -770,9 +785,8 @@ test("ADR-025: repair em lote da mesma parte (hook 3+2), re-judge dos modificado
 });
 
 // ADR-025 §1/§3: envelope de repair malformado (ID extra) NÃO aprova os itens
-// do lote nem derruba os irmãos — os itens do lote permanecem não-PASS e não
-// publicam; os irmãos PASS publicam → SUCCEEDED_PARTIAL.
-test("ADR-025: envelope de repair malformado isola os itens do lote e fecha parcial", async () => {
+// do lote nem derruba os irmãos — as partes originais permanecem e publicam.
+test("ADR-025: envelope de repair malformado preserva fallback sem partial", async () => {
   const briefFor = (position: number) => ({
     angle: `a${position}`,
     hook: `Gancho ${position}`,
@@ -802,7 +816,7 @@ test("ADR-025: envelope de repair malformado isola os itens do lote e fecha parc
           contentId,
           parts: Number(String(contentId).slice(-1)) <= 3
             ? qualityPass.parts
-            : qualityPass.parts.map((part) => part.part === "hook" ? { ...part, status: "REPAIR", reason: "unclear" } : part),
+            : qualityPass.parts.map((part) => part.part === "hook" ? { ...part, status: "REVIEW", reason: "unclear" } : part),
         })),
       };
     }
@@ -816,11 +830,9 @@ test("ADR-025: envelope de repair malformado isola os itens do lote e fecha parc
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 5, router });
   assert.deepEqual(judgeCallSizes, [3, 2]);
-  assert.deepEqual(repairCallSizes, [2, 2], "repair reexecuta no round 2, mas o envelope continua malformado");
-  assert.equal(result.briefs.length, 3, "itens 4 e 5 (lote de repair falho) não publicam; irmãos 1-3 aprovam");
-  assert.equal(result.partial?.deliveredCount, 3);
-  assert.equal(result.partial?.failedCount, 2);
-  assert.deepEqual(result.partial?.failedItems.map(({ contentId }) => contentId), ["j-content-4", "j-content-5"]);
+  assert.deepEqual(repairCallSizes, [2], "uma tentativa de repair para o lote REVIEW");
+  assert.equal(result.briefs.length, 5, "fallback preserva os itens 4 e 5");
+  assert.equal(result.partial, null, "falha semântica não cria partial");
 });
 
 // ADR-025 §3: limites por parte — development agrupa no máximo 2 (chunks 2+1)
@@ -848,7 +860,7 @@ test("ADR-025: repair de development agrupa 2+1 e scenes é individual", async (
       const items = judgeItems(input);
       judgeCallSizes.push(items.length);
       const parts = judgeCalls === 1
-        ? qualityPass.parts.map((part) => part.part === "development" || part.part === "scenes" ? { ...part, status: "REPAIR", reason: "unclear" } : part)
+        ? qualityPass.parts.map((part) => part.part === "development" || part.part === "scenes" ? { ...part, status: "REVIEW", reason: "unclear" } : part)
         : qualityPass.parts;
       return { audits: items.map(({ contentId }) => ({ contentId, parts })) };
     }
@@ -868,7 +880,7 @@ test("ADR-025: repair de development agrupa 2+1 e scenes é individual", async (
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 3, router });
-  assert.deepEqual(judgeCallSizes, [3, 3], "judge round 0 e re-judge dos modificados, um chunk cada");
+  assert.deepEqual(judgeCallSizes, [3], "judge único");
   assert.deepEqual(repairCallSizes, [2, 1, 1, 1, 1], "development em 2+1 (REPAIR_BATCH_MAX.development); scenes sempre 1");
   assert.equal(result.briefs.length, 3);
   assert.ok(!result.partial);
