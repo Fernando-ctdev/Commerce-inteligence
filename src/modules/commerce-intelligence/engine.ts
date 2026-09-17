@@ -1828,7 +1828,6 @@ export async function runFirstGeneration(
   const varietyDropped = new Set<number>();
   const compositionDiagnostics: GateReport[] = [];
   const sceneDiagnostics: GateReport[] = [];
-  let lastQualityAudits: QualityAudit[] = [];
   if (input.router) {
     // ADR-025: curadoria em lote — transporte apenas, nunca mudança semântica; a
     // unidade de decisão permanece Content + QualityPart + round. O lote é
@@ -1969,9 +1968,10 @@ export async function runFirstGeneration(
         } catch (error) {
           if (input.signal?.aborted) throw error;
           // ADR-025 §1 + B-003-11: somente falha/timeout de provider (GEN-PROVIDER)
-          // ou contrato malformado (GEN-SCHEMA) isola o lote — os itens permanecem
-          // não-PASS e não publicam (ADR-021), sem repetir o job. Erro fatal ou
-          // desconhecido repropaga: fail-closed, sem parcial indevido.
+          // ou contrato malformado (GEN-SCHEMA) isola o lote — os itens mantêm a
+          // parte original (fallback do engine) e seguem para a validação objetiva
+          // final, sem repetir o job e sem virar faltante por causa semântica.
+          // Erro fatal ou desconhecido repropaga: fail-closed, sem parcial indevido.
           if (!isIsolatableBatchError(error)) throw error;
           continue;
         }
@@ -1979,7 +1979,7 @@ export async function runFirstGeneration(
           const index = chunk.find((item) => hard[item.index].brief.contentId === contentId)!.index;
           const candidate = hard[index];
           // ADR-025 §1: validação individual da parte retornada — falha isola o
-          // item (a parte permanece não-PASS), nunca os irmãos do lote.
+          // item (a parte original é preservada), nunca os irmãos do lote.
           let replacement: unknown;
           try {
             replacement = part === "scenes"
@@ -2014,30 +2014,22 @@ export async function runFirstGeneration(
         }
       }
     };
-    // ADR-025 §2: o judge roda UMA vez para os itens hard-valid e volta a rodar
-    // apenas para os itens modificados do round concluído.
+    // ADR-025 §2 simplificado: o judge roda UMA vez para os itens hard-valid; a
+    // curadoria é consultiva — passada ÚNICA de repair seletivo sobre as partes
+    // REVIEW do audit inicial, sem re-Judge. Itens sem audit (lote isolado) ou
+    // com REVIEW/reparo em fallback seguem para a validação objetiva final,
+    // única autoridade de bloqueio pós-repair; semântica nunca cria faltante.
     await judgeBatch(hard.map((_, index) => index), 0);
-    let qualityRepairRounds = 0;
-    const hasPendingRepairs = () =>
-      currentQualityAudits.some((audit, index) =>
-        audit && !judgeBatchFailed.has(index) && qualityPartsToRepair(audit).length);
-    for (let round = 1; round <= 2 && hasPendingRepairs(); round++) {
-      qualityRepairRounds = round;
-      const modified = new Set<number>();
-      for (const part of QUALITY_PARTS) {
-        const pending = currentQualityAudits.flatMap((audit, index) =>
-          audit && !judgeBatchFailed.has(index)
-            ? qualityPartsToRepair(audit)
-              .filter((judgment) => judgment.part === part)
-              .map((judgment) => ({ index, judgment }))
-            : []);
-        if (pending.length) await repairPartBatch(pending, part, round, modified);
-      }
-      if (modified.size) await judgeBatch([...modified], round);
+    const modified = new Set<number>();
+    for (const part of QUALITY_PARTS) {
+      const pending = currentQualityAudits.flatMap((audit, index) =>
+        audit && !judgeBatchFailed.has(index)
+          ? qualityPartsToRepair(audit)
+            .filter((judgment) => judgment.part === part)
+            .map((judgment) => ({ index, judgment }))
+          : []);
+      if (pending.length) await repairPartBatch(pending, part, 0, modified);
     }
-    for (const [index, audit] of currentQualityAudits.entries())
-      if (!audit || audit.parts.some(({ status }) => status !== "PASS")) judgeFailIdx.add(index);
-    lastQualityAudits = currentQualityAudits.filter((audit): audit is QualityAudit => Boolean(audit));
   }
   sceneSets.forEach((set, index) => {
     if (set.status !== "AVAILABLE" || set.scenes.length < 2) {
@@ -2099,25 +2091,20 @@ export async function runFirstGeneration(
   if (delivered.length === 0 || failedCount > PARTIAL_FAILURE_CAP)
     throw new GenerationError(
       "GEN-REPAIR-EXHAUSTED",
-      delivered.length === 0 && judgeFailIdx.size > 0
-        ? "Judge semântico rejeitou parte ou a curadoria esgotou os dois rounds"
-        : "Briefing inválido após curadoria semântica",
+      "Validação objetiva não aprovou itens suficientes",
       true,
       {
         task: "CONTENT_QUALITY_JUDGE",
         expected: count,
         received: delivered.length,
-        rejected:
-          compositionDiagnostics.length === 0 && sceneDiagnostics.length === 0
-            ? // Falha dirigida pelo judge: assinatura de curadoria da última rodada.
-              projectQualityFailures(lastQualityAudits.length ? lastQualityAudits : qualityAudits)
-            : // Falha dirigida por hard gate/composição/cena: reports do gate.
-              [
-                ...candidateReports.filter((_, i) => hardFailIdx.includes(i)),
-                ...deliveredReports.filter((report) => report.decision !== "PASS"),
-                ...compositionDiagnostics,
-                ...sceneDiagnostics,
-              ],
+        // A curadoria semântica é consultiva e nunca derruba item: toda falha
+        // terminal é objetiva (hard gate, composição, cena ou variedade).
+        rejected: [
+          ...candidateReports.filter((_, i) => hardFailIdx.includes(i)),
+          ...deliveredReports.filter((report) => report.decision !== "PASS"),
+          ...compositionDiagnostics,
+          ...sceneDiagnostics,
+        ],
       },
     );
   // Assinatura residual por item (ADR-021 decisão 5): checkCodes da cascata +

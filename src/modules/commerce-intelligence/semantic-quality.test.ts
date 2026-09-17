@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runFirstGeneration } from "./engine";
+import { GenerationError } from "./errors";
 import { parseQualityAuditBatch, parseQualityRepairBatch, applyQualityRepair, qualityPartsToRepair, projectQualityFailures, QUALITY_PARTS, type QualityAudit, type QualityPart } from "./semantic-quality";
 import { internalFailureMetadata } from "./worker";
 
@@ -136,63 +137,64 @@ test("qualityPartsToRepair e projectQualityFailures consideram somente REVIEW", 
   assert.deepEqual(projectQualityFailures([]), []);
 });
 
-test("generation audits all five parts and repairs only the rejected part", async () => {
+test("one initial Judge: REVIEW repairs once, PASS parts stay untouched, no re-Judge", async () => {
   const seen: string[][] = [];
   const repairedParts: string[] = [];
   const mock = routerFor({
     judge: (context, call) => {
       seen.push((((context.items as Array<{ parts: Array<{ part: string }> }>)[0]).parts).map(({ part }) => part));
-      if (call === 1) return { parts: parts.map((item) => item.part === "hook" ? { ...item, status: "REPAIR", reason: "unclear" } : item) };
+      if (call === 1) return { parts: parts.map((item) => item.part === "hook" ? { ...item, status: "REVIEW", reason: "unclear" } : item) };
       return judgePass();
     },
     repair: (part) => { repairedParts.push(part); return { content: part === "hook" ? "Veja o tecido respiravel" : "UNEXPECTED" }; },
   });
   const result = await run(mock.router);
-  assert.deepEqual(repairedParts, ["hook"]);
-  assert.ok(seen.length >= 2 && seen.every((evaluated) => assert.deepEqual(evaluated, [...QUALITY_PARTS]) === undefined));
+  assert.deepEqual(repairedParts, ["hook"], "só a parte marcada é reparada");
+  assert.equal(seen.length, 1, "exatamente uma passada de Judge");
+  assert.deepEqual(seen[0], [...QUALITY_PARTS]);
   assert.equal(result.briefs[0].hook, "Veja o tecido respiravel");
-  assert.equal(result.briefs[0].script, "Demonstre o tecido respiravel no produto");
+  assert.equal(result.briefs[0].script, "Demonstre o tecido respiravel no produto", "parte PASS permanece intacta");
   assert.equal(result.qualityRepairs.length, 1);
   assert.equal(result.qualityRepairs[0].part, "hook");
+  assert.equal(result.partial, null, "REVIEW nunca cria faltante");
 });
 
-test("semantic repair stops after two global rounds", async () => {
+test("REVIEW persistente recebe uma única tentativa de repair e entrega sem re-Judge nem faltante", async () => {
   const mock = routerFor({
-    judge: () => ({ parts: parts.map((item) => item.part === "hook" ? { ...item, status: "REPAIR", reason: "unclear" } : item) }),
+    judge: () => ({ parts: parts.map((item) => item.part === "hook" ? { ...item, status: "REVIEW", reason: "unclear" } : item) }),
     repair: (_part, call) => ({ content: `Veja o tecido respiravel ${call}` }),
   });
-  await assert.rejects(() => run(mock.router), (error: unknown) => {
-    const failure = error as { code?: string; detail?: Record<string, unknown> };
-    assert.equal(failure.code, "GEN-REPAIR-EXHAUSTED");
-    assert.deepEqual(failure.detail?.rejected, [{ contentId: "quality-content-1", part: "hook", round: 2, status: "REPAIR", criterion: "hook_clarity", reason: "unclear" }]);
-    assert.deepEqual(Object.keys((failure.detail?.rejected as Array<Record<string, unknown>>)[0]).sort(), ["contentId", "criterion", "part", "reason", "round", "status"]);
-    return true;
-  });
-  assert.equal(mock.counts().repairs, 2);
+  const result = await run(mock.router);
+  assert.deepEqual(mock.counts(), { judges: 1, repairs: 1 }, "sem segunda rodada global nem re-Judge");
+  assert.equal(result.briefs.length, 1);
+  assert.equal(result.briefs[0].hook, "Veja o tecido respiravel 1");
+  assert.equal(result.partial, null);
 });
 
-test("REJECT is terminal, does not call part repair, and preserves its diagnostic", async () => {
-  const mock = routerFor({
-    judge: () => ({ parts: parts.map((item) => item.part === "script"
-      ? { ...item, status: "REJECT", criterion: "script_shop_compliance", reason: "unsupported_persuasion" }
-      : item) }),
+test("repair que falha (provider ou schema) preserva a parte original e mantém a entrega", async () => {
+  const judgeReview = () => ({ parts: parts.map((item) => item.part === "hook" ? { ...item, status: "REVIEW", reason: "unclear" } : item) });
+  const providerFail = routerFor({
+    judge: judgeReview,
+    repair: () => { throw new GenerationError("GEN-PROVIDER", "Provider indisponível", true, { task: "CONTENT_PART_REPAIR" }); },
   });
-  await assert.rejects(() => run(mock.router), (error: unknown) => {
-    const failure = error as { code?: string; detail?: Record<string, unknown> };
-    assert.equal(failure.code, "GEN-REPAIR-EXHAUSTED");
-    assert.deepEqual(failure.detail?.rejected, [{
-      contentId: "quality-content-1", part: "script", round: 0, status: "REJECT",
-      criterion: "script_shop_compliance", reason: "unsupported_persuasion",
-    }]);
-    return true;
+  const failed = await run(providerFail.router);
+  assert.deepEqual(providerFail.counts(), { judges: 1, repairs: 1 });
+  assert.equal(failed.briefs[0].hook, "Hook original", "fallback preserva o original");
+  assert.equal(failed.partial, null);
+  const invalidShape = routerFor({
+    judge: judgeReview,
+    repair: () => ({ content: 42 }),
   });
-  assert.deepEqual(mock.counts(), { judges: 1, repairs: 0 });
+  const invalid = await run(invalidShape.router);
+  assert.deepEqual(invalidShape.counts(), { judges: 1, repairs: 1 });
+  assert.equal(invalid.briefs[0].hook, "Hook original", "shape inválido isola o item com o original");
+  assert.equal(invalid.partial, null);
 });
 
 test("composition violating the deterministic factual gate cannot succeed", async () => {
   const mock = routerFor({
     judge: (context, call) => call === 1
-      ? { parts: parts.map((item) => item.part === "script" ? { ...item, status: "REPAIR", reason: "weak_commercial_value" } : item) }
+      ? { parts: parts.map((item) => item.part === "script" ? { ...item, status: "REVIEW", reason: "weak_commercial_value" } : item) }
       : judgePass(),
     repair: () => ({ content: "Garantia de 999 kg de resistencia" }),
   });
@@ -211,7 +213,7 @@ test("composition violating the deterministic factual gate cannot succeed", asyn
 test("scene failure without a gate report keeps a safe terminal cause in internal error metadata", async () => {
   const mock = routerFor({
     judge: (context, call) => call === 1
-      ? { parts: parts.map((item) => item.part === "script" ? { ...item, status: "REPAIR", reason: "weak_commercial_value" } : item) }
+      ? { parts: parts.map((item) => item.part === "script" ? { ...item, status: "REVIEW", reason: "weak_commercial_value" } : item) }
       : judgePass(),
     repair: () => ({ content: "Demonstre o tecido respiravel no produto" }),
     scenes: () => ({ scenes: [{ description: "Cena sem verbo compatível com a ação" }, { description: "Texto visual sem ação ou conexão com o produto" }] }),
