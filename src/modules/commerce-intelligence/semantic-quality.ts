@@ -2,7 +2,7 @@ import { GenerationError } from "./errors";
 
 export const QUALITY_PARTS = ["hook", "development", "script", "cta", "scenes"] as const;
 export type QualityPart = (typeof QUALITY_PARTS)[number];
-export type QualityStatus = "PASS" | "REPAIR" | "REJECT";
+export type QualityStatus = "PASS" | "REVIEW";
 export const QUALITY_CRITERIA = [
   "hook_clarity", "hook_style_fit", "hook_tiktok_native", "hook_product_relevance",
   "development_coherence", "development_style_fit", "development_commerce_value",
@@ -12,14 +12,14 @@ export const QUALITY_CRITERIA = [
 ] as const;
 export const QUALITY_REASONS = [
   "meets_criteria", "unclear", "style_mismatch", "not_tiktok_native",
-  "weak_product_link", "incoherent", "weak_commercial_value", "unsupported_persuasion",
+  "weak_product_link", "incoherent", "weak_commercial_value",
   "not_actionable", "misaligned_scenes",
 ] as const;
 export type QualityCriterion = (typeof QUALITY_CRITERIA)[number];
 export type QualityReason = (typeof QUALITY_REASONS)[number];
 export type QualityJudgment = { part: QualityPart; status: QualityStatus; criterion: QualityCriterion; reason: QualityReason };
 export type QualityAudit = { contentId: string; round: number; parts: QualityJudgment[] };
-export type QualityFailure = { contentId: string; part: QualityPart; round: number; status: Exclude<QualityStatus, "PASS">; criterion: QualityCriterion; reason: Exclude<QualityReason, "meets_criteria"> };
+export type QualityFailure = { contentId: string; part: QualityPart; round: number; status: "REVIEW"; criterion: QualityCriterion; reason: Exclude<QualityReason, "meets_criteria"> };
 
 const REASON_TEXT: Record<QualityReason, string> = {
   meets_criteria: "Atende aos critérios internos de qualidade.",
@@ -29,7 +29,6 @@ const REASON_TEXT: Record<QualityReason, string> = {
   weak_product_link: "Precisa se conectar melhor ao produto e à oportunidade.",
   incoherent: "Precisa manter coerência entre as partes do conteúdo.",
   weak_commercial_value: "Precisa comunicar melhor o valor comercial sem claims novos.",
-  unsupported_persuasion: "A persuasão precisa respeitar as evidências e políticas comerciais.",
   not_actionable: "As cenas precisam ser mais claras e graváveis pelo creator.",
   misaligned_scenes: "As cenas precisam se alinhar ao conteúdo.",
 };
@@ -51,7 +50,7 @@ function parseAuditParts(root: Record<string, unknown>, invalid: () => Error): Q
     const item = raw as Record<string, unknown>;
     if (Object.keys(item).length !== 4 || Object.keys(item).some((key) => !["part", "status", "criterion", "reason"].includes(key))) throw invalid();
     if (!QUALITY_PARTS.includes(item.part as QualityPart) || seen.has(String(item.part)) ||
-      !["PASS", "REPAIR", "REJECT"].includes(String(item.status)) ||
+      !["PASS", "REVIEW"].includes(String(item.status)) ||
       !QUALITY_CRITERIA.includes(item.criterion as QualityCriterion) ||
       !CRITERIA_BY_PART[item.part as QualityPart].includes(item.criterion as QualityCriterion) ||
       !QUALITY_REASONS.includes(item.reason as QualityReason)) throw invalid();
@@ -109,12 +108,12 @@ export const JUDGE_BATCH_MAX = 3;
 export const REPAIR_BATCH_MAX: Record<QualityPart, number> = { hook: 3, development: 2, script: 3, cta: 3, scenes: 1 };
 
 export function qualityPartsToRepair(audit: QualityAudit): QualityJudgment[] {
-  return audit.parts.filter(({ status }) => status === "REPAIR");
+  return audit.parts.filter(({ status }) => status === "REVIEW");
 }
 
 export function projectQualityFailures(audits: QualityAudit[]): QualityFailure[] {
   return audits.flatMap(({ contentId, round, parts }) => parts
-    .filter((judgment): judgment is QualityJudgment & { status: Exclude<QualityStatus, "PASS">; reason: Exclude<QualityReason, "meets_criteria"> } => judgment.status !== "PASS" && judgment.reason !== "meets_criteria")
+    .filter((judgment): judgment is QualityJudgment & { status: "REVIEW"; reason: Exclude<QualityReason, "meets_criteria"> } => judgment.status === "REVIEW" && judgment.reason !== "meets_criteria")
     .map(({ part, status, criterion, reason }) => ({ contentId, part, round, status, criterion, reason })));
 }
 

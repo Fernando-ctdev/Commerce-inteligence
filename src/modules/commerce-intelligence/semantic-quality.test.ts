@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runFirstGeneration } from "./engine";
-import { parseQualityAuditBatch, parseQualityRepairBatch, QUALITY_PARTS, type QualityPart } from "./semantic-quality";
+import { parseQualityAuditBatch, parseQualityRepairBatch, applyQualityRepair, QUALITY_PARTS, type QualityPart } from "./semantic-quality";
 import { internalFailureMetadata } from "./worker";
 
 const parts = QUALITY_PARTS.map((part) => ({
@@ -49,11 +49,32 @@ function run(router: ReturnType<typeof routerFor>["router"]) {
   return runFirstGeneration({ productId: "p", jobId: "quality", name: "Produto", description: "tecido respiravel", facts: { features: ["tecido respiravel"] }, targetContentCount: 1, router });
 }
 
-test("judge exige exatamente as cinco partes, uma vez cada, com critério e motivo allowlisted", () => {
+test("judge exige exatamente as cinco partes, uma vez cada, com status PASS|REVIEW e motivo allowlisted", () => {
   const [audit] = parseQualityAuditBatch({ audits: [{ contentId: "content-1", parts }] }, ["content-1"], 0);
   assert.deepEqual(audit.parts.map(({ part }) => part), [...QUALITY_PARTS]);
+  const [reviewAudit] = parseQualityAuditBatch(
+    { audits: [{ contentId: "content-1", parts: parts.map((item) => item.part === "hook" ? { ...item, status: "REVIEW", reason: "unclear" } : item) }] },
+    ["content-1"],
+    0,
+  );
+  assert.equal(reviewAudit.parts[0].status, "REVIEW");
   assert.throws(() => parseQualityAuditBatch({ audits: [{ contentId: "content-1", parts: parts.slice(1) }] }, ["content-1"], 0), /contrato inválido/);
   assert.throws(() => parseQualityAuditBatch({ audits: [{ contentId: "content-1", parts: [...parts, parts[0]] }] }, ["content-1"], 0), /contrato inválido/);
+  assert.throws(
+    () => parseQualityAuditBatch({ audits: [{ contentId: "content-1", parts: parts.map((item) => item.part === "hook" ? { ...item, status: "REJECT", reason: "unclear" } : item) }] }, ["content-1"], 0),
+    /contrato inválido/,
+    "REJECT não é mais um status válido",
+  );
+  assert.throws(
+    () => parseQualityAuditBatch({ audits: [{ contentId: "content-1", parts: parts.map((item) => item.part === "hook" ? { ...item, status: "REVIEW", reason: "unsupported_persuasion" } : item) }] }, ["content-1"], 0),
+    /contrato inválido/,
+    "unsupported_persuasion não é mais um motivo válido",
+  );
+  assert.throws(
+    () => parseQualityAuditBatch({ audits: [{ contentId: "content-1", parts: parts.map((item) => item.part === "hook" ? { ...item, status: "REVIEW", reason: "meets_criteria" } : item) }] }, ["content-1"], 0),
+    /contrato inválido/,
+    "meets_criteria só vale para PASS",
+  );
 });
 
 test("ADR-025: parseQualityAuditBatch exige conjunto exato de contentIds e normaliza a ordem", () => {
@@ -77,6 +98,19 @@ test("ADR-025: parseQualityRepairBatch valida o envelope de IDs, não o conteúd
   assert.throws(() => parseQualityRepairBatch({ items: [{ contentId: "content-1", content: "x" }] }, expected, "hook"), /contrato inválido/, "faltante");
   assert.throws(() => parseQualityRepairBatch({ items: [{ contentId: "content-1", content: "x" }, { contentId: "content-1", content: "y" }] }, expected, "hook"), /contrato inválido/, "duplicado");
   assert.throws(() => parseQualityRepairBatch({ items: [{ contentId: "content-9", content: "x" }, { contentId: "content-1", content: "y" }] }, expected, "hook"), /contrato inválido/, "id fora do conjunto");
+});
+
+test("applyQualityRepair valida o formato da parte substituída e preserva as demais", () => {
+  const brief = { hook: "Hook original", development: ["d1"], script: "Script original", cta: "CTA original" };
+  const scenes = [{ description: "cena" }];
+  assert.deepEqual(applyQualityRepair(brief, scenes, "hook", "Novo hook").brief, { ...brief, hook: "Novo hook" });
+  assert.deepEqual(applyQualityRepair(brief, scenes, "development", ["novo"]).brief.development, ["novo"]);
+  assert.deepEqual(applyQualityRepair(brief, scenes, "scenes", [{ description: "nova" }]).scenes, [{ description: "nova" }]);
+  assert.throws(() => applyQualityRepair(brief, scenes, "hook", 42), /conteúdo inválido/);
+  assert.throws(() => applyQualityRepair(brief, scenes, "development", "não é lista"), /conteúdo inválido/);
+  assert.throws(() => applyQualityRepair(brief, scenes, "development", [42]), /conteúdo inválido/);
+  const repaired = applyQualityRepair(brief, scenes, "hook", "Novo hook");
+  assert.equal(repaired.scenes, scenes);
 });
 
 test("generation audits all five parts and repairs only the rejected part", async () => {
