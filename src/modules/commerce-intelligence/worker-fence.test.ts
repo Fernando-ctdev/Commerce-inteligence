@@ -33,9 +33,12 @@ test("setup: banco acessível (skip dos testes de integração caso contrário)"
 });
 
 // Output de engine mínimo (sem briefs/cenas): suficiente para exercitar a
-// transação de finalização ponta a ponta.
-function syntheticOutput(strategyId = `strat-${randomUUID()}`): EngineResult {
-  return {
+// transação de finalização ponta a ponta. includeBrief acrescenta um Content
+// objetivo-válido (brief + report objetivo PASS) com IDs derivados do strategyId.
+function syntheticOutput(strategyId = `strat-${randomUUID()}`, opts: { includeBrief?: boolean } = {}): EngineResult {
+  const contentId = `${strategyId}-content-1`;
+  const briefVersionId = `${strategyId}-brief-v1`;
+  const output: EngineResult = {
     productUnderstanding: { fonte: "teste-fence" },
     strategy: { id: strategyId, platformId: "tiktok", platformSkillVersion: "test" },
     plan: { id: `plan-${randomUUID()}`, platformId: "tiktok", platformSkillVersion: "test" },
@@ -56,6 +59,11 @@ function syntheticOutput(strategyId = `strat-${randomUUID()}`): EngineResult {
     briefOpportunityPositions: [],
     partial: null,
   };
+  if (opts.includeBrief) {
+    output.briefs = [{ contentId, briefVersionId, version: 1, angle: "demonstração", hook: "Gancho do teste de fence", development: ["Destaque o uso do produto para orientar a conversa sobre o uso"], script: "Fale sobre o uso do produto", cta: "cta do teste" }];
+    output.reports = [{ briefId: `${contentId}:${briefVersionId}`, gateVersion: 1, factualStatus: "SUPPORTED", claimType: "objetivo", evidenceRefs: [], structuralStatus: "PASS", platformStatus: "PASS", varietyStatus: "PASS", issues: [], decision: "PASS" }];
+  }
+  return output;
 }
 
 // Fixtures: user/tenant/product + job QUEUED (attempt 0 = nenhuma tentativa
@@ -87,6 +95,9 @@ async function criarJobQueued() {
   const limpar = async () => {
     await prisma.generationUsageReservation.deleteMany({ where: { jobId: job.id } });
     await prisma.briefValidationReport.deleteMany({ where: { jobId: job.id } });
+    // B-003-14: a relação circular Content ↔ ContentBriefVersion exige nulificar
+    // currentBriefVersionId/approvedBriefVersionId antes de apagar as versões.
+    await prisma.content.updateMany({ where: { jobId: job.id }, data: { currentBriefVersionId: null, approvedBriefVersionId: null } });
     await prisma.contentBriefVersion.deleteMany({ where: { jobId: job.id } });
     await prisma.contentSceneSet.deleteMany({ where: { jobId: job.id } });
     await prisma.content.deleteMany({ where: { jobId: job.id } });
@@ -175,6 +186,43 @@ test("fence válido publica tudo na mesma transação: terminal, reserva CONFIRM
     assert.ok(atual.finishedAt);
     assert.equal(reservation.status, "CONFIRMED");
     assert.deepEqual(publicados, { strategies: 1, plans: 1, understandings: 1, runs: 1, snapshots: 1, contents: 0 });
+  } finally {
+    await limpar();
+  }
+});
+
+// Fix round Task 4 (revisão Lens): prova observável de persistência do contrato
+// de entrega — Content objetivo-válido nasce com status DRAFT (default do
+// schema, nunca um status semântico), o payload persistido é exatamente o
+// brief canônico (sem chave de status/aviso semântico) e partial null não vira
+// metadado do run. Complementa os testes de engine (partial null) com persistência real.
+test("finalizeGeneration persiste Content objetivo-válido como DRAFT, sem status/aviso semântico", async (t) => {
+  if (!dbUp) return t.skip();
+  const { job, limpar } = await criarJobQueued();
+  try {
+    const strategyId = `strat-${randomUUID()}`;
+    const output = syntheticOutput(strategyId, { includeBrief: true });
+    const contentId = `${strategyId}-content-1`;
+    const briefVersionId = `${strategyId}-brief-v1`;
+    const claimed = await claimGeneration(new Date(), "fence-owner-a", job.id);
+    assert.ok(claimed);
+
+    await finalizeGeneration(job, "fence-owner-a", claimed.attempt, output, [], {});
+
+    const content = await prisma.content.findUniqueOrThrow({ where: { id: contentId } });
+    assert.equal(content.status, "DRAFT", "gates objetivos passando → persistido como DRAFT");
+    assert.equal(content.currentBriefVersionId, briefVersionId);
+    assert.equal(content.approvedBriefVersionId, null, "aprovação pertence a slice posterior");
+    // O payload persistido é o brief canônico — nenhuma chave de status/aviso
+    // semântico atravessa para a persistência.
+    assert.deepEqual(Object.keys(content.payload as Record<string, unknown>).sort(), ["angle", "briefVersionId", "contentId", "cta", "development", "hook", "script", "version"]);
+    const report = await prisma.briefValidationReport.findUniqueOrThrow({ where: { id: `${contentId}:${briefVersionId}` } });
+    assert.equal(report.decision, "PASS", "report objetivo registrado separado do judge semântico");
+    const run = await prisma.intelligenceRun.findUniqueOrThrow({ where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } } });
+    assert.equal("partial" in (run.metadata as Record<string, unknown>), false, "partial null não vira metadado do run");
+    const { job: atual, publicados } = await estadoPublicacao(job.id, job.tenantId);
+    assert.equal(atual.status, "SUCCEEDED");
+    assert.deepEqual(publicados, { strategies: 1, plans: 1, understandings: 1, runs: 1, snapshots: 1, contents: 1 });
   } finally {
     await limpar();
   }
