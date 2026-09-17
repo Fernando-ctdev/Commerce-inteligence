@@ -96,10 +96,11 @@ async function criarJobQueued() {
     await prisma.generationUsageReservation.deleteMany({ where: { jobId: job.id } });
     await prisma.briefValidationReport.deleteMany({ where: { jobId: job.id } });
     // B-003-14: a relação circular Content ↔ ContentBriefVersion exige nulificar
-    // currentBriefVersionId/approvedBriefVersionId antes de apagar as versões.
+    // currentBriefVersionId/approvedBriefVersionId antes de apagar as versões;
+    // ContentSceneSet referencia a versão (briefVersionId) e sai antes dela.
     await prisma.content.updateMany({ where: { jobId: job.id }, data: { currentBriefVersionId: null, approvedBriefVersionId: null } });
-    await prisma.contentBriefVersion.deleteMany({ where: { jobId: job.id } });
     await prisma.contentSceneSet.deleteMany({ where: { jobId: job.id } });
+    await prisma.contentBriefVersion.deleteMany({ where: { jobId: job.id } });
     await prisma.content.deleteMany({ where: { jobId: job.id } });
     await prisma.contentOpportunity.deleteMany({ where: { jobId: job.id } });
     await prisma.contentPlan.deleteMany({ where: { jobId: job.id } });
@@ -220,6 +221,14 @@ test("finalizeGeneration persiste Content objetivo-válido como DRAFT, sem statu
     assert.equal(report.decision, "PASS", "report objetivo registrado separado do judge semântico");
     const run = await prisma.intelligenceRun.findUniqueOrThrow({ where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } } });
     assert.equal("partial" in (run.metadata as Record<string, unknown>), false, "partial null não vira metadado do run");
+    // Rodada 2 (revisão Lens): prova negativa explícita — nenhum status/aviso
+    // semântico sobrevive no payload do Content nem no metadata do run.
+    const payloadText = JSON.stringify(content.payload).toUpperCase();
+    const metadataText = JSON.stringify(run.metadata).toUpperCase();
+    for (const proibido of ["QUALITY_PENDING", "REJECT", "WARNING", "QUALITYSTATUS", "SEMANTICSTATUS"]) {
+      assert.ok(!payloadText.includes(proibido), `payload persistido não contém ${proibido}`);
+      assert.ok(!metadataText.includes(proibido), `metadata do run não contém ${proibido}`);
+    }
     const { job: atual, publicados } = await estadoPublicacao(job.id, job.tenantId);
     assert.equal(atual.status, "SUCCEEDED");
     assert.deepEqual(publicados, { strategies: 1, plans: 1, understandings: 1, runs: 1, snapshots: 1, contents: 1 });
