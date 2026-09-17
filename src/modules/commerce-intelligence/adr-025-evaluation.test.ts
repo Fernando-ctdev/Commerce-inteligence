@@ -6,12 +6,12 @@
 // Contexto autorizado MINIMIZADO: produto genérico de tecido (mesma família
 // factual já usada na suíte), sem dados reais do usuário. Configuração: Judge e
 // repair HIGH, reasoning low (padrão B-003-05), skill tiktok-commerce@1.2.
-// Expectativas observáveis registradas no ADR e assertadas abaixo:
+// Expectativas sob o contrato vigente (judge único PASS|REVIEW, no máximo um
+// repair por parte marcada, sem re-Judge — judge-semantico-contrato-a):
 //   - nenhum metacomentário/instrução de cena no script entregue (e o vazamento
-//     do Content 02 vira REPAIR via detector determinístico, nunca REJECT);
-//   - hard gate, Judge, exact-N/parcial declarado e cenas preservados;
-//   - chamadas de Judge/repair EM LOTE menores que a rodada individual (13/10);
-//   - zero REJECT; no máximo 2 rounds globais.
+//     do Content 02 vira repair objetivo via detector determinístico);
+//   - hard gate, Judge único em lote, exact-N/parcial declarado e cenas preservados;
+//   - chamadas de Judge/repair EM LOTE menores que a rodada individual (13/10).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runFirstGeneration } from "./engine";
@@ -34,7 +34,7 @@ const qualityPass = { parts: [
 ] };
 const developmentOk = ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"];
 
-test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, preserva parcial 3/5 sem REJECT e entrega script sem metainstrução de cena", async () => {
+test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, parcial 3/5 só por falha objetiva e script sem metainstrução de cena", async () => {
   const judgeCallSizes: number[] = [];
   const repairCallSizes: number[] = [];
   const briefRepairContexts: Array<Record<string, unknown>> = [];
@@ -69,12 +69,12 @@ test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, preserva p
     if (task === "CONTENT_QUALITY_JUDGE") {
       const items = judgeItems(input);
       judgeCallSizes.push(items.length);
-      // Contents 4-5: REPAIR sem convergência nos 2 rounds (zero REJECT, como na
-      // rodada real); 1-3: PASS.
+      // Contents 4-5: hook REVIEW com repair que falha no gate objetivo
+      // (parcial nasce de falha objetiva, nunca semântica); 1-3: PASS.
       return { audits: items.map(({ contentId }) => ({
         contentId,
         parts: Number(String(contentId).slice(-1)) >= 4
-          ? qualityPass.parts.map((part) => part.part === "hook" ? { ...part, status: "REPAIR", reason: "unclear" } : part)
+          ? qualityPass.parts.map((part) => part.part === "hook" ? { ...part, status: "REVIEW", reason: "unclear" } : part)
           : qualityPass.parts,
       })) };
     }
@@ -83,31 +83,34 @@ test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, preserva p
       const items = Array.isArray(context?.items) ? context.items as Array<Record<string, unknown>> : [];
       repairCallSizes.push(items.length);
       assert.equal(String(context?.part), "hook", "repair agrupa somente a mesma parte");
-      return { items: items.map(({ contentId }) => ({ contentId, content: `Gancho reparado do ${contentId}` })) };
+      // Repair devolve hook com claim objetivo sem evidência: a composição do
+      // hard gate rejeita (composition_rejected) — fallback não autoriza claim.
+      return { items: items.map(({ contentId }) => ({ contentId, content: "Suporta 999 kg" })) };
     }
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 5, router });
-  // Chamadas de judge em lote: round 0 em chunks 3+2, re-judge dos modificados
-  // (2 itens) em cada um dos 2 rounds — 4 chamadas < 13 da rodada individual.
-  assert.deepEqual(judgeCallSizes, [3, 2, 2, 2]);
+  // Judge em passada única: chunks 3+2 — 2 chamadas < 13 da rodada individual;
+  // o deepEqual prova que não existe re-Judge.
+  assert.deepEqual(judgeCallSizes, [3, 2]);
   assert.ok(judgeCallSizes.length < 13, "redução de chamadas de judge vs. rodada individual");
-  // Repair em lote da mesma parte/round: 2 chamadas (rounds 1 e 2, hook 3+2
-  // máx.→ 2 itens) < 10 da rodada individual.
-  assert.deepEqual(repairCallSizes, [2, 2]);
+  // Repair em lote da mesma parte: uma única tentativa (hook 4+5 em 1 chamada)
+  // < 10 da rodada individual.
+  assert.deepEqual(repairCallSizes, [2]);
   assert.ok(repairCallSizes.length < 10, "redução de chamadas de repair vs. rodada individual");
   // Fronteira script×cenas (§5): o vazamento vira causa de repair e nenhum
   // script entregue contém metainstrução de cena.
   assert.ok(briefRepairContexts.length === 1, "apenas o Content 02 vai a repair de briefing");
   assert.ok(JSON.stringify(briefRepairContexts[0]).includes("script contém metainstrução de cena"));
   for (const brief of result.briefs) assert.equal(scriptSceneMetacomment(String(brief.script)), null, "script entregue sem metainstrução de cena");
-  // Parcial declarado 3/5 com faltantes explícitos (ADR-021/025).
+  // Parcial declarado 3/5 (ADR-021/025) — somente por falha objetiva: os hooks
+  // reparados caem na composição do hard gate (nunca por REVIEW semântico).
   assert.equal(result.partial?.expectedCount, 5);
   assert.equal(result.partial?.deliveredCount, 3);
   assert.deepEqual(result.partial?.failedItems.map(({ contentId }) => contentId), ["j-content-4", "j-content-5"]);
-  // Zero REJECT em toda auditoria; cenas disponíveis para os entregues.
-  assert.ok(result.qualityAudits.every((audit) => audit.parts.every(({ status }) => status !== "REJECT")));
+  assert.deepEqual(result.partial?.failedItems.map(({ reason }) => reason), ["HARD_GATE", "HARD_GATE"]);
+  assert.deepEqual(result.partial?.failedItems.flatMap(({ issues }) => issues), ["composition_rejected", "composition_rejected"]);
+  // Auditoria semântica só PASS|REVIEW; cenas disponíveis para os entregues.
+  assert.ok(result.qualityAudits.every((audit) => audit.parts.every(({ status }) => status === "PASS" || status === "REVIEW")));
   assert.ok(result.sceneSets.every((set) => set.status === "AVAILABLE" && set.scenes.length >= 2));
-  // No máximo 2 rounds globais: 2 re-judges após o round 0.
-  assert.equal(judgeCallSizes.length - 2, 2);
 });

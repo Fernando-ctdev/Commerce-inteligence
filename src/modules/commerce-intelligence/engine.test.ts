@@ -626,7 +626,7 @@ test("semantic REVIEW sem repair preserva o item e mantém DRAFT completo", asyn
     parts: qualityPass.parts.map((part) => part.part === "script" ? { ...part, status: "REVIEW", reason: "unclear" } : part),
   };
   let briefCalls = 0;
-  const judgedRejects: unknown[] = [];
+  const judgedReview: unknown[] = [];
   const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
     if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 6 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
@@ -648,7 +648,7 @@ test("semantic REVIEW sem repair preserva o item e mantém DRAFT completo", asyn
     if (task === "CONTENT_QUALITY_JUDGE") {
       return {
         audits: judgeItems(input).map(({ contentId }) => {
-          if (contentId === "j-content-6") judgedRejects.push(contentId);
+          if (contentId === "j-content-6") judgedReview.push(contentId);
           return { contentId, parts: contentId === "j-content-6" ? judgeReview.parts : qualityPass.parts };
         }),
       };
@@ -657,7 +657,7 @@ test("semantic REVIEW sem repair preserva o item e mantém DRAFT completo", asyn
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 6, router });
   assert.equal(briefCalls, 2, "batches 4+2");
-  assert.equal(judgedRejects.length, 1, "judge rejeita exatamente o item alvo");
+  assert.equal(judgedReview.length, 1, "judge marca exatamente o item alvo como REVIEW");
   assert.equal(result.briefs.length, 6, "REVIEW sem repair não remove o item");
   assert.equal(result.partial, null, "fallback semântico não cria partial");
   assert.equal(result.qualityAudits.length, 6);
@@ -736,7 +736,7 @@ test("ADR-025: judge em lote (3+2) com identidade por contentId; lote malformado
   assert.equal(result.partial, null, "falha semântica de lote não cria partial");
 });
 
-// ADR-025 §3: repair em lote agrupa SOMENTE a mesma QualityPart+round (hook:
+// ADR-025 §3: repair em lote agrupa SOMENTE a mesma QualityPart (hook:
 // 3+2 por REPAIR_BATCH_MAX), o conjunto exato de contentIds é ecoado, os itens
 // reparados não voltam ao judge e o job fecha SUCCEEDED.
 test("ADR-025: repair em lote da mesma parte (hook 3+2), sem re-judge", async () => {
@@ -749,7 +749,6 @@ test("ADR-025: repair em lote da mesma parte (hook 3+2), sem re-judge", async ()
   });
   const judgeCallSizes: number[] = [];
   const repairCallSizes: number[] = [];
-  let judgeCalls = 0;
   let briefCalls = 0;
   const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
     if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
@@ -763,7 +762,6 @@ test("ADR-025: repair em lote da mesma parte (hook 3+2), sem re-judge", async ()
     }
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
     if (task === "CONTENT_QUALITY_JUDGE") {
-      judgeCalls += 1;
       const items = judgeItems(input);
       judgeCallSizes.push(items.length);
       const parts = qualityPass.parts.map((part) => part.part === "hook" ? { ...part, status: "REVIEW", reason: "unclear" } : part);
@@ -783,6 +781,11 @@ test("ADR-025: repair em lote da mesma parte (hook 3+2), sem re-judge", async ()
   assert.equal(result.briefs.length, 5, "todos os itens reparados e aprovados");
   assert.ok(!result.partial, "SUCCEEDED completo");
   assert.ok(result.briefs.every(({ hook }) => String(hook).startsWith("Gancho reparado do j-content-")));
+  assert.deepEqual(
+    result.briefs.map(({ development, script, cta }) => ({ development, script, cta })),
+    Array.from({ length: 5 }, (_, i) => ({ development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: `cta ${i + 1}` })),
+    "somente a parte marcada é reparada; partes PASS permanecem intactas",
+  );
   assert.equal(result.qualityRepairs.filter(({ part }) => part === "hook").length, 5);
 });
 
@@ -849,7 +852,6 @@ test("ADR-025: repair de development agrupa 2+1 e scenes é individual", async (
   });
   const judgeCallSizes: number[] = [];
   const repairCallSizes: number[] = [];
-  let judgeCalls = 0;
   const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
     if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 3 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
@@ -858,12 +860,9 @@ test("ADR-025: repair de development agrupa 2+1 e scenes é individual", async (
     if (task === "CONTENT_BRIEF_GENERATION") return { items: Array.from({ length: 3 }, (_, offset) => briefFor(offset + 1)) };
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
     if (task === "CONTENT_QUALITY_JUDGE") {
-      judgeCalls += 1;
       const items = judgeItems(input);
       judgeCallSizes.push(items.length);
-      const parts = judgeCalls === 1
-        ? qualityPass.parts.map((part) => part.part === "development" || part.part === "scenes" ? { ...part, status: "REVIEW", reason: "unclear" } : part)
-        : qualityPass.parts;
+      const parts = qualityPass.parts.map((part) => part.part === "development" || part.part === "scenes" ? { ...part, status: "REVIEW", reason: "unclear" } : part);
       return { audits: items.map(({ contentId }) => ({ contentId, parts })) };
     }
     if (task === "CONTENT_PART_REPAIR") {
