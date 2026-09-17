@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CONTENT_BRIEF_GENERATION_INSTRUCTION, createHttpProvider, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
+import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_PART_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION, createHttpProvider, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
 import { CARDINALITY_POLICY } from "./contract";
 import { GenerationError } from "./errors";
+import { ROUTER_MAP } from "./model-router";
 
 function mockProviderFetch(models: string[]) {
   const originalFetch = globalThis.fetch;
@@ -545,6 +546,60 @@ test("non-PU tasks keep generic json_object response_format", async () => {
     await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} });
   } finally { restore(); }
   assert.deepEqual(bodies[0].response_format, { type: "json_object" });
+});
+
+// Task 2 (simplify-semantic-judge): o Judge semântico emite somente PASS|REVIEW,
+// sem status terminal, sem motivo factual e sem segunda passada de avaliação.
+test("CONTENT_QUALITY_JUDGE instruction contracts PASS|REVIEW only, without REJECT or unsupported_persuasion", () => {
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("status ∈ PASS|REVIEW"));
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("reason ∈ meets_criteria|unclear|style_mismatch|not_tiktok_native|weak_product_link|incoherent|weak_commercial_value|not_actionable|misaligned_scenes"));
+  assert.ok(!CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("REJECT"), "sem opção de saída REJECT");
+  assert.ok(!CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("REPAIR"), "sem opção de saída REPAIR");
+  assert.ok(!CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("unsupported_persuasion"), "motivo factual removido do Judge");
+  // Uma avaliação inicial única e independente por content/parte; nada que implique re-Judge.
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("UMA ÚNICA avaliação inicial"));
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("decisões de um item nunca influenciam os irmãos"));
+  // A autoridade factual permanece no hard gate objetivo; estilo/configuração só quando declarada.
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("autoridade factual é do hard gate objetivo"));
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("nunca autorize, corrija ou reclassifique claims"));
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("estilo/configuração do creator apenas quando declarada"));
+  // Cardinalidade/batch shape preservados (ADR-025).
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("até 3 Contents homogêneos"));
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("EXATAMENTE um audit para cada contentId recebido"));
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("exatamente um item por parte"));
+});
+
+// Task 2: repair é seletivo (somente a parte marcada), tentativa única com fallback
+// no engine, e mantém o envelope de IDs exato e os shapes por parte.
+test("CONTENT_PART_REPAIR instruction stays single-attempt, marked-part-only, with engine-owned fallback", () => {
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("Repare somente a parte indicada"));
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("preservando integralmente as demais partes"));
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("UMA ÚNICA tentativa de reparo"));
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("preservar o original é responsabilidade do engine"));
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("contexto declarado"));
+  assert.ok(!CONTENT_PART_REPAIR_INSTRUCTION.includes("REJECT"));
+  assert.ok(!CONTENT_PART_REPAIR_INSTRUCTION.includes("unsupported_persuasion"));
+  // Exact-ID e batch shape por parte preservados (ADR-025).
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("MESMA parte e do MESMO round"));
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("EXATAMENTE um item para cada contentId recebido"));
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("string para hook/script/cta"));
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("array de 1 a 4 strings para development"));
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("array de 2 a 6 objetos {description} para scenes"));
+});
+
+// Task 2: tasks semânticas permanecem HIGH no ROUTER_MAP e com envelope json_object
+// genérico — nenhuma task lógica nova, nenhum formato estrito adicional.
+test("semantic tasks keep HIGH routing and generic json_object envelope", async () => {
+  assert.equal(ROUTER_MAP.CONTENT_QUALITY_JUDGE, "HIGH");
+  assert.equal(ROUTER_MAP.CONTENT_PART_REPAIR, "HIGH");
+  const bodies: Array<Record<string, unknown>> = [];
+  const restore = captureProviderBodies(bodies);
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { LOW: "fast", MID: "balanced", HIGH: "quality" }, timeoutMs: 5000 });
+  try {
+    await provider.complete("CONTENT_QUALITY_JUDGE", { trustedContext: {} });
+    await provider.complete("CONTENT_PART_REPAIR", { trustedContext: {} });
+  } finally { restore(); }
+  assert.deepEqual(bodies.map((body) => body.response_format), [{ type: "json_object" }, { type: "json_object" }]);
 });
 
 test("provider without schema support (HTTP 400) stays fail-closed: explicit error, no silent downgrade", async () => {
