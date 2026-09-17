@@ -180,6 +180,11 @@
   gap: 8px;
 }
 
+.themeToggle {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
 .main {
   margin: 0 auto;
   max-width: 1440px;

@@ -16,6 +16,7 @@ import {
 
 import { ShellNav, ShellRoot } from "./product-shell-nav";
 import { GenerationToast } from "./generation-toast";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import styles from "./product-shell.module.css";
 
 type ProductShellProps = {
@@ -94,6 +95,9 @@ export function ProductShell({
             {title}
           </h1>
           {action && <div className={styles.toolbarAction}>{action}</div>}
+          <div className={styles.themeToggle}>
+            <ThemeToggle />
+          </div>
         </header>
 
         <header className={styles.mobileHeader}>
@@ -105,6 +109,9 @@ export function ProductShell({
             <PageIcon aria-hidden="true" className={styles.titleIcon} />
             {title}
           </h1>
+          <div className={styles.themeToggle}>
+            <ThemeToggle />
+          </div>
         </header>
         <GenerationToast />
 

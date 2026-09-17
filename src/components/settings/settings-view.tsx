@@ -7,10 +7,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  applyThemePreference,
+  THEME_CHANGE_EVENT,
+} from "@/components/theme/theme-toggle";
 
 import styles from "./settings-view.module.css";
-
-const THEME_STORAGE_KEY = "ci-theme";
 
 type SettingsViewProps = {
   email: string;
@@ -23,22 +25,24 @@ export function SettingsView({ email }: SettingsViewProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
+    const syncTheme = () => {
+      setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light");
+    };
     // O script pré-pintura aplica a classe antes da hidratação; este readback
     // assíncrono alinha o Select após a montagem sem setState síncrono em efeito.
     const frame = window.requestAnimationFrame(() => {
-      setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light");
+      syncTheme();
     });
-    return () => window.cancelAnimationFrame(frame);
+    window.addEventListener(THEME_CHANGE_EVENT, syncTheme);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener(THEME_CHANGE_EVENT, syncTheme);
+    };
   }, []);
 
   function changeTheme(next: "light" | "dark") {
     setTheme(next);
-    document.documentElement.classList.toggle("dark", next === "dark");
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, next);
-    } catch {
-      // Preferência é local ao dispositivo; falha de storage não bloqueia a troca.
-    }
+    applyThemePreference(next);
   }
 
 
