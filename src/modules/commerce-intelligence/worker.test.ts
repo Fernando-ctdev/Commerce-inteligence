@@ -63,7 +63,7 @@ test("brief persistence rejects empty, oversized, or non-string development bull
 test("failure metadata persists internal code, current stage and sanitized causes per brief", () => {
   const metadata = internalFailureMetadata("GEN-REPAIR-EXHAUSTED", "GENERATING_BRIEFS", {
     task: "CONTENT_BRIEF_GENERATION",
-    rejected: [{ briefId: "job-content-2:job-brief-2", factualStatus: "UNSUPPORTED", decision: "REPAIR", issues: ["claim sem suporte", "development invalido"], script: "raw brief must not be persisted" }],
+    rejected: [{ briefId: "job-content-2:job-brief-2", factualStatus: "UNSUPPORTED", claimType: "objetivo", structuralStatus: "FAIL", platformStatus: "PASS", varietyStatus: "PASS", decision: "REPAIR", issues: ["claim sem suporte", "development invalido"], script: "raw brief must not be persisted" }],
   });
   assert.equal(metadata.code, "GEN-REPAIR-EXHAUSTED");
   assert.equal(metadata.stage, "GENERATING_BRIEFS");
@@ -82,7 +82,7 @@ test("failure metadata keeps semantic REVIEW out: no qualityFailures, no gateRep
 test("terminal failure event carries only objective gate reports, never qualityFailures", () => {
   const diagnostics = projectFailureDiagnostics([
     { contentId: "job-content-1", part: "hook", round: 2, status: "REVIEW", criterion: "hook_clarity", reason: "unclear", raw: "drop" },
-    { briefId: "job-content-2:job-brief-2", factualStatus: "UNSUPPORTED", decision: "REPAIR", issues: ["claim sem suporte"] },
+    { briefId: "job-content-2:job-brief-2", factualStatus: "UNSUPPORTED", claimType: "objetivo", structuralStatus: "FAIL", platformStatus: "PASS", varietyStatus: "PASS", decision: "REPAIR", issues: ["claim sem suporte"] },
   ]);
   assert.equal("qualityFailures" in diagnostics, false);
   resetJobEvents();
@@ -93,6 +93,13 @@ test("terminal failure event carries only objective gate reports, never qualityF
   assert.ok(!JSON.stringify(event).includes("raw"));
   assert.ok(!JSON.stringify(event).includes("REVIEW"));
   resetJobEvents();
+});
+test("objective gate guard: semantic-shaped record with briefId and issues is not projected", () => {
+  const diagnostics = projectFailureDiagnostics([
+    { briefId: "job-content-1:job-brief-1", contentId: "job-content-1", part: "hook", round: 2, status: "REVIEW", criterion: "hook_clarity", reason: "unclear", issues: ["style"] },
+  ]);
+  assert.deepEqual(diagnostics.gateReports, []);
+  assert.deepEqual(diagnostics.causes, []);
 });
 test("internal failure metadata retains sanitized ContractError identity and field", () => {
   const metadata = internalFailureMetadata("GEN-SCHEMA", "UNDERSTANDING_PRODUCT", {

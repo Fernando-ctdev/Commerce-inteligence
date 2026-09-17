@@ -77,14 +77,28 @@ function projectRepairCauses(source: Record<string, unknown>, sanitized: string[
   });
 }
 
+// Forma objetiva completa de GateReport (gates.ts): briefId + issues + enums
+// válidos. Registro semântico (contentId/part/round/status) nunca satisfaz —
+// nem mesmo com briefId e issues presentes — e nunca vira diagnóstico objetivo.
+const OBJECTIVE_GATE_ENUMS: Record<string, readonly string[]> = {
+  factualStatus: ["SUPPORTED", "INFERRED_BUT_SAFE", "UNSUPPORTED", "CONTRADICTED"],
+  claimType: ["objetivo", "subjetivo"],
+  structuralStatus: ["PASS", "FAIL"],
+  platformStatus: ["PASS", "FAIL"],
+  varietyStatus: ["PASS", "FAIL"],
+  decision: ["PASS", "REPAIR", "REJECT"],
+};
+function isObjectiveGateRecord(item: Record<string, unknown>): boolean {
+  if (typeof item.briefId !== "string" || !Array.isArray(item.issues)) return false;
+  return Object.entries(OBJECTIVE_GATE_ENUMS).every(([field, allowed]) => allowed.includes(String(item[field])));
+}
 export function projectFailureDiagnostics(value: unknown): { gateReports: SanitizedGateReport[]; causes: Array<{ briefId: string; causes: string[] }> } {
   const records = Array.isArray(value)
     ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
     : [];
-  // GateDecision REPAIR|REJECT é vocabulário objetivo do GateReport e permanece;
-  // registro semântico (contentId/part/round, sem briefId/issues) nunca vira
-  // qualityFailures nem diagnóstico público.
-  const gateSources = records.filter((item) => typeof item.briefId === "string" || Array.isArray(item.issues));
+  // GateDecision REPAIR|REJECT permanece vocabulário objetivo do GateReport;
+  // só registro com a forma objetiva completa entra em gateReports/causes.
+  const gateSources = records.filter(isObjectiveGateRecord);
   const gateReports = sanitizeGateReports(gateSources);
   return {
     gateReports,
