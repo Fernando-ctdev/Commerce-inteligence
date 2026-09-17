@@ -70,25 +70,28 @@ test("failure metadata persists internal code, current stage and sanitized cause
   assert.deepEqual(metadata.causes, [{ briefId: "job-content-2:job-brief-2", causes: ["claim sem suporte", "development invalido"] }]);
   assert.ok(!JSON.stringify(metadata).includes("raw brief"));
 });
-test("failure metadata projects semantic quality failures without the gate sanitizer", () => {
+test("failure metadata keeps semantic REVIEW out: no qualityFailures, no gateReports from semantic shapes", () => {
   const metadata = internalFailureMetadata("GEN-REPAIR-EXHAUSTED", "GENERATING_BRIEFS", {
-    rejected: [{ contentId: "job-content-1", part: "hook", round: 2, status: "REPAIR", criterion: "hook_clarity", reason: "unclear", raw: "do not persist" }],
+    rejected: [{ contentId: "job-content-1", part: "hook", round: 2, status: "REVIEW", criterion: "hook_clarity", reason: "unclear", raw: "do not persist" }],
   });
-  assert.deepEqual(metadata.qualityFailures, [{ contentId: "job-content-1", part: "hook", round: 2, status: "REPAIR", criterion: "hook_clarity", reason: "unclear" }]);
+  assert.equal("qualityFailures" in metadata, false);
   assert.equal("gateReports" in metadata, false);
+  assert.ok(!JSON.stringify(metadata).includes("REVIEW"));
   assert.ok(!JSON.stringify(metadata).includes("do not persist"));
 });
-test("terminal failure event keeps semantic allowlist separate from deterministic gate reports", () => {
+test("terminal failure event carries only objective gate reports, never qualityFailures", () => {
   const diagnostics = projectFailureDiagnostics([
-    { contentId: "job-content-1", part: "hook", round: 2, status: "REPAIR", criterion: "hook_clarity", reason: "unclear", raw: "drop" },
+    { contentId: "job-content-1", part: "hook", round: 2, status: "REVIEW", criterion: "hook_clarity", reason: "unclear", raw: "drop" },
     { briefId: "job-content-2:job-brief-2", factualStatus: "UNSUPPORTED", decision: "REPAIR", issues: ["claim sem suporte"] },
   ]);
+  assert.equal("qualityFailures" in diagnostics, false);
   resetJobEvents();
-  emitJobEvent("job.terminal", { errorCode: "GEN-REPAIR-EXHAUSTED", qualityFailures: diagnostics.qualityFailures, gateReports: diagnostics.gateReports });
+  emitJobEvent("job.terminal", { errorCode: "GEN-REPAIR-EXHAUSTED", gateReports: diagnostics.gateReports });
   const event = JSON.parse(collectJobEvents()[0]) as Record<string, unknown>;
-  assert.deepEqual(event.qualityFailures, [{ contentId: "job-content-1", part: "hook", round: 2, status: "REPAIR", criterion: "hook_clarity", reason: "unclear" }]);
+  assert.equal("qualityFailures" in event, false);
   assert.deepEqual((event.gateReports as Array<Record<string, unknown>>).map(({ briefId }) => briefId), ["job-content-2:job-brief-2"]);
   assert.ok(!JSON.stringify(event).includes("raw"));
+  assert.ok(!JSON.stringify(event).includes("REVIEW"));
   resetJobEvents();
 });
 test("internal failure metadata retains sanitized ContractError identity and field", () => {

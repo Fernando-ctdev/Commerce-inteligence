@@ -17,7 +17,7 @@ export type PartialFailureCheckCode =
 export type FailedItemDiagnostic = {
   contentId: string;
   position: number;
-  reason: "HARD_GATE" | "JUDGE" | "VARIETY_CAP";
+  reason: "HARD_GATE" | "VARIETY_CAP";
   checkCodes: PartialFailureCheckCode[];
   issues: string[];
   quality?: Array<{ part: string; round: number; criterion: string; reason: string }>;

@@ -46,14 +46,15 @@ export function currentGenerationFilter(tenantId: string, userId: string, produc
 // ADR-021/UI: `missing` público do parcial — um token por item faltante
 // (position + reasonCode server-side); sem issues livres, diagnóstico ou payload.
 // reasonCode prefere o checkCode da cascata; cai para o reason do particionamento
-// (HARD_GATE/JUDGE/VARIETY_CAP) quando o item não tem checkCode mapeado.
+// (HARD_GATE/VARIETY_CAP) quando o item não tem checkCode mapeado; razão semântica
+// legada ("JUDGE") nunca vira reasonCode público.
 function projectMissing(value: unknown): Array<{ position: number | null; reasonCode: string }> {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
     const v = payloadObject(item);
     if (typeof v.contentId !== "string") return [];
     const checkCodes = Array.isArray(v.checkCodes) ? v.checkCodes.filter((code): code is string => typeof code === "string") : [];
-    const reasonCode = checkCodes[0] ?? (typeof v.reason === "string" && ["HARD_GATE", "JUDGE", "VARIETY_CAP"].includes(v.reason) ? v.reason : "");
+    const reasonCode = checkCodes[0] ?? (typeof v.reason === "string" && ["HARD_GATE", "VARIETY_CAP"].includes(v.reason) ? v.reason : "");
     if (!reasonCode) return [];
     return [{ position: typeof v.position === "number" ? v.position : null, reasonCode }];
   });

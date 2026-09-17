@@ -9,12 +9,13 @@ import { partialModel } from "@/components/products/generation-ui-model";
 const persistedBrief = { payload: { angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: "c" } };
 const baseJob = {
   id: "j-partial", productId: "p", status: "SUCCEEDED_PARTIAL", stage: "FINALIZING",
-  targetContentCount: 3, publicErrorMessage: null,
+  targetContentCount: 4, publicErrorMessage: null,
   metadata: {
-    expectedCount: 3, deliveredCount: 2, failedCount: 1,
+    expectedCount: 4, deliveredCount: 2, failedCount: 2,
     failedItems: [
       { contentId: "j-partial-content-1", position: 1, reason: "HARD_GATE", checkCodes: ["unverified_claim", "grounding_below_min"], issues: ["claim sem evidência autorizada"], diagnostic: { minGroundingMatched: 0 } },
-      { contentId: "j-partial-content-2", position: 2, reason: "JUDGE", checkCodes: [], issues: [], quality: [{ part: "hook", round: 2, criterion: "hook_clarity", reason: "unclear" }] },
+      { contentId: "j-partial-content-2", position: 2, reason: "VARIETY_CAP", checkCodes: [], issues: ["variety_cap_drop"] },
+      { contentId: "j-partial-content-3", position: 3, reason: "JUDGE", checkCodes: [], issues: [], quality: [{ part: "hook", round: 2, criterion: "hook_clarity", reason: "unclear" }] },
     ],
   },
   createdAt: new Date("2026-09-14T00:00:00Z"), startedAt: new Date("2026-09-14T00:00:01Z"), finishedAt: new Date("2026-09-14T00:00:02Z"),
@@ -27,19 +28,23 @@ test("envelope expõe missing sanitizado (position/reasonCode) e normalize da UI
   assert.equal(view.status, "SUCCEEDED_PARTIAL");
   assert.equal(view.readiness, "READY");
   assert.equal(view.deliveredCount, 2);
-  assert.equal(view.expectedCount, 3);
+  assert.equal(view.expectedCount, 4);
+  // HARD_GATE/VARIETY_CAP permanecem públicos; a razão semântica legada "JUDGE"
+  // (entrada crua no metadata) é descartada — semântica nunca vira faltante.
   assert.deepEqual(view.missing, [
     { position: 1, reasonCode: "unverified_claim" },
-    { position: 2, reasonCode: "JUDGE" },
+    { position: 2, reasonCode: "VARIETY_CAP" },
   ]);
   const serialized = JSON.stringify(view);
   assert.ok(!serialized.includes("valoriza"), "sem payload bruto");
   assert.ok(!serialized.includes("minGroundingMatched"), "sem diagnóstico interno");
   assert.ok(!serialized.includes("issues"), "sem issues livres");
+  assert.ok(!serialized.includes("JUDGE"), "razão semântica ausente do envelope");
+  assert.ok(!serialized.includes("QUALITY_PENDING"), "sem status semântico público");
   const model = partialModel(view as never);
   assert.deepEqual(model, {
     delivered: 2,
-    expected: 3,
+    expected: 4,
     missing: [
       { position: 1, reason: "continha informação não confirmada nos dados do produto" },
       { position: 2, reason: "não convergiu nos critérios de qualidade" },
@@ -55,8 +60,8 @@ test("partições ADR-021: /retry nunca aceita parcial; /complete somente parcia
 // Gate 6 item 7: F que o /complete usa como targetContentCount (reserva dos
 // faltantes). metadata do job parcial é a fonte; fallbacks preservam N−0.
 test("partialMissing deriva F do metadata do parcial; fora do parcial é indefinido", () => {
-  // D=2 de N=3 → /complete cria job com targetContentCount=1.
-  assert.equal(partialMissing({ status: "SUCCEEDED_PARTIAL", targetContentCount: 3, metadata: baseJob.metadata }), 1);
+  // D=2 de N=4 (F=2, dois faltantes objetivos) → /complete cria job com targetContentCount=2.
+  assert.equal(partialMissing({ status: "SUCCEEDED_PARTIAL", targetContentCount: 4, metadata: baseJob.metadata }), 2);
   // Sem metadata (legado): fallback expected=N, delivered=0 → N.
   assert.equal(partialMissing({ status: "SUCCEEDED_PARTIAL", targetContentCount: 3, metadata: null }), 3);
   // Nada faltante ou fora do parcial: /complete responde GEN-NOTHING-TO-COMPLETE (missing < 1) e undefined.

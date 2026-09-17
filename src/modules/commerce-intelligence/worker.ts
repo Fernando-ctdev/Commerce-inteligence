@@ -20,7 +20,7 @@ import { GATE_POLICY_VERSION } from "./gates";
 import type { ContentBriefVersion } from "./contract";
 import { createHttpProvider } from "./provider";
 import type { ModelDescription } from "./model-router";
-import { QUALITY_CRITERIA, QUALITY_PARTS, QUALITY_REASONS, reasonText, type QualityAudit, type QualityCriterion, type QualityFailure, type QualityPart } from "./semantic-quality";
+import { QUALITY_PARTS, reasonText, type QualityAudit, type QualityPart } from "./semantic-quality";
 import { heartbeat } from "./runtime";
 
 const SAFE_REPAIR_CAUSE_LABELS = ["claim sem suporte", "development invalido"] as const;
@@ -77,37 +77,18 @@ function projectRepairCauses(source: Record<string, unknown>, sanitized: string[
   });
 }
 
-function isSemanticQualityRecord(value: Record<string, unknown>): boolean {
-  return typeof value.contentId === "string" && "part" in value && "round" in value;
-}
-
-export function projectSemanticQualityFailures(value: unknown): QualityFailure[] {
+export function projectFailureDiagnostics(value: unknown): { gateReports: SanitizedGateReport[]; causes: Array<{ briefId: string; causes: string[] }> } {
   const records = Array.isArray(value)
     ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
     : [];
-  return records.flatMap((item) => {
-    if (
-      typeof item.contentId !== "string" ||
-      !Number.isInteger(item.round) ||
-      !QUALITY_PARTS.includes(item.part as QualityPart) ||
-      !["REPAIR", "REJECT"].includes(String(item.status)) ||
-      !QUALITY_CRITERIA.includes(item.criterion as QualityCriterion) ||
-      !QUALITY_REASONS.includes(item.reason as typeof QUALITY_REASONS[number])
-    ) return [];
-    return [{ contentId: item.contentId.slice(0, 200), part: item.part, round: item.round, status: item.status, criterion: item.criterion, reason: item.reason } as QualityFailure];
-  });
-}
-
-export function projectFailureDiagnostics(value: unknown): { gateReports: SanitizedGateReport[]; causes: Array<{ briefId: string; causes: string[] }>; qualityFailures: QualityFailure[] } {
-  const records = Array.isArray(value)
-    ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
-    : [];
-  const gateSources = records.filter((item) => !isSemanticQualityRecord(item) && (typeof item.briefId === "string" || Array.isArray(item.issues)));
+  // GateDecision REPAIR|REJECT é vocabulário objetivo do GateReport e permanece;
+  // registro semântico (contentId/part/round, sem briefId/issues) nunca vira
+  // qualityFailures nem diagnóstico público.
+  const gateSources = records.filter((item) => typeof item.briefId === "string" || Array.isArray(item.issues));
   const gateReports = sanitizeGateReports(gateSources);
   return {
     gateReports,
     causes: gateReports.map((report, index) => ({ briefId: report.briefId, causes: projectRepairCauses(gateSources[index], report.causes) })),
-    qualityFailures: projectSemanticQualityFailures(records),
   };
 }
 
@@ -147,7 +128,6 @@ export function internalFailureMetadata(code: string, stage: string | null, deta
       gateReports: diagnostics.gateReports,
       causes: diagnostics.causes,
     } : {}),
-    ...(diagnostics.qualityFailures.length ? { qualityFailures: diagnostics.qualityFailures } : {}),
   };
 }
 
@@ -417,7 +397,7 @@ export async function failJobAndReleaseReservation(
   attempt?: number,
   internalDetail?: unknown,
   failureRun?: { tenantId: string; productId: string; engineVersion: string; platformSkillVersion: string; metadata: Record<string, unknown> },
-  terminalEvent?: Pick<JobEventFields, "stage" | "gateReports" | "qualityFailures">,
+  terminalEvent?: Pick<JobEventFields, "stage" | "gateReports">,
 ): Promise<boolean> {
   const terminalized = await prisma.$transaction(async (tx) => {
     const result = await tx.commerceIntelligenceJob.updateMany({
@@ -1142,7 +1122,6 @@ export async function processGeneration(jobId: string, ownerId: string) {
     }, {
       stage: currentStage ?? undefined,
       gateReports: rejected?.gateReports,
-      qualityFailures: rejected?.qualityFailures,
     });
     return false;
   } finally {
