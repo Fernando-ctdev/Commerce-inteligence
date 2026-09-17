@@ -123,7 +123,11 @@ export function applyQualityRepair<T extends { hook: string; development: string
   part: QualityPart,
   replacement: unknown,
 ): { brief: T; scenes: S | unknown } {
-  if (part === "scenes") return { brief, scenes: replacement };
+  if (part === "scenes") {
+    if (!Array.isArray(replacement) || replacement.some((scene) => !scene || typeof scene !== "object" || Array.isArray(scene) || typeof (scene as Record<string, unknown>).description !== "string"))
+      throw new GenerationError("GEN-SCHEMA", "Quality repair retornou conteúdo inválido", true, { task: "CONTENT_PART_REPAIR", part });
+    return { brief, scenes: replacement };
+  }
   if (typeof replacement !== (part === "development" ? "object" : "string") || (part === "development" && (!Array.isArray(replacement) || replacement.some((value) => typeof value !== "string"))))
     throw new GenerationError("GEN-SCHEMA", "Quality repair retornou conteúdo inválido", true, { task: "CONTENT_PART_REPAIR", part });
   return { brief: { ...brief, [part]: replacement } as T, scenes };

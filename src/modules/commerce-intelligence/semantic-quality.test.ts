@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runFirstGeneration } from "./engine";
-import { parseQualityAuditBatch, parseQualityRepairBatch, applyQualityRepair, QUALITY_PARTS, type QualityPart } from "./semantic-quality";
+import { parseQualityAuditBatch, parseQualityRepairBatch, applyQualityRepair, qualityPartsToRepair, projectQualityFailures, QUALITY_PARTS, type QualityAudit, type QualityPart } from "./semantic-quality";
 import { internalFailureMetadata } from "./worker";
 
 const parts = QUALITY_PARTS.map((part) => ({
@@ -106,11 +106,34 @@ test("applyQualityRepair valida o formato da parte substituída e preserva as de
   assert.deepEqual(applyQualityRepair(brief, scenes, "hook", "Novo hook").brief, { ...brief, hook: "Novo hook" });
   assert.deepEqual(applyQualityRepair(brief, scenes, "development", ["novo"]).brief.development, ["novo"]);
   assert.deepEqual(applyQualityRepair(brief, scenes, "scenes", [{ description: "nova" }]).scenes, [{ description: "nova" }]);
+  assert.throws(() => applyQualityRepair(brief, scenes, "scenes", "não é lista"), /conteúdo inválido/);
+  assert.throws(() => applyQualityRepair(brief, scenes, "scenes", 42), /conteúdo inválido/);
+  assert.throws(() => applyQualityRepair(brief, scenes, "scenes", { description: "cena solta" }), /conteúdo inválido/);
+  assert.throws(() => applyQualityRepair(brief, scenes, "scenes", [{ description: "ok" }, 42]), /conteúdo inválido/);
+  assert.throws(() => applyQualityRepair(brief, scenes, "scenes", [{ description: 42 }]), /conteúdo inválido/);
+  assert.throws(() => applyQualityRepair(brief, scenes, "scenes", [{ demais: "sem description" }]), /conteúdo inválido/);
+  assert.throws(() => applyQualityRepair(brief, scenes, "scenes", [null]), /conteúdo inválido/);
   assert.throws(() => applyQualityRepair(brief, scenes, "hook", 42), /conteúdo inválido/);
   assert.throws(() => applyQualityRepair(brief, scenes, "development", "não é lista"), /conteúdo inválido/);
   assert.throws(() => applyQualityRepair(brief, scenes, "development", [42]), /conteúdo inválido/);
   const repaired = applyQualityRepair(brief, scenes, "hook", "Novo hook");
   assert.equal(repaired.scenes, scenes);
+});
+
+test("qualityPartsToRepair e projectQualityFailures consideram somente REVIEW", () => {
+  const audit: QualityAudit = { contentId: "content-1", round: 1, parts: [
+    { part: "hook", status: "PASS", criterion: "hook_clarity", reason: "meets_criteria" },
+    { part: "script", status: "REVIEW", criterion: "script_naturalness", reason: "unclear" },
+    { part: "cta", status: "PASS", criterion: "cta_clarity", reason: "meets_criteria" },
+    { part: "scenes", status: "REVIEW", criterion: "scenes_actionable", reason: "not_actionable" },
+  ] };
+  assert.deepEqual(qualityPartsToRepair(audit).map(({ part }) => part), ["script", "scenes"]);
+  assert.deepEqual(projectQualityFailures([audit]), [
+    { contentId: "content-1", part: "script", round: 1, status: "REVIEW", criterion: "script_naturalness", reason: "unclear" },
+    { contentId: "content-1", part: "scenes", round: 1, status: "REVIEW", criterion: "scenes_actionable", reason: "not_actionable" },
+  ]);
+  assert.deepEqual(qualityPartsToRepair({ contentId: "content-1", round: 0, parts: [] }), []);
+  assert.deepEqual(projectQualityFailures([]), []);
 });
 
 test("generation audits all five parts and repairs only the rejected part", async () => {
