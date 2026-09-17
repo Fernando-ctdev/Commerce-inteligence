@@ -1,7 +1,6 @@
 // Observabilidade estruturada mínima: uma linha JSON por evento no terminal (JSONL),
 // reutilizando o padrão console.info dos logs existentes. Allowlist estrita por evento:
 // nunca prompt/payload/segredos/valores de contexto — só hashes, tamanhos e metadados.
-import type { QualityFailure } from "./semantic-quality";
 export type JobEventName =
   | "job.claimed"
   | "stage.started"
@@ -19,7 +18,7 @@ export type JobEventFields = {
   jobId?: string; attempt?: number; stage?: string; task?: string; tier?: string; model?: string; instructionHash?: string;
   durationMs?: number; timeoutMs?: number; requestBytes?: number; trustedContextBytes?: number; externalBytes?: number; responseBytes?: number;
   providerStatus?: number; rootShape?: string; responseKeys?: string[]; arrayLength?: number; endpoint?: string; providerRequestId?: string; providerRequestIdSource?: string;
-  expected?: number; received?: number; retry?: number; errorName?: string; errorCode?: string; reservationAction?: string; contextDigest?: string; item?: number; issue?: string; field?: string; errorKind?: string; rate?: Record<string, string>; gateReports?: SanitizedGateReport[]; qualityFailures?: QualityFailure[]; cardinalityPolicyVersion?: number;
+  expected?: number; received?: number; retry?: number; errorName?: string; errorCode?: string; reservationAction?: string; contextDigest?: string; item?: number; issue?: string; field?: string; errorKind?: string; rate?: Record<string, string>; gateReports?: SanitizedGateReport[]; cardinalityPolicyVersion?: number;
   // Gate de cenas (CONTENT_SCENE_IDEAS): contagem determinística do gateSceneSet.
   kept?: number; dropped?: number;
 };
@@ -73,7 +72,7 @@ const EVENT_ALLOWLIST: Record<JobEventName, (keyof JobEventFields)[]> = {
   // Expiração de lease: rotação (job.reclaimed) e esgotamento (job.terminal) —
   // emitidos apenas quando o CAS do reclaim persiste (mesmo contrato do failJob).
   "job.reclaimed": BASE_ALLOWLIST,
-  "job.terminal": [...BASE_ALLOWLIST, "errorCode", "durationMs", "expected", "received", "retry", "gateReports", "qualityFailures"],
+  "job.terminal": [...BASE_ALLOWLIST, "errorCode", "durationMs", "expected", "received", "retry", "gateReports"],
 };
 
 const buffer: string[] = [];
