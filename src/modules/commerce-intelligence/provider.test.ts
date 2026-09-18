@@ -725,7 +725,14 @@ test("extractReportedCostLexeme ignora cost dentro do conteúdo gerado (string e
   assert.equal(extractReportedCostLexeme(both), "0.009");
   // "usage" citado dentro do conteúdo não confunde o scanner string-aware
   const usageInContent = '{"choices":[{"message":{"content":"{\\"usage\\":{\\"cost\\":99}}"}},{"usage":{"cost":0.5}}]}';
-  assert.equal(extractReportedCostLexeme(usageInContent), "0.5");
+  assert.equal(extractReportedCostLexeme(usageInContent), null, "usage fora do nível-raiz é ignorado pelo contrato");
+});
+
+test("extractReportedCostLexeme aceita apenas usage no nível 0 do envelope (choices[].usage não conta)", () => {
+  // usage aninhado em choices sem usage de topo → null
+  assert.equal(extractReportedCostLexeme('{"choices":[{"usage":{"cost":99}}]}'), null);
+  // usage de topo prevalece sobre usage aninhado em choices
+  assert.equal(extractReportedCostLexeme('{"choices":[{"usage":{"cost":99}}],"usage":{"cost":0.5}}'), "0.5");
 });
 
 test("dollarsLexemeToMinor converte decimal exato para cents com HALF_UP documentado", () => {

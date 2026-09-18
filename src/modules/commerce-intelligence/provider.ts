@@ -280,15 +280,18 @@ function balancedEnd(raw: string, open: number): number {
   return raw.length - 1;
 }
 
-// Devolve o texto do objeto balanceado que segue a chave `key` fora de strings; null se ausente.
+// Devolve o texto do objeto balanceado que segue a chave `key` como membro DIRETO do objeto
+// raiz do envelope (fora de strings; depth 1 = filho direto da raiz). Assim, `choices[0].usage`
+// de providers alternativos (depth ≥ 2) nunca é confundido com o usage do envelope.
 function balancedObjectAfterKey(raw: string, key: string): string | null {
   const keyToken = `"${key}"`;
+  let depth = 0;
   let i = 0;
   while (i < raw.length) {
     const ch = raw[i]!;
     if (ch === '"') {
-      // Chave candidata: o token casa aqui E é seguido de ":" (contexto de chave, não valor).
-      if (raw.startsWith(keyToken, i)) {
+      const directRootMember = depth === 1 && raw.startsWith(keyToken, i);
+      if (directRootMember) {
         let k = i + keyToken.length;
         while (k < raw.length && /\s/.test(raw[k]!)) k += 1;
         if (raw[k] === ":") {
@@ -300,6 +303,8 @@ function balancedObjectAfterKey(raw: string, key: string): string | null {
       i = skipString(raw, i);
       continue;
     }
+    if (ch === "{" || ch === "[") depth += 1;
+    else if (ch === "}" || ch === "]") depth -= 1;
     i += 1;
   }
   return null;
