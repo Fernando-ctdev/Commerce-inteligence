@@ -314,7 +314,9 @@ export function extractReportedCostLexeme(rawText: string): string | null {
   const usageObject = balancedObjectAfterKey(rawText, "usage");
   if (!usageObject) return null;
   // Membro DIRETO do objeto usage: sempre no início ou após { , — nunca dentro de cost_details.
-  const costMatch = /(^|[,{])\s*"cost"\s*:\s*(\d+(?:\.\d+)?)/.exec(usageObject);
+  // Lookahead rejeita notação científica/dígito/ponto pendente: "1e-3"→null, "1.5e1"→null
+  // (sem captura de prefixo — backtrack sobre "." também é bloqueado).
+  const costMatch = /(^|[,{])\s*"cost"\s*:\s*(\d+(?:\.\d+)?)(?![\deE.])/.exec(usageObject);
   return costMatch?.[2] ?? null;
 }
 

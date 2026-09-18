@@ -714,6 +714,10 @@ test("extractReportedCostLexeme casa apenas a chave exata cost, nunca cost_detai
   assert.equal(extractReportedCostLexeme('{"usage":{"cost":0.009,"cost_details":{"upstream_inference_cost":19}}}'), "0.009");
   assert.equal(extractReportedCostLexeme('{"usage":{"prompt_tokens":5}}'), null);
   assert.equal(extractReportedCostLexeme('{"usage":{"cost_details":{"upstream_inference_cost":19}}}'), null);
+  // notação científica é rejeitada por inteiro — sem captura de prefixo numérico
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost":1e-3}}'), null, "1e-3 não pode virar 1");
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost":0.5e1}}'), null, "0.5e1 não pode virar 0.5");
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost":1.5e1}}'), null, "1.5e1 não pode virar 1 (backtrack sobre '.' bloqueado)");
 });
 
 test("extractReportedCostLexeme ignora cost dentro do conteúdo gerado (string escapada) e só lê usage de topo", () => {
