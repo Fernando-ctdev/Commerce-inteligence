@@ -47,6 +47,51 @@ const stateOf = (job: GenerationRecord) => ({
   retry: async () => {},
 });
 
+const renderContents = async (envelope: unknown) => {
+  const [{ ContentsView }, { normalizeGeneration }] = await Promise.all([import("./generation-views"), import("./generation-api")]);
+  return renderToStaticMarkup(
+    React.createElement(ContentsView, { job: normalizeGeneration(envelope) as GenerationRecord, active: false }),
+  );
+};
+
+const envelopeParcial = () => ({
+  ...envelopeDegradado("SUCCEEDED_PARTIAL"),
+  code: undefined,
+  error: null,
+  readiness: "READY",
+  targetContentCount: 5,
+  expectedCount: 5,
+  deliveredCount: 4,
+  failedCount: 1,
+  missing: [{ position: 3, reasonCode: "HARD_GATE" }],
+  contents: [conteudoValido(1), conteudoValido(2), conteudoValido(4), conteudoValido(5)],
+});
+
+test("escopo editorial: SUCCEEDED_PARTIAL publica os D itens sem exigir exato-N", async () => {
+  const html = await renderContents(envelopeParcial());
+  assert.match(html, /Conteúdos/);
+  assert.match(html, /4 de 5 conteúdos/);
+  assert.doesNotMatch(html, /ainda não estão prontos/);
+});
+
+const renderContentsJob = async (job: GenerationRecord) => {
+  // Import dinâmico é pré-condição do stub do .module.css registrado acima.
+  const { ContentsView } = await import("./generation-views");
+  return renderToStaticMarkup(React.createElement(ContentsView, { job, active: false }));
+};
+
+test("SUCCEEDED pleno continua exato-N: mismatch mantém o guard de publicação", async () => {
+  const job = {
+    id: "job-mismatch", productId: "product-1", status: "SUCCEEDED", stage: "FINALIZING",
+    targetContentCount: 6, expectedCount: 6, deliveredCount: 4, failedCount: 2,
+    error: null, code: undefined, readiness: "READY", strategy: {}, plan: {},
+    contents: [conteudoValido(1), conteudoValido(2), conteudoValido(4), conteudoValido(5)],
+    createdAt: "2026-01-01T00:00:00.000Z", startedAt: "2026-01-01T00:00:01.000Z", finishedAt: "2026-01-01T00:00:02.000Z", attempt: 1,
+  } as unknown as GenerationRecord;
+  const html = await renderContentsJob(job);
+  assert.match(html, /ainda não estão prontos/);
+});
+
 const renderCard = async (envelope: unknown) => {
   const [{ GenerationStatusCard }, { normalizeGeneration }] = await Promise.all([import("./generation-views"), import("./generation-api")]);
   return renderToStaticMarkup(

@@ -403,7 +403,7 @@ export function OperationalSummaryCard({ className, job, readiness }: {
 export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | null; onOpenContents?: () => void }) {
   if (!job?.strategy) return <EmptyRegion>A estratégia aparece aqui quando a análise concluir.</EmptyRegion>;
   const strategy = strategyModel(job.strategy);
-  const contentsReady = job.status === "SUCCEEDED" && job.contents.length === job.targetContentCount;
+  const contentsReady = (job.status === "SUCCEEDED" || job.status === "SUCCEEDED_PARTIAL") && job.contents.length > 0;
   const triplet = [
     { icon: HeartCrack, title: "Dores", items: strategy.pains },
     { icon: Heart, title: "Desejos", items: strategy.desires },
@@ -592,8 +592,17 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
       </section>
     );
   }
+  // SUCCEEDED_PARTIAL publica os D itens aprovados pelo envelope (server-
+  // authoritative); SUCCEEDED pleno permanece exato-N (ADR-021).
   const expectedPublished = job.status === "SUCCEEDED" ? job.targetContentCount : job.deliveredCount ?? -1;
-  if (job.contents.length !== expectedPublished) {
+  if (job.status !== "SUCCEEDED_PARTIAL" && job.contents.length !== expectedPublished) {
+    return (
+      <section className={styles.panel} id="generated-contents">
+        <p role="alert">Os conteúdos ainda não estão prontos. Nenhum resultado parcial será apresentado. Tente novamente em instantes.</p>
+      </section>
+    );
+  }
+  if (job.contents.length < 1) {
     return (
       <section className={styles.panel} id="generated-contents">
         <p role="alert">Os conteúdos ainda não estão prontos. Nenhum resultado parcial será apresentado. Tente novamente em instantes.</p>
