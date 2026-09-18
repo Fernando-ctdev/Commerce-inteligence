@@ -19,7 +19,7 @@ export type HistoryViewModel = { jobs: HistoryJobView[] };
 function formatAmount(amountMinor: string, currency: string): string {
   try {
     const formatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency });
-    const digits = formatter.resolvedOptions().maximumFractionDigits;
+    const digits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
     const units = 10n ** BigInt(digits);
     const minor = BigInt(amountMinor);
     const major = minor / units;

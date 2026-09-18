@@ -8,6 +8,7 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { GenerationRecord } from "./generation-api";
+import type { ProductHistoryResponse } from "./history-api";
 
 // generation-views importa .module.css, que o node puro não carrega — stub mínimo
 // antes de qualquer import da view (o tsx resolve o .tsx via require/CJS).
@@ -141,7 +142,7 @@ test("SUCCEEDED sem code segue como sucesso: Revisar conteúdos presente, sem al
 
 test("Histórico mostra apenas custo agregado e revela custos de Conteúdo sob demanda", async () => {
   const { HistoryView } = await import("./generation-views");
-  const history = {
+  const history: ProductHistoryResponse = {
     jobs: [{
       status: "SUCCEEDED",
       createdAt: "2026-09-18T12:30:00.000Z",
@@ -150,7 +151,7 @@ test("Histórico mostra apenas custo agregado e revela custos de Conteúdo sob d
       cost: { currency: "BRL", amountMinor: "1234", completeness: "COMPLETE" },
       contents: [{ position: 1, cost: { currency: "BRL", amountMinor: "234", completeness: "PARTIAL" } }],
     }],
-  } as const;
+  };
   const html = renderToStaticMarkup(React.createElement(HistoryView, { history, loading: false, error: null }));
   assert.match(html, /R\$ 12,34/);
   assert.match(html, /Completo/);

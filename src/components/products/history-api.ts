@@ -59,7 +59,7 @@ export function normalizeProductHistory(value: unknown): ProductHistoryResponse 
         contents: job.contents.map((rawContent) => {
           const content = object(rawContent);
           const position = content?.position;
-          if (typeof position !== "number" || !Number.isInteger(position) || position < 1) invalid();
+          if (!content || typeof position !== "number" || !Number.isInteger(position) || position < 1) invalid();
           return { position, cost: cost(content.cost) };
         }),
       };
