@@ -4,7 +4,8 @@ import { buildCapabilityUsageCosts, attachCapabilityCosts, aggregateRunCosts, ty
 
 import type { LogicalTask, ProviderTokenUsage } from "./model-router";
 
-type AttachableEvent = RunCostInputEvent & { attempts?: Array<{ usage?: ProviderTokenUsage; retry?: number; pricing?: { versionId: string | null; currency: string | null }; cost?: { amountMinor: string | null; completeness: string } }>; pricing?: { versionId: string | null; currency: string | null }; cost?: { amountMinor: string | null; completeness: string } };
+type AttachableAttempt = { usage?: ProviderTokenUsage; retry?: number; pricing?: { versionId: string | null; currency: string | null }; cost?: { amountMinor: string | null; completeness: string } };
+type AttachableEvent = Omit<RunCostInputEvent, "attempts"> & { attempts?: AttachableAttempt[]; pricing?: { versionId: string | null; currency: string | null }; cost?: { amountMinor: string | null; completeness: string } };
 
 const BRL: PriceSnapshot = {
   versionId: "price-1",
