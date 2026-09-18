@@ -132,8 +132,19 @@
 
 .contentsActions > [role="alert"],
 .contentsActions > [role="status"] {
+  align-items: center;
+  column-gap: 24px;
   display: grid;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 12px;
+}
+
+.contentsActions > [role="alert"] > .actions,
+.contentsActions > [role="status"] > .actions {
+  align-self: center;
+  grid-column: 2;
+  grid-row: 1 / -1;
+  justify-content: flex-end;
 }
 
 .stateLine {
@@ -1136,6 +1147,19 @@
 
   .contentsActions .stateAction {
     width: 100%;
+  }
+
+  .contentsActions > [role="alert"],
+  .contentsActions > [role="status"] {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .contentsActions > [role="alert"] > .actions,
+  .contentsActions > [role="status"] > .actions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-content: stretch;
   }
 
   .strategyLayout {
