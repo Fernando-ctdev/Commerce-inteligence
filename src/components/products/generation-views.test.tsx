@@ -33,7 +33,7 @@ const envelopeDegradado = (status: "SUCCEEDED" | "SUCCEEDED_PARTIAL") => ({
   ...(status === "SUCCEEDED_PARTIAL" ? { expectedCount: 2, deliveredCount: 1, failedCount: 1, missing: [{ position: 2, reasonCode: "HARD_GATE" }] } : {}),
 });
 
-const conteudoValido = (position: number) => ({ id: `c${position}`, position, status: "DRAFT", angle: "a", hook: "h", development: ["ponto completo"], script: "s", cta: "c" });
+const conteudoValido = (position: number) => ({ id: `c${position}`, position, status: "DRAFT", angle: "a", hook: "h", development: ["ponto completo", "ponto completo de apoio"], script: "s", cta: "c" });
 
 const stateOf = (job: GenerationRecord) => ({
   job,

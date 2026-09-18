@@ -51,15 +51,15 @@ test("gerar faltantes chama /complete do parcial com chave idempotente e recarre
 
 test("aceita SUCCEEDED com bullets separados e preserva a projeção canônica de cenas", () => {
   const scenes = { status: "AVAILABLE", generated: 2, dropped: 0, scenes: [{ description: "Demonstre o produto" }, { description: "Mostre o detalhe" }] };
-  const job = normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: { objective: "Vender" }, plan: { targetContentCount: 1 }, contents: [{ id: "content-1", angle: "Demonstração", hook: "Veja isto", development: ["Mostre o produto"], script: "Mostre o produto", scenes, cta: "Confira agora" }] });
+  const job = normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: { objective: "Vender" }, plan: { targetContentCount: 1 }, contents: [{ id: "content-1", angle: "Demonstração", hook: "Veja isto", development: ["Mostre o produto", "Destaque o produto"], script: "Mostre o produto", scenes, cta: "Confira agora" }] });
   assert.equal(job.readiness, "READY");
   assert.equal(job.contents.length, job.targetContentCount);
-  assert.deepEqual(job.contents[0].development, ["Mostre o produto"]);
+  assert.deepEqual(job.contents[0].development, ["Mostre o produto", "Destaque o produto"]);
   assert.deepEqual(job.contents[0].scenes, scenes);
 });
 
 test("aceita SUCCEEDED_PARTIAL com D de N prontos, motivos por item e readiness READY", () => {
-  const brief = { id: "content-1", angle: "a", hook: "h", development: ["ponto"], script: "s", cta: "c" };
+  const brief = { id: "content-1", angle: "a", hook: "h", development: ["ponto 1", "ponto 2"], script: "s", cta: "c" };
   const job = normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED_PARTIAL", targetContentCount: 3, expectedCount: 3, deliveredCount: 2, failedCount: 1, strategy: {}, plan: {}, contents: [brief, { ...brief, id: "content-2" }], missing: [{ position: 3, reasonCode: "unverified_claim" }, { reasonCode: " " }, 42] });
   assert.equal(job.status, "SUCCEEDED_PARTIAL");
   assert.equal(job.readiness, "READY");
@@ -70,7 +70,7 @@ test("aceita SUCCEEDED_PARTIAL com D de N prontos, motivos por item e readiness 
 });
 
 test("rejeita SUCCEEDED_PARTIAL sem deliveredCount consistente e mantém retry só em FAILED/CANCELLED", () => {
-  const brief = { angle: "a", hook: "h", development: ["ponto"], script: "s", cta: "c" };
+  const brief = { angle: "a", hook: "h", development: ["ponto 1", "ponto 2"], script: "s", cta: "c" };
   assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED_PARTIAL", targetContentCount: 2, strategy: {}, plan: {}, contents: [brief] }), GenerationApiError);
   assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED_PARTIAL", targetContentCount: 2, deliveredCount: 2, strategy: {}, plan: {}, contents: [brief] }), GenerationApiError);
   assert.equal(isRetryableGeneration("SUCCEEDED_PARTIAL"), false);
@@ -84,7 +84,8 @@ test("rejeita envelope sem ownership válido, quantidade inválida ou briefing i
   assert.throws(() => normalizeGeneration({ id: "", productId: "product-1", status: "QUEUED", targetContentCount: 1 }), GenerationApiError);
   assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "QUEUED", targetContentCount: 0 }), GenerationApiError);
   assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: {}, plan: {}, contents: [{ id: "content-1" }] }), GenerationApiError);
-  assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: {}, plan: {}, contents: [{ angle: "a", hook: "h", development: "bullet", script: "oral", cta: "cta" }] }), GenerationApiError);
+  assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: {}, plan: {}, contents: [{ angle: "a", hook: "h", development: ["um", "dois", "três", "quatro", "cinco", "seis", "sete"], script: "oral", cta: "cta" }] }), GenerationApiError);
+  assert.throws(() => normalizeGeneration({ id: "job-1", productId: "product-1", status: "SUCCEEDED", targetContentCount: 1, strategy: {}, plan: {}, contents: [{ angle: "a", hook: "h", development: ["único"], script: "oral", cta: "cta" }] }), GenerationApiError);
 });
 
 test("consulta o estado atual escopado ao Product e aceita resposta vazia", async () => {
