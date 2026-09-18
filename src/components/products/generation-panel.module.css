@@ -499,6 +499,7 @@
   border-left: 3px solid var(--color-intelligence);
   border-radius: 0 10px 10px 0;
   border-top: 0;
+  margin-top: 16px;
   padding: 18px 16px;
 }
 

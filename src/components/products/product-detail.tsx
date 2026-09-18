@@ -234,9 +234,6 @@ export function ProductDetail({
 
   useEffect(() => {
     let disposed = false;
-    setHistory(null);
-    setHistoryError(null);
-    setHistoryLoading(true);
     void loadProductHistory(id)
       .then((value) => {
         if (!disposed) setHistory(value);
