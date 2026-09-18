@@ -26,6 +26,7 @@ Registrar o uso real retornado pelo provider e calcular custo estimado reproduz�
 ## Fonte de uso e preço
 
 O adapter do provider é a única fonte de usage. Ele normaliza o envelope de resposta para os quatro campos conhecidos e preserva `null` quando não houver dado confiável. A engine não estima tokens por texto nem converte bytes em tokens.
+O adapter preserva os contadores reportados, mas normaliza a base de cálculo sem dupla contagem: `cachedTokens` pode ser subconjunto de `inputTokens` e `reasoningTokens` pode ser subconjunto de `outputTokens`. O custo usa somente buckets não sobrepostos conforme a semântica documentada do provider. Se essa semântica não puder ser determinada, a capability fica `PARTIAL` ou `UNAVAILABLE`; nunca soma tokens sobrepostos.
 
 A tabela de preço é um registro versionado e imutável por `provider`, `model`, `currency` e vigência. Cada versão informa preço unitário por milhão de tokens para input, output, reasoning e cached input; dimensões não precificadas permanecem nulas. O cálculo usa inteiros em unidades monetárias menores (por exemplo, micros da moeda) ou decimal exato, nunca `float`.
 
