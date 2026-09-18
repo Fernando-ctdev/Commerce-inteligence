@@ -1,7 +1,7 @@
 # Design — Observabilidade de uso e custo de IA
 
 **Data:** 2026-09-18  
-**Status:** aguardando revisão do usuário  
+**Status:** aprovado pelo usuário
 **Escopo:** Commerce Intelligence, Model Router/LLM Gateway e Histórico do Produto.
 
 ## Objetivo

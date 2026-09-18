@@ -29,7 +29,7 @@ Engine Capability → Logical Intelligence Task → Model Router
 - Um provider por vez no MVP, atrás de adapter próprio (OpenRouter, OpenAI, Anthropic, Google ou compatível). Nenhum provider entra na regra de negócio; trocar modelo/provider não altera entidades de domínio.
 - `LOW`, `MID`, `HIGH` são valores de `IntelligenceTier` — nunca planos comerciais. É proibido variar qualidade estratégica por plano.
 - Avaliação de modelos usa tarefas reais da plataforma (produtos de categorias variadas, medindo compreensão, estratégia, variedade, naturalidade, latência, custo, confiabilidade), alimentando o Golden Dataset do ADR-012.
-- Toda decisão de modelo permanece invisível ao creator: sem tier, provider, modelo, tokens ou prompt na UI.
+- Decisões de modelo permanecem invisíveis ao creator: tier, provider, modelo, tokens e prompt nunca cruzam a fronteira creator-facing. A única exceção é o Histórico do Produto, que pode mostrar somente custo estimado agregado, moeda e completude (`COMPLETE`, `PARTIAL` ou `UNAVAILABLE`), sem permitir inferir os detalhes internos.
 
 ## Alternativas consideradas
 
@@ -58,7 +58,7 @@ Engine Capability → Logical Intelligence Task → Model Router
 - Chaves de provider ficam no gateway, fora do domínio e dos logs.
 - Contexto mínimo por capability (slices de Strategy/Skill/Memory), nunca o mundo inteiro.
 - Conteúdo de páginas de Produto entra como dado não confiável, separado das instruções (ver ADR-012).
-- Métricas por tarefa: latência, tokens, custo, taxa de erro e retries — internas, sem exposição na UI.
+- Métricas por tarefa: latência, tokens, custo, taxa de erro e retries permanecem internas. O Histórico do Produto recebe somente a projeção allowlisted de custo estimado agregado, moeda e completude; nunca provider, modelo, tier, tokens, prompt, logs ou payload.
 
 ## Relações
 
