@@ -55,6 +55,7 @@ import {
   type LogicalTask,
   type ModelRouter,
   type ProviderCallMetrics,
+  type ProviderTokenUsage,
 } from "./model-router";
 import { emitJobEvent, sanitizeGateReports } from "./observability";
 import { GenerationError } from "./errors";
@@ -89,7 +90,10 @@ export type CapabilityEvent = {
   tier: string;
   instructionVersion?: string;
   instructionHash?: string;
+  provider?: string;
   model?: string;
+  // Usage real normalizado do provider; metadata legado permanece válido sem o campo.
+  usage?: ProviderTokenUsage;
   reasoning?: string;
   providerStatus?: number | null;
   durationMs: number;
@@ -930,7 +934,9 @@ export function createCapabilityTracker(opts: {
         tier: ROUTER_MAP[task],
         instructionVersion,
         instructionHash: opts.router?.hash?.(task),
+        provider: captured?.provider,
         model: captured?.model ?? effectiveModel(task),
+        usage: captured?.usage,
         reasoning: captured?.reasoning,
         providerStatus: captured?.providerStatus ?? null,
         durationMs,
@@ -984,7 +990,9 @@ export function createCapabilityTracker(opts: {
         task,
         tier: ROUTER_MAP[task],
         instructionVersion,
+        provider: captured?.provider,
         model: captured?.model ?? effectiveModel(task),
+        usage: captured?.usage,
         reasoning: captured?.reasoning,
         providerStatus: captured?.providerStatus ?? null,
         durationMs,

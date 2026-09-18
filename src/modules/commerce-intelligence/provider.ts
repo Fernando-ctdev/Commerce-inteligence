@@ -8,6 +8,7 @@ import {
   type LogicalTask,
   type ModelRouter,
   type ProviderCallMetrics,
+  type ProviderTokenUsage,
 } from "./model-router";
 type ProviderConfig = {
   baseUrl?: string;
@@ -225,6 +226,40 @@ const providerCorrelationOf = (
 // (fencing/cancelamento) e nunca erro de configuração (4xx fora da lista).
 const FALLBACK_STATUSES: ReadonlySet<number> = new Set([408, 429, 502, 503, 504]);
 const TIER_CHAIN: readonly IntelligenceTier[] = ["LOW", "MID", "HIGH"];
+
+const NO_USAGE: ProviderTokenUsage = { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null };
+
+// Contador seguro: apenas inteiro não negativo; valor presente porém inválido → null (nunca 0).
+const usageToken = (value: unknown): number | null =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+
+// Primeira chave PRESENTE decide: fallback de naming só quando a chave primária não existe.
+const firstToken = (source: Record<string, unknown>, keys: string[]): number | null => {
+  for (const key of keys) if (key in source) return usageToken(source[key]);
+  return null;
+};
+
+const nestedObject = (source: Record<string, unknown>, key: string): Record<string, unknown> | null => {
+  const value = source[key];
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+};
+
+// Allowlist dos envelopes OpenAI-compatíveis conhecidos (design 2026-09-18): usage real é a
+// única fonte de tokens; ausência/ formato desconhecido → null. Contadores cached/reasoning são
+// preservados como reportados; a semântica de sobreposição (cached⊆input, reasoning⊆output)
+// é aplicada pelo calculador de custo (pricing.ts), nunca aqui.
+export function normalizeProviderUsage(envelope: unknown): ProviderTokenUsage {
+  const usage = nestedObject((envelope ?? {}) as Record<string, unknown>, "usage");
+  if (!usage) return NO_USAGE;
+  const promptDetails = nestedObject(usage, "prompt_tokens_details");
+  const completionDetails = nestedObject(usage, "completion_tokens_details");
+  return {
+    inputTokens: firstToken(usage, ["prompt_tokens", "input_tokens"]),
+    outputTokens: firstToken(usage, ["completion_tokens", "output_tokens"]),
+    reasoningTokens: completionDetails ? firstToken(completionDetails, ["reasoning_tokens"]) : firstToken(usage, ["reasoning_tokens"]),
+    cachedTokens: promptDetails ? firstToken(promptDetails, ["cached_tokens"]) : firstToken(usage, ["cached_tokens"]),
+  };
+}
 type FallbackFailure = {
   kind: "timeout" | "connection" | "http_status";
   providerStatus: number | null;
@@ -290,8 +325,10 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
     let requestBytes = 0;
     let trustedContextBytes = 0;
     let externalBytes = 0;
+    let usage: ProviderTokenUsage | undefined;
     const report = () =>
       onMetrics?.({
+        provider: "openai-compatible",
         model,
         reasoning: REASONING_BY_TASK[task],
         providerStatus,
@@ -300,6 +337,8 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
         externalBytes,
         responseBytes,
         durationMs: Date.now() - startedAt,
+        // Usage nunca entra em console.info/logs — apenas no callback de métricas em memória.
+        ...(usage ? { usage } : {}),
         ...providerCorrelation,
       });
     try {
@@ -424,6 +463,9 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
           id?: unknown;
         };
         content = envelope?.choices?.[0]?.message?.content;
+        // Uso real capturado do envelope mesmo quando o conteúdo viola contrato (GEN-SCHEMA):
+        // a chamada aconteceu e o custo deve ser registrado.
+        usage = normalizeProviderUsage(envelope);
       } catch {
         throw new GenerationError(
           "GEN-SCHEMA",

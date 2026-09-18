@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_PART_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION, JUDGE_EDITORIAL_GUIDANCE, PART_REPAIR_EDITORIAL_GUIDANCE, createHttpProvider, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
+import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_PART_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION, JUDGE_EDITORIAL_GUIDANCE, PART_REPAIR_EDITORIAL_GUIDANCE, createHttpProvider, normalizeProviderUsage, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
 import { CARDINALITY_POLICY } from "./contract";
 import { GenerationError } from "./errors";
 import { ROUTER_MAP } from "./model-router";
@@ -622,4 +622,70 @@ test("escopo editorial: judge/repair guidance cobre weak_commercial_value, coer�
   assert.ok(JUDGE_EDITORIAL_GUIDANCE.includes("bolso de calça"), "exemplo de ângulo banal explícito");
   assert.ok(PART_REPAIR_EDITORIAL_GUIDANCE.includes("coerência intra-brief"));
   assert.ok(PART_REPAIR_EDITORIAL_GUIDANCE.includes("perguntas como formato de hook permanecem válidas"));
+});
+
+// ---- Usage real do provider (design 2026-09-18): allowlist; null quando desconhecido ----
+
+test("normalizeProviderUsage lê envelope OpenAI-compatível completo (cached/reasoning em details)", () => {
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { prompt_tokens: 1200, completion_tokens: 400, prompt_tokens_details: { cached_tokens: 250 }, completion_tokens_details: { reasoning_tokens: 100 } } }),
+    { inputTokens: 1200, outputTokens: 400, reasoningTokens: 100, cachedTokens: 250 },
+  );
+});
+
+test("normalizeProviderUsage aceita naming alternativo input_tokens/output_tokens e paths planos", () => {
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { input_tokens: 500, output_tokens: 200, cached_tokens: 50, reasoning_tokens: 30 } }),
+    { inputTokens: 500, outputTokens: 200, reasoningTokens: 30, cachedTokens: 50 },
+  );
+});
+
+test("normalizeProviderUsage sem usage/envelope malformado devolve nulos (nunca 0 inferido)", () => {
+  assert.deepEqual(normalizeProviderUsage({}), { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null });
+  assert.deepEqual(normalizeProviderUsage({ usage: "1200 tokens" }), { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null });
+  assert.deepEqual(normalizeProviderUsage(null), { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null });
+});
+
+test("normalizeProviderUsage: valor presente porém inválido (negativo/fracionário) vira null nessa dimensão", () => {
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { prompt_tokens: -5, completion_tokens: 1.5 } }),
+    { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null },
+  );
+  // details malformado cai para caminho plano; chave primária presente decide antes do alternate
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { prompt_tokens: 10, prompt_tokens_details: "x", cached_tokens: 7 } }),
+    { inputTokens: 10, outputTokens: null, reasoningTokens: null, cachedTokens: 7 },
+  );
+});
+
+test("normalizeProviderUsage preserva zero reportado como zero", () => {
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { prompt_tokens: 0, completion_tokens: 0, prompt_tokens_details: { cached_tokens: 0 }, completion_tokens_details: { reasoning_tokens: 0 } } }),
+    { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+  );
+});
+
+test("onMetrics carrega provider + usage no sucesso e provider identity é sempre openai-compatible", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ id: "gen-usage-1", usage: { prompt_tokens: 120, completion_tokens: 40, prompt_tokens_details: { cached_tokens: 20 }, completion_tokens_details: { reasoning_tokens: 10 } }, choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200 })) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
+  let captured: Record<string, unknown> | undefined;
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (metrics) => { captured = metrics as unknown as Record<string, unknown>; });
+  } finally { globalThis.fetch = originalFetch; }
+  assert.equal(captured?.provider, "openai-compatible");
+  assert.deepEqual(captured?.usage, { inputTokens: 120, outputTokens: 40, reasoningTokens: 10, cachedTokens: 20 });
+});
+
+test("usage do envelope sobrevive a GEN-SCHEMA e chega no report de falha; sem usage, campo ausente", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ usage: { prompt_tokens: 90, completion_tokens: 10 }, choices: [{ message: { content: "not-json" } }] }), { status: 200 })) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
+  const captured: Array<Record<string, unknown>> = [];
+  try {
+    await assert.rejects(provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (metrics) => { captured.push(metrics as unknown as Record<string, unknown>); }), (error: GenerationError) => error.code === "GEN-SCHEMA");
+  } finally { globalThis.fetch = originalFetch; }
+  assert.equal(captured.length, 1, "report único no finally");
+  assert.deepEqual(captured[0]?.usage, { inputTokens: 90, outputTokens: 10, reasoningTokens: null, cachedTokens: null });
+  assert.ok(!JSON.stringify(captured[0]).includes("not-json"), "usage não vira log de payload");
 });
