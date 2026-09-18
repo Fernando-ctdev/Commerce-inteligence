@@ -317,18 +317,6 @@
   margin: 0;
 }
 
-.statusTag {
-  background: var(--color-surface-secondary);
-  border-radius: 9999px;
-  color: var(--color-text-secondary);
-  flex-shrink: 0;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 16px;
-  margin: 0;
-  padding: 2px 10px;
-  white-space: nowrap;
-}
 
 
 /* Leitor ocupa a largura do painel; o texto controla a medida por bloco. */

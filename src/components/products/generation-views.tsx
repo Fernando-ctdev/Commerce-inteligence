@@ -20,7 +20,6 @@ import {
   statusMessage,
   partialModel,
   briefingItems,
-  contentStatusLabel,
   strategyModel,
   type BriefingItem,
   scriptParagraphs,
@@ -108,7 +107,6 @@ function BriefingDetail({ index, item, onNavigate, total }: {
           <span className={styles.contentProgress}>
             {`${String(index + 1).padStart(2, "0")}/${String(total).padStart(2, "0")}`}
           </span>
-          <p className={styles.statusTag}>{contentStatusLabel(item.status)}</p>
         </div>
       </header>
       <Tabs className={styles.detailTabs} defaultValue="script">
