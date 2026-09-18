@@ -21,9 +21,16 @@ export const ROUTER_MAP: Record<LogicalTask, IntelligenceTier> = {
 export type ProjectedContext = { instructions: { task: LogicalTask; tier: IntelligenceTier; instructionHash: string }; confirmedContext: unknown; externalData?: unknown };
 // Fallback MID→HIGH (decisão do Arquiteto): tentativa sacrifada em MID, registrada com retry/custo.
 export type ProviderFallbackInfo = { from: string; reason: "timeout" | "connection" | "http_status"; providerStatus: number | null; requestBytes: number; durationMs: number };
-export type ProviderCallMetrics = { provider?: string; model: string; reasoning: string; providerStatus: number | null; requestBytes: number; trustedContextBytes: number; externalBytes: number; responseBytes: number | null; durationMs: number; usage?: ProviderTokenUsage; providerRequestId?: string; providerRequestIdSource?: "header" | "body.id"; retry?: number; fallback?: ProviderFallbackInfo };
+export type ProviderCallMetrics = { provider?: string; model: string; reasoning: string; providerStatus: number | null; requestBytes: number; trustedContextBytes: number; externalBytes: number; responseBytes: number | null; durationMs: number; usage?: ProviderTokenUsage; reportedCost?: ProviderReportedCost; providerRequestId?: string; providerRequestIdSource?: "header" | "body.id"; retry?: number; fallback?: ProviderFallbackInfo };
 // Uso real normalizado do provider; dimensão sem contador confiável permanece null (nunca 0 inferido).
 export type ProviderTokenUsage = { inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null; cachedTokens: number | null };
+// Custo monetário relatado pelo provider (ex.: OpenRouter usage.cost, USD documentado).
+// amountMinor em unidades menores da moeda; sem moeda explícita/configurada, completa vira PARTIAL.
+export type ProviderReportedCost = {
+  amountMinor: string | null;
+  currency: string | null;
+  completeness: "COMPLETE" | "PARTIAL" | "UNAVAILABLE";
+};
 // Registro sanitizado por capability: nunca prompts/payload bruto/secrets.
 export type CapabilityRecord = { task: LogicalTask; tier: IntelligenceTier; provider: string; model: string; instructionVersion: string; instructionHash: string; durationMs: number; requestBytes: number; contextBytes: number; responseBytes: number; attempt: number; retry: number };
 export type ModelRouter = { complete(task: LogicalTask, input: { trustedContext: unknown; externalData?: unknown }, signal?: AbortSignal, onMetrics?: (metrics: ProviderCallMetrics) => void): Promise<unknown>; describe(): ModelDescription; hash?(task: LogicalTask): string; modelFor?(task: LogicalTask): string };

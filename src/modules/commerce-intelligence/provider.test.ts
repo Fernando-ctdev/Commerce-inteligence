@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_PART_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION, JUDGE_EDITORIAL_GUIDANCE, PART_REPAIR_EDITORIAL_GUIDANCE, createHttpProvider, normalizeProviderUsage, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
+import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_PART_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION, JUDGE_EDITORIAL_GUIDANCE, PART_REPAIR_EDITORIAL_GUIDANCE, createHttpProvider, dollarsLexemeToMinor, extractReportedCostLexeme, normalizeProviderUsage, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
 import { CARDINALITY_POLICY } from "./contract";
 import { GenerationError } from "./errors";
 import { ROUTER_MAP } from "./model-router";
@@ -706,4 +706,33 @@ test("usage do envelope sobrevive a GEN-SCHEMA e chega no report de falha; sem u
   assert.equal(captured.length, 1, "report único no finally");
   assert.deepEqual(captured[0]?.usage, { inputTokens: 90, outputTokens: 10, reasoningTokens: null, cachedTokens: null });
   assert.ok(!JSON.stringify(captured[0]).includes("not-json"), "usage não vira log de payload");
+});
+
+// ---- Custo relatado pelo provider (Blueprint 456f525): usage.cost exato, sem float ----
+
+test("extractReportedCostLexeme casa apenas a chave exata cost, nunca cost_details", () => {
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost":0.009,"cost_details":{"upstream_inference_cost":19}}}'), "0.009");
+  assert.equal(extractReportedCostLexeme('{"usage":{"prompt_tokens":5}}'), null);
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost_details":{"upstream_inference_cost":19}}}'), null);
+});
+
+test("dollarsLexemeToMinor converte decimal exato para cents com HALF_UP documentado", () => {
+  assert.equal(dollarsLexemeToMinor("0.009"), "1", "contrato: 0.009 → 1 centavo (HALF_UP)");
+  assert.equal(dollarsLexemeToMinor("0.95"), "95");
+  assert.equal(dollarsLexemeToMinor("1.005"), "101");
+  assert.equal(dollarsLexemeToMinor("2"), "200");
+  assert.equal(dollarsLexemeToMinor("0.004"), "0", "abaixo de meio centavo → 0 válido");
+  assert.equal(dollarsLexemeToMinor("-1"), null, "negativo não é lexeme válido");
+  assert.equal(dollarsLexemeToMinor("1.5e3"), null, "notação científica não é lexeme válido");
+});
+
+test("onMetrics carrega reportedCost (USD) no sucesso; falha com cost também reporta", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ usage: { prompt_tokens: 100, completion_tokens: 10, cost: 0.009 }, choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200 })) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
+  let captured: Record<string, unknown> | undefined;
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (metrics) => { captured = metrics as unknown as Record<string, unknown>; });
+  } finally { globalThis.fetch = originalFetch; }
+  assert.deepEqual(captured?.reportedCost, { amountMinor: "1", currency: "USD", completeness: "COMPLETE" });
 });

@@ -2,7 +2,13 @@
 // CapabilityEvents em registros sanitizados + agregação capability/Content/job.
 // Fonte canônica: IntelligenceRun.metadata.capabilities[]; nada de totais duplicados.
 import { calculateCost, type PriceCompleteness, type ResolvedPrice } from "./pricing";
-import type { LogicalTask, ProviderTokenUsage } from "./model-router";
+import type { LogicalTask, ProviderReportedCost, ProviderTokenUsage } from "./model-router";
+
+const NO_USAGE: ProviderTokenUsage = { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null };
+
+// Fonte do custo do registro (contrato Blueprint 456f525): custo relatado pelo provider
+// prevalece; snapshot oficial (futuro) e catálogo local são fallback; nada → UNAVAILABLE.
+export type CostSource = "REPORTED" | "OFFICIAL_SNAPSHOT" | "LOCAL_FALLBACK" | "UNAVAILABLE";
 
 export type CapabilityUsageCost = {
   task: LogicalTask;
@@ -11,7 +17,7 @@ export type CapabilityUsageCost = {
   retry: number;
   usage: ProviderTokenUsage;
   pricing: { versionId: string | null; currency: string | null };
-  cost: { amountMinor: string | null; completeness: PriceCompleteness };
+  cost: { amountMinor: string | null; completeness: PriceCompleteness; source: CostSource };
 };
 
 // Subconjunto lido do CapabilityEvent: events com attempts[] geram um registro por callback
@@ -24,7 +30,8 @@ export type RunCostInputEvent = {
   attempt: number;
   retry: number;
   usage?: ProviderTokenUsage;
-  attempts?: Array<{ usage?: ProviderTokenUsage; retry?: number }>;
+  reportedCost?: ProviderReportedCost;
+  attempts?: Array<{ usage?: ProviderTokenUsage; reportedCost?: ProviderReportedCost; retry?: number }>;
 };
 
 // Snapshot imutável do preço aplicável no momento da resolução: o próprio ResolvedPrice
@@ -46,20 +53,34 @@ export async function buildCapabilityUsageCosts(
   const priceCache = new Map<string, PriceSnapshot | null>();
   for (const event of events) {
     const perAttempt = event.attempts?.length
-      ? event.attempts.map((attempt) => ({ usage: attempt.usage, retry: attempt.retry ?? 0 }))
-      : event.usage
-        ? [{ usage: event.usage, retry: event.retry }]
+      ? event.attempts.map((attempt) => ({ usage: attempt.usage, reportedCost: attempt.reportedCost, retry: attempt.retry ?? 0 }))
+      : event.usage || event.reportedCost
+        ? [{ usage: event.usage, reportedCost: event.reportedCost, retry: event.retry }]
         : [];
     // Dedupe POR EVENTO (chave retry): callbacks distintas do mesmo evento são tentativas
     // efetivas distintas; eventos repetidos (chunks da mesma task sem contentId) são
     // chamadas legítimas e NUNCA se deduplicam entre si.
     const seenRetries = new Set<number>();
     for (const attempt of perAttempt) {
-      // Tentativa sem usage do provider não cria custo (nunca inferido de bytes/texto).
-      const usage = attempt.usage ?? null;
-      if (!usage) continue;
+      // Tentativa sem usage E sem custo relatado não cria registro (nada inventado).
+      if (!attempt.usage && !attempt.reportedCost) continue;
       if (seenRetries.has(attempt.retry)) continue;
       seenRetries.add(attempt.retry);
+      const usage = attempt.usage ?? NO_USAGE;
+      // Custo relatado é PRIMÁRIO: preserva moeda explícita e nunca consulta catálogo.
+      if (attempt.reportedCost) {
+        const reported = attempt.reportedCost;
+        records.push({
+          task: event.task,
+          contentId: event.contentId,
+          attempt: event.attempt,
+          retry: attempt.retry,
+          usage,
+          pricing: { versionId: null, currency: reported.currency },
+          cost: { amountMinor: reported.amountMinor, completeness: reported.completeness, source: "REPORTED" },
+        });
+        continue;
+      }
       let price: PriceSnapshot | null = null;
       try {
         price = await resolvePriceCached(event.provider, event.model, resolvePrice, priceCache);
@@ -74,7 +95,7 @@ export async function buildCapabilityUsageCosts(
         retry: attempt.retry,
         usage,
         pricing: { versionId: price?.versionId ?? null, currency: estimate.currency },
-        cost: { amountMinor: estimate.amountMinor, completeness: estimate.completeness },
+        cost: { amountMinor: estimate.amountMinor, completeness: estimate.completeness, source: price ? "LOCAL_FALLBACK" : "UNAVAILABLE" },
       };
       records.push(record);
     }
@@ -117,7 +138,7 @@ export async function attachCapabilityCosts(
       if (!record) return;
       Object.assign(target, {
         pricing: { versionId: record.pricing.versionId, currency: record.pricing.currency },
-        cost: { amountMinor: record.cost.amountMinor, completeness: record.cost.completeness },
+        cost: { amountMinor: record.cost.amountMinor, completeness: record.cost.completeness, source: record.cost.source },
       });
     };
     if (event.attempts?.length) {

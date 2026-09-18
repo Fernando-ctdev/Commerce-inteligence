@@ -55,6 +55,7 @@ import {
   type LogicalTask,
   type ModelRouter,
   type ProviderCallMetrics,
+  type ProviderReportedCost,
   type ProviderTokenUsage,
 } from "./model-router";
 import { emitJobEvent, sanitizeGateReports } from "./observability";
@@ -94,6 +95,8 @@ export type CapabilityEvent = {
   model?: string;
   // Usage real normalizado do provider; metadata legado permanece válido sem o campo.
   usage?: ProviderTokenUsage;
+  // Custo monetário relatado pelo provider (ex.: usage.cost OpenRouter); primário sobre snapshots.
+  reportedCost?: ProviderReportedCost;
   // Todas as callbacks de métricas da execução (uma por tentativa efetiva do provider,
   // inclusive a sacrificada em fallback); cost-observability achata em registros por tentativa.
   attempts?: ProviderCallMetrics[];
@@ -950,6 +953,7 @@ export function createCapabilityTracker(opts: {
         provider: captured()?.provider,
         model: captured()?.model ?? effectiveModel(task),
         usage: captured()?.usage,
+        reportedCost: captured()?.reportedCost,
         attempts: capturedAll.length > 0 ? capturedAll : undefined,
         reasoning: captured()?.reasoning,
         providerStatus: captured()?.providerStatus ?? null,
@@ -1008,6 +1012,7 @@ export function createCapabilityTracker(opts: {
         provider: captured()?.provider,
         model: captured()?.model ?? effectiveModel(task),
         usage: captured()?.usage,
+        reportedCost: captured()?.reportedCost,
         attempts: capturedAll.length > 0 ? capturedAll : undefined,
         reasoning: captured()?.reasoning,
         providerStatus: captured()?.providerStatus ?? null,

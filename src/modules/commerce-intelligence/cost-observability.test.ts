@@ -124,6 +124,38 @@ test("attach define event.cost da última tentativa mesmo após consumir a fila 
   assert.deepEqual(event.pricing, { versionId: "price-1", currency: "BRL" });
 });
 
+test("custo relatado é primário: sem catálogo, sem resolver, source REPORTED", async () => {
+  let resolverCalls = 0;
+  const records = await buildCapabilityUsageCosts(
+    [{ task: "PRODUCT_UNDERSTANDING", provider: "p", model: "m", attempt: 1, retry: 0, usage: usage({ inputTokens: 100 }), reportedCost: { amountMinor: "1", currency: "USD", completeness: "COMPLETE" } }],
+    async () => { resolverCalls += 1; throw new Error("catálogo não deve ser consultado"); },
+  );
+  assert.equal(records.length, 1);
+  assert.equal(resolverCalls, 0, "custo relatado nunca consulta catálogo");
+  assert.deepEqual(records[0]?.pricing, { versionId: null, currency: "USD" });
+  assert.deepEqual(records[0]?.cost, { amountMinor: "1", completeness: "COMPLETE", source: "REPORTED" });
+});
+
+test("reported sem moeda configurada é PARTIAL com valor preservado", async () => {
+  const records = await buildCapabilityUsageCosts(
+    [{ task: "PRODUCT_UNDERSTANDING", attempt: 1, retry: 0, usage: usage({ inputTokens: 100 }), reportedCost: { amountMinor: "1", currency: null, completeness: "PARTIAL" } }],
+    resolverByCurrency("BRL").resolve,
+  );
+  assert.deepEqual(records[0]?.cost, { amountMinor: "1", completeness: "PARTIAL", source: "REPORTED" });
+  assert.equal(records[0]?.pricing.currency, null);
+});
+
+test("misto REPORTED(USD) + ESTIMATED(BRL): job não soma — UNAVAILABLE", () => {
+  const result = aggregateRunCosts({ capabilities: [
+    { task: "PRODUCT_UNDERSTANDING", pricing: { currency: "USD" }, cost: { amountMinor: "1", completeness: "COMPLETE", source: "REPORTED" } },
+    { task: "CONTENT_BRIEF_GENERATION", contentId: "c1", pricing: { currency: "BRL" }, cost: { amountMinor: "100", completeness: "COMPLETE", source: "LOCAL_FALLBACK" } },
+  ] });
+  assert.deepEqual(result.job, { currency: null, amountMinor: null, completeness: "UNAVAILABLE" });
+  // totais por capability preservam a fonte de cada registro
+  assert.equal(result.capabilities[0]?.total.completeness, "COMPLETE");
+  assert.equal(result.capabilities[1]?.total.completeness, "COMPLETE");
+});
+
 test("contentId só aparece quando atribuído", async () => {
   const records = await buildCapabilityUsageCosts(
     [

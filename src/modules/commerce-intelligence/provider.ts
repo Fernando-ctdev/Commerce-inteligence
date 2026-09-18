@@ -8,6 +8,7 @@ import {
   type LogicalTask,
   type ModelRouter,
   type ProviderCallMetrics,
+  type ProviderReportedCost,
   type ProviderTokenUsage,
 } from "./model-router";
 type ProviderConfig = {
@@ -250,6 +251,39 @@ const detailToken = (usage: Record<string, unknown>, details: Record<string, unk
   return firstToken(usage, [key]);
 };
 
+// Lexeme bruto de `usage.cost` extraído do TEXTO da resposta: JSON.parse produz double e
+// destruiria o invariante de aritmética exata. A regex casa apenas a chave exata "cost"
+// (nunca "upstream_inference_cost" — sem aspas imediatamente antes de "cost").
+const COST_LEXEME_RE = /"cost"\s*:\s*(\d+(?:\.\d+)?)/;
+export function extractReportedCostLexeme(rawText: string): string | null {
+  return COST_LEXEME_RE.exec(rawText)?.[1] ?? null;
+}
+
+// Moeda do custo reportado: OpenRouter documenta créditos = USD; configurável no adapter.
+const REPORTED_COST_CURRENCY = process.env.LLM_REPORTED_COST_CURRENCY?.trim().toUpperCase() || "USD";
+
+// Decimal dollars (string exata) → cents (string) com HALF_UP único; BigInt puro, sem float.
+// Documentado (contrato): "0.009" → "1" centavo; custo < meio centavo → "0" é válido.
+export function dollarsLexemeToMinor(lexeme: string): string | null {
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(lexeme.trim());
+  if (!match) return null;
+  const units = BigInt(match[1]!);
+  const fraction = match[2] ?? "";
+  if (fraction === "") return (units * 100n).toString();
+  const scale = 10n ** BigInt(fraction.length); // 10^n
+  const numerator = units * scale + BigInt(fraction); // valor × 10^n exato
+  return ((numerator * 100n + 5n * scale / 10n) / scale).toString();
+}
+
+// Custo relatado pelo provider: primário quando presente. Sem moeda configurada → PARTIAL
+// (valor conhecido, moeda não confiável); sem valor → null (nada a registrar).
+export function normalizeReportedCost(lexeme: string | null): ProviderReportedCost | null {
+  if (lexeme == null) return null;
+  const amountMinor = dollarsLexemeToMinor(lexeme);
+  if (amountMinor == null) return null;
+  return { amountMinor, currency: REPORTED_COST_CURRENCY || null, completeness: REPORTED_COST_CURRENCY ? "COMPLETE" : "PARTIAL" };
+}
+
 // Allowlist dos envelopes OpenAI-compatíveis conhecidos (design 2026-09-18): usage real é a
 // única fonte de tokens; ausência/ formato desconhecido → null. Contadores cached/reasoning são
 // preservados como reportados; a semântica de sobreposição (cached⊆input, reasoning⊆output)
@@ -332,6 +366,7 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
     let trustedContextBytes = 0;
     let externalBytes = 0;
     let usage: ProviderTokenUsage | undefined;
+    let reportedCost: ProviderReportedCost | undefined;
     const report = () =>
       onMetrics?.({
         provider: "openai-compatible",
@@ -343,8 +378,9 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
         externalBytes,
         responseBytes,
         durationMs: Date.now() - startedAt,
-        // Usage nunca entra em console.info/logs — apenas no callback de métricas em memória.
+        // Usage/custo nunca entram em console.info/logs — apenas no callback de métricas.
         ...(usage ? { usage } : {}),
+        ...(reportedCost ? { reportedCost } : {}),
         ...providerCorrelation,
       });
     try {
@@ -472,6 +508,8 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
         // Uso real capturado do envelope mesmo quando o conteúdo viola contrato (GEN-SCHEMA):
         // a chamada aconteceu e o custo deve ser registrado.
         usage = normalizeProviderUsage(envelope);
+        // Custo relatado (usage.cost) extraído do texto bruto — exato, sem float.
+        reportedCost = normalizeReportedCost(extractReportedCostLexeme(text)) ?? undefined;
       } catch {
         throw new GenerationError(
           "GEN-SCHEMA",
