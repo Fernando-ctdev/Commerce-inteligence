@@ -458,6 +458,23 @@
   color: var(--color-intelligence);
 }
 
+/* Cabeçalho do Roteiro: rótulo à esquerda, cópia discreta à direita. */
+.scriptHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Ação de cópia: ícone only, cor auxiliar; alvo de toque 44px do Button.
+   Base em text.secondary (5.36:1 em Light — ícone significativo ≥ 3:1). */
+.copyScriptButton {
+  color: var(--color-text-secondary);
+}
+
+.copyScriptButton:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
 /* Leitura editorial: ~65–75 caracteres por linha, sem correr o painel todo. */
 /* Roteiro para leitura start-to-end: uma frase completa por parágrafo, com pausa visual entre frases. */
 .scriptParagraphs {

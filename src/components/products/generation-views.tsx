@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Check, ChevronLeft, ChevronRight, CircleAlert, Compass, Gift, Heart, HeartCrack, Hourglass, Megaphone, Mic, ScrollText, Shield, Sparkles, Users, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, ChevronLeft, ChevronRight, CircleAlert, Compass, Copy, Gift, Heart, HeartCrack, Hourglass, Megaphone, Mic, ScrollText, Shield, Sparkles, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import type { GenerationRecord } from "./generation-api";
@@ -50,6 +50,42 @@ function SectionLabel({ icon: Icon, iconClassName, children }: { icon: typeof Mi
       <Icon aria-hidden="true" className={[styles.sectionIcon, iconClassName].filter(Boolean).join(" ")} />
       {children}
     </p>
+  );
+}
+
+/** Cópia do roteiro inteiro (texto bruto, com quebras originais) para a área de
+    transferência; ícone e aria-label comunicam copiado/erro por 2s. */
+function CopyScriptButton({ script }: { script: string }) {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
+  useEffect(() => {
+    if (copyState === "idle") return;
+    const timer = setTimeout(() => setCopyState("idle"), 2000);
+    return () => clearTimeout(timer);
+  }, [copyState]);
+  const label = copyState === "copied"
+    ? "Roteiro copiado"
+    : copyState === "error"
+      ? "Não foi possível copiar o roteiro"
+      : "Copiar roteiro";
+  return (
+    <Button
+      aria-label={label}
+      className={styles.copyScriptButton}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(script);
+          setCopyState("copied");
+        } catch {
+          setCopyState("error");
+        }
+      }}
+      size="icon"
+      title={label}
+      type="button"
+      variant="ghost"
+    >
+      {copyState === "copied" ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+    </Button>
   );
 }
 
@@ -138,7 +174,10 @@ function BriefingDetail({ index, item, onNavigate, total }: {
           aria-label="Roteiro"
           className={[styles.detailSection, styles.scriptSection].join(" ")}
         >
-          <SectionLabel icon={ScrollText} iconClassName={styles.sectionIconIntelligence}>ROTEIRO</SectionLabel>
+          <div className={styles.scriptHeader}>
+            <SectionLabel icon={ScrollText} iconClassName={styles.sectionIconIntelligence}>ROTEIRO</SectionLabel>
+            <CopyScriptButton script={item.script} />
+          </div>
           <div className={styles.scriptParagraphs}>
             {scriptParagraphs(item.script).map((paragraph, index) => (
               <p className={styles.readingText} key={`${index}-${paragraph.slice(0, 20)}`}>{paragraph}</p>
