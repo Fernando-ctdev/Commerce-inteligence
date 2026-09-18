@@ -35,13 +35,11 @@ import {
   type PlatformSkill,
 } from "./platform-skill";
 import {
-  DEVELOPMENT_ACTION_STEMS,
-  DEVELOPMENT_CONNECTORS,
-  DEVELOPMENT_RATIONALE,
   ctaTextFactualIssues,
   GATE_POLICY_VERSION,
   deliverableHookBuckets,
-  developmentGroundingTerms,
+  developmentRequirements,
+  parseStructuredDevelopment,
   gateSceneSet,
   diagnoseDevelopmentPoint,
   validDevelopmentPoint,
@@ -382,28 +380,8 @@ function siblingSummary(
     ),
   };
 }
-// ADR-020 adendo 2: requirements server-derived do development — projeção das
-// constantes/predicados do PRÓPRIO gate (reuso, sem critério novo); efêmero.
-function developmentRequirements(evidence: EvidenceSnapshot) {
-  return {
-    allowedActionStems: DEVELOPMENT_ACTION_STEMS,
-    connectors: DEVELOPMENT_CONNECTORS,
-    factRefs: evidence.facts
-      .map((value, index) => ({ value, ref: evidence.refs[index] }))
-      .filter(({ ref }) => ref !== "product:name")
-      .map(({ value, ref }) => ({
-        ref,
-        value,
-        terms: developmentGroundingTerms(value),
-      })),
-    noShotList: true,
-    minGrounding: {
-      factTermsInPoint: 2,
-      factTermsInRationale: 2,
-      contextTerms: 1,
-    },
-  };
-}
+// ADR-020 adendo 2: requirements server-derived do development vivem NO GATE
+// (fonte única dos predicados); engine apenas importa developmentRequirements.
 
 // Contraste determinístico por item, PRÉ-VALIDADO pelo gate
 // (validDevelopmentPoint): contexto efêmero — nunca persistência/fabricação.
@@ -428,39 +406,14 @@ function buildRepairContrast(
     : undefined;
 }
 
-// Output contract do CONTENT_BRIEF_REPAIR (adendo 2): partes estruturadas por
-// bullet {text, action, factRef, rationale}; SOMENTE text é projetado para o
-// ContentBriefVersion canônico. Partes NUNCA autorizam texto falho — após as
-// checagens de partes, o texto passa por validateContentBriefDraft e o conjunto
-// por validateBriefSet (gate é a autoridade).
+// Contrato estruturado compartilhado (design 2026-09-18): parser único do gate valida
+// shape/repertório (GEN-SCHEMA) e produz texto + diagnóstico sanitizado; o texto projetado
+// passa por validateContentBriefDraft e o conjunto por validateBriefSet (autoridade final).
 export function parseStructuredRepairDraft(
   output: Record<string, unknown>,
   evidence: EvidenceSnapshot,
 ): ContentBriefDraft {
-  if (!Array.isArray(output.development))
-    throw new ContractError("GEN-SCHEMA", "development estruturado inválido", "development");
-  const texts = output.development.map((item): string => {
-    if (!item || typeof item !== "object" || Array.isArray(item))
-      throw new ContractError("GEN-SCHEMA", "bullet estruturado inválido", "development");
-    const bullet = item as Record<string, unknown>;
-    const factRef = typeof bullet.factRef === "string" ? bullet.factRef : undefined;
-    const action = typeof bullet.action === "string" ? bullet.action : undefined;
-    const rationale = typeof bullet.rationale === "string" ? bullet.rationale : undefined;
-    const text = typeof bullet.text === "string" ? bullet.text.trim() : undefined;
-    if (!text)
-      throw new ContractError("GEN-SCHEMA", "bullet sem text", "development");
-    if (!factRef || factRef === "product:name" || !evidence.refs.includes(factRef))
-      throw new ContractError(
-        "GEN-SCHEMA",
-        `factRef fora do snapshot autorizado (${factRef ?? "ausente"})`,
-        "development",
-      );
-    if (!action || !DEVELOPMENT_ACTION_STEMS.some((stem) => action.toLowerCase().startsWith(stem)))
-      throw new ContractError("GEN-SCHEMA", "action fora do repertório do gate", "development");
-    if (!rationale || !DEVELOPMENT_RATIONALE.test(rationale))
-      throw new ContractError("GEN-SCHEMA", "rationale sem conector do gate", "development");
-    return text;
-  });
+  const { texts } = parseStructuredDevelopment(output.development, evidence);
   return validateContentBriefDraft({ ...output, development: texts });
 }
 

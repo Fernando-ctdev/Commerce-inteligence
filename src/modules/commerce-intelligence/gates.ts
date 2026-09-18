@@ -616,6 +616,95 @@ export function validDevelopmentPoint(point: string, evidence: EvidenceSnapshot)
   return diagnoseDevelopmentPoint(point, evidence).valid;
 }
 
+// ---- Contrato estruturado de development (design 2026-09-18) ----
+// Fonte única do contrato: MESMOS predicados do gate (stems, conectores, fold + stopwords).
+// Erros ESTRUTURAIS (shape/factRef/action/rationale ausentes ou fora do repertório) → GEN-SCHEMA
+// (batch retry). Bullet com shape válido porém QUALIDADE inválida → texto + diagnóstico sanitizado
+// seguem para o fluxo existente (gate decide repair; nunca publicação antecipada).
+export type DevelopmentBullet = { text: string; action: string; factRef: string; rationale: string };
+
+export type DevelopmentBulletDiagnostic = {
+  index: number;
+  actionPresent: boolean;
+  factRefAllowed: boolean;
+  connectorPresent: boolean;
+  textGroundingMatched: number;
+  rationaleGroundingMatched: number;
+  shotList: boolean;
+  unverifiedClaim: boolean;
+};
+
+export function developmentRequirements(evidence: EvidenceSnapshot) {
+  return {
+    allowedActionStems: DEVELOPMENT_ACTION_STEMS,
+    connectors: DEVELOPMENT_CONNECTORS,
+    factRefs: evidence.facts
+      .map((value, index) => ({ value, ref: evidence.refs[index] }))
+      .filter(({ ref }) => ref !== "product:name")
+      .map(({ value, ref }) => ({
+        ref,
+        value,
+        terms: developmentGroundingTerms(value),
+      })),
+    noShotList: true as const,
+    minGrounding: {
+      factTermsInPoint: 2,
+      factTermsInRationale: 2,
+      contextTerms: 1,
+    },
+  };
+}
+
+// Termos de evidência (fatos não-name) presentes no texto — fold + stopwords do próprio gate.
+function factTermsMatched(value: string, evidence: EvidenceSnapshot): number {
+  const textTerms = new Set(developmentGroundingTerms(value));
+  const factTerms = evidence.facts
+    .filter((_fact, index) => evidence.refs[index] !== "product:name")
+    .flatMap((fact) => developmentGroundingTerms(fact));
+  return new Set(factTerms.filter((term) => textTerms.has(term))).size;
+}
+
+export function parseStructuredDevelopment(
+  value: unknown,
+  evidence: EvidenceSnapshot,
+): { texts: string[]; diagnostics: DevelopmentBulletDiagnostic[] } {
+  if (!Array.isArray(value))
+    throw new ContractError("GEN-SCHEMA", "development estruturado deve ser uma lista", "development");
+  const texts: string[] = [];
+  const diagnostics: DevelopmentBulletDiagnostic[] = [];
+  value.forEach((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item))
+      throw new ContractError("GEN-SCHEMA", "bullet estruturado inválido", "development");
+    const bullet = item as Record<string, unknown>;
+    const text = typeof bullet.text === "string" ? bullet.text.trim() : "";
+    const action = typeof bullet.action === "string" ? bullet.action.trim() : "";
+    const factRef = typeof bullet.factRef === "string" ? bullet.factRef : "";
+    const rationale = typeof bullet.rationale === "string" ? bullet.rationale.trim() : "";
+    // Estrutural: shape e campos fora do repertório do gate são GEN-SCHEMA (retry do lote).
+    if (!text) throw new ContractError("GEN-SCHEMA", "bullet sem text", "development");
+    if (!factRef || factRef === "product:name" || !evidence.refs.includes(factRef))
+      throw new ContractError("GEN-SCHEMA", `factRef fora do snapshot autorizado (${factRef || "ausente"})`, "development");
+    if (!action || !DEVELOPMENT_ACTION_STEMS.some((stem) => action.toLowerCase().startsWith(stem)))
+      throw new ContractError("GEN-SCHEMA", "action fora do repertório do gate", "development");
+    if (!rationale || !DEVELOPMENT_RATIONALE.test(rationale))
+      throw new ContractError("GEN-SCHEMA", "rationale sem conector do gate", "development");
+    // Qualidade: diagnóstico sanitizado por bullet; texto é projetado e o GATE decide.
+    const point = diagnoseDevelopmentPoint(text, evidence);
+    diagnostics.push({
+      index,
+      actionPresent: point.actionPresent,
+      factRefAllowed: true,
+      connectorPresent: point.connectorPresent,
+      textGroundingMatched: factTermsMatched(text, evidence),
+      rationaleGroundingMatched: point.minGroundingMatched,
+      shotList: point.shotList,
+      unverifiedClaim: point.unverified,
+    });
+    texts.push(text);
+  });
+  return { texts, diagnostics };
+}
+
 export type GatePattern = { id?: string; guidance?: string; type?: string; text?: string };
 type SelectedBriefPatterns = Array<{ hook: GatePattern; cta: GatePattern }>;
 type CreatorRecordingContext = {

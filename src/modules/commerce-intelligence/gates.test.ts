@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateBriefSet } from "./gates";
+import type { EvidenceSnapshot } from "./contract";
+import { validateBriefSet, parseStructuredDevelopment, developmentRequirements } from "./gates";
 const brief = (id: string, angle = "angle", hook = "hook", cta = "cta") => ({ contentId: id, briefVersionId: `${id}-v1`, version: 1 as const, angle, hook, development: ["Destaque o uso para orientar a conversa sobre o uso", "Destaque o uso para orientar a conversa sobre o uso"], script: `Fale sobre ${id}`, cta });
 test("desconto só é factual quando presente no catálogo: suportado com fato, contradito sem correspondência e não suportado sem fato", () => {
   const evidence = { facts: ["20% de desconto"], refs: ["fact:discountPercentage"] };
@@ -115,4 +116,70 @@ test("ADR-025: metainstrução de cena no script vira issue reparável, sem bloq
   ];
   for (const script of creatorFirst)
     assert.equal(reportFor(script).issues.includes("script contém metainstrução de cena"), false, script);
+});
+
+// ---- Contrato estruturado de development (design 2026-09-18) ----
+
+const evidenceStruct: EvidenceSnapshot = {
+  facts: ["Presilha em acrílico padrão tartaruga", "Fechamento firme que não marca o cabelo"],
+  refs: ["fact:features:1", "fact:features:2"],
+};
+
+const validBullet = {
+  text: "Destaque a presilha tartaruga para explicar o cuidado com o cabelo",
+  action: "Destaque",
+  factRef: "fact:features:1",
+  rationale: "para explicar o cuidado com o cabelo",
+};
+
+test("parseStructuredDevelopment aceita bullet válido e projeta o texto canônico", () => {
+  const parsed = parseStructuredDevelopment([validBullet], evidenceStruct);
+  assert.deepEqual(parsed.texts, ["Destaque a presilha tartaruga para explicar o cuidado com o cabelo"]);
+  const d = parsed.diagnostics[0]!;
+  assert.equal(d.index, 0);
+  assert.equal(d.actionPresent, true);
+  assert.equal(d.factRefAllowed, true);
+  assert.equal(d.connectorPresent, true);
+  assert.equal(d.shotList, false);
+  assert.equal(d.unverifiedClaim, false);
+  assert.ok(d.rationaleGroundingMatched >= 2);
+});
+
+test("parseStructuredDevelopment: shape/factRef/action/rationale estruturalmente inválidos viram GEN-SCHEMA", () => {
+  assert.throws(() => parseStructuredDevelopment([{ text: "x", action: "Destaque", factRef: "product:name", rationale: "para algo" }], evidenceStruct), /factRef/);
+  assert.throws(() => parseStructuredDevelopment([{ text: "x", action: "Destaque", factRef: "fact:inexistente", rationale: "para algo" }], evidenceStruct), /factRef/);
+  assert.throws(() => parseStructuredDevelopment([{ text: "x", factRef: "fact:features:1", rationale: "para algo" }], evidenceStruct), /action/);
+  assert.throws(() => parseStructuredDevelopment([{ text: "x", action: "Destaque", factRef: "fact:features:1" }], evidenceStruct), /rationale/);
+  assert.throws(() => parseStructuredDevelopment([{ action: "Destaque", factRef: "fact:features:1", rationale: "para algo" }], evidenceStruct), /text/);
+  assert.throws(() => parseStructuredDevelopment("não é lista", evidenceStruct));
+});
+
+test("parseStructuredDevelopment: bullet de qualidade inválida retorna texto + diagnóstico sanitizado (fluxo de repair)", () => {
+  // sem conector no texto
+  const semConector = parseStructuredDevelopment([{ ...validBullet, text: "A presilha tartaruga cuida do cabelo" }], evidenceStruct);
+  assert.equal(semConector.diagnostics[0]?.connectorPresent, false);
+  assert.equal(semConector.texts.length, 1, "texto segue para o gate/repair, sem publicação antecipada");
+  // feature list / shot list
+  const shotList = parseStructuredDevelopment([{ ...validBullet, text: "Destaque o close da presilha tartaruga para explicar o cuidado" }], evidenceStruct);
+  assert.equal(shotList.diagnostics[0]?.shotList, true);
+  // grounding curto: rationale com menos de 2 termos
+  const groundingCurto = parseStructuredDevelopment([{ ...validBullet, text: "Destaque a presilha para o", rationale: "para o" }], evidenceStruct);
+  assert.equal(groundingCurto.diagnostics[0]?.rationaleGroundingMatched, 0, "terms after connector: none");
+});
+
+test("parseStructuredDevelopment: diagnóstico contém apenas índice/flags/contagens (nunca texto)", () => {
+  const parsed = parseStructuredDevelopment([validBullet], evidenceStruct);
+  const serialized = JSON.stringify(parsed.diagnostics);
+  assert.ok(!serialized.includes("tartaruga"), "texto do bullet nunca entra no diagnóstico");
+  assert.deepEqual(Object.keys(parsed.diagnostics[0]!).sort(), ["actionPresent", "connectorPresent", "factRefAllowed", "index", "rationaleGroundingMatched", "shotList", "textGroundingMatched", "unverifiedClaim"]);
+});
+
+test("developmentRequirements é exportado do gate com requisitos derivados da evidência", () => {
+  const req = developmentRequirements(evidenceStruct);
+  assert.ok(req.allowedActionStems.includes("destaqu"));
+  assert.deepEqual(req.connectors, ["para", "porque", "pois", "assim"]);
+  assert.equal(req.noShotList, true);
+  assert.deepEqual(req.minGrounding, { factTermsInPoint: 2, factTermsInRationale: 2, contextTerms: 1 });
+  assert.equal(req.factRefs.length, 2);
+  assert.ok(req.factRefs[0]!.terms.length > 0);
 });
