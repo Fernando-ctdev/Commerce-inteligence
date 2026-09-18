@@ -458,6 +458,48 @@
   color: var(--color-intelligence);
 }
 
+/* Desenvolvimento e CTA no desenho aprovado: ícone em brand; rótulo e texto do
+   CTA em action (texto normal ≥ 4.5:1 — brand só 4.17:1 em Light). */
+.sectionLabelBrand {
+  color: var(--color-action);
+}
+
+.sectionIconBrand {
+  color: var(--color-brand);
+}
+
+/* Texto do CTA em action; os pontos do Desenvolvimento permanecem escuros. */
+.ctaText {
+  color: var(--color-action);
+}
+
+/* Desenvolvimento: bolinha sólida pequena por ponto, sem réguas entre itens. */
+.developmentList {
+  color: var(--color-text);
+  display: grid;
+  font-size: 15px;
+  line-height: 22px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.developmentList li {
+  padding: 10px 0 10px 16px;
+  position: relative;
+}
+
+.developmentList li::before {
+  background: var(--color-text-secondary);
+  border-radius: 50%;
+  content: "";
+  height: 5px;
+  left: 2px;
+  position: absolute;
+  top: 18px;
+  width: 5px;
+}
+
 /* Cabeçalho do Roteiro: rótulo à esquerda, cópia discreta à direita. */
 .scriptHeader {
   align-items: center;
@@ -511,11 +553,22 @@
   padding: 0;
 }
 
-/* Seções do Briefing separadas por divisão sutil, não por cards. */
+/* Seções do Briefing: sem réguas genéricas; o ritmo vem do fluxo da aba e o
+   único divisor é o border-top condicional do CTA (.ctaSection). */
 .detailSection {
-  border-top: 1px solid var(--color-border);
   display: grid;
   gap: 8px;
+}
+
+/* Fluxo da aba Script: espaçamento uniforme entre blocos sem réguas. */
+.scriptFlow {
+  display: grid;
+  gap: 24px;
+}
+
+/* Divisor único e sutil: apenas o CTA, quando há Desenvolvimento antes. */
+.ctaSection {
+  border-top: 1px solid var(--color-border);
   padding-top: 24px;
 }
 

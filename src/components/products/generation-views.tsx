@@ -44,9 +44,9 @@ export type GenerationState = {
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
 /** Rótulo de seção do Briefing com âncora visual de traço simples. */
-function SectionLabel({ icon: Icon, iconClassName, children }: { icon: typeof Mic; iconClassName?: string; children: string }) {
+function SectionLabel({ icon: Icon, iconClassName, className, children }: { icon: typeof Mic; iconClassName?: string; className?: string; children: string }) {
   return (
-    <p className={styles.sectionLabel}>
+    <p className={[styles.sectionLabel, className].filter(Boolean).join(" ")}>
       <Icon aria-hidden="true" className={[styles.sectionIcon, iconClassName].filter(Boolean).join(" ")} />
       {children}
     </p>
@@ -147,7 +147,7 @@ function BriefingDetail({ index, item, onNavigate, total }: {
           <TabsTrigger value="script">Script</TabsTrigger>
           <TabsTrigger value="cenas">Cenas</TabsTrigger>
         </TabsList>
-        <TabsContent value="script">
+        <TabsContent className={styles.scriptFlow} value="script">
       <section aria-label="Gancho" className={styles.hookBlock}>
         <p className={styles.sectionLabel}>
           <Mic aria-hidden="true" className={[styles.sectionIcon, styles.sectionIconIntelligence].join(" ")} />
@@ -157,16 +157,19 @@ function BriefingDetail({ index, item, onNavigate, total }: {
       </section>
       {item.development.length > 0 && (
         <section aria-label="Desenvolvimento" className={styles.detailSection}>
-          <SectionLabel icon={Sparkles} iconClassName={styles.sectionIconIntelligence}>DESENVOLVIMENTO</SectionLabel>
-          <ul className={styles.bulletList}>
+          <SectionLabel className={styles.sectionLabelBrand} icon={Sparkles} iconClassName={styles.sectionIconBrand}>DESENVOLVIMENTO</SectionLabel>
+          <ul className={styles.developmentList}>
             {item.development.map((point, index) => <li key={`${index}-${point}`}>{point}</li>)}
           </ul>
         </section>
       )}
       {item.cta && (
-        <section aria-label="CTA" className={styles.detailSection}>
-          <SectionLabel icon={Megaphone} iconClassName={styles.sectionIconIntelligence}>CTA</SectionLabel>
-          <p className={styles.readingText}>{item.cta}</p>
+        <section
+          aria-label="CTA"
+          className={item.development.length > 0 ? [styles.detailSection, styles.ctaSection].join(" ") : styles.detailSection}
+        >
+          <SectionLabel className={styles.sectionLabelBrand} icon={Megaphone} iconClassName={styles.sectionIconBrand}>CTA</SectionLabel>
+          <p className={[styles.readingText, styles.ctaText].join(" ")}>{item.cta}</p>
         </section>
       )}
       {item.script.trim() !== "" && (
