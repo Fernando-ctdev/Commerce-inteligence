@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { EvidenceSnapshot } from "./contract";
-import { validateBriefSet, parseStructuredDevelopment, developmentRequirements } from "./gates";
+import { validateBriefSet, parseStructuredDevelopment, developmentRequirements, validDevelopmentPoint } from "./gates";
 const brief = (id: string, angle = "angle", hook = "hook", cta = "cta") => ({ contentId: id, briefVersionId: `${id}-v1`, version: 1 as const, angle, hook, development: ["Destaque o uso para orientar a conversa sobre o uso", "Destaque o uso para orientar a conversa sobre o uso"], script: `Fale sobre ${id}`, cta });
 test("desconto só é factual quando presente no catálogo: suportado com fato, contradito sem correspondência e não suportado sem fato", () => {
   const evidence = { facts: ["20% de desconto"], refs: ["fact:discountPercentage"] };
@@ -182,4 +182,24 @@ test("developmentRequirements é exportado do gate com requisitos derivados da e
   assert.deepEqual(req.minGrounding, { factTermsInPoint: 2, factTermsInRationale: 2, contextTerms: 1 });
   assert.equal(req.factRefs.length, 2);
   assert.ok(req.factRefs[0]!.terms.length > 0);
+});
+
+test("regressão feature_list/connector: bullet sem ação+conector é diagnosticado, gate reprova e corrigido converge", () => {
+  const evidence: EvidenceSnapshot = { facts: ["Tecido respiravel"], refs: ["product:description"] };
+  const featureList = { text: "Camisa leve, tecido respiravel, bolso frontal", action: "Destaque", factRef: "product:description", rationale: "para o cabedal" };
+  const parsed = parseStructuredDevelopment([featureList], evidence);
+  assert.equal(parsed.diagnostics[0]!.connectorPresent, false);
+  assert.equal(parsed.diagnostics[0]!.actionPresent, false, "texto sem verbo de comunicação");
+  assert.equal(parsed.diagnostics[0]!.rationaleGroundingMatched, 0);
+  // texto projetado segue para o gate, que reprova (fail-closed preservado)
+  const report = validateBriefSet([{ contentId: "c1", briefVersionId: "c1-v", version: 1 as const, angle: "a", hook: "h", development: [parsed.texts[0]!, parsed.texts[0]!], script: "Fale sobre o produto", cta: "c" }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined)[0];
+  assert.ok(["REPAIR", "REJECT"].includes(report.decision), `gate reprova fail-closed: ${report.decision} ${JSON.stringify(report.issues)}`);
+  assert.ok(report.issues.some((issue) => /orientar comunicação|lista de features/.test(issue)));
+  // convergência: ação + conector + grounding ≥2
+  const fixed = { text: "Destaque o tecido respiravel para explicar o tecido respiravel no uso", action: "Destaque", factRef: "product:description", rationale: "para explicar o tecido respiravel no uso" };
+  const fixedParsed = parseStructuredDevelopment([fixed], evidence);
+  assert.equal(fixedParsed.diagnostics[0]!.connectorPresent, true);
+  assert.equal(validDevelopmentPoint(fixed.text, evidence), true);
+  const fixedReport = validateBriefSet([{ contentId: "c2", briefVersionId: "c2-v", version: 1 as const, angle: "a", hook: "h", development: [fixedParsed.texts[0]!, fixedParsed.texts[0]!], script: "Tecido respiravel", cta: "c" }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined)[0];
+  assert.equal(fixedReport.decision, "PASS");
 });

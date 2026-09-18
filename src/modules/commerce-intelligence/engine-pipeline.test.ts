@@ -423,3 +423,35 @@ test("bullet estruturado com factRef desconhecido falha GEN-SCHEMA após retry �
   );
   assert.equal(briefCalls, 2, "retry único de contrato do lote");
 });
+
+test("script_naturalness REVIEW vai ao part repair do item com creatorContext e script limpo publica", async () => {
+  let partRepairContext: Record<string, unknown> | undefined;
+  const judgeParts = (contentId: string) => [
+    { part: "hook", status: "PASS", criterion: "hook_clarity", reason: "meets_criteria" },
+    { part: "development", status: "PASS", criterion: "development_coherence", reason: "meets_criteria" },
+    { part: "script", status: "REVIEW", criterion: "script_naturalness", reason: "not_tiktok_native" },
+    { part: "cta", status: "PASS", criterion: "cta_clarity", reason: "meets_criteria" },
+    { part: "scenes", status: "PASS", criterion: "scenes_actionable", reason: "meets_criteria" },
+  ].map((part) => part);
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+    if (task === "PRODUCT_UNDERSTANDING") return understanding;
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
+    if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
+    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: sbPair("Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"), script: "Fale sobre o produto", cta: "c" }] };
+    if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o produto nas maos girando" }, { description: "Pegue o produto e aproxime do tecido" }] };
+    if (task === "CONTENT_QUALITY_JUDGE") { const items = recordOf(input?.trustedContext)?.items; const list = Array.isArray(items) ? items as Array<{ contentId: string }> : []; return { audits: list.map(({ contentId }) => ({ contentId, parts: judgeParts(contentId) })) }; }
+    if (task === "CONTENT_PART_REPAIR") { partRepairContext = input?.trustedContext as Record<string, unknown>; return { items: (recordOf(partRepairContext)?.items as Array<{ contentId: string }> ?? []).map(({ contentId }) => ({ contentId, content: "Mostre o produto perto e fale do tecido" })) }; }
+    return {};
+  } };
+  const result = await runFirstGeneration({ productId: "p", jobId: "j-nat", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
+  assert.ok(partRepairContext);
+  assert.equal(partRepairContext!.part, "script", "somente a parte revisada vai a repair");
+  const repairItem = (partRepairContext!.items as Array<Record<string, unknown>>)[0]!;
+  assert.equal(repairItem.contentId, "j-nat-content-1", "somente o item revisado vai a repair");
+  assert.equal(repairItem.criterion, "script_naturalness");
+  assert.equal(repairItem.reason, "Precisa soar mais natural para conteúdo TikTok.", "contexto do repair carrega reasonText localizado; enum segue em qualityDiagnostics");
+  assert.ok("creatorContext" in partRepairContext!, "creatorContext allowlisted presente");
+  assert.equal(result.briefs[0].script, "Mostre o produto perto e fale do tecido");
+  assert.equal(result.reports[0].decision, "PASS");
+});
