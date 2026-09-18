@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make initial brief generation, brief repair and deterministic gates consume one structured `development` contract, so invalid bullet shape is rejected before publication and failures are diagnosable without storing raw drafts.
+**Goal:** Make initial brief generation, brief repair, deterministic gates and `CONTENT_QUALITY_JUDGE` consume one structured `development` contract, so invalid bullet shape is rejected before publication and every repairable quality failure is diagnosable without storing raw drafts.
 
-**Architecture:** `gates.ts` remains the single source for development predicates and exports the structured-contract validator. `engine.ts` uses it to project validated text for both initial generation and repair, then still calls `validateBriefSet` as the final authority. Provider instructions request the same structure in both tasks; metadata receives only redacted per-bullet diagnostics.
+**Architecture:** `gates.ts` remains the single source for development predicates and exports the structured-contract validator. `engine.ts` uses it to project validated text for generation and repair, then still calls `validateBriefSet` as final factual/structural/variety authority. `CONTENT_QUALITY_JUDGE` receives the same ephemeral `DevelopmentBullet[]` plus allowlisted `creatorContext`, and returns only structured per-part/per-criterion `PASS|REVIEW` diagnostics. It does not validate factuality, grounding, action or connectors, and does not duplicate the hard gate. Metadata receives only redacted bullet and quality diagnostics.
 
 **Tech Stack:** TypeScript strict, Node `tsx --test`, existing Model Router/provider adapter, PostgreSQL JSON metadata without migration.
 
@@ -13,9 +13,10 @@
 ## Global Constraints
 
 - No gate is reduced, bypassed or reclassified; `validateBriefSet` remains the final factual/structural/variety authority.
+- `CONTENT_QUALITY_JUDGE` is advisory for selective repair: it only returns `PASS|REVIEW` per part/criterion and cannot approve facts, grounding or publication.
 - `ContentBriefVersion.development` remains `string[]`; structured bullets are ephemeral provider-contract input/output.
 - Provider output is untrusted. `factRef`, action, connector, grounding and canonical text must be validated server-side.
-- Diagnostics persist only index, booleans, enums and counts. Never persist draft text, prompt, provider body, facts, tokens or secrets.
+- Diagnostics persist only index, booleans, enums and counts, or allowlisted quality `part`, `criterion`, `status`, `reason`. Never persist draft text, prompt, provider body, facts, tokens or secrets.
 - Preserve server-derived IDs, exact-N, per-item repair, current repair limits, partial-generation rules, provider/tier routing and quota behavior.
 - No database migration, endpoint, UI, feature flag, new provider or model change.
 
@@ -96,43 +97,66 @@ git commit -m "fix(slice-003): unify brief development contract"
 
 ---
 
-### Task 2: Align generator and repair provider contracts
+### Task 2: Align generator, repair and judge provider contracts
 
 **Files:**
-- Modify: `src/modules/commerce-intelligence/provider.ts: CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_BRIEF_REPAIR_INSTRUCTION`
+- Modify: `src/modules/commerce-intelligence/provider.ts: CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_BRIEF_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION`
+- Modify: `src/modules/commerce-intelligence/semantic-quality.ts: quality audit decoder`
+- Modify: `src/modules/commerce-intelligence/engine.ts: generateBatch, quality judge context and CONTENT_PART_REPAIR context`
 - Modify: `src/modules/commerce-intelligence/provider.test.ts`
 - Modify: `src/modules/commerce-intelligence/engine-pipeline.test.ts`
+- Modify: `src/modules/commerce-intelligence/adr-025-evaluation.test.ts`
 
 **Interfaces:**
 
 `CONTENT_BRIEF_GENERATION` returns `{ items: Array<{ angle, hook, development: DevelopmentBullet[], script, cta }> }`. `CONTENT_BRIEF_REPAIR` returns `{ angle, hook, development: DevelopmentBullet[], script, cta }`. Both receive the same server-derived `developmentRequirements`; only repair receives its own redacted `developmentDiagnostics` and `repairChecklist`.
 
-- [ ] **Step 1: Write failing instruction/engine tests.** Assert both instructions require `text`, `action`, `factRef`, `rationale`; forbid locators in creator text; require factual grounding through terms rather than writing refs. Assert the initial generator receives requirements and repair receives requirements plus only its own diagnostic array.
+```ts
+type QualityPartDiagnostic = {
+  part: "hook" | "development" | "script" | "cta" | "scenes";
+  criterion: string;
+  status: "PASS" | "REVIEW";
+  reason: string;
+};
 
-- [ ] **Step 2: Run the focused tests and confirm the initial generator still accepts string bullets.**
-
-```bash
-npx tsx --test src/modules/commerce-intelligence/provider.test.ts src/modules/commerce-intelligence/engine-pipeline.test.ts
+type ContentQualityJudgeInput = {
+  contentId: string;
+  development: DevelopmentBullet[];
+  creatorContext: CreatorRecordingContext;
+};
 ```
 
-- [ ] **Step 3: Change both instructions to the shared structured schema.** Keep root cardinality, selected hook/CTA behavior, exact-N and scene boundary unchanged. Require `factRef` only as a structured field and prohibit refs/locators in `text`, `script`, `hook` and `cta`.
+`CONTENT_QUALITY_JUDGE` consumes `ContentQualityJudgeInput` alongside existing creator-facing parts and returns `QualityPartDiagnostic[]` per content. Its `REVIEW` diagnostics are passed unchanged, after allowlist validation, only to `CONTENT_PART_REPAIR` for that content/part.
 
-- [ ] **Step 4: Change `generateBatch` validation in `engine.ts`.** Validate each provider item through the shared parser before `assignServerBriefIds`; a malformed structured bullet becomes existing `GEN-SCHEMA` batch retry, never a late hard-gate repair.
+- [ ] **Step 1: Write failing instruction/engine tests.** Assert generator and repair require `text`, `action`, `factRef`, `rationale`; assert judge receives the same structured bullets and allowlisted `creatorContext`; assert judge returns `part`, `criterion`, `status`, `reason` for every audited part. Assert neither provider instruction permits locators in creator text.
 
-- [ ] **Step 5: Change per-item `repairContext`.** Add `developmentDiagnostics` derived only from the rejected candidate. Do not send `previousBrief`, rejected sibling text, raw provider output or another Product's context.
-
-- [ ] **Step 6: Run focused provider/pipeline tests.**
+- [ ] **Step 2: Run the focused tests and confirm the initial generator still accepts string bullets and the judge context lacks structured bullets.**
 
 ```bash
-npx tsx --test src/modules/commerce-intelligence/provider.test.ts src/modules/commerce-intelligence/engine-pipeline.test.ts
+npx tsx --test src/modules/commerce-intelligence/provider.test.ts src/modules/commerce-intelligence/engine-pipeline.test.ts src/modules/commerce-intelligence/adr-025-evaluation.test.ts
 ```
 
-- [ ] **Step 7: Commit provider contract alignment.**
+- [ ] **Step 3: Change generator and repair instructions to the shared structured schema.** Keep root cardinality, selected hook/CTA behavior, exact-N and scene boundary unchanged. Require `factRef` only as a structured field and prohibit refs/locators in `text`, `script`, `hook` and `cta`.
+
+- [ ] **Step 4: Narrow the judge instruction and decoder to structured per-part/per-criterion diagnostics.** Give it the same `DevelopmentBullet[]` and `creatorContext`; explicitly prohibit factual, `factRef`, grounding, action, connector, cardinality and gate-decision evaluation. Reject diagnostics with unknown parts, criteria, status or reason before use.
+
+- [ ] **Step 5: Change `generateBatch` and quality composition in `engine.ts`.** Validate generator items through the shared parser before `assignServerBriefIds`. Build the judge input from the same ephemeral structured bullets and allowlisted creator context. A malformed generation bullet remains existing `GEN-SCHEMA` batch retry, never a late hard-gate repair.
+
+- [ ] **Step 6: Change repair contexts.** `CONTENT_BRIEF_REPAIR` receives only its own `developmentDiagnostics`; `CONTENT_PART_REPAIR` receives only its item's validated `QualityPartDiagnostic` for the reviewed part plus existing allowlisted `creatorContext`. Do not send `previousBrief`, rejected sibling text, raw provider output or another Product's context.
+
+- [ ] **Step 7: Run focused provider/pipeline tests.**
 
 ```bash
-git add src/modules/commerce-intelligence/provider.ts src/modules/commerce-intelligence/provider.test.ts src/modules/commerce-intelligence/engine.ts src/modules/commerce-intelligence/engine-pipeline.test.ts
-git commit -m "fix(slice-003): align brief generation and repair"
+npx tsx --test src/modules/commerce-intelligence/provider.test.ts src/modules/commerce-intelligence/engine-pipeline.test.ts src/modules/commerce-intelligence/adr-025-evaluation.test.ts
 ```
+
+- [ ] **Step 8: Commit provider contract alignment.**
+
+```bash
+git add src/modules/commerce-intelligence/provider.ts src/modules/commerce-intelligence/semantic-quality.ts src/modules/commerce-intelligence/engine.ts src/modules/commerce-intelligence/provider.test.ts src/modules/commerce-intelligence/engine-pipeline.test.ts src/modules/commerce-intelligence/adr-025-evaluation.test.ts
+git commit -m "fix(slice-003): align brief quality contracts"
+```
+
 
 ---
 
@@ -155,18 +179,19 @@ type FailedItemDiagnostic = {
   checkCodes: PartialFailureCheckCode[];
   issues: string[];
   developmentDiagnostics?: DevelopmentBulletDiagnostic[];
+  qualityDiagnostics?: QualityPartDiagnostic[];
 };
 ```
 
-- [ ] **Step 1: Write failing persistence tests.** Drive a failed development bullet through the worker and assert `IntelligenceRun.metadata` contains its sanitized diagnostic. Assert JSON serialization does not contain a sentinel draft phrase, prompt, `relevantFacts` value, API key or provider response text.
+- [ ] **Step 1: Write failing persistence tests.** Drive a failed development bullet and a judge `REVIEW` through the worker. Assert `IntelligenceRun.metadata` contains only sanitized bullet diagnostics and `part`/`criterion`/`status`/`reason` quality diagnostics. Assert JSON serialization does not contain a sentinel draft phrase, prompt, `relevantFacts` value, API key or provider response text.
 
-- [ ] **Step 2: Run the focused worker tests and confirm the new field is absent.**
+- [ ] **Step 2: Run the focused worker tests and confirm the new fields are absent.**
 
 ```bash
 npx tsx --test src/modules/commerce-intelligence/worker.test.ts src/modules/commerce-intelligence/worker-fence.test.ts
 ```
 
-- [ ] **Step 3: Extend `diagnoseFailure` to attach `DevelopmentBulletDiagnostic[]` only when development is implicated.** Keep existing `checkCodes` and sanitized issue list for backward compatibility. Do not add raw drafts to job metadata or logs.
+- [ ] **Step 3: Extend `diagnoseFailure` and quality composition to attach validated diagnostics only for the implicated item and part.** Keep existing `checkCodes` and sanitized issue list for backward compatibility. Do not add raw drafts to job metadata or logs.
 
 - [ ] **Step 4: Preserve fenced/idempotent persistence.** The existing owner/attempt guard remains the sole writer of `IntelligenceRun.metadata`; replaying the same attempt replaces its diagnostic rather than appending duplicates.
 
@@ -193,19 +218,15 @@ git commit -m "fix(slice-003): record brief failure diagnostics"
 - Modify: `src/modules/commerce-intelligence/adr-025-evaluation.test.ts`
 - Modify: `src/modules/commerce-intelligence/locator-leak.test.ts`
 
-- [ ] **Step 1: Add three deterministic regression cases.**
+- [ ] **Step 1: Add deterministic regression cases.**
   - feature-list: initial structured bullet missing action/reason is rejected before final gate and repair receives the redacted bullet diagnostic;
   - connector-missing: a bullet with a valid fact but no connector is rejected, then converges only with a structured rationale containing an allowed connector and grounding;
-  - script-naturalness: scene metainstruction remains a repairable issue and repaired script contains no metacomment, without affecting valid creator-first phrasing.
-
-- [ ] **Step 2: Add an end-to-end five-item fixture modeled on `c529711d`.** Four malformed initial development bullets must either converge through the shared repair contract or become declared objective failures; the test must never assert raw job drafts or call a real provider.
-
-- [ ] **Step 3: Verify the gates remain strict.** Assert unsupported claims, locator leakage, structural duplicates and invalid scene sets still fail exactly as before; no test may replace a hard-gate failure with `PASS` merely to make the run succeed.
+  - script-naturalness: the judge returns `REVIEW` for `script_naturalness`; the validated part/criterion diagnostic and creator context reach only that item's `CONTENT_PART_REPAIR`; repaired script contains no metacomment and valid creator-first phrasing remains `PASS`.
 
 - [ ] **Step 4: Run the focused regression suite.**
 
 ```bash
-npx tsx --test src/modules/commerce-intelligence/gates.test.ts src/modules/commerce-intelligence/engine-pipeline.test.ts src/modules/commerce-intelligence/adr-025-evaluation.test.ts src/modules/commerce-intelligence/locator-leak.test.ts src/modules/commerce-intelligence/worker.test.ts src/modules/commerce-intelligence/worker-fence.test.ts
+npx tsx --test src/modules/commerce-intelligence/gates.test.ts src/modules/commerce-intelligence/engine-pipeline.test.ts src/modules/commerce-intelligence/adr-025-evaluation.test.ts src/modules/commerce-intelligence/locator-leak.test.ts src/modules/commerce-intelligence/worker.test.ts src/modules/commerce-intelligence/worker-fence.test.ts src/modules/commerce-intelligence/provider.test.ts
 ```
 
 - [ ] **Step 5: Commit regressions.**
