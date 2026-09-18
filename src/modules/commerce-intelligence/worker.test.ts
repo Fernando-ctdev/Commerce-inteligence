@@ -172,3 +172,67 @@ test("mergeMemorySignals sem snapshot anterior inicia o histórico", () => {
   assert.deepEqual(merged.deliveredHookMechanisms, ["prova social"]);
   assert.equal(merged.generatedCount, 2);
 });
+
+// ---- Task 3 (design 2026-09-18): diagnósticos redigidos por item no partial ----
+
+function recordOf(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlisted, sem texto de draft", async () => {
+  const understanding = { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["barreira"], evidenceRefs: ["product:name"] };
+  const envelope = { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [
+    { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] },
+    { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s2", confidence: 0.9, evidenceRefs: ["product:name"] },
+    { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s3", confidence: 0.9, evidenceRefs: ["product:name"] },
+  ] };
+  const strategy = { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
+  const badBullet = { text: "Destaque o tecido para o", action: "Destaque", factRef: "product:description", rationale: "para o" };
+  const goodBullet = { text: "Destaque o tecido respiravel para explicar o conforto no uso diario", action: "Destaque", factRef: "product:description", rationale: "para explicar o conforto no uso diario" };
+  const judgeBatchPass = (input?: { trustedContext?: unknown }) => {
+    const items = recordOf(input?.trustedContext)?.items;
+    const list = Array.isArray(items) ? items as Array<Record<string, unknown>> : [];
+    return { audits: list.map(({ contentId }) => ({
+      contentId,
+      parts: [
+        { part: "hook", status: Number(String(contentId).slice(-1)) === 2 ? "REVIEW" : "PASS", criterion: "hook_clarity", reason: Number(String(contentId).slice(-1)) === 2 ? "unclear" : "meets_criteria" },
+        { part: "development", status: "PASS", criterion: "development_coherence", reason: "meets_criteria" },
+        { part: "script", status: "PASS", criterion: "script_naturalness", reason: "meets_criteria" },
+        { part: "cta", status: "PASS", criterion: "cta_tiktok_native", reason: "meets_criteria" },
+        { part: "scenes", status: "PASS", criterion: "scenes_actionable", reason: "meets_criteria" },
+      ],
+    })) };
+  };
+  const router = { describe: () => ({ provider: "test", model: "m", instructionVersion: "i" }), complete: async (task: string, input?: { trustedContext?: unknown }) => {
+    if (task === "PRODUCT_UNDERSTANDING") return understanding;
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
+    if (task === "STRATEGY_SYNTHESIS") return strategy;
+    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: envelope.opportunities.map((_opportunity, index) => ({ commercialObjective: `c${index + 1}`, angle: `a${index + 1}`, coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [
+      { angle: "a1", hook: "h1", development: [badBullet, badBullet], script: "Fale sobre o produto", cta: "c1" },
+      { angle: "a2", hook: "h2", development: [goodBullet, goodBullet], script: "Fale sobre o produto", cta: "c2" },
+      { angle: "a3", hook: "h3", development: [goodBullet, goodBullet], script: "Fale sobre o produto", cta: "c3" },
+    ] };
+    if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o produto nas maos" }, { description: "Pegue o produto e aproxime do tecido" }] };
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
+    if (task === "CONTENT_PART_REPAIR") return { items: (recordOf(input?.trustedContext)?.items as Array<{ contentId: string }> ?? []).map(({ contentId }) => ({ contentId, content: "Suporta 999 kg" })) };
+    return {};
+  } };
+  const { runFirstGeneration } = await import("./engine");
+  const result = await runFirstGeneration({ productId: "p", jobId: "j-diag", name: "Produto", description: "Tecido respirável", targetContentCount: 3, router });
+  assert.ok(result.partial, "parcial declarado (ADR-021)");
+  assert.equal(result.partial.expectedCount, 3);
+  const byContent = new Map(result.partial.failedItems.map((f) => [f.contentId, f]));
+  const devFailed = byContent.get("j-diag-content-1")!;
+  assert.equal(devFailed.reason, "HARD_GATE");
+  assert.ok(Array.isArray(devFailed.developmentDiagnostics) && devFailed.developmentDiagnostics.length === 2, "diagnóstico por bullet presente");
+  assert.equal(devFailed.developmentDiagnostics![0]!.rationaleGroundingMatched, 0);
+  assert.equal(devFailed.developmentDiagnostics![0]!.connectorPresent, true, "conector presente; a falha é grounding abaixo do mínimo");
+  const qualityFailed = byContent.get("j-diag-content-2")!;
+  assert.ok(Array.isArray(qualityFailed.qualityDiagnostics) && qualityFailed.qualityDiagnostics.length > 0, "diagnóstico de qualidade allowlisted presente");
+  assert.deepEqual(qualityFailed.qualityDiagnostics![0], { part: "hook", criterion: "hook_clarity", status: "REVIEW", reason: "unclear" });
+  const serialized = JSON.stringify(result.partial.failedItems);
+  for (const sentinel of ["Destaque o tecido", "Tecido respirável", "Suporta 999 kg", "para explicar o conforto"]) {
+    assert.ok(!serialized.includes(sentinel), `sem texto de draft/fato no metadata: ${sentinel}`);
+  }
+});

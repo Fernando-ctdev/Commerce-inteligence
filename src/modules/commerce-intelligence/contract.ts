@@ -22,6 +22,10 @@ export type FailedItemDiagnostic = {
   issues: string[];
   quality?: Array<{ part: string; round: number; criterion: string; reason: string }>;
   diagnostic?: { actionPresent: boolean; connectorPresent: boolean; minGroundingExpected: number; minGroundingMatched: number };
+  // Diagnósticos redigidos (design 2026-09-18): somente índice/flags/contagens e
+  // part/criterion/status/reason allowlisted — nunca texto de draft/prompt/provider.
+  developmentDiagnostics?: Array<{ index: number; actionPresent: boolean; factRefAllowed: boolean; connectorPresent: boolean; textGroundingMatched: number; rationaleGroundingMatched: number; shotList: boolean; unverifiedClaim: boolean }>;
+  qualityDiagnostics?: Array<{ part: string; criterion: string; status: string; reason: string }>;
 };
 export type EnginePartial = { expectedCount: number; deliveredCount: number; failedCount: number; failedItems: FailedItemDiagnostic[] };
 const text = (v: unknown, field: string, max = 2_000): string => { if (typeof v !== "string" || !v.trim() || v.length > max) throw new ContractError("GEN-SCHEMA", `${field} inválido`, field); return v.trim(); };

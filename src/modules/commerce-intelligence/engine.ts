@@ -1481,6 +1481,11 @@ export async function runFirstGeneration(
   await emit("GENERATING_BRIEFS");
   // Bullets estruturados efêmeros por contentId (judge/parte repair); nunca persistidos.
   const bulletsByContentId = new Map<string, DevelopmentBullet[]>();
+  // Diagnóstico redigido por bullet para itens que falharam no gate de development.
+  const developmentDiagnosticsFor = (contentId: string) => {
+    const bullets = bulletsByContentId.get(contentId);
+    return bullets ? parseStructuredDevelopment(bullets, evidence).diagnostics : undefined;
+  };
   const generateBatch = async (
     entries: Array<{
       opportunity: ContentOpportunity;
@@ -2120,7 +2125,10 @@ export async function runFirstGeneration(
   // Assinatura residual por item (ADR-021 decisão 5): checkCodes da cascata +
   // diagnóstico determinístico; nunca payload do provider.
   const failedItems: FailedItemDiagnostic[] = [
-    ...hardFailIdx.map((i) => diagnoseFailure(candidates[i].brief, candidateReports[i], evidence, "HARD_GATE", i + 1, [])),
+    ...hardFailIdx.map((i) => ({
+      ...diagnoseFailure(candidates[i].brief, candidateReports[i], evidence, "HARD_GATE", i + 1, []),
+      developmentDiagnostics: developmentDiagnosticsFor(candidates[i].brief.contentId),
+    })),
     ...[...objectiveFailureIdx].map((i) => ({
       contentId: hard[i].brief.contentId,
       position: hardIdx[i] + 1,
@@ -2133,6 +2141,10 @@ export async function runFirstGeneration(
           : [],
       quality: projectQualityFailures(qualityAudits.filter((audit) => audit.contentId === hard[i].brief.contentId))
         .map(({ part, round, criterion, reason }) => ({ part, round, criterion, reason: reasonText(reason) })),
+      // part/criterion/status/reason allowlisted (enum original, sem texto livre).
+      qualityDiagnostics: qualityAudits
+        .filter((audit) => audit.contentId === hard[i].brief.contentId)
+        .flatMap((audit) => audit.parts),
     })),
     ...[...varietyDropped].map((i) => ({
       contentId: hard[i].brief.contentId,
