@@ -39,7 +39,7 @@ No contexto de um Product, o creator consulta seu histórico intelectual e opera
 
 ### `GET /api/products/:id/history`
 
-O servidor resolve a sessão e o `tenantId`; o cliente não envia nem controla o tenant. O Product é buscado no mesmo limite autorizado. Product inexistente ou pertencente a outro tenant retorna a resposta uniforme `404`. A rota não usa cache (`Cache-Control: no-store`).
+O servidor resolve a sessão e o `tenantId`; o cliente não envia nem controla o tenant. Toda leitura, junção e agregação recebe o par server-derived `tenantId + productId` e falha fechada fora desse escopo. O Product é buscado no mesmo limite autorizado. Product inexistente ou pertencente a outro tenant retorna a resposta uniforme `404`. A rota não usa cache (`Cache-Control: no-store`).
 
 ```ts
 type CostSummary = {
@@ -50,14 +50,14 @@ type CostSummary = {
 
 type ProductHistoryResponse = {
   jobs: Array<{
-    jobId: string;
+    // Contexto creator-facing: status, datas e quantidade; nenhum ID técnico.
     status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "SUCCEEDED_PARTIAL" | "FAILED" | "CANCELLED";
     createdAt: string;
     finishedAt: string | null;
     requestedContents: number;
     cost: CostSummary;
     contents: Array<{
-      contentId: string;
+      // Posição no conjunto do job; nenhum ID técnico.
       position: number;
       cost: CostSummary;
     }>;
@@ -69,13 +69,13 @@ A resposta ordena jobs por criação, do mais recente ao mais antigo. Cada `amou
 
 ## 6. Regras de projeção
 
-A fonte canônica é `IntelligenceRun.metadata.capabilities[]`. Totais são calculados na leitura, sem colunas duplicadas em `Content` ou `CommerceIntelligenceJob`.
+A fonte canônica é `IntelligenceRun.metadata.capabilities[]`. Toda leitura, junção e agregação é limitada por `tenantId + productId` server-derived e falha fechada fora desse par. Totais são calculados na leitura, sem colunas duplicadas em `Content` ou `CommerceIntelligenceJob`.
 
 - O total de job inclui cada capability efetiva do run uma vez, incluindo retry, fallback, repair e falha que tenha usage/custo conhecido.
 - O total de Content inclui apenas capabilities cujo `contentId` foi derivado pelo servidor; chamadas de conjunto contribuem somente para o job.
-- `COMPLETE` exige custo completo para todas as entradas elegíveis e uma única moeda.
-- `PARTIAL` exige ao menos um custo conhecido e outra entrada parcial ou indisponível.
-- `UNAVAILABLE` ocorre sem custo calculável, em metadata legado, moeda incompatível ou ausência de semântica/price/usage necessária.
+- `COMPLETE` exige pelo menos uma entrada elegível, todas completas e na mesma moeda.
+- `PARTIAL` inclui uma única entrada `PARTIAL` com `amountMinor` conhecido e também combinações com ao menos um custo conhecido e outra entrada parcial ou indisponível.
+- `UNAVAILABLE` ocorre quando a lista não contém custo calculável, em metadata legado, moeda incompatível ou ausência de semântica/price/usage necessária.
 - A rota não reestima tokens, não recalcula pelo preço atual e não soma moedas distintas.
 
 ## 7. UI Contract
