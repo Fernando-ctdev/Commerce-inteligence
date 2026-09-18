@@ -47,10 +47,10 @@ export type GenerationState = {
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
 /** Rótulo de seção do Briefing com âncora visual de traço simples. */
-function SectionLabel({ icon: Icon, children }: { icon: typeof Mic; children: string }) {
+function SectionLabel({ icon: Icon, iconClassName, children }: { icon: typeof Mic; iconClassName?: string; children: string }) {
   return (
     <p className={styles.sectionLabel}>
-      <Icon aria-hidden="true" className={styles.sectionIcon} />
+      <Icon aria-hidden="true" className={[styles.sectionIcon, iconClassName].filter(Boolean).join(" ")} />
       {children}
     </p>
   );
@@ -124,7 +124,7 @@ function BriefingDetail({ index, item, onNavigate, total }: {
       </section>
       {item.development.length > 0 && (
         <section aria-label="Desenvolvimento" className={styles.detailSection}>
-          <SectionLabel icon={Sparkles}>DESENVOLVIMENTO</SectionLabel>
+          <SectionLabel icon={Sparkles} iconClassName={styles.sectionIconIntelligence}>DESENVOLVIMENTO</SectionLabel>
           <ul className={styles.bulletList}>
             {item.development.map((point, index) => <li key={`${index}-${point}`}>{point}</li>)}
           </ul>
@@ -132,7 +132,7 @@ function BriefingDetail({ index, item, onNavigate, total }: {
       )}
       {item.cta && (
         <section aria-label="CTA" className={styles.detailSection}>
-          <SectionLabel icon={Megaphone}>CTA</SectionLabel>
+          <SectionLabel icon={Megaphone} iconClassName={styles.sectionIconIntelligence}>CTA</SectionLabel>
           <p className={styles.readingText}>{item.cta}</p>
         </section>
       )}
@@ -141,7 +141,7 @@ function BriefingDetail({ index, item, onNavigate, total }: {
           aria-label="Roteiro"
           className={[styles.detailSection, styles.scriptSection].join(" ")}
         >
-          <SectionLabel icon={ScrollText}>ROTEIRO</SectionLabel>
+          <SectionLabel icon={ScrollText} iconClassName={styles.sectionIconIntelligence}>ROTEIRO</SectionLabel>
           <div className={styles.scriptParagraphs}>
             {scriptParagraphs(item.script).map((paragraph, index) => (
               <p className={styles.readingText} key={`${index}-${paragraph.slice(0, 20)}`}>{paragraph}</p>
