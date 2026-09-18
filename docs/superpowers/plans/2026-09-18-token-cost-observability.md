@@ -46,13 +46,13 @@
 ```ts
 type ProductHistoryResponse = {
   jobs: Array<{
-    jobId: string;
+    // Contexto público: status, datas e quantidade; nenhum ID técnico.
     status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "SUCCEEDED_PARTIAL" | "FAILED" | "CANCELLED";
     createdAt: string;
     finishedAt: string | null;
     requestedContents: number;
     cost: { currency: string | null; amountMinor: string | null; completeness: "COMPLETE" | "PARTIAL" | "UNAVAILABLE" };
-    contents: Array<{ contentId: string; position: number; cost: { currency: string | null; amountMinor: string | null; completeness: "COMPLETE" | "PARTIAL" | "UNAVAILABLE" } }>;
+    contents: Array<{ position: number; cost: { currency: string | null; amountMinor: string | null; completeness: "COMPLETE" | "PARTIAL" | "UNAVAILABLE" } }>;
   }>;
 };
 ```
@@ -213,11 +213,11 @@ git commit -m "feat(slice-003): persist capability cost metadata"
 - Modify: `src/modules/commerce-intelligence/http-status.test.ts` or create a route contract test beside the new route
 
 **Interfaces:**
-- Produces `getProductHistoryCost(tenantId, productId): Promise<ProductHistoryResponse>`.
+- Produces `getProductHistoryCost(tenantId, productId): Promise<ProductHistoryResponse>` internally; the public DTO contains no technical IDs.
 - Route accepts `GET /api/products/:id/history` with session-derived tenant scope and returns only the approved DTO.
 
-- [ ] **Step 1: Write failing projection tests.** Cover complete, partial, unavailable, legacy run metadata, failed/partial jobs, multiple jobs ordered by creation, Content attribution, mixed currencies, missing Product, and cross-tenant Product IDs.
-- [ ] **Step 2: Implement pure projection/aggregation.** Read Product-scoped terminal jobs and their `IntelligenceRun` rows in one authorized query boundary; calculate DTOs from metadata using `aggregateRunCosts`; never expose `metadata`, provider/model, price IDs, capability rows, or tokens.
+- [ ] **Step 1: Write failing projection tests.** Cover `COMPLETE` only with at least one eligible entry, all complete and one currency; a single known-amount `PARTIAL`; `UNAVAILABLE` for no calculable cost; legacy run metadata; failed/partial jobs; multiple jobs ordered by creation; Content attribution by position; mixed currencies; missing Product; and cross-tenant Product IDs.
+- [ ] **Step 2: Implement pure projection/aggregation.** Every read, join and aggregate receives the server-derived `tenantId + productId` pair and fails closed outside it. Read Product-scoped terminal jobs and their `IntelligenceRun` rows in one authorized query boundary; calculate DTOs from metadata using `aggregateRunCosts`; project job date/status/context and Content position only; never expose IDs, `metadata`, provider/model, price IDs, capability rows, or tokens.
 - [ ] **Step 3: Add the authenticated route.** Reuse current session/origin conventions, validate Product ID format, resolve Product with `tenantId` from the session, return `404` uniformly for missing/cross-tenant records, and set `cache-control: no-store`.
 - [ ] **Step 4: Run API tests and commit.**
 
@@ -242,13 +242,13 @@ git commit -m "feat(slice-010): expose product cost history"
 - Modify: `src/components/products/generation-panel.module.css` only for approved responsive states
 
 **Interfaces:**
-- `loadProductHistory(productId: string): Promise<ProductHistoryResponse>` fetches the dedicated endpoint with same-origin credentials.
-- `HistoryView` consumes `{ history, loading, error }` and renders job-level cost plus optional Content-level cost without technical fields.
+- `loadProductHistory(productId: string): Promise<ProductHistoryResponse>` fetches the dedicated endpoint with same-origin credentials; IDs remain client routing inputs and never enter the creator-facing DTO.
+- `HistoryView` consumes `{ history, loading, error }` and renders job context (status/dates/quantity), position-based Content context, and financial cost without technical fields.
 
-- [ ] **Step 1: Write failing UI-model tests.** Cover complete amount formatting, partial/unavailable labels, multiple jobs, no history, network error, currency grouping, and absence of technical fields in the creator-facing model.
+- [ ] **Step 1: Write failing UI-model tests.** Cover complete amount formatting, a known-amount partial label, unavailable when no cost is calculable, multiple jobs by date/context, Content position, no history, network error, currency grouping, and absence of technical fields in the creator-facing model.
 - [ ] **Step 2: Implement the API client and UI model.** Validate the DTO at the boundary, preserve server-provided completeness, format `amountMinor` with string/`BigInt` minor-unit arithmetic plus `Intl.NumberFormat` currency metadata (never `Number`), and never infer a value from tokens/bytes.
 - [ ] **Step 3: Load history when Product detail mounts/changes.** Keep the current generation status fetch separate; loading cost history must not block Contents, Strategy, or Product tabs.
-- [ ] **Step 4: Replace the current latest-job-only HistoryView.** Show each historical job's date/status/requested count and estimated aggregate cost. Use progressive disclosure for Content-level amounts; show explicit text for partial/unavailable and accessible labels not dependent on color.
+- [ ] **Step 4: Replace the current latest-job-only HistoryView.** Show each historical job's date/status/requested count and estimated aggregate cost. Use progressive disclosure for Content-level amounts by position; show explicit text for partial/unavailable and accessible labels not dependent on color.
 - [ ] **Step 5: Validate responsive layout.** Desktop may use a dense list; mobile remains a readable vertical list. Do not create a global analytics card or expose provider/model/tier/tokens.
 - [ ] **Step 6: Run component tests and commit.**
 
