@@ -130,6 +130,12 @@
   margin-bottom: 20px;
 }
 
+.contentsActions > [role="alert"],
+.contentsActions > [role="status"] {
+  display: grid;
+  gap: 16px;
+}
+
 .stateLine {
   color: var(--color-text);
   font-size: 15px;

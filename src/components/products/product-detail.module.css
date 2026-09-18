@@ -75,6 +75,10 @@
   letter-spacing: -0.04em;
   line-height: 36px;
   margin: 0;
+  min-width: 0;
+}
+.objectTitleText {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -469,6 +473,19 @@
 
   .objectIdentity h2 {
     font-size: 28px;
+  }
+
+  .objectTitle {
+    align-items: flex-start;
+  }
+
+  .objectTitleText {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;
   }
 
 

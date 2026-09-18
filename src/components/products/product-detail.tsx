@@ -387,7 +387,7 @@ export function ProductDetail({
           <p className={styles.eyebrow}>Produto</p>
           <h2 className={styles.objectTitle} id="product-actions-title">
             <Tag aria-hidden="true" className={styles.pageTitleIcon} />
-            {product.name}
+            <span className={styles.objectTitleText}>{product.name}</span>
           </h2>
         </div>
       </section>
