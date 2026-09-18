@@ -75,7 +75,7 @@ test("pipeline entrega a projeção exata por capability, sem creatorContext no 
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
       if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
       if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
-      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso"], script: "O tecido duna leve e macio", cta: "c" }] };
+      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso", "Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso"], script: "O tecido duna leve e macio", cta: "c" }] };
       if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
       if (task === "CONTENT_QUALITY_JUDGE") {
         // ADR-025: judge em lote — o fake ecoa o conjunto exato de contentIds recebidos.

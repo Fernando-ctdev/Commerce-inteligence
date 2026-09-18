@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_PART_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION, createHttpProvider, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
+import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_PART_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION, JUDGE_EDITORIAL_GUIDANCE, PART_REPAIR_EDITORIAL_GUIDANCE, createHttpProvider, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
 import { CARDINALITY_POLICY } from "./contract";
 import { GenerationError } from "./errors";
 import { ROUTER_MAP } from "./model-router";
@@ -129,7 +129,7 @@ test("brief provider instruction makes development strategic, evidence-grounded,
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("variação curta de até 12 palavras"));
   assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("productReference.category"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use categoria no hook somente se explícita em relevantFacts"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Development contém 1 a 4 bullets"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Development contém 2 a 6 bullets"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("cada bullet precisa combinar ação de comunicação, razão significativa ligada ao fato e o fato específico de relevantFacts"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("'para contextualizar', 'para explicar esse detalhe' e outras frases sem ligação concreta não contam"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Não faça lista de features nem instrução de câmera/gravação"));
@@ -583,7 +583,7 @@ test("CONTENT_PART_REPAIR instruction stays single-attempt, marked-part-only, wi
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("MESMA parte e do MESMO round"));
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("EXATAMENTE um item para cada contentId recebido"));
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("string para hook/script/cta"));
-  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("array de 1 a 4 strings para development"));
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("array de 2 a 6 strings para development"));
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("array de 2 a 6 objetos {description} para scenes"));
 });
 
@@ -613,4 +613,13 @@ test("provider without schema support (HTTP 400) stays fail-closed: explicit err
   assert.equal(bodies.length, 1, "uma única chamada: sem downgrade silencioso para json_object");
   const format400 = recordOf(bodies[0].response_format);
   assert.equal(format400?.type, "json_schema", "sem downgrade silencioso de formato");
+});
+
+test("escopo editorial: judge/repair guidance cobre weak_commercial_value, coerência intra-brief e cena visual-only", () => {
+  assert.ok(JUDGE_EDITORIAL_GUIDANCE.includes("weak_commercial_value"), "ângulo banal de categoria é REVIEW do judge");
+  assert.ok(JUDGE_EDITORIAL_GUIDANCE.includes("incoherent"), "coerência intra-brief é REVIEW do judge");
+  assert.ok(JUDGE_EDITORIAL_GUIDANCE.includes("misaligned_scenes"), "cena com fala é REVIEW do judge");
+  assert.ok(JUDGE_EDITORIAL_GUIDANCE.includes("bolso de calça"), "exemplo de ângulo banal explícito");
+  assert.ok(PART_REPAIR_EDITORIAL_GUIDANCE.includes("coerência intra-brief"));
+  assert.ok(PART_REPAIR_EDITORIAL_GUIDANCE.includes("perguntas como formato de hook permanecem válidas"));
 });

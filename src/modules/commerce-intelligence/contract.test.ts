@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { validateTargetContentCount, validateContentBrief, validateContentOpportunity, validateProductStrategy, validateProductUnderstanding, validateCommercialOpportunityDraft, structureHash, normalizeForVariety, validateCommercialOpportunityMappingEnvelope, CARDINALITY_POLICY, CARDINALITY_POLICY_VERSION } from "./contract";
 test("accepts only integer quantity from 1 through 10", () => { assert.equal(validateTargetContentCount(1), 1); assert.equal(validateTargetContentCount(10), 10); for (const value of [0, 11, 1.5, "2", null]) assert.throws(() => validateTargetContentCount(value)); });
-test("requires a complete brief, keeps strategic development as string[] and drops legacy scene data", () => { const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: ["Destaque Fone Space S1", "Reforce drivers de 40 mm"], script: "s", scenes: ["legado"], cta: "c" }; const brief = validateContentBrief(base); assert.equal(brief.version, 1); assert.deepEqual(brief.development, base.development); assert.equal("scenes" in brief, false); assert.equal(structureHash(brief), structureHash({ structure: undefined, development: base.development, cta: base.cta })); assert.throws(() => validateContentBrief({ ...base, development: undefined })); assert.throws(() => validateContentBrief({ ...base, development: "ponto" })); assert.throws(() => validateContentBrief({ ...base, development: [] })); assert.throws(() => validateContentBrief({ ...base, development: ["a", "b", "c", "d", "e"] })); });
+test("requires a complete brief, keeps strategic development as string[] and drops legacy scene data", () => { const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: ["Destaque Fone Space S1", "Reforce drivers de 40 mm"], script: "s", scenes: ["legado"], cta: "c" }; const brief = validateContentBrief(base); assert.equal(brief.version, 1); assert.deepEqual(brief.development, base.development); assert.equal("scenes" in brief, false); assert.equal(structureHash(brief), structureHash({ structure: undefined, development: base.development, cta: base.cta })); assert.throws(() => validateContentBrief({ ...base, development: undefined })); assert.throws(() => validateContentBrief({ ...base, development: "ponto" })); assert.throws(() => validateContentBrief({ ...base, development: [] })); assert.throws(() => validateContentBrief({ ...base, development: ["a", "b", "c", "d", "e", "f", "g"] })); });
 test("normalizes equivalent variety text", () => assert.equal(normalizeForVariety("  Hook  Forte "), "hook forte"));
 test("mapping envelope missing opportunities yields typed GEN-SCHEMA, not generic failure", () => { const envelope = { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], analysis: "longo texto sem oportunidades" }; assert.throws(() => validateCommercialOpportunityMappingEnvelope(envelope), (error: unknown) => { const e = error as { name?: string; code?: string; message?: string }; return e.name === "ContractError" && e.code === "GEN-SCHEMA" && /sem oportunidades/.test(e.message ?? ""); }); });
 test("mapping envelope with one opportunity passes and preserves canonical shape", () => { const commercial = { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }; const envelope = { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [commercial] }; const result = validateCommercialOpportunityMappingEnvelope(envelope, { facts: ["Produto"], refs: ["product:name"] }); assert.equal(result.opportunities.length, 1); assert.equal(result.opportunities[0].sellingArgument, "s"); });
@@ -41,7 +41,8 @@ test("content opportunity preserves canonical optionals when provided", () => {
   assert.throws(() => validateContentOpportunity({ ...base, proof: 42 }), (e: unknown) => (e as { code?: string }).code === "GEN-SCHEMA");
 });
 test("cardinality policy is versioned and uses MVP limits", () => {
-  assert.equal(CARDINALITY_POLICY_VERSION, 3); // v3: estratégicos do PU aceitam [] sempre
+  assert.equal(CARDINALITY_POLICY_VERSION, 4); // v4: development 2–6; estratégicos do PU aceitam [] sempre
+  assert.deepEqual(CARDINALITY_POLICY.development, { min: 2, minWithEvidence: 2, max: 6 });
   assert.equal(CARDINALITY_POLICY.coreUseCases.max, 8);
   assert.equal(CARDINALITY_POLICY.evidenceRefs.max, 25);
   assert.deepEqual(CARDINALITY_POLICY.opportunities, { min: 1, minWithEvidence: 3, max: 10 });
@@ -52,7 +53,7 @@ test("cardinality policy is versioned and uses MVP limits", () => {
 test("strict maximums fail closed without truncation", () => {
   const commercial = { relevantCapabilities: Array.from({ length: 11 }, (_, i) => `cap${i}`), benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] };
   assert.throws(() => validateCommercialOpportunityDraft(commercial), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /cardinalidade de relevantCapabilities/.test(e.message ?? ""); });
-  const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: Array.from({ length: 5 }, (_, i) => `c${i}`), script: "s", cta: "c" };
+  const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: Array.from({ length: 7 }, (_, i) => `c${i}`), script: "s", cta: "c" };
   assert.throws(() => validateContentBrief(base), (error: unknown) => { const e = error as { code?: string }; return e.code === "GEN-SCHEMA"; });
 });
 test("understanding minimums are conditional to evidence (no invention without it)", () => {
@@ -97,12 +98,13 @@ test("minimum of 3 opportunities requires DISTINCT evidence refs (repeated menti
   // 3 evidências distintas sustentam o mínimo de 3: uma só oportunidade falha.
   assert.throws(() => validateCommercialOpportunityMappingEnvelope(single, { facts: ["f"], refs: ["r1", "r2", "r3"] }), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /min 3/.test(e.message ?? ""); });
 });
-test("development permanece entre 1 e 4 bullets e cenas não entram no contrato", () => {
+test("development permanece entre 2 e 6 bullets e cenas não entram no contrato", () => {
   const base = { contentId: "c1", briefVersionId: "b1", version: 1 as const, angle: "a", hook: "h", development: ["ponto 1", "ponto 2"], script: "s", cta: "c" };
   assert.deepEqual(validateContentBrief(base).development, ["ponto 1", "ponto 2"]);
   assert.equal("scenes" in validateContentBrief(base), false);
-  assert.equal("scenes" in validateContentBrief({ ...base, scenes: ["legado"] }), false);
   assert.throws(() => validateContentBrief({ ...base, development: undefined }));
-  assert.throws(() => validateContentBrief({ ...base, development: ["1", "2", "3", "4", "5"] }));
+  assert.throws(() => validateContentBrief({ ...base, development: ["só um ponto"] }));
+  assert.equal(validateContentBrief({ ...base, development: ["1", "2", "3", "4", "5", "6"] }).development.length, 6);
+  assert.throws(() => validateContentBrief({ ...base, development: ["1", "2", "3", "4", "5", "6", "7"] }));
   assert.equal(structureHash(validateContentBrief(base)), structureHash({ structure: undefined, development: base.development, cta: base.cta }));
 });

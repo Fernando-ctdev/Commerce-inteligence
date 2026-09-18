@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { GenerationError } from "./errors";
-import { ContractError } from "./contract";
+import { CARDINALITY_POLICY, ContractError } from "./contract";
 import { emitJobEvent, sanitizeGateReports, type JobEventFields, type SanitizedGateReport } from "./observability";
 import { prisma } from "../db";
 import { extractJobCreatorContext } from "../creator-preferences/service";
@@ -108,7 +108,7 @@ export function projectFailureDiagnostics(value: unknown): { gateReports: Saniti
 
 export function briefPayloadForPersistence(brief: ContentBriefVersion): Prisma.InputJsonObject {
   const { scenes: _legacyScenes, ...payload } = brief as ContentBriefVersion & { scenes?: unknown };
-  if (!Array.isArray(payload.development) || payload.development.length < 1 || payload.development.length > 4 || payload.development.some((point) => typeof point !== "string" || !point.trim())) {
+  if (!Array.isArray(payload.development) || payload.development.length < CARDINALITY_POLICY.development.min || payload.development.length > CARDINALITY_POLICY.development.max || payload.development.some((point) => typeof point !== "string" || !point.trim())) {
     throw new GenerationError("GEN-SCHEMA", "Brief sem development válido não pode ser persistido", false);
   }
   return JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonObject;

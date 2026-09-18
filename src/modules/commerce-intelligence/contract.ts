@@ -34,7 +34,7 @@ const optionalText = (v: unknown, field: string, max = 2_000): string | undefine
 // [] INCONDICIONALMENTE — pertinência por campo não é determinável sem
 // classificador semântico; quem impede invenção é o hard gate factual + judge,
 // não o mínimo cardinal. v2 (pertinência binária) rejeitava [] legítimo.
-export const CARDINALITY_POLICY_VERSION = 3;
+export const CARDINALITY_POLICY_VERSION = 4;
 export type CardinalityRule = { min: number; minWithEvidence: number; max: number };
 // Campos estratégicos do PU (v3): mínimo sempre 0 — aceitam [] sem evidência.
 const STRATEGIC_MIN_ZERO: Record<string, true> = {
@@ -74,9 +74,9 @@ export const CARDINALITY_POLICY: Record<string, CardinalityRule> = {
   communicationPrinciples: { min: 0, minWithEvidence: 0, max: 10 },
   // Conteúdo e lote de briefings.
   noveltyTargets: { min: 1, minWithEvidence: 1, max: 4 },
-  // Development canônico: 1–4 strings de orientação estratégica/acionável,
+  // Development canônico: 2–6 strings de orientação estratégica/acionável,
   // separadas do roteiro; fatos técnicos usados nelas devem vir de relevantFacts.
-  development: { min: 1, minWithEvidence: 1, max: 4 },
+  development: { min: 2, minWithEvidence: 2, max: 6 },
   items: { min: 1, minWithEvidence: 1, max: 8 },
   opportunities: { min: 1, minWithEvidence: 3, max: 10 },
   targetContentCount: { min: 1, minWithEvidence: 1, max: 10 },
@@ -174,14 +174,21 @@ export function validateContentPlan(value: unknown, hookVariety?: { classify: (m
 export type ContentBriefVersion = { contentId: string; briefVersionId: string; version: 1; angle: string; hook: string; development: string[]; script: string; cta: string; structure?: string; objective?: string; targetAudience?: string; pain?: string; desire?: string; objection?: string; benefit?: string; notes?: string };
 export type ContentBriefDraft = Omit<ContentBriefVersion, "contentId" | "briefVersionId" | "version">;
 // Only declared brief fields cross into persistence; unknown provider fields are omitted.
-export function validateContentBrief(value: unknown): ContentBriefVersion { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Brief inválido"); const v = value as Record<string, unknown>; return { contentId: id(v.contentId, "contentId"), briefVersionId: id(v.briefVersionId, "briefVersionId"), version: 1, angle: text(v.angle, "angle"), hook: text(v.hook, "hook"), development: strings(v.development, "development"), script: text(v.script, "script", 8_000), cta: text(v.cta, "cta"), structure: v.structure === undefined ? undefined : text(v.structure, "structure", 100), objective: v.objective === undefined ? undefined : text(v.objective, "objective"), targetAudience: v.targetAudience === undefined ? undefined : text(v.targetAudience, "targetAudience"), pain: optionalText(v.pain, "pain"), desire: optionalText(v.desire, "desire"), objection: optionalText(v.objection, "objection"), benefit: v.benefit === undefined ? undefined : text(v.benefit, "benefit"), notes: v.notes === undefined ? undefined : text(v.notes, "notes") }; }
+// Cardinalidade de development (v4, min 2/max 6) é enforceada no contrato —
+// brief fora da política falha ANTES de gates/persistência (nunca late-fail).
+function assertDevelopmentCardinality(value: unknown[]): void {
+  const rule = CARDINALITY_POLICY.development;
+  if (value.length < rule.min || value.length > rule.max)
+    throw new ContractError("GEN-SCHEMA", `cardinalidade de development fora da política (min ${rule.min}, max ${rule.max})`, "development");
+}
+export function validateContentBrief(value: unknown): ContentBriefVersion { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Brief inválido"); const v = value as Record<string, unknown>; const development = strings(v.development, "development"); assertDevelopmentCardinality(development); return { contentId: id(v.contentId, "contentId"), briefVersionId: id(v.briefVersionId, "briefVersionId"), version: 1, angle: text(v.angle, "angle"), hook: text(v.hook, "hook"), development, script: text(v.script, "script", 8_000), cta: text(v.cta, "cta"), structure: v.structure === undefined ? undefined : text(v.structure, "structure", 100), objective: v.objective === undefined ? undefined : text(v.objective, "objective"), targetAudience: v.targetAudience === undefined ? undefined : text(v.targetAudience, "targetAudience"), pain: optionalText(v.pain, "pain"), desire: optionalText(v.desire, "desire"), objection: optionalText(v.objection, "objection"), benefit: v.benefit === undefined ? undefined : text(v.benefit, "benefit"), notes: v.notes === undefined ? undefined : text(v.notes, "notes") }; }
 export type ContentBriefBatch = { items: ContentBriefVersion[] };
 // Valida a estrutura de um briefing provider-sem-ids; contentId/briefVersionId são server-derived.
 export function validateContentBriefDraft(value: unknown): ContentBriefDraft {
   if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Brief inválido");
   const v = value as Record<string, unknown>;
   rejectForbiddenFields(v, "Brief");
-  return { angle: text(v.angle, "angle"), hook: text(v.hook, "hook"), development: strings(v.development, "development"), script: text(v.script, "script", 8_000), cta: text(v.cta, "cta"), structure: v.structure === undefined ? undefined : text(v.structure, "structure", 100), objective: v.objective === undefined ? undefined : text(v.objective, "objective"), targetAudience: v.targetAudience === undefined ? undefined : text(v.targetAudience, "targetAudience"), pain: optionalText(v.pain, "pain"), desire: optionalText(v.desire, "desire"), objection: optionalText(v.objection, "objection"), benefit: v.benefit === undefined ? undefined : text(v.benefit, "benefit"), notes: v.notes === undefined ? undefined : text(v.notes, "notes") };
+  return { angle: text(v.angle, "angle"), hook: text(v.hook, "hook"), development: (() => { const development = strings(v.development, "development"); assertDevelopmentCardinality(development); return development; })(), script: text(v.script, "script", 8_000), cta: text(v.cta, "cta"), structure: v.structure === undefined ? undefined : text(v.structure, "structure", 100), objective: v.objective === undefined ? undefined : text(v.objective, "objective"), targetAudience: v.targetAudience === undefined ? undefined : text(v.targetAudience, "targetAudience"), pain: optionalText(v.pain, "pain"), desire: optionalText(v.desire, "desire"), objection: optionalText(v.objection, "objection"), benefit: v.benefit === undefined ? undefined : text(v.benefit, "benefit"), notes: v.notes === undefined ? undefined : text(v.notes, "notes") };
 }
 export function validateContentBriefBatch(value: unknown): ContentBriefVersion[] {
   if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Lote de briefings inválido");

@@ -12,7 +12,7 @@ import { runFirstGeneration } from "./engine";
 import { gateSceneSet, internalLocator, scriptInsertMetacomment } from "./gates";
 
 const describe = () => ({ provider: "test", model: "test", instructionVersion: "test" });
-const developmentOk = ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"];
+const developmentOk = ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"];
 const qualityPassParts = [
   { part: "hook", status: "PASS", criterion: "hook_clarity", reason: "meets_criteria" },
   { part: "development", status: "PASS", criterion: "development_coherence", reason: "meets_criteria" },
@@ -64,7 +64,7 @@ test("ADR-026: scriptInsertMetacomment casa inserção editorial e preserva fala
 
 test("ADR-026: locator derruba SOMENTE a cena que o contém", () => {
   const evidence = { facts: ["tecido respiravel"], refs: ["product:description"] };
-  const brief = { angle: "a", hook: "Gancho", development: ["Destaque o tecido respiravel"], script: "Tecido respiravel", cta: "cta" };
+  const brief = { angle: "a", hook: "Gancho", development: ["Destaque o tecido respiravel", "Destaque o tecido respiravel"], script: "Tecido respiravel", cta: "cta" };
   const gated = gateSceneSet([
     { description: "Mostre o tecido respiravel em uso" },
     { description: "[fact:features] Mostre o tecido respiravel" },
@@ -90,7 +90,7 @@ test("ADR-026 caso real 1: [fact:features] no script não publica e repara sem c
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "Gancho", development: developmentOk, script: "[fact:features] Tecido respiravel", cta: "cta" }] };
     if (task === "CONTENT_BRIEF_REPAIR") {
       repairContexts.push(recordOf(input?.trustedContext) ?? {});
-      return { angle: "a", hook: "Gancho", development: [{ text: developmentOk[0], action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso" }], script: "Tecido respiravel", cta: "cta" };
+      return { angle: "a", hook: "Gancho", development: [{ text: developmentOk[0], action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso" }, { text: developmentOk[0], action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso" }], script: "Tecido respiravel", cta: "cta" };
     }
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
     if (task === "CONTENT_QUALITY_JUDGE")
@@ -124,7 +124,7 @@ test("ADR-026 caso real 2: inserção editorial no script não publica e repara 
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "Gancho", development: developmentOk, script: "Eu colocaria aqui um objeto pequeno que mostra o tecido respiravel", cta: "cta" }] };
     if (task === "CONTENT_BRIEF_REPAIR") {
       repairContexts.push(recordOf(input?.trustedContext) ?? {});
-      return { angle: "a", hook: "Gancho", development: [{ text: developmentOk[0], action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso" }], script: "Tecido respiravel", cta: "cta" };
+      return { angle: "a", hook: "Gancho", development: [{ text: developmentOk[0], action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso" }, { text: developmentOk[0], action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso" }], script: "Tecido respiravel", cta: "cta" };
     }
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
     if (task === "CONTENT_QUALITY_JUDGE")
@@ -152,7 +152,7 @@ test("ADR-026: locator persistente após repair falha o item, nunca publica", as
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] }] };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [leakyBrief] };
     if (task === "CONTENT_BRIEF_REPAIR")
-      return { ...leakyBrief, development: [{ text: developmentOk[0], action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso" }] };
+      return { ...leakyBrief, development: [{ text: developmentOk[0], action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso" }, { text: developmentOk[0], action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso" }] };
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
     if (task === "CONTENT_QUALITY_JUDGE")
       return { audits: judgeItems(input).map(({ contentId }) => ({ contentId, parts: qualityPassParts })) };

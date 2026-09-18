@@ -252,6 +252,28 @@ const SCRIPT_INSERT_METACOMMENT =
 export function scriptInsertMetacomment(script: string): string | null {
   return SCRIPT_INSERT_METACOMMENT.exec(script)?.[0] ?? null;
 }
+// Hook em pergunta (escopo editorial): começa com "?" ou interrogativo pt-BR,
+// ou termina em "?" — detector estreito; perguntas não são banidas, apenas
+// limitadas proporcionalmente no conjunto quando há alternativas elegíveis.
+const QUESTION_HOOK_RE =
+  /(?:^\?|\?\s*$)|^(?:o\s*que|oque|qual(?:es)?|quando|onde|por\s*que|porque|porqu[eê]|como|quanto|quantos|quantas|quem|cad[eê])\b/i;
+// Escopo editorial: cenas são instruções visuais — fala/diálogo pertence ao
+// script (fonte canônica do que dizer). Detector ESTREITO: fala explícita
+// marcada (aspas, dois-pontos de fala, "diga/fale" imperativo de fala), não
+// linguagem visual legítima ("Prefira fala para câmera" é instrução, não fala).
+const SCENE_DIALOGUE_QUOTE =
+  /["“”„«»]|\b(?:diga|diz|fale|fala|pergunta|responda)\s*:\s|\b(?:dizendo|falando)\b/i;
+export function sceneDialogueQuote(description: string): string | null {
+  return SCENE_DIALOGUE_QUOTE.exec(description)?.[0] ?? null;
+}
+// Antecedente de CTA (escopo editorial): CTA de preço/valor exige que o corpo
+// (development+script) apresente esse preço/valor. Detector ESTREITO: token
+// explícito de preço/valor no texto; linguagem de estilo sem preço não casa.
+const PRICE_VALUE_TOKEN =
+  /(?:r\$\s*\d|\b\d+\s*reais\b|\b\d+\s*%|\b\d+\s*por\s*cento)|(?:\b(?:pre[çc]o|valor|desconto|promo[çc][ãa]o|oferta|barat[oa]|caro)\b)/i;
+export function mentionsPriceOrValue(value: string): boolean {
+  return PRICE_VALUE_TOKEN.test(value);
+}
 const SOLO_PRODUCTION_ANTIPATTERNS = /\b(360\s*graus|órbita|orbita|orbit|travelling|motion\s*graphics|animação|animacao|vfx|efeitos especiais|chroma\s*key|croma|green\s*screen|drone|operador de câmera|operador de camera|segunda câmera|segunda camera|montagem (rápida|complexa)|montagem (rapida|complexa)|múltiplas locações|multiplas locacoes|múltiplos setups|multiplos setups|estúdio montado|câmera gira|camera gira|câmera começa a orbitar|camera comeca a orbitar)\b/i;
 const DRONE_PRODUCTION = /\bdrone\b/i;
 const CREW_OR_POST_PRODUCTION_ANTIPATTERNS = /\b(motion\s*graphics|animação|animacao|vfx|efeitos especiais|chroma\s*key|croma|green\s*screen|operador de câmera|operador de camera|segunda câmera|segunda camera|montagem (rápida|complexa)|montagem (rapida|complexa)|múltiplas locações|multiplas locacoes|múltiplos setups|multiplos setups|estúdio montado)\b/i;
@@ -709,6 +731,19 @@ export function validateBriefSet(
   const ctaFunctionCap = briefs.length > 1 && CTA_FUNCTION_BUCKET_COUNT > 1
     ? Math.ceil(briefs.length / CTA_FUNCTION_BUCKET_COUNT)
     : 0;
+  // Escopo editorial: no máximo 2 hooks em pergunta por lote de 5 (teto
+  // proporcional ceil(2N/5)) quando existem alternativas elegíveis; perguntas
+  // não são banidas e a variedade por mecanismo não é afetada.
+  const hookOf = (value: unknown): string => {
+    if (value && typeof value === "object" && "hook" in value && typeof value.hook === "string") return value.hook;
+    return "";
+  };
+  const hookQuestionFlags = briefs.map((value) => QUESTION_HOOK_RE.test(hookOf(value)));
+  const hookQuestionCount = hookQuestionFlags.filter(Boolean).length;
+  const hookQuestionCap = Math.max(1, Math.ceil((briefs.length * 2) / 5));
+  const hookQuestionEligible =
+    hookQuestionFlags.length - hookQuestionCount > 0 && hookQuestionCount > hookQuestionCap;
+  let hookQuestionOrdinal = 0;
   const reports = briefs.map((value, index): GateReport => {
     const issues: string[] = [];
     let brief: ContentBriefVersion;
@@ -743,6 +778,12 @@ export function validateBriefSet(
       ({ text }) => normalizeForVariety(text) === normalizedCta,
     );
     const structuralHash = structureHash(brief);
+    // Teto de hooks em pergunta: só o excesso (além do cap proporcional) é
+    // marcado, e apenas quando existem alternativas elegíveis no lote.
+    if (hookQuestionEligible && hookQuestionFlags[index]) {
+      hookQuestionOrdinal += 1;
+      if (hookQuestionOrdinal > hookQuestionCap) issues.push("excesso de hooks em pergunta no lote");
+    }
     if (seenBriefs.has(normalizedBrief)) issues.push("duplicata normalizada");
     if (!catalogHookVerbatim && seenHooks.has(normalizedHook)) issues.push("hook repetido");
     if (!catalogCtaVerbatim && seenCtas.has(normalizedCta)) issues.push("CTA repetido");
@@ -794,6 +835,10 @@ export function validateBriefSet(
     // automático.
     if (scriptSceneMetacomment(brief.script) || scriptInsertMetacomment(brief.script))
       issues.push("script contém metainstrução de cena");
+    // Antecedente de CTA: preço/valor no CTA exige que o corpo apresente esse
+    // preço/valor (development+script). Sem antecedente, issue reparável da parte.
+    if (mentionsPriceOrValue(brief.cta) && !mentionsPriceOrValue(`${brief.development.join(" ")} ${brief.script}`))
+      issues.push("CTA de preço/valor sem antecedente no corpo do briefing");
     // ADR-026: locator interno de evidência em campo creator-facing é issue
     // reparável da PARTE nomeada — refs existem só em contexto/relatório.
     for (const [field, value] of [["hook", brief.hook], ["script", brief.script], ["cta", brief.cta], ["development", brief.development.join(" ")]] as const)
@@ -917,6 +962,9 @@ export function gateSceneSet(
     // ADR-026: locator interno invalida SOMENTE a cena que o contém; as demais
     // cenas do set seguem válidas.
     if (internalLocator(description)) { causes.set("locator_interno", (causes.get("locator_interno") ?? 0) + 1); return false; }
+    // Cenas são instruções visuais; fala/diálogo é da parte script (fonte
+    // canônica do que dizer). Fala explícita na cena descarta só a cena.
+    if (sceneDialogueQuote(description)) { causes.set("fala_na_cena", (causes.get("fala_na_cena") ?? 0) + 1); return false; }
     if (creatorContext.recordsAlone === true && requiresUndeclaredProduction(folded, creatorContext)) { causes.set("producao_nao_declarada", (causes.get("producao_nao_declarada") ?? 0) + 1); return false; }
     return true;
   });

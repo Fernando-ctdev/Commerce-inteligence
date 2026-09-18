@@ -32,7 +32,7 @@ const qualityPass = { parts: [
   { part: "cta", status: "PASS", criterion: "cta_clarity", reason: "meets_criteria" },
   { part: "scenes", status: "PASS", criterion: "scenes_actionable", reason: "meets_criteria" },
 ] };
-const developmentOk = ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"];
+const developmentOk = ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"];
 
 test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, parcial 3/5 só por falha objetiva e script sem metainstrução de cena", async () => {
   const judgeCallSizes: number[] = [];
@@ -63,7 +63,7 @@ test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, parcial 3/
     if (task === "CONTENT_BRIEF_REPAIR") {
       briefRepairContexts.push(recordOf(input?.trustedContext) ?? {});
       // Contrato do repair (adendo 2): development estruturado {text, action, factRef, rationale}.
-      return { angle: "a2", hook: "Gancho 2", development: [{ text: developmentOk[0], action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }], script: "Tecido respiravel", cta: "cta 2" };
+      return { angle: "a2", hook: "Gancho 2", development: [{ text: developmentOk[0], action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }, { text: developmentOk[0], action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }], script: "Tecido respiravel", cta: "cta 2" };
     }
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
     if (task === "CONTENT_QUALITY_JUDGE") {

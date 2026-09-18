@@ -25,7 +25,7 @@ function routerFor(overrides: Partial<{ judge: (context: Record<string, unknown>
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["creator"], situations: ["uso"], pains: ["calor"], desires: ["conforto"], objections: ["preco"], opportunities: Array.from({ length: 3 }, () => ({ relevantCapabilities: ["respiravel"], benefits: ["conforto"], proofOptions: ["respiravel"], sellingArgument: "uso confortavel", confidence: 0.9, evidenceRefs: ["product:description"] })) };
       if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "uso", audiences: ["creator"], priorityBenefits: ["conforto"], priorityObjections: ["preco"], priorityArguments: ["uso"], priorityAngles: ["demonstracao"], communicationPrinciples: ["natural"] };
       if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "demonstrar", angle: "demonstracao", coreMessage: "tecido respiravel", hookMechanism: "demonstracao", noveltyTargets: ["demonstracao"] }] };
-      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "demonstracao", hook: "Hook original", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Demonstre o tecido respiravel no produto", cta: "Confira o produto" }] };
+      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "demonstracao", hook: "Hook original", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Demonstre o tecido respiravel no produto", cta: "Confira o produto" }] };
       if (task === "CONTENT_SCENE_IDEAS") return overrides.scenes?.() ?? { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
       if (task === "CONTENT_QUALITY_JUDGE") {
         // ADR-025: judge em lote — a resposta ecoa o conjunto exato de contentIds.
@@ -102,7 +102,7 @@ test("ADR-025: parseQualityRepairBatch valida o envelope de IDs, não o conteúd
 });
 
 test("applyQualityRepair valida o formato da parte substituída e preserva as demais", () => {
-  const brief = { hook: "Hook original", development: ["d1"], script: "Script original", cta: "CTA original" };
+  const brief = { hook: "Hook original", development: ["d1", "d1"], script: "Script original", cta: "CTA original" };
   const scenes = [{ description: "cena" }];
   assert.deepEqual(applyQualityRepair(brief, scenes, "hook", "Novo hook").brief, { ...brief, hook: "Novo hook" });
   assert.deepEqual(applyQualityRepair(brief, scenes, "development", ["novo"]).brief.development, ["novo"]);

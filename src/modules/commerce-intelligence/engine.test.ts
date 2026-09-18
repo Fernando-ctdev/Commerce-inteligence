@@ -16,7 +16,7 @@ const puBase = (over: Record<string, unknown> = {}) => ({
   desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"],
   purchaseBarriers: ["barreira"], evidenceRefs: ["product:name"], ...over,
 });
-const briefOk = { angle: "demonstração", hook: "Veja", development: ["Mostre o tecido respirável para explicar como o tecido respirável afeta o uso"], script: "Tecido respirável", cta: "c" };
+const briefOk = { angle: "demonstração", hook: "Veja", development: ["Mostre o tecido respirável para explicar como o tecido respirável afeta o uso", "Mostre o tecido respirável para explicar como o tecido respirável afeta o uso"], script: "Tecido respirável", cta: "c" };
 function recordOf(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
@@ -83,7 +83,7 @@ test("repairs mapping envelope without opportunities via a second contract-true 
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") { mappingCalls++; if (mappingCalls === 1) return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], analysis: "prosa sem opportunities" }; return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] }; }
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router: withInternalCuration(router) });
@@ -97,7 +97,7 @@ test("repairs content plan array root via one contract-true retry, then fail-clo
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") { planCalls++; if (planCalls === 1) return [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }]; return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] }; }
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router: withInternalCuration(router) });
@@ -111,7 +111,7 @@ test("plan retry exhausted yields typed GEN-SCHEMA without fabricating opportuni
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") { planCalls++; return [1, 2]; }
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
     return {};
   } };
   await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string }; return e?.code === "GEN-SCHEMA"; });
@@ -124,7 +124,7 @@ test("repairs brief batch cardinality divergence via one retry preserving exact-
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; if (briefCalls === 1) return { items: [] }; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; if (briefCalls === 1) return { items: [] }; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] }; }
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router: withInternalCuration(router) });
@@ -138,7 +138,7 @@ test("brief batch retry exhausted yields typed GEN-SCHEMA without publishing", a
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }, { angle: "a2", hook: "h2", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto de novo", cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }, { angle: "a2", hook: "h2", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto de novo", cta: "c" }] }; }
     return {};
   } };
   await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }), (error: unknown) => { const e = error as { code?: string }; return e?.code === "GEN-SCHEMA"; });
@@ -151,7 +151,7 @@ test("provider scene data is not persisted in the brief", async () => {
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", scenes: ["legado"], cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { briefCalls++; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", scenes: ["legado"], cta: "c" }] }; }
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router: withInternalCuration(router) });
@@ -178,7 +178,7 @@ test("GEN-REPAIR-EXHAUSTED carries sanitized gate summary without brief payload"
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["SEGREDO_DO_BRIEFING em uso"], script: "SEGREDO_DO_BRIEFING suporta 7 kg comprovados", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["SEGREDO_DO_BRIEFING em uso", "SEGREDO_DO_BRIEFING em uso"], script: "SEGREDO_DO_BRIEFING suporta 7 kg comprovados", cta: "c" }] };
     return {};
   } };
   await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }), (error: unknown) => {
@@ -202,7 +202,7 @@ test("capabilities carry provider metrics allowlist for IntelligenceRun metadata
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
+    return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router: withInternalCuration(router) });
   const strategyCap = result.capabilities.find((cap) => cap.task === "STRATEGY_SYNTHESIS");
@@ -228,12 +228,12 @@ test("repair of many rejected briefs is per-item on CONTENT_BRIEF_REPAIR/HIGH pr
       const batch = input as { trustedContext?: { opportunities?: unknown[] } } | undefined;
       const n = batch?.trustedContext?.opportunities?.length ?? 1;
       // Rodada inicial: claim numérico sem evidência → todos os itens exigem repair factual.
-      return { items: Array.from({ length: n }, () => ({ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c" })) };
+      return { items: Array.from({ length: n }, () => ({ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c" })) };
     }
     if (task === "CONTENT_BRIEF_REPAIR") {
       repairCalls++;
       // Repair por item: saída única, campos distintos por chamada (variedade do conjunto).
-      return { angle: `ang ${repairCalls}`, hook: `hook ${repairCalls}`, development: [{ "text": `Destaque o tecido respiravel ${repairCalls} para explicar como o tecido respiravel ${repairCalls} afeta o uso`, "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: `script distinto ${repairCalls}`, cta: `cta distinto ${repairCalls}` };
+      return { angle: `ang ${repairCalls}`, hook: `hook ${repairCalls}`, development: [{ "text": `Destaque o tecido respiravel ${repairCalls} para explicar como o tecido respiravel ${repairCalls} afeta o uso`, "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }, { "text": `Destaque o tecido respiravel ${repairCalls} para explicar como o tecido respiravel ${repairCalls} afeta o uso`, "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: `script distinto ${repairCalls}`, cta: `cta distinto ${repairCalls}` };
     }
     return {};
   } };
@@ -254,7 +254,7 @@ test("capability events carry cardinality policy version on success", async () =
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: "c" }] };
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router: withInternalCuration(router) });
@@ -348,14 +348,14 @@ test("brief repair context carries per-item repairChecklist (Duna c1/c3 distinct
     if (task === "CONTENT_BRIEF_GENERATION") {
       briefCalls += 1;
       return { items: [
-        { angle: "a", hook: "h1", development: ["Cós elástico com cordão para ajuste"], script: "s1", cta: "c1" },
-        { angle: "b", hook: "h2", development: ["Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste"], script: "s2", cta: "Aproveita o frete grátis que apareceu na sua conta." },
+        { angle: "a", hook: "h1", development: ["Cós elástico com cordão para ajuste", "Cós elástico com cordão para ajuste"], script: "s1", cta: "c1" },
+        { angle: "b", hook: "h2", development: ["Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste"], script: "s2", cta: "Aproveita o frete grátis que apareceu na sua conta." },
       ] };
     }
     if (task === "CONTENT_BRIEF_REPAIR") {
       repairCalls += 1;
       captured.push(recordOf(input?.trustedContext)?.repairChecklist);
-      const structuredDuna = [{ "text": "Mostre o cós elástico com cordão da calça para conectar o cordão do cós ao ajuste na cintura", "action": "Mostre", "factRef": "fact:features", "rationale": "para conectar o cordão do cós ao ajuste na cintura", "context": "na cintura" }];
+      const structuredDuna = [{ "text": "Mostre o cós elástico com cordão da calça para conectar o cordão do cós ao ajuste na cintura", "action": "Mostre", "factRef": "fact:features", "rationale": "para conectar o cordão do cós ao ajuste na cintura", "context": "na cintura" }, { "text": "Mostre o cós elástico com cordão da calça para conectar o cordão do cós ao ajuste na cintura", "action": "Mostre", "factRef": "fact:features", "rationale": "para conectar o cordão do cós ao ajuste na cintura", "context": "na cintura" }];
       return repairCalls === 1
         ? { angle: "a", hook: "h1b", development: structuredDuna, script: "s1b", cta: "Confira as condições atuais na página do produto." }
         : { angle: "b", hook: "h2b", development: structuredDuna, script: "s2b", cta: "Vale dar uma olhada na página do produto para comparar." };
@@ -376,9 +376,9 @@ test("ADR-020: pre-selection never delivers CTA patterns the evidence does not s
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 3, opportunities: Array.from({ length: 3 }, (_, i) => ({ commercialObjective: `c${i}`, angle: `a${i}`, coreMessage: `m${i}`, hookMechanism: "h", noveltyTargets: ["n"] })) };
     if (task === "CONTENT_BRIEF_GENERATION") {
       genContext = recordOf(input?.trustedContext);
-      return { items: Array.from({ length: 3 }, (_, i) => ({ angle: `a${i}`, hook: `h${i}`, development: ["Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste"], script: `s${i}`, cta: `cta seguro ${i}` })) };
+      return { items: Array.from({ length: 3 }, (_, i) => ({ angle: `a${i}`, hook: `h${i}`, development: ["Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste"], script: `s${i}`, cta: `cta seguro ${i}` })) };
     }
-    if (task === "CONTENT_BRIEF_REPAIR") return { angle: "r", hook: "hr", development: [{ "text": "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", "action": "Mostre", "factRef": "fact:features", "rationale": "para explicar como o cós elástico com cordão ajuda no ajuste", "context": "no ajuste" }], script: "sr", cta: "cta seguro r" };
+    if (task === "CONTENT_BRIEF_REPAIR") return { angle: "r", hook: "hr", development: [{ "text": "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", "action": "Mostre", "factRef": "fact:features", "rationale": "para explicar como o cós elástico com cordão ajuda no ajuste", "context": "no ajuste" }, { "text": "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", "action": "Mostre", "factRef": "fact:features", "rationale": "para explicar como o cós elástico com cordão ajuda no ajuste", "context": "no ajuste" }], script: "sr", cta: "cta seguro r" };
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j-safe", name: "Calça Duna", description: "Calça Duna, cós elástico com cordão", facts: { features: ["cós elástico com cordão"] }, targetContentCount: 3, router: withInternalCuration(router) });
@@ -425,7 +425,7 @@ test("ADR-020/blocker: replacement de CTA registra id+reason no EngineResult sem
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 3, opportunities: Array.from({ length: 3 }, (_, i) => ({ commercialObjective: `c${i}`, angle: `a${i}`, coreMessage: `m${i}`, hookMechanism: "h", noveltyTargets: ["n"] })) };
     if (task === "CONTENT_BRIEF_GENERATION") {
       genContext = recordOf(input?.trustedContext);
-      return { items: Array.from({ length: 3 }, (_, i) => ({ angle: `a${i}`, hook: `h${i}`, development: ["Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste"], script: `s${i}`, cta: `cta seguro ${i}` })) };
+      return { items: Array.from({ length: 3 }, (_, i) => ({ angle: `a${i}`, hook: `h${i}`, development: ["Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste"], script: `s${i}`, cta: `cta seguro ${i}` })) };
     }
     return {};
   } };
@@ -459,7 +459,7 @@ test("ADR-020/mechanism: planner objection sem repertório → retry causal para
       assert.ok((trusted?.varietyCauses as string[]).some((cause) => cause.includes("repertório deliverable")), "retry recebe a causa");
       return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "demonstração", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] }] };
     }
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste"], script: "s", cta: "Confira as condições atuais na página do produto." }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste"], script: "s", cta: "Confira as condições atuais na página do produto." }] };
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j-mech1", name: "Calça Duna", description: "Calça Duna, cós elástico com cordão", facts: { features: ["cós elástico com cordão"] }, targetContentCount: 1, router: withInternalCuration(router) });
@@ -539,11 +539,11 @@ test("ADR-020 adendo 2 + ADR-021: factRef fora do snapshot → GEN-SCHEMA por it
       { commercialObjective: "c", angle: "a3", coreMessage: "m", hookMechanism: "mostrando o resultado no tecido", noveltyTargets: ["n"] },
     ] };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [
-      { angle: "a1", hook: "h1", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c1" },
-      { angle: "a2", hook: "h2", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: "c2" },
-      { angle: "a3", hook: "h3", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: "c3" },
+      { angle: "a1", hook: "h1", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c1" },
+      { angle: "a2", hook: "h2", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: "c2" },
+      { angle: "a3", hook: "h3", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: "c3" },
     ] };
-    if (task === "CONTENT_BRIEF_REPAIR") { repairCalls += 1; return { angle: "a1", hook: "h2", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "fact-inexistente", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: "Tecido respiravel", cta: "c2" }; }
+    if (task === "CONTENT_BRIEF_REPAIR") { repairCalls += 1; return { angle: "a1", hook: "h2", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "fact-inexistente", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }, { "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "fact-inexistente", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: "Tecido respiravel", cta: "c2" }; }
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j-factref", name: "Produto", description: "Tecido respirável", targetContentCount: 3, router: withInternalCuration(router) });
@@ -580,11 +580,11 @@ test("PARTIAL_FAILURE_CAP: F == 2 fecha parcial declarado; F == 3 falha GEN-REPA
       if (task === "CONTENT_BRIEF_GENERATION") return { items: Array.from({ length: count }, (_, i) => ({
         angle: `a${i + 1}`,
         hook: `h${i + 1}`,
-        development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+        development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
         script: i < failing ? "Suporta 999 kg" : "Tecido respiravel",
         cta: `c${i + 1}`,
       })) };
-      if (task === "CONTENT_BRIEF_REPAIR") return { angle: "a", hook: "h2", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: "Suporta 999 kg", cta: "c2" };
+      if (task === "CONTENT_BRIEF_REPAIR") return { angle: "a", hook: "h2", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }, { "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: "Suporta 999 kg", cta: "c2" };
       return {};
     },
   });
@@ -618,7 +618,7 @@ test("semantic REVIEW sem repair preserva o item e mantém DRAFT completo", asyn
   const briefFor = (position: number) => ({
     angle: `a${position}`,
     hook: `Gancho ${position}`,
-    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
     script: "Tecido respiravel",
     cta: position === 1 ? checkoutCtas[0] : position === 5 ? checkoutCtas[1] : `cta ${position}`,
   });
@@ -675,7 +675,7 @@ test("dois REVIEW: repair inválido deixa somente o candidato objetivo inválido
       { commercialObjective: "c", angle: "a1", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] },
       { commercialObjective: "c", angle: "a2", coreMessage: "m", hookMechanism: "prova de resistência do tecido", noveltyTargets: ["n"] },
     ] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [1, 2].map((i) => ({ angle: `a${i}`, hook: `Gancho ${i}`, development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: `cta ${i}` })) };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [1, 2].map((i) => ({ angle: `a${i}`, hook: `Gancho ${i}`, development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: `cta ${i}` })) };
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
     if (task === "CONTENT_QUALITY_JUDGE") {
       const items = recordOf(input?.trustedContext)?.items as Array<Record<string, unknown>>;
@@ -702,7 +702,7 @@ test("ADR-025: judge em lote (3+2) com identidade por contentId; lote malformado
   const briefFor = (position: number) => ({
     angle: `a${position}`,
     hook: `Gancho ${position}`,
-    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
     script: "Tecido respiravel",
     cta: `cta ${position}`,
   });
@@ -743,7 +743,7 @@ test("ADR-025: repair em lote da mesma parte (hook 3+2), sem re-judge", async ()
   const briefFor = (position: number) => ({
     angle: `a${position}`,
     hook: `Gancho ${position}`,
-    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
     script: "Tecido respiravel",
     cta: `cta ${position}`,
   });
@@ -783,7 +783,7 @@ test("ADR-025: repair em lote da mesma parte (hook 3+2), sem re-judge", async ()
   assert.ok(result.briefs.every(({ hook }) => String(hook).startsWith("Gancho reparado do j-content-")));
   assert.deepEqual(
     result.briefs.map(({ development, script, cta }) => ({ development, script, cta })),
-    Array.from({ length: 5 }, (_, i) => ({ development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: `cta ${i + 1}` })),
+    Array.from({ length: 5 }, (_, i) => ({ development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: `cta ${i + 1}` })),
     "somente a parte marcada é reparada; partes PASS permanecem intactas",
   );
   assert.equal(result.qualityRepairs.filter(({ part }) => part === "hook").length, 5);
@@ -795,7 +795,7 @@ test("ADR-025: envelope de repair malformado preserva fallback sem partial", asy
   const briefFor = (position: number) => ({
     angle: `a${position}`,
     hook: `Gancho ${position}`,
-    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
     script: "Tecido respiravel",
     cta: `cta ${position}`,
   });
@@ -846,7 +846,7 @@ test("ADR-025: repair de development agrupa 2+1 e scenes é individual", async (
   const briefFor = (position: number) => ({
     angle: `a${position}`,
     hook: `Gancho ${position}`,
-    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
+    development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"],
     script: "Tecido respiravel",
     cta: `cta ${position}`,
   });
@@ -895,7 +895,7 @@ test("ADR-025: erro fatal do judge (não isolável) repropaga fail-closed", asyn
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: "c" }] };
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
     if (task === "CONTENT_QUALITY_JUDGE") throw Object.assign(new Error("falha de datasource no judge"), { code: "GEN-DATASOURCE" });
     return {};
@@ -912,12 +912,12 @@ test("ADR-020 adendo 2: partes plausíveis NÃO autorizam texto falho (gate é a
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 3 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c" }] };
     if (task === "CONTENT_BRIEF_REPAIR") {
       repairCalls += 1;
       // Partes coerentes, mas o TEXT continua com claim objetivo sem evidência:
       // o gate deve continuar rejeitando o item (nunca autorizado pelas partes).
-      return { angle: "a", hook: "h2", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel suporta 999 kg", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel suporta 999 kg", "context": "no uso" }], script: "s", cta: "c2" };
+      return { angle: "a", hook: "h2", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel suporta 999 kg", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel suporta 999 kg", "context": "no uso" }, { "text": "Destaque o tecido respiravel para explicar como o tecido respiravel suporta 999 kg", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel suporta 999 kg", "context": "no uso" }], script: "s", cta: "c2" };
     }
     return {};
   } };
@@ -940,8 +940,8 @@ test("ADR-020 adendo 2: developmentRequirements chegam ao brief MID e ao repair 
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 3 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c" }] };
-    if (task === "CONTENT_BRIEF_REPAIR") return { angle: "a", hook: "h2", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: "s", cta: "c2" };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_REPAIR") return { angle: "a", hook: "h2", development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }, { "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: "s", cta: "c2" };
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j-reqs", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router: withInternalCuration(router) });
@@ -971,8 +971,8 @@ test("ADR-020 adendo 2: saída inicial permanece string[] com exact-N e IDs est�
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 3 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 2, opportunities: [{ commercialObjective: "c1", angle: "a1", coreMessage: "m1", hookMechanism: "demonstração direta", noveltyTargets: ["n"] }, { commercialObjective: "c2", angle: "a2", coreMessage: "m2", hookMechanism: "descoberta", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") { genCalls += 1; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c" }, { angle: "b", hook: "h2", development: ["Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste"], script: "Suporta 999 kg", cta: "c2" }] }; }
-    if (task === "CONTENT_BRIEF_REPAIR") { repairCalls += 1; return { angle: "r", hook: `hr ${repairCalls}`, development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: `s ${repairCalls}`, cta: `cta seguro ${repairCalls}` }; }
+    if (task === "CONTENT_BRIEF_GENERATION") { genCalls += 1; return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Suporta 999 kg", cta: "c" }, { angle: "b", hook: "h2", development: ["Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste"], script: "Suporta 999 kg", cta: "c2" }] }; }
+    if (task === "CONTENT_BRIEF_REPAIR") { repairCalls += 1; return { angle: "r", hook: `hr ${repairCalls}`, development: [{ "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }, { "text": "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "action": "Destaque", "factRef": "product:description", "rationale": "para explicar como o tecido respiravel afeta o uso", "context": "no uso" }], script: `s ${repairCalls}`, cta: `cta seguro ${repairCalls}` }; }
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j-strings", name: "Produto", description: "Tecido respirável", targetContentCount: 2, router: withInternalCuration(router) });

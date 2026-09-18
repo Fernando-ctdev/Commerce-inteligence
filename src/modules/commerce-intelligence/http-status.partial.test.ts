@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { envelope, projectJobEnvelope, partialMissing, RETRY_ALLOWED_STATUSES, COMPLETE_ALLOWED_STATUSES } from "./http-status";
 import { partialModel } from "@/components/products/generation-ui-model";
 
-const persistedBrief = { payload: { angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: "c" } };
+const persistedBrief = { payload: { angle: "a", hook: "h", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: "c" } };
 const baseJob = {
   id: "j-partial", productId: "p", status: "SUCCEEDED_PARTIAL", stage: "FINALIZING",
   targetContentCount: 4, publicErrorMessage: null,

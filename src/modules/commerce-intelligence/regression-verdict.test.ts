@@ -18,7 +18,7 @@ const brief = (id: string, overrides: Record<string, unknown> = {}) => ({
   version: 1 as const,
   angle: `Ângulo ${id}`,
   hook: `Hook ${id}`,
-  development: ["Mostre o tecido respirável para explicar como o tecido respirável ajuda no uso"],
+  development: ["Mostre o tecido respirável para explicar como o tecido respirável ajuda no uso", "Mostre o tecido respirável para explicar como o tecido respirável ajuda no uso"],
   script: `Fale sobre ${id} com o tecido respirável.`,
   cta: `CTA ${id}`,
   ...overrides,
@@ -38,11 +38,10 @@ test("regressão dbaa5552: developments declarativos reais são REPAIR (gate cre
     refs: ["product:name", "fact:features", "fact:features:2", "fact:features:3"],
   };
   for (const point of DBAA5552_DEVELOPMENTS) {
-    const report = validateBriefSet([brief(`d-${point.length}`, { development: [point] })], evidence)[0];
+    const report = validateBriefSet([brief(`d-${point.length}`, { development: [point, point] })], evidence)[0];
     assert.equal(report.decision, "REPAIR", point);
     assert.ok(
       report.issues.some((issue) => issue.includes("development deve orientar comunicação")),
-      point,
     );
     assert.equal(report.gateVersion, GATE_POLICY_VERSION);
   }
@@ -55,7 +54,7 @@ test("regressão dbaa5552: monocultura funcional de CTA (carrinho/preço ×3) é
   };
   // Funções: checkout (carrinho), promo (frete), checkout (carrinho) — K=5, cap=ceil(3/5)=1.
   const reports = validateBriefSet([
-    brief("cta-1", { cta: "Clica no carrinho laranja e vê qual valor tá aparecendo pra você." }),
+    brief("cta-1", { cta: "Clica no carrinho laranja e vê qual opção tá aparecendo pra você." }),
     brief("cta-2", { cta: "Aproveita o frete grátis que apareceu na sua conta." }),
     brief("cta-3", { cta: "Entra no carrinho e confere as condições atuais." }),
   ], evidence);
@@ -66,7 +65,7 @@ test("regressão dbaa5552: monocultura funcional de CTA (carrinho/preço ×3) é
 test("frete grátis exige evidência: sem fato é UNSUPPORTED, com fato é SUPPORTED", () => {
   const cta = "Vai no carrinho laranja e confere se o frete grátis apareceu aí.";
   const base = {
-    development: ["Mostre a calça Duna para explicar como a calça Duna ajuda no uso"],
+    development: ["Mostre a calça Duna para explicar como a calça Duna ajuda no uso", "Mostre a calça Duna para explicar como a calça Duna ajuda no uso"],
     script: "Fale da calça Duna com naturalidade.",
   };
   const without = validateBriefSet([brief("f1", { cta, ...base })], { facts: ["Calça Duna"], refs: ["product:name"] })[0];
@@ -80,12 +79,12 @@ test("claims de vestuário (não amassa / não marca / não aperta) exigem fato 
   const script = "O wide leg dá esse caimento que não amassa e não marca.";
   const without = validateBriefSet([brief("g1", {
     script,
-    development: ["Mostre a calça para explicar como a calça se comporta no uso"],
+    development: ["Mostre a calça para explicar como a calça se comporta no uso", "Mostre a calça para explicar como a calça se comporta no uso"],
   })], { facts: ["Calça Pantalona Duna"], refs: ["product:name"] })[0];
   assert.equal(without.factualStatus, "UNSUPPORTED");
   const withFact = validateBriefSet([brief("g2", {
     script,
-    development: ["Mostre o tecido que não amassa para explicar como o tecido que não amassa se comporta no uso"],
+    development: ["Mostre o tecido que não amassa para explicar como o tecido que não amassa se comporta no uso", "Mostre o tecido que não amassa para explicar como o tecido que não amassa se comporta no uso"],
   })], { facts: ["Calça Duna", "Tecido que não amassa e não marca"], refs: ["product:name", "fact:features"] })[0];
   assert.equal(withFact.factualStatus, "SUPPORTED", withFact.issues.join("; "));
 });
@@ -94,12 +93,12 @@ test("'deixa o ar circular' é claim térmica de ventilação: exige fato", () =
   const script = "O tecido deixa o ar circular no calor.";
   const without = validateBriefSet([brief("h1", {
     script,
-    development: ["Mostre o tecido para explicar como o tecido ajuda no calor"],
+    development: ["Mostre o tecido para explicar como o tecido ajuda no calor", "Mostre o tecido para explicar como o tecido ajuda no calor"],
   })], { facts: ["Calça Duna"], refs: ["product:name"] })[0];
   assert.equal(without.factualStatus, "UNSUPPORTED");
   const withFact = validateBriefSet([brief("h2", {
     script,
-    development: ["Mostre o tecido respirável para explicar como o tecido respirável deixa o ar circular"],
+    development: ["Mostre o tecido respirável para explicar como o tecido respirável deixa o ar circular", "Mostre o tecido respirável para explicar como o tecido respirável deixa o ar circular"],
   })], { facts: ["Calça Duna", "Tecido respirável"], refs: ["product:name", "fact:features"] })[0];
   assert.equal(withFact.factualStatus, "SUPPORTED", withFact.issues.join("; "));
 });
@@ -111,7 +110,7 @@ test("regressão Space S1: produção incompatível com creator solo é REPAIR c
   const blocked = validateBriefSet([brief("s1", {
     hook: "Eu achava que áudio espacial era meio conversa de marketing.",
     script,
-    development: ["Mostre os drivers de 40 mm para relacionar 40 mm ao som informado"],
+    development: ["Mostre os drivers de 40 mm para relacionar 40 mm ao som informado", "Mostre os drivers de 40 mm para relacionar 40 mm ao som informado"],
   })], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], solo)[0];
   assert.equal(blocked.decision, "REPAIR");
   assert.ok(blocked.issues.includes("produção incompatível com creator solo"));
@@ -122,7 +121,7 @@ test("gate de cenas: mantém ação com âncora, dropa antipadrão de produção
   const briefFields = {
     angle: "Experiência de entretenimento com áudio espacial",
     hook: "Eu achava que áudio espacial era meio conversa de marketing.",
-    development: ["Mostre os drivers de 40 mm para relacionar 40 mm ao som informado"],
+    development: ["Mostre os drivers de 40 mm para relacionar 40 mm ao som informado", "Mostre os drivers de 40 mm para relacionar 40 mm ao som informado"],
     script: "Esse fone tem drivers de 40 mm e muda a percepção do som.",
     cta: "Se você curte esse tipo de imersão, vale dar uma olhada nesse aqui.",
   };
@@ -145,7 +144,7 @@ test("gate de cenas: set abaixo do mínimo de 2 mantidas vira vazio", () => {
   const evidence = { facts: ["Fone Space S1"], refs: ["product:name"] };
   const briefFields = {
     angle: "a", hook: "h",
-    development: ["Mostre o fone para explicar o uso do fone"],
+    development: ["Mostre o fone para explicar o uso do fone", "Mostre o fone para explicar o uso do fone"],
     script: "Fale sobre o fone.", cta: "c",
   };
   const result = gateSceneSet([
@@ -154,6 +153,23 @@ test("gate de cenas: set abaixo do mínimo de 2 mantidas vira vazio", () => {
   ], briefFields, evidence, { recordsAlone: true, recordingEquipment: ["camera"] });
   assert.deepEqual(result.kept, []);
   assert.equal(result.dropped, 2);
+});
+
+test("escopo editorial: cena com fala/diálogo é dropada; instrução visual legítima permanece", () => {
+  const brief = { angle: "a", hook: "Gancho", development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Mostre o tecido respiravel em uso para conectar o resultado pratico do tecido respiravel"], script: "Fale sobre o uso do produto", cta: "cta" };
+  const ev = { facts: ["Produto"], refs: ["product:name"] };
+  const result = gateSceneSet(
+    [
+      { description: "Mostre o produto em uso no dia a dia" },
+      { description: "Pegue o produto e aproxime do celular para um close" },
+      { description: "Mostre o produto. Fale: esse produto muda o seu dia a dia" },
+    ],
+    brief,
+    ev,
+  );
+  assert.equal(result.kept.length, 2);
+  assert.equal(result.dropped, 1);
+  assert.ok(result.causes.some((cause) => cause.startsWith("fala_na_cena")));
 });
 
 test("gateVersion: versão incompatível (ou pré-versionamento) é GATE-VERSION-MISMATCH, nunca REPAIR", () => {
@@ -181,7 +197,7 @@ test("gateSceneSet: causas agregadas por motivo de descarte", () => {
   const evidence = { facts: ["Fone Space S1 com drivers de 40 mm"], refs: ["fact:features"] };
   const briefFields = {
     angle: "a", hook: "h",
-    development: ["Mostre o fone para explicar o uso do fone"],
+    development: ["Mostre o fone para explicar o uso do fone", "Mostre o fone para explicar o uso do fone"],
     script: "Fale sobre o fone.", cta: "c",
   };
   const result = gateSceneSet([

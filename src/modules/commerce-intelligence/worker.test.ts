@@ -47,8 +47,8 @@ test("run metadata carries engineVersion and gateVersion snapshots", () => {
   assert.deepEqual(metadata.understandingReductions, [{ field: "purchaseBarriers", received: 9, kept: 8 }]);
 });
 test("brief persistence keeps development bullets and strips legacy scenes", () => {
-  const payload = briefPayloadForPersistence({ contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: ["Ponto de desenvolvimento"], script: "Roteiro oral", cta: "CTA", scenes: ["cena antiga"] } as never);
-  assert.deepEqual(payload.development, ["Ponto de desenvolvimento"]);
+  const payload = briefPayloadForPersistence({ contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: ["Ponto de desenvolvimento", "Ponto de desenvolvimento"], script: "Roteiro oral", cta: "CTA", scenes: ["cena antiga"] } as never);
+  assert.deepEqual(payload.development, ["Ponto de desenvolvimento", "Ponto de desenvolvimento"]);
   assert.equal("scenes" in payload, false);
 });
 test("brief persistence rejects missing development", () => {
@@ -56,7 +56,7 @@ test("brief persistence rejects missing development", () => {
 });
 test("brief persistence rejects empty, oversized, or non-string development bullets", () => {
   const base = { contentId: "c1", briefVersionId: "b1", version: 1 as const, angle: "a", hook: "h", script: "Roteiro oral", cta: "CTA" };
-  for (const development of [[], ["1", "2", "3", "4", "5"], ["válido", 2]]) {
+  for (const development of [[], ["1", "2", "3", "4", "5", "6", "7"], ["válido", 2]]) {
     assert.throws(() => briefPayloadForPersistence({ ...base, development } as never), /development/);
   }
 });

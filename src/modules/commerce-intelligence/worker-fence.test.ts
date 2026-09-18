@@ -60,7 +60,7 @@ function syntheticOutput(strategyId = `strat-${randomUUID()}`, opts: { includeBr
     partial: null,
   };
   if (opts.includeBrief) {
-    output.briefs = [{ contentId, briefVersionId, version: 1, angle: "demonstração", hook: "Gancho do teste de fence", development: ["Destaque o uso do produto para orientar a conversa sobre o uso"], script: "Fale sobre o uso do produto", cta: "cta do teste" }];
+    output.briefs = [{ contentId, briefVersionId, version: 1, angle: "demonstração", hook: "Gancho do teste de fence", development: ["Destaque o uso do produto para orientar a conversa sobre o uso", "Destaque o uso do produto para orientar a conversa sobre o uso"], script: "Fale sobre o uso do produto", cta: "cta do teste" }];
     output.reports = [{ briefId: `${contentId}:${briefVersionId}`, gateVersion: 1, factualStatus: "SUPPORTED", claimType: "objetivo", evidenceRefs: [], structuralStatus: "PASS", platformStatus: "PASS", varietyStatus: "PASS", issues: [], decision: "PASS" }];
   }
   return output;
