@@ -106,9 +106,12 @@ function ScenesNote({ scenes }: { scenes: ScenesProjection }) {
   if (scenes.status === "ERROR")
     return <p className={styles.scenesNote}>Não foi possível gerar as cenas agora.</p>;
   return (
-    <ol aria-label="Sugestões de cenas" className={styles.bulletList}>
+    <ol aria-label="Sugestões de cenas" className={styles.sceneList}>
       {scenes.scenes.map((scene, index) => (
-        <li key={`${index}-${scene.description.slice(0, 24)}`}>{scene.description}</li>
+        <li className={styles.sceneItem} key={`${index}-${scene.description.slice(0, 24)}`}>
+          <span aria-hidden="true" className={styles.sceneIndex}>{pad2(index + 1)}</span>
+          <p>{scene.description}</p>
+        </li>
       ))}
     </ol>
   );

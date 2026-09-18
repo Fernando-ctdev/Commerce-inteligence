@@ -603,7 +603,9 @@
 }
 
 .sceneItem p {
+  color: var(--color-text);
   margin: 0;
+  max-width: 62ch;
 }
 
 .sceneIndex {
