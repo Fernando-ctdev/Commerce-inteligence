@@ -1,7 +1,6 @@
 // Preço versionado + cálculo exato de custo (Slice 010 / design 2026-09-18).
 // Aritmética exclusivamente BigInt em unidades menores escaladas; float proibido.
 // O custo é observabilidade: nenhum erro aqui pode alterar geração, quota ou estado do job.
-import type { Prisma } from "@prisma/client";
 
 export type PriceCompleteness = "COMPLETE" | "PARTIAL" | "UNAVAILABLE";
 
@@ -29,8 +28,32 @@ export type CostEstimate = {
   completeness: PriceCompleteness;
 };
 
-// Injeção do delegate Prisma: testes unitários herméticos sem banco (padrão Pick do repo).
-export type PriceReader = Pick<Prisma.TransactionClient, "providerModelPrice">;
+// Leitor estrutural (sem depender do delegate gerado): testes unitários herméticos sem banco
+// e o client Prisma real são atribuíveis a esta interface.
+export type ProviderModelPriceRow = {
+  id: string;
+  version: number;
+  currency: string;
+  // Decimal(20,6) chega como objeto Decimal/string; String() preserva a exatidão decimal.
+  inputPerMillionMinor: unknown;
+  outputPerMillionMinor: unknown;
+  reasoningPerMillionMinor: unknown;
+  cachedPerMillionMinor: unknown;
+};
+
+export type PriceReader = {
+  providerModelPrice: {
+    findMany(args: {
+      where: {
+        provider: string;
+        model: string;
+        currency?: string;
+        effectiveFrom: { lte: Date };
+        OR: Array<{ effectiveTo: null } | { effectiveTo: { gt: Date } }>;
+      };
+    }): Promise<ProviderModelPriceRow[]>;
+  };
+};
 
 // Catálogo do operador inconsistente (vigências sobrepostas / moedas ambíguas): falha explícita;
 // o chamador degrada para UNAVAILABLE em vez de inventar preço.
