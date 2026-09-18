@@ -121,11 +121,16 @@ export async function attachCapabilityCosts(
       });
     };
     if (event.attempts?.length) {
+      // O registro da última tentativa com usage é reservado para o evento: a fila é
+      // consumida pelos attempts, mas event.cost precisa existir (contrato allowlisted).
+      let finalRecord: CapabilityUsageCost | undefined;
       for (const attempt of event.attempts) {
         if (!attempt.usage) continue;
-        attach(attempt, take(recordKey({ task: event.task, contentId: event.contentId, attempt: event.attempt, retry: attempt.retry ?? 0 })));
+        const record = take(recordKey({ task: event.task, contentId: event.contentId, attempt: event.attempt, retry: attempt.retry ?? 0 }));
+        attach(attempt, record);
+        finalRecord = record ?? finalRecord;
       }
-      attach(event, take(recordKey({ task: event.task, contentId: event.contentId, attempt: event.attempt, retry: event.attempts[event.attempts.length - 1]?.retry ?? event.retry })));
+      attach(event, finalRecord);
     } else {
       attach(event, take(recordKey({ task: event.task, contentId: event.contentId, attempt: event.attempt, retry: event.retry })));
     }

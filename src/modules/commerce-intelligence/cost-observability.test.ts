@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildCapabilityUsageCosts, attachCapabilityCosts, aggregateRunCosts, type RunCostInputEvent, type PriceSnapshot } from "./cost-observability";
-import type { LogicalTask } from "./model-router";
 
-type AttachableEvent = RunCostInputEvent & { cost?: { amountMinor: string | null; completeness: string } };
+import type { LogicalTask, ProviderTokenUsage } from "./model-router";
+
+type AttachableEvent = RunCostInputEvent & { attempts?: Array<{ usage?: ProviderTokenUsage; retry?: number; pricing?: { versionId: string | null; currency: string | null }; cost?: { amountMinor: string | null; completeness: string } }>; pricing?: { versionId: string | null; currency: string | null }; cost?: { amountMinor: string | null; completeness: string } };
 
 const BRL: PriceSnapshot = {
   versionId: "price-1",
@@ -109,6 +110,17 @@ test("attach cruza registros por fila: eventos repetidos recebem seus próprios 
   assert.equal(records.length, 2);
   assert.equal(events[0]?.cost?.amountMinor, "100");
   assert.equal(events[1]?.cost?.amountMinor, "300", "segundo evento recebe o próprio registro");
+});
+
+test("attach define event.cost da última tentativa mesmo após consumir a fila dos attempts", async () => {
+  const event: AttachableEvent = { task: "CONTENT_BRIEF_GENERATION", provider: "p", model: "m", attempt: 1, retry: 1, attempts: [{ usage: usage({ inputTokens: 800 }), retry: 0 }, { usage: usage({ inputTokens: 1000, outputTokens: 500 }), retry: 1 }] };
+  const records = await attachCapabilityCosts([event], resolverByCurrency("BRL").resolve);
+  assert.equal(records.length, 2);
+  assert.equal(event.attempts?.[0]?.cost?.amountMinor, "800");
+  assert.equal(event.attempts?.[1]?.cost?.amountMinor, "2000");
+  assert.equal(event.cost?.amountMinor, "2000", "evento recebe o custo da tentativa final");
+  assert.equal(event.cost?.completeness, "COMPLETE");
+  assert.deepEqual(event.pricing, { versionId: "price-1", currency: "BRL" });
 });
 
 test("contentId só aparece quando atribuído", async () => {
