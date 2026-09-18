@@ -26,6 +26,7 @@ No contexto de um Product, o creator consulta seu histórico intelectual e opera
 - Estados financeiros `COMPLETE`, `PARTIAL` e `UNAVAILABLE`.
 - Endpoint dedicado, autenticado e tenant-scoped para leitura do Histórico por Product.
 - Compatibilidade para jobs legados sem usage/preço: custo `UNAVAILABLE`, sem backfill por estimativa.
+- A projeção consome custo reportado pelo adapter ou snapshot imutável de preço. Para OpenRouter, `usage.cost`/`cost_details` prevalece e o snapshot de `GET /api/v1/models` é secundário; catálogo local só atende provider sem pricing oficial. Fonte e detalhes permanecem internos e nunca integram o DTO.
 - Apresentação responsiva: lista densa no desktop e lista vertical legível no mobile; valores e estados têm rótulo textual acessível.
 
 ## 4. Out of Scope
@@ -77,6 +78,7 @@ A fonte canônica é `IntelligenceRun.metadata.capabilities[]`. Toda leitura, ju
 - `PARTIAL` inclui uma única entrada `PARTIAL` com `amountMinor` conhecido e também combinações com ao menos um custo conhecido e outra entrada parcial ou indisponível.
 - `UNAVAILABLE` ocorre quando a lista não contém custo calculável, em metadata legado, moeda incompatível ou ausência de semântica/price/usage necessária.
 - A rota não reestima tokens, não recalcula pelo preço atual e não soma moedas distintas.
+- O Histórico projeta custo reportado pelo adapter quando disponível; para OpenRouter, na ausência dele usa somente snapshot imutável previamente aplicado de `GET /api/v1/models`. Catálogo local é fallback apenas de provider sem pricing oficial. Origem, rates e breakdown não cruzam a fronteira creator-facing.
 
 ## 7. UI Contract
 
@@ -88,7 +90,7 @@ Desktop pode agrupar a informação em lista densa. Mobile preserva a mesma capa
 
 1. Leitura e autorização são sempre tenant-scoped no servidor.
 2. A API/UI creator-facing recebe apenas `currency`, `amountMinor` e `completeness` como dados de custo.
-3. Valores históricos usam o snapshot de preço aplicado à capability; mudanças de catálogo não os alteram.
+3. Valores históricos usam o custo reportado normalizado ou o snapshot de preço aplicado; mudanças de catálogo não os alteram.
 4. `null` significa indisponibilidade honesta, não zero ou estimativa.
 5. Custos não alteram quota, billing, estados de job, retry, fallback ou resultado gerado.
 

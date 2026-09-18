@@ -27,6 +27,7 @@ Engine Capability → Logical Intelligence Task → Model Router
 - Capabilities determinísticas (orquestração, estado, persistência, idempotência, schema validation, contagens, quota) **não passam pelo router**.
 - Regenerações locais reutilizam contexto persistido: CTA → LOW; hook → LOW/MID; script → MID; trocar ângulo → MID; replanejar conjunto → HIGH. Nenhuma alteração local recalcula toda a inteligência do Produto.
 - Um provider por vez no MVP, atrás de adapter próprio (OpenRouter, OpenAI, Anthropic, Google ou compatível). Nenhum provider entra na regra de negócio; trocar modelo/provider não altera entidades de domínio.
+- Para OpenRouter, `usage.cost` e `usage.cost_details` da resposta são a fonte primária de custo da chamada. `GET /api/v1/models` é fonte secundária: seus rates somente entram após snapshot imutável local por provider/modelo/moeda. Catálogo local é fallback exclusivo de provider sem pricing oficial. A moeda do custo reportado ou do snapshot é explícita/configurada; sem moeda confiável, o custo é parcial ou indisponível. Essa variação fica confinada ao adapter, preservando o domínio agnóstico a provider.
 - `LOW`, `MID`, `HIGH` são valores de `IntelligenceTier` — nunca planos comerciais. É proibido variar qualidade estratégica por plano.
 - Avaliação de modelos usa tarefas reais da plataforma (produtos de categorias variadas, medindo compreensão, estratégia, variedade, naturalidade, latência, custo, confiabilidade), alimentando o Golden Dataset do ADR-012.
 - Decisões de modelo permanecem invisíveis ao creator: tier, provider, modelo, tokens e prompt nunca cruzam a fronteira creator-facing. A única exceção é o Histórico do Produto, que pode mostrar somente custo estimado agregado, moeda e completude (`COMPLETE`, `PARTIAL` ou `UNAVAILABLE`), sem permitir inferir os detalhes internos.
@@ -59,6 +60,7 @@ Engine Capability → Logical Intelligence Task → Model Router
 - Contexto mínimo por capability (slices de Strategy/Skill/Memory), nunca o mundo inteiro.
 - Conteúdo de páginas de Produto entra como dado não confiável, separado das instruções (ver ADR-012).
 - Métricas por tarefa: latência, tokens, custo, taxa de erro e retries permanecem internas. O Histórico do Produto recebe somente a projeção allowlisted de custo estimado agregado, moeda e completude; nunca provider, modelo, tier, tokens, prompt, logs ou payload.
+- Snapshot de preço e custo reportado ficam no metadata interno allowlisted por capability; histórico não recebe fonte, provider, modelo, rates ou breakdown — somente valor, moeda e completude.
 
 ## Relações
 

@@ -28,9 +28,9 @@ Registrar o uso real retornado pelo provider e calcular custo estimado reproduz�
 O adapter do provider é a única fonte de usage. Ele normaliza o envelope de resposta para os quatro campos conhecidos e preserva `null` quando não houver dado confiável. A engine não estima tokens por texto nem converte bytes em tokens.
 O adapter preserva os contadores reportados, mas normaliza a base de cálculo sem dupla contagem: `cachedTokens` pode ser subconjunto de `inputTokens` e `reasoningTokens` pode ser subconjunto de `outputTokens`. O custo usa somente buckets não sobrepostos conforme a semântica documentada do provider. Se essa semântica não puder ser determinada, a capability fica `PARTIAL` ou `UNAVAILABLE`; nunca soma tokens sobrepostos.
 
-A tabela de preço é um registro versionado e imutável por `provider`, `model`, `currency` e vigência. Cada versão informa preço unitário por milhão de tokens para input, output, reasoning e cached input; dimensões não precificadas permanecem nulas. O cálculo usa inteiros em unidades monetárias menores (por exemplo, micros da moeda) ou decimal exato, nunca `float`.
+Para OpenRouter, `usage.cost` e `usage.cost_details` são a fonte primária do custo da chamada. A moeda precisa estar explicitamente documentada pelo provider ou configurada no adapter; sem essa confirmação, o valor não se torna custo monetário completo. `GET /api/v1/models` é fonte secundária: antes de qualquer cálculo por rates, o adapter persiste um snapshot imutável com provider, modelo, moeda, rates, instante de coleta e hash/versionamento local. Catálogo local só é fallback para provider sem pricing oficial; nunca preenche lacuna de preço OpenRouter.
 
-Cada capability grava a identidade da versão de preço aplicada, a moeda e o custo calculado. Portanto, mudanças futuras de preço não alteram o custo histórico. Se modelo, preço aplicável, moeda, usage necessário ou dimensão de preço forem desconhecidos, o custo daquela capability é `partial` ou `unavailable`, conforme abaixo.
+O contrato comum é provider-agnostic: cada capability registra origem `REPORTED`, `OFFICIAL_SNAPSHOT`, `LOCAL_FALLBACK` ou `UNAVAILABLE`. O primeiro usa o custo reportado; o segundo calcula buckets não sobrepostos; o terceiro somente usa catálogo local explicitamente configurado; o último não inventa preço. Mudanças de preço ou modelo nunca alteram o custo histórico porque o registro referencia o custo reportado normalizado ou o snapshot aplicado.
 
 ## Contrato persistido
 
@@ -49,7 +49,8 @@ type CapabilityUsageCost = {
     cachedTokens: number | null;
   };
   pricing: {
-    versionId: string | null;
+    source: "REPORTED" | "OFFICIAL_SNAPSHOT" | "LOCAL_FALLBACK" | "UNAVAILABLE";
+    snapshotId: string | null;
     currency: string | null;
   };
   cost: {
@@ -88,7 +89,7 @@ A migration adiciona a estrutura versionada de preços e amplia apenas a allowli
 ## Invariantes
 
 1. Usage vem exclusivamente da resposta real do provider; ausência é `null`.
-2. Custo histórico referencia a versão de preço aplicada e nunca é recalculado por preço atual.
+2. Custo histórico referencia o custo reportado normalizado ou o snapshot de preço aplicado e nunca é recalculado por preço atual.
 3. O total é derivado da fonte por capability e não é persistido em duplicidade.
 4. Toda leitura é isolada por tenant e Product; identificadores do cliente não definem escopo.
 5. A UI creator-facing não recebe nem exibe dados técnicos da engine.

@@ -14,7 +14,7 @@
 
 - Provider usage is the only token source; missing or unsupported counters remain `null`, never inferred from bytes or text.
 - Cached and reasoning counters must not be double-counted when they are subsets of input/output; ambiguous provider semantics produce `PARTIAL` or `UNAVAILABLE` cost.
-- Prices are immutable/versioned by provider, model, currency, and validity interval; historical cost never uses a newer price.
+- Custo usa, nesta ordem, custo reportado oficialmente pelo adapter, snapshot imutável de pricing oficial ou fallback local de provider sem pricing oficial; moeda sempre é explícita/configurada e ausência confiável resulta `PARTIAL`/`UNAVAILABLE`.
 - Monetary calculations use exact decimal/integer arithmetic, never JavaScript floating point.
 - `IntelligenceRun.metadata.capabilities[]` is the canonical source; do not add duplicated totals to `Content` or `CommerceIntelligenceJob`.
 - Retries, fallbacks, repairs, and provider failures are separate effective calls and count once when usage/cost is known.
@@ -66,20 +66,22 @@ git commit -m "docs(slice-010): define cost history contract"
 
 ---
 
-### Task 2: Add immutable provider/model pricing
+### Task 2: Add immutable reported-cost and official pricing snapshots
 
 **Files:**
 - Modify: `prisma/schema.prisma`
 - Create: `prisma/migrations/20260918120000_provider_model_prices/migration.sql`
 - Create: `src/modules/commerce-intelligence/pricing.ts`
 - Create: `src/modules/commerce-intelligence/pricing.test.ts`
-- Create: `scripts/seed-provider-prices.mts` (operator-supplied catalog only)
+- Create: `src/modules/commerce-intelligence/openrouter-pricing.ts`
+- Create: `src/modules/commerce-intelligence/openrouter-pricing.test.ts`
 
 **Interfaces:**
-- Produces `ProviderModelPrice` rows with `provider`, `model`, `currency`, `version`, effective interval, and exact per-million rates.
-- Produces `resolveProviderModelPrice(provider, model, at, preferredCurrency?)` and `calculateCost(usage, price)`; the resolver requires one unambiguous active currency and both operations are deterministic.
+- Produces immutable `ProviderModelPrice` snapshots with `source` (`OFFICIAL_SNAPSHOT` or `LOCAL_FALLBACK`), provider, model, explicitly configured currency, version/hash, collection instant, exact rates and validity interval.
+- Produces a provider-agnostic cost result with source `REPORTED`, `OFFICIAL_SNAPSHOT`, `LOCAL_FALLBACK` or `UNAVAILABLE`; reported cost wins over any calculated rate.
+- Produces `resolveProviderModelPrice(provider, model, at, preferredCurrency?)` and `calculateCost(usage, price)` for snapshot/fallback calculation. The resolver requires one unambiguous active currency and both operations are deterministic.
 
-- [ ] **Step 1: Write failing pricing tests.** Cover active interval selection, no row, overlapping intervals, zero usage, exact rounding, nullable dimensions, and cached/reasoning overlap.
+- [ ] **Step 1: Write failing pricing tests.** Cover reported cost precedence, active official snapshot selection, no row, overlapping intervals, missing/ambiguous currency, zero usage, exact rounding, nullable dimensions, cached/reasoning overlap, and unavailable fallback.
 
 ```ts
 test("selects the price version active at call time", async () => {
@@ -108,17 +110,18 @@ test("does not double-count cached input or reasoning output", () => {
 });
 ```
 
-- [ ] **Step 2: Add the Prisma model and migration.** Use exact decimal columns for per-million rates, nullable rates for unsupported dimensions, `effectiveFrom`/`effectiveTo`, append-only version identity, and indexes for provider/model/currency/interval lookup. Do not add totals to Job or Content.
-- [ ] **Step 3: Implement deterministic resolver/calculator.** Reject overlapping active versions, normalize currency, calculate non-overlapping billable buckets, return `COMPLETE`, `PARTIAL`, or `UNAVAILABLE`, and serialize monetary output as a string. If no preferred currency is supplied, resolve only when exactly one active currency exists.
-- [ ] **Step 4: Add the seed command.** Read `PROVIDER_PRICE_CATALOG_JSON`, validate non-negative rates and non-overlapping versions, and insert only new immutable versions. An empty/unset catalog is valid and makes runtime cost `UNAVAILABLE`; never invent provider rates.
-- [ ] **Step 5: Run pricing tests and commit.**
+- [ ] **Step 2: Add the Prisma model and migration.** Use exact decimal columns for per-million rates, nullable rates for unsupported dimensions, `source`, `sourceHash`, `collectedAt`, `effectiveFrom`/`effectiveTo`, append-only version identity, and indexes for provider/model/currency/interval lookup. Do not add totals to Job or Content.
+- [ ] **Step 3: Implement the OpenRouter pricing adapter.** Fetch `GET /api/v1/models`, allowlist prompt/completion/cache rates only, require configured/documented currency, validate non-negative values, canonicalize and hash the payload, and insert a new immutable snapshot only when its identity changes. Network/schema/currency failure returns no snapshot; it never invents a rate.
+- [ ] **Step 4: Implement deterministic resolver/calculator.** Prefer normalized `usage.cost`/`cost_details` when currency is explicit; otherwise select an active official snapshot, then a local fallback only for a provider with no official pricing integration. Calculate non-overlapping billable buckets, return `COMPLETE`, `PARTIAL`, or `UNAVAILABLE`, and serialize monetary output as a string.
+- [ ] **Step 5: Do not add `PROVIDER_PRICE_CATALOG_JSON` for OpenRouter.** A local immutable catalog remains an operator-supplied fallback only for providers without official pricing; empty/unavailable source is valid and makes runtime cost `UNAVAILABLE`.
+- [ ] **Step 6: Run pricing tests and commit.**
 
 
 ```bash
-npx tsx --test src/modules/commerce-intelligence/pricing.test.ts
+npx tsx --test src/modules/commerce-intelligence/pricing.test.ts src/modules/commerce-intelligence/openrouter-pricing.test.ts
 
-git add prisma/schema.prisma prisma/migrations src/modules/commerce-intelligence/pricing.ts src/modules/commerce-intelligence/pricing.test.ts scripts/seed-provider-prices.mts
-git commit -m "feat(slice-010): add versioned model pricing"
+git add prisma/schema.prisma prisma/migrations src/modules/commerce-intelligence/pricing.ts src/modules/commerce-intelligence/pricing.test.ts src/modules/commerce-intelligence/openrouter-pricing.ts src/modules/commerce-intelligence/openrouter-pricing.test.ts
+git commit -m "feat(slice-010): add official pricing snapshots"
 ```
 
 ---
@@ -133,8 +136,8 @@ git commit -m "feat(slice-010): add versioned model pricing"
 - Modify: `src/modules/commerce-intelligence/engine.test.ts`
 
 **Interfaces:**
-- Produces `ProviderTokenUsage` with nullable `inputTokens`, `outputTokens`, `reasoningTokens`, and `cachedTokens`.
-- Extends `ProviderCallMetrics` and `CapabilityEvent` with provider identity and usage without changing existing callers that omit usage.
+- Produces `ProviderTokenUsage` with nullable `inputTokens`, `outputTokens`, `reasoningTokens`, and `cachedTokens`, plus normalized optional `ProviderReportedCost` from `usage.cost`/`usage.cost_details` with explicit/configured currency.
+- Extends `ProviderCallMetrics` and `CapabilityEvent` with provider identity, usage and reported cost without changing existing callers that omit them.
 
 ```ts
 export type ProviderTokenUsage = {
@@ -142,6 +145,12 @@ export type ProviderTokenUsage = {
   outputTokens: number | null;
   reasoningTokens: number | null;
   cachedTokens: number | null;
+};
+
+export type ProviderReportedCost = {
+  amountMinor: string | null;
+  currency: string | null;
+  completeness: "COMPLETE" | "PARTIAL" | "UNAVAILABLE";
 };
 
 export type ProviderCallMetrics = {
@@ -153,14 +162,15 @@ export type ProviderCallMetrics = {
   responseBytes: number | null;
   durationMs: number;
   usage?: ProviderTokenUsage;
+  reportedCost?: ProviderReportedCost;
   // existing retry/fallback fields remain
 };
 ```
 
-- [ ] **Step 1: Add provider fixtures/tests that fail.** Cover OpenAI-compatible `usage.prompt_tokens`, `completion_tokens`, `prompt_tokens_details.cached_tokens`, `completion_tokens_details.reasoning_tokens`, alternate `input_tokens`/`output_tokens`, missing usage, invalid negative/fractional values, and zero values.
-- [ ] **Step 2: Implement one adapter normalizer.** Read only allowlisted usage paths, accept safe non-negative integers, keep unsupported dimensions `null`, and preserve raw counters while marking overlap semantics for the cost calculator.
-- [ ] **Step 3: Attach usage to `onMetrics` for success and provider failures.** Do not log usage payloads, prompts, responses, or secrets; keep existing correlation and rate-header allowlists unchanged.
-- [ ] **Step 4: Thread usage through `createCapabilityTracker`.** Copy normalized usage into each `CapabilityEvent`; preserve one event per effective attempt, retry, fallback, repair, and failure.
+- [ ] **Step 1: Add provider fixtures/tests that fail.** Cover OpenRouter `usage.prompt_tokens`, `completion_tokens`, cached/reasoning details, `usage.cost`, `cost_details`, explicit currency, missing currency, alternate `input_tokens`/`output_tokens`, missing usage, invalid negative/fractional values, and zero values.
+- [ ] **Step 2: Implement one adapter normalizer.** Read only allowlisted usage/cost paths, accept safe non-negative integers for tokens and exact decimal conversion for reported cost, keep unsupported dimensions `null`, preserve raw counters while marking overlap semantics for the calculator, and reject monetary completeness without explicit/configured currency.
+- [ ] **Step 3: Attach usage and reported cost to `onMetrics` for success and provider failures.** Do not log usage/cost payloads, prompts, responses, or secrets; keep existing correlation and rate-header allowlists unchanged.
+- [ ] **Step 4: Thread usage and reported cost through `createCapabilityTracker`.** Copy normalized fields into each `CapabilityEvent`; preserve one event per effective attempt, retry, fallback, repair, and failure.
 - [ ] **Step 5: Run provider/engine tests and commit.**
 
 ```bash
@@ -185,10 +195,10 @@ git commit -m "feat(slice-003): capture provider token usage"
 **Interfaces:**
 - Produces `CapabilityUsageCost` records matching the approved design.
 - Produces `aggregateRunCosts(metadata)` for capability, Content, and Job projections.
-- Consumes `ProviderTokenUsage`, provider/model identity, call attempt/retry, `ProviderModelPrice`, and optional server-derived `contentId`.
+- Consumes `ProviderTokenUsage`, optional `ProviderReportedCost`, provider/model identity, call attempt/retry, immutable official/local `ProviderModelPrice` snapshot, and optional server-derived `contentId`.
 
-- [ ] **Step 1: Write failing aggregation tests.** Cover one call, set-level calls without `contentId`, direct Content calls, retries/fallbacks, provider failure with usage, legacy metadata, mixed currencies, and no-price/no-usage states.
-- [ ] **Step 2: Implement `cost-observability.ts`.** Build immutable per-call records, resolve the price at call time, calculate exact cost, and aggregate without duplicating totals. Set-level calls contribute to Job only; Content totals include only directly attributed calls and expose incomplete state when appropriate.
+- [ ] **Step 1: Write failing aggregation tests.** Cover reported cost precedence, one call, set-level calls without `contentId`, direct Content calls, retries/fallbacks, provider failure with usage/cost, legacy metadata, mixed currencies, official snapshot, local fallback, and no-price/no-usage states.
+- [ ] **Step 2: Implement `cost-observability.ts`.** Build immutable per-call records with source `REPORTED`, `OFFICIAL_SNAPSHOT`, `LOCAL_FALLBACK` or `UNAVAILABLE`; prefer explicit-currency reported cost, otherwise resolve the applied snapshot/fallback, calculate exact cost, and aggregate without duplicating totals. Set-level calls contribute to Job only; Content totals include only directly attributed calls and expose incomplete state when appropriate.
 - [ ] **Step 3: Integrate finalization.** When `runMetadata` is created, transform each capability event into a sanitized cost record and merge it into `IntelligenceRun.metadata.capabilities`. Preserve existing metadata fields and legacy readers.
 - [ ] **Step 4: Integrate failed/reclaimed paths.** Persist usage/cost received before terminal provider failure in the existing fenced `IntelligenceRun` upsert; never persist response bodies or stale-owner metrics.
 - [ ] **Step 5: Verify idempotency.** Replaying the same owner/attempt must not duplicate a capability record; explicit retry creates a separate record and is included once.
