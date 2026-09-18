@@ -5,6 +5,14 @@
   width: 100%;
 }
 
+/* Itens do grid podem encolher abaixo do min-content: sem isso o track
+   cresce ao largo do passo mais largo e estoura telas de 380px. */
+.form > .formSteps,
+.form > .section,
+.form > .submitBar {
+  min-width: 0;
+}
+
 .section {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -551,6 +559,12 @@
   min-height: 44px;
 }
 
+.creatorOptions [data-slot="tabs-trigger"]:nth-child(3) {
+  font-size: 13px;
+  line-height: 16px;
+  white-space: normal;
+}
+
 .creatorOptions [data-slot="tabs-trigger"][data-active] {
   color: var(--color-brand);
 }
@@ -631,6 +645,34 @@
   padding-block: 4px;
 }
 
+.preparationActions .backButton {
+  order: 1;
+}
+
+.preparationActions .continueButton {
+  order: 2;
+}
+
+.preparationActions .cancelLink {
+  order: 3;
+}
+
+.summaryActions .backButton {
+  order: 1;
+}
+
+.summaryActions .analysisButton {
+  order: 2;
+}
+
+.summaryActions .saveButton {
+  order: 3;
+}
+
+.summaryActions .cancelLink {
+  order: 4;
+}
+
 .primaryButton,
 .secondaryButton,
 .textButton {
@@ -693,19 +735,63 @@
     gap: 24px;
     padding: 20px;
   }
-
-  .form {
-    gap: 24px;
-    padding-block-end: 24px;
-  }
-
   .submitBar {
+    display: grid;
+    gap: 12px;
+    align-items: stretch;
+    grid-template-areas:
+      "continue continue"
+      "back cancel"
+      "save save"
+      "analysis analysis";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-top: 4px;
     padding: 12px 0 0;
   }
 
-  .primaryButton {
-    flex: 1;
+  .backButton {
+    grid-area: back;
+    width: 100%;
+  }
+
+  .continueButton {
+    grid-area: continue;
+    width: 100%;
+  }
+
+  .firstStepActions {
+    grid-template-areas:
+      "continue continue"
+      "cancel cancel";
+  }
+
+  .firstStepActions .cancelLink {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: auto;
+  }
+
+  .summaryActions {
+    grid-template-areas:
+      "back cancel"
+      "save save"
+      "analysis analysis";
+  }
+
+  .cancelLink {
+    grid-area: cancel;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .saveButton {
+    grid-area: save;
+    width: 100%;
+  }
+
+  .analysisButton {
+    grid-area: analysis;
+    width: 100%;
   }
 
   .grid,
@@ -716,6 +802,83 @@
   }
   .factsGrid > :nth-child(n) {
     grid-column: 1 / -1;
+  }
+
+  .preparationGrid {
+    gap: 24px;
+  }
+
+  /* Formato do creator: lista vertical em vez de 3 colunas comprimidas. */
+  .creatorOptions {
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    display: grid;
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .creatorOptions [data-slot="tabs-trigger"] {
+    justify-content: flex-start;
+    min-height: 44px;
+    padding: 10px 12px;
+    text-align: start;
+    white-space: normal;
+  }
+
+  .creatorOptions [data-slot="tabs-trigger"][data-active] {
+    background: color-mix(in srgb, var(--color-brand) 8%, var(--color-surface));
+    border-inline-start: 3px solid var(--color-brand);
+    color: var(--color-brand);
+  }
+
+  .creatorOptions [data-slot="tabs-trigger"]::after {
+    display: none;
+  }
+
+  /* Stepper progressivo: números em linha 44px; só a etapa ativa exibe o
+     rótulo. Rótulos inativos permanecem no DOM via visually-hidden. */
+  .formSteps {
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    min-width: 0;
+    overflow: visible;
+    width: 100%;
+  }
+
+  .formSteps li {
+    flex: 0 0 44px;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .formSteps li[aria-current="step"] {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    min-width: 0;
+  }
+
+  .formSteps li strong {
+    border: 0;
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  .formSteps li[aria-current="step"] strong {
+    clip-path: none;
+    height: auto;
+    min-width: 0;
+    overflow: visible;
+    position: static;
+    white-space: normal;
+    width: auto;
   }
 }
 

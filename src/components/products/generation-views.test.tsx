@@ -70,7 +70,7 @@ const envelopeParcial = () => ({
 test("escopo editorial: SUCCEEDED_PARTIAL publica os D itens sem exigir exato-N", async () => {
   const html = await renderContents(envelopeParcial());
   assert.match(html, /Conteúdos/);
-  assert.match(html, /4 de 5 conteúdos/);
+  assert.doesNotMatch(html, /4 de 5 conteúdos/);
   assert.doesNotMatch(html, /ainda não estão prontos/);
 });
 

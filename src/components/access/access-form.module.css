@@ -15,8 +15,16 @@
   gap: clamp(20px, 3dvh, 26px);
   margin: auto;
   max-width: 560px;
+  min-width: 0;
   padding: clamp(34px, 5dvh, 42px) 44px;
   width: 100%;
+}
+
+.surface > *,
+.form > *,
+.field > *,
+.modeSwitch > * {
+  min-width: 0;
 }
 
 .brand {
@@ -30,6 +38,18 @@
   height: 56px;
   object-fit: contain;
   width: 146px;
+}
+
+.logoLight {
+  display: none;
+}
+
+:global(.dark) .logoDark {
+  display: none;
+}
+
+:global(.dark) .logoLight {
+  display: block;
 }
 
 .brand span {
@@ -80,6 +100,7 @@
   display: grid;
   gap: 4px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
   padding: 4px;
 }
 
@@ -93,6 +114,7 @@
   font-size: 17px;
   font-weight: 500;
   min-height: 48px;
+  min-width: 0;
   padding: 8px 12px;
 }
 
@@ -110,6 +132,7 @@
 .form,
 .field {
   display: grid;
+  min-width: 0;
 }
 
 .form {
@@ -133,6 +156,7 @@
   border-radius: 10px;
   display: flex;
   min-height: 54px;
+  min-width: 0;
   padding-inline: 16px;
   transition:
     border-color 80ms ease,
@@ -251,11 +275,13 @@
 
 @media (max-width: 767px) {
   .page {
-    padding: 16px;
+    align-items: start;
+    padding: 32px 16px;
   }
 
   .surface {
     gap: 22px;
+    margin: 0 auto;
     padding: 32px 24px 28px;
   }
 

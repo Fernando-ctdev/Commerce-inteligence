@@ -4,7 +4,8 @@ import { FormEvent, useState } from "react";
 import Image from "next/image";
 import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 
-import logoText from "@/assets/logo/logo_text.png";
+import logoTextDark from "@/assets/logo/logo_text_dark.webp";
+import logoTextLight from "@/assets/logo/logo_text_light.webp";
 
 import styles from "./access-form.module.css";
 
@@ -81,17 +82,21 @@ export function AccessForm({ sessionExpired }: AccessFormProps) {
         <div className={styles.brand}>
           <Image
             alt="Viewefy"
-            className={styles.logo}
-            height={64}
+            className={`${styles.logo} ${styles.logoDark}`}
             priority
-            src={logoText}
-            width={166}
+            src={logoTextDark}
+          />
+          <Image
+            alt=""
+            className={`${styles.logo} ${styles.logoLight}`}
+            priority
+            src={logoTextLight}
           />
         </div>
 
         <div className={styles.intro}>
-          <h1 id="access-title">{title}</h1>
-          <p>Transforme produtos em estratégias e conteúdos prontos para gravar.</p>
+          {/* <h1 id="access-title">{title}</h1> */}
+          <p>Transforme produtos em estratégias e conteúdos que vendem.</p>
         </div>
 
         {sessionExpired && (

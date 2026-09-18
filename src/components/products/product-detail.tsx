@@ -36,6 +36,27 @@ type ProductTab = "overview" | "strategy" | "contents" | "history";
 const hashToTab = (hash: string): ProductTab | null =>
   hash === "#generated-contents" ? "contents" : null;
 
+/* Ciclo navegável do MVP: Conteúdos → Estratégia → Produto → Conteúdos.
+   Histórico permanece no código, fora da navegação visível. */
+const cycleTabs = ["contents", "strategy", "overview"] as const;
+type CycleTab = (typeof cycleTabs)[number];
+
+const tabLabels: Record<ProductTab, string> = {
+  contents: "Conteúdos",
+  strategy: "Estratégia",
+  overview: "Produto",
+  history: "Histórico",
+};
+
+function cycleNeighbours(tab: ProductTab): { prev: CycleTab; next: CycleTab } {
+  const index = cycleTabs.indexOf(tab as CycleTab);
+  const safe = index === -1 ? 0 : index;
+  return {
+    prev: cycleTabs[(safe + cycleTabs.length - 1) % cycleTabs.length],
+    next: cycleTabs[(safe + 1) % cycleTabs.length],
+  };
+}
+
 /* Vislumbre do produto: imagem + fatos essenciais. O form completo só
    aparece quando o usuário pede edição — a aba abre em modo leitura. */
 
@@ -147,7 +168,13 @@ function ProductSummaryPanel({ product }: { product: ProductRecord }) {
   );
 }
 
-export function ProductDetail({ id }: { id: string }) {
+export function ProductDetail({
+  id,
+  initialEditing = false,
+}: {
+  id: string;
+  initialEditing?: boolean;
+}) {
   const [product, setProduct] = useState<ProductRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +182,7 @@ export function ProductDetail({ id }: { id: string }) {
   const [reactivating, setReactivating] = useState(false);
   const [tab, setTab] = useState<ProductTab>(() =>
     hashToTab(typeof window === "undefined" ? "" : window.location.hash) ??
-      "overview",
+      "contents",
   );
   const [archiveConfirmationOpen, setArchiveConfirmationOpen] = useState(false);
   const [reactivateConfirmationOpen, setReactivateConfirmationOpen] =
@@ -163,7 +190,7 @@ export function ProductDetail({ id }: { id: string }) {
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   /* A aba abre em leitura (resumo); o form completo só entra sob edição explícita. */
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(initialEditing);
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const router = useRouter();
 
@@ -175,6 +202,9 @@ export function ProductDetail({ id }: { id: string }) {
      após o re-render, por isso o foco vai no próximo frame. */
   function stopEdit() {
     setEditing(false);
+    void router.replace("/products/" + encodeURIComponent(id), {
+      scroll: false,
+    });
     requestAnimationFrame(() => editButtonRef.current?.focus());
   }
 
@@ -217,6 +247,8 @@ export function ProductDetail({ id }: { id: string }) {
       value === "contents" ? "#generated-contents" : window.location.pathname,
     );
   }
+
+  const cycle = cycleNeighbours(tab);
 
   const generation = useGenerationJob({
     productId: product?.active ? product.id : null,
@@ -379,12 +411,30 @@ export function ProductDetail({ id }: { id: string }) {
         >
           <div className={styles.tabsScroller}>
             <SectionSwitcherList className={styles.tabsList}>
-              <SectionSwitcherTrigger value="overview">Visão geral</SectionSwitcherTrigger>
               <SectionSwitcherTrigger value="contents">Conteúdos</SectionSwitcherTrigger>
               <SectionSwitcherTrigger value="strategy">Estratégia</SectionSwitcherTrigger>
+              <SectionSwitcherTrigger value="overview">Produto</SectionSwitcherTrigger>
               <SectionSwitcherTrigger value="history">Histórico</SectionSwitcherTrigger>
             </SectionSwitcherList>
           </div>
+          <nav aria-label="Navegar entre seções" className={styles.tabsMobile}>
+            <button
+              aria-label={`Seção anterior: ${tabLabels[cycle.prev]}`}
+              className={styles.tabsMobileButton}
+              onClick={() => changeTab(cycle.prev)}
+              type="button"
+            >
+              {tabLabels[cycle.prev]}
+            </button>
+            <button
+              aria-label={`Próxima seção: ${tabLabels[cycle.next]}`}
+              className={styles.tabsMobileButton}
+              onClick={() => changeTab(cycle.next)}
+              type="button"
+            >
+              {tabLabels[cycle.next]}
+            </button>
+          </nav>
           <SectionSwitcherContent className={styles.overviewContent} value="overview">
             {generation.failed && generation.job && (
               <div className={styles.failureBanner} role="alert">

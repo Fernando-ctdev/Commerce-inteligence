@@ -1,9 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Fingerprint, Home, Settings2, Tag } from "lucide-react";
-import logo from "@/assets/logo/logo.png";
-import logoText from "@/assets/logo/logo_text.png";
+import { Fingerprint, Home, Menu, Settings2, Tag } from "lucide-react";
+import logoMascot from "@/assets/logo/logo_mascot.png";
+import logoTextDark from "@/assets/logo/logo_text_dark.webp";
+import logoTextLight from "@/assets/logo/logo_text_light.webp";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Sidebar,
@@ -55,12 +56,18 @@ export function ProductShell({
     <Sidebar collapsible="icon" side="left">
       <SidebarHeader className={styles.sidebarHeader}>
         <Link aria-label="Viewefy" className={styles.brand} href="/today">
-          <Image alt="" className={styles.brandLogo} src={logo} />
+          <Image alt="" className={styles.brandLogo} src={logoMascot} />
           <Image
             alt=""
-            className={styles.brandLogoText}
+            className={`${styles.brandLogoText} ${styles.brandLogoTextDark}`}
             priority
-            src={logoText}
+            src={logoTextDark}
+          />
+          <Image
+            alt=""
+            className={`${styles.brandLogoText} ${styles.brandLogoTextLight}`}
+            priority
+            src={logoTextLight}
           />
         </Link>
       </SidebarHeader>
@@ -104,7 +111,9 @@ export function ProductShell({
           <SidebarTrigger
             aria-label="Abrir navegação"
             className={styles.mobileTrigger}
-          />
+          >
+            <Menu aria-hidden="true" />
+          </SidebarTrigger>
           <h1 className={styles.title}>
             <PageIcon aria-hidden="true" className={styles.titleIcon} />
             {title}

@@ -1015,11 +1015,11 @@ export function ProductCreateForm({
         <ol aria-label="Etapas do cadastro" className={styles.formSteps}>
           <li aria-current={formStep === "facts" ? "step" : undefined}>
             <span aria-hidden="true">1</span>
-            <strong>Informações do produto</strong>
+            <strong>Informações</strong>
           </li>
           <li aria-current={formStep === "preparation" ? "step" : undefined}>
             <span aria-hidden="true">2</span>
-            <strong>Preparação dos conteúdos</strong>
+            <strong>Conteúdos</strong>
           </li>
           <li aria-current={formStep === "summary" ? "step" : undefined}>
             <span aria-hidden="true">3</span>
@@ -1422,14 +1422,29 @@ export function ProductCreateForm({
         />
       )}
 
-      <div className={styles.submitBar}>
+      <div
+        className={[
+          styles.submitBar,
+          !isEdit && formStep === "facts" ? styles.firstStepActions : "",
+          formStep === "preparation" ? styles.preparationActions : "",
+          formStep === "summary" ? styles.summaryActions : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
         {!isEdit && formStep === "facts" && (
-          <Button onClick={continueToPreparation} type="button">
+          <Button className={styles.continueButton} onClick={continueToPreparation} type="button">
+            Continuar
+          </Button>
+        )}
+        {!isEdit && formStep === "preparation" && (
+          <Button className={styles.continueButton} disabled={saving} onClick={continueToSummary} type="button">
             Continuar
           </Button>
         )}
         {!isEdit && (formStep === "preparation" || formStep === "summary") && (
           <Button
+            className={styles.backButton}
             disabled={saving}
             onClick={() =>
               setFormStep(formStep === "preparation" ? "facts" : "preparation")
@@ -1440,40 +1455,32 @@ export function ProductCreateForm({
             Voltar
           </Button>
         )}
-        {!isEdit && (
-          <>
-            {formStep === "preparation" && (
-              <Button disabled={saving} onClick={continueToSummary} type="button">
-                Continuar
-              </Button>
-            )}
-            {formStep === "summary" && (
-              <>
-                <Button
-                  className={styles.analysisButton}
-                  disabled={saving}
-                  onClick={() => {
-                    submitIntent.current = "analyze";
-                  }}
-                  type="submit"
-                >
-                  {saving ? "Iniciando análise…" : "Analisar produto"}
-                </Button>
-                <Button disabled={saving} type="submit">
-                  {saving ? "Salvar produto — salvando" : "Salvar produto"}
-                </Button>
-              </>
-            )}
-            {saving ? (
-              <Button disabled type="button" variant="outline">
-                Cancelar
-              </Button>
-            ) : (
-              <Link className={styles.cancelLink} href="/products">
-                Cancelar
-              </Link>
-            )}
-          </>
+        {!isEdit &&
+          (saving ? (
+          <Button className={styles.cancelLink} disabled type="button" variant="outline">
+            Cancelar
+          </Button>
+        ) : (
+          <Link className={styles.cancelLink} href="/products">
+            Cancelar
+          </Link>
+          ))}
+        {!isEdit && formStep === "summary" && (
+          <Button className={styles.saveButton} disabled={saving} type="submit">
+            {saving ? "Salvar produto — salvando" : "Salvar produto"}
+          </Button>
+        )}
+        {!isEdit && formStep === "summary" && (
+          <Button
+            className={styles.analysisButton}
+            disabled={saving}
+            onClick={() => {
+              submitIntent.current = "analyze";
+            }}
+            type="submit"
+          >
+            {saving ? "Iniciando análise…" : "Analisar produto"}
+          </Button>
         )}
       </div>
     </form>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleAlert, Clapperboard, Compass, Gift, Heart, HeartCrack, Hourglass, Megaphone, Mic, ScrollText, Shield, Sparkles, Users, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, CircleAlert, Clapperboard, Compass, Gift, Heart, HeartCrack, Hourglass, Megaphone, Mic, ScrollText, Shield, Sparkles, Users, X } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Button } from "@/components/ui/button";
 
@@ -21,7 +21,6 @@ import {
   partialModel,
   briefingItems,
   contentStatusLabel,
-  contentsSummaryLabel,
   strategyModel,
   type BriefingItem,
   scriptParagraphs,
@@ -81,12 +80,9 @@ function ScenesNote({ scenes }: { scenes: ScenesProjection }) {
   );
 }
 
-/** Sentinela: usuário pediu explicitamente voltar à lista (mobile). Diferente de "nunca selecionou". */
-const LIST_VIEW = "__list__";
-function BriefingDetail({ index, item, onBack, onNavigate, total }: {
+function BriefingDetail({ index, item, onNavigate, total }: {
   index: number;
   item: BriefingItem;
-  onBack: () => void;
   onNavigate: (nextIndex: number) => void;
   total: number;
 }) {
@@ -104,13 +100,14 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
   ].filter((pair): pair is [string, string] => !!pair[1]);
   return (
     <article className={styles.detail}>
-      <Button className={styles.mobileBack} onClick={onBack} type="button" variant="outline">
-        <ArrowLeft aria-hidden="true" />
-        Conteúdos
-      </Button>
       <header className={styles.detailHeader}>
         <h3 className={styles.detailTitle}>{`Conteúdo ${pad2(item.position)}`}</h3>
-        <p className={styles.statusTag}>{contentStatusLabel(item.status)}</p>
+        <div className={styles.detailMeta}>
+          <span className={styles.contentProgress}>
+            {`${String(index + 1).padStart(2, "0")}/${String(total).padStart(2, "0")}`}
+          </span>
+          <p className={styles.statusTag}>{contentStatusLabel(item.status)}</p>
+        </div>
       </header>
       <Tabs className={styles.detailTabs} defaultValue="script">
         <TabsList aria-label="Seções do conteúdo" variant="line">
@@ -133,8 +130,17 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
           </ul>
         </section>
       )}
+      {item.cta && (
+        <section aria-label="CTA" className={styles.detailSection}>
+          <SectionLabel icon={Megaphone}>CTA</SectionLabel>
+          <p className={styles.readingText}>{item.cta}</p>
+        </section>
+      )}
       {item.script.trim() !== "" && (
-        <section aria-label="Roteiro" className={styles.detailSection}>
+        <section
+          aria-label="Roteiro"
+          className={[styles.detailSection, styles.scriptSection].join(" ")}
+        >
           <SectionLabel icon={ScrollText}>ROTEIRO</SectionLabel>
           <div className={styles.scriptParagraphs}>
             {scriptParagraphs(item.script).map((paragraph, index) => (
@@ -143,10 +149,6 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
           </div>
         </section>
       )}
-      <section aria-label="CTA" className={styles.detailSection}>
-        <SectionLabel icon={Megaphone}>CTA</SectionLabel>
-        <p className={styles.readingText}>{item.cta}</p>
-      </section>
       {context.length > 0 && (
         <section className={styles.contextRow}>
           {context.map(([label, value]) => (
@@ -173,14 +175,25 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
           <ScenesNote scenes={item.scenes} />
         </TabsContent>
       </Tabs>
-      <nav aria-label={`Navegação entre conteúdos: conteúdo ${index + 1} de ${total}`} className={styles.contentsNav}>
-        <Button disabled={index <= 0} onClick={() => onNavigate(index - 1)} type="button" variant="outline">
+      <nav aria-label="Navegação entre conteúdos" className={styles.contentsNav}>
+        <Button
+          className={styles.readerNavButton}
+          disabled={index <= 0}
+          onClick={() => onNavigate(index - 1)}
+          type="button"
+          variant="outline"
+        >
           <ChevronLeft aria-hidden="true" />
           Anterior
         </Button>
-        <span>{`${index + 1} de ${total}`}</span>
-        <Button disabled={index >= total - 1} onClick={() => onNavigate(index + 1)} type="button" variant="outline">
-          Próximo
+        <Button
+          className={styles.readerNavButton}
+          disabled={index >= total - 1}
+          onClick={() => onNavigate(index + 1)}
+          type="button"
+          variant="outline"
+        >
+          Próximo conteúdo
           <ChevronRight aria-hidden="true" />
         </Button>
       </nav>
@@ -570,11 +583,7 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
   );
 }
 
-/**
- * Aba Conteúdos: estação de revisão de Briefings em master-detail — lista
- * compacta para navegar (escala para 20+), painel do Briefing selecionado.
- * Mobile usa fluxo lista → detalhe; nunca exibe resultado parcial.
- */
+/** Aba Conteúdos: leitor de Briefings com navegação linear entre conteúdos. */
 export function ContentsView({ job, active }: { job: GenerationRecord | null; active: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   if (active) {
@@ -610,55 +619,19 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
     );
   }
   const items = briefingItems(job.contents);
-  const approved = items.filter((item) => item.status === "APPROVED").length;
-  // A aba abre sempre com um Briefing ativo: sem seleção (ou id de outro job),
-  // recai sobre o primeiro conteúdo. Só o pedido explícito de voltar (LIST_VIEW)
-  // exibe a lista sem detalhe.
-  const selected = selectedId === LIST_VIEW
-    ? null
-    : items.find((item) => item.id === selectedId) ?? items[0] ?? null;
+  const selected = items.find((item) => item.id === selectedId) ?? items[0] ?? null;
   const selectedIndex = selected ? items.indexOf(selected) : -1;
   return (
-    <section aria-labelledby="contents-title" className={styles.panel} id="generated-contents">
-      <header className={styles.contentsHeader}>
-        <h2 id="contents-title">Conteúdos</h2>
-        <p>{job.status === "SUCCEEDED_PARTIAL" ? `${items.length} de ${job.expectedCount ?? job.targetContentCount} conteúdos` : contentsSummaryLabel(items.length, approved)}</p>
-      </header>
-      <div className={styles.contentsLayout} data-selected={selected ? "true" : "false"}>
-        <ol aria-label="Lista de conteúdos" className={styles.contentsList}>
-          {items.map((item) => (
-            <li key={item.id}>
-              <button
-                aria-current={item.id === selected?.id ? "true" : undefined}
-                className={styles.contentRow}
-                data-selected={item.id === selected?.id ? "true" : undefined}
-                onClick={() => setSelectedId(item.id)}
-                type="button"
-              >
-                <span className={styles.contentRowTop}>
-                  <span className={styles.contentRowPosition}>{pad2(item.position)}</span>
-                  <span className={styles.statusTag}>{contentStatusLabel(item.status)}</span>
-                </span>
-                <span className={styles.contentRowHook}>{item.hook}</span>
-              </button>
-            </li>
-          ))}
-        </ol>
-        <div className={styles.detailPane}>
-          {selected ? (
-            <BriefingDetail
-              index={selectedIndex}
-              item={selected}
-              key={selected.id}
-              onBack={() => setSelectedId(LIST_VIEW)}
-              onNavigate={(nextIndex) => setSelectedId(items[nextIndex]?.id ?? LIST_VIEW)}
-              total={items.length}
-            />
-          ) : (
-            <p className={styles.blockedNote}>Selecione um conteúdo para revisar o Briefing.</p>
-          )}
-        </div>
-      </div>
+    <section aria-label="Conteúdos" className={styles.panel} id="generated-contents">
+      {selected && (
+        <BriefingDetail
+          index={selectedIndex}
+          item={selected}
+          key={selected.id}
+          onNavigate={(nextIndex) => setSelectedId(items[nextIndex]?.id ?? null)}
+          total={items.length}
+        />
+      )}
     </section>
   );
 }

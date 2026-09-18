@@ -20,12 +20,14 @@
 
 /* SPEC: reduced-motion remove o movimento, não só o reduz. */
 @media (prefers-reduced-motion: reduce) {
-  .list {
+  .list,
+  .cards,
+  .galleryEmpty {
     animation: none;
   }
 
   .card,
-  .card > a.cardAction {
+  .filterTab {
     transition: none;
   }
 }
@@ -94,76 +96,61 @@
   padding: 10px 12px 10px 40px;
   width: 100%;
 }
-.filterScroller {
-  max-width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.filterScroller::-webkit-scrollbar {
-  display: none;
-}
-
-.filters {
+.filterNav {
+  border-block-end: 1px solid var(--color-border);
   display: flex;
-  gap: 8px;
-  min-width: max-content;
+  gap: 20px;
   width: fit-content;
 }
 
-.filter {
-  align-items: center;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+.filterTab {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   color: var(--color-text-secondary);
   cursor: pointer;
-  display: inline-flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   font: inherit;
   font-size: 14px;
   font-weight: 500;
-  gap: 8px;
-  justify-content: center;
   min-height: 44px;
-  min-width: 108px;
-  padding: 8px 16px;
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
-  white-space: nowrap;
+  padding: 8px 4px;
+  position: relative;
+  transition: color 160ms ease-out, transform 160ms ease-out;
 }
 
-.filter:hover {
-  background: var(--color-surface-secondary);
+.filterTab[data-pressed] {
+  color: var(--color-brand);
+  font-weight: 600;
+  transform: translateY(-1px);
 }
 
-.filter[data-pressed] {
-  background: color-mix(in srgb, var(--color-focus) 8%, var(--color-surface));
-  border-color: var(--color-focus);
-  color: var(--color-focus);
+.filterTab[data-pressed]::after {
+  background: var(--color-brand);
+  block-size: 2px;
+  bottom: -1px;
+  content: "";
+  inset-inline: 0;
+  position: absolute;
 }
 
-.filter[data-pressed] .filterCount {
-  background: color-mix(in srgb, var(--color-focus) 14%, var(--color-surface));
-  color: var(--color-focus);
+.filterCount {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  margin-inline-start: 4px;
 }
 
-.filter:focus-visible {
+.filterTab:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
-.filterCount {
-  align-items: center;
-  background: var(--color-surface-secondary);
-  border-radius: 999px;
-  color: var(--color-text-muted);
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 600;
-  justify-content: center;
-  min-width: 22px;
-  padding: 2px 6px;
+.filterSummary {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  margin: 4px 0 0;
 }
 
 .secondaryButton {
@@ -243,10 +230,14 @@
 
 .searchInput:focus-visible,
 .secondaryButton:focus-visible,
-.primaryButton:focus-visible,
-.cardAction:focus-visible {
+.primaryButton:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--color-focus) 45%, transparent);
   outline-offset: 2px;
+}
+
+.cardAction:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
 }
 
 .listIntro h2,
@@ -280,6 +271,7 @@
 }
 
 .cards {
+  animation: listOpen 160ms ease-out;
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -336,7 +328,6 @@
 
 .cardHeader {
   min-width: 0;
-  position: relative;
 }
 
 .card h3 {
@@ -345,7 +336,6 @@
   line-height: 24px;
   margin: 0;
   min-width: 0;
-  padding-inline-end: 32px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow-wrap: anywhere;
@@ -354,21 +344,26 @@
 
 .cardMenuTrigger {
   align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  background: color-mix(in srgb, var(--color-surface) 42%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-radius: 8px;
   color: var(--color-text-secondary);
+  cursor: pointer;
   display: inline-flex;
-  height: 32px;
+  height: 40px;
   justify-content: center;
   position: absolute;
-  right: 0;
-  top: -4px;
-  width: 32px;
+  right: 8px;
+  top: 8px;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out;
+  width: 40px;
+  z-index: 1;
 }
 
 .cardMenuTrigger:hover {
-  background: var(--color-surface-secondary);
+  background: color-mix(in srgb, var(--color-surface-secondary) 55%, transparent);
+  border-color: var(--color-focus);
   color: var(--color-text);
 }
 
@@ -379,7 +374,9 @@
 
 .cardMenuTrigger svg {
   height: 18px;
+  position: relative;
   width: 18px;
+  z-index: 1;
 }
 
 .cardProgress {
@@ -415,8 +412,7 @@
   height: 100%;
   transition: width 300ms ease;
 }
-.cardStatus,
-.cardActivity {
+.cardStatus {
   color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 18px;
@@ -428,7 +424,6 @@
   font-weight: 600;
 }
 .cardStatus,
-.cardActivity,
 .cardError {
   align-items: center;
   display: flex;
@@ -436,7 +431,6 @@
 }
 
 .cardStatus > svg,
-.cardActivity > svg,
 .cardError > svg {
   flex: 0 0 auto;
   height: 15px;
@@ -478,44 +472,28 @@
 }
 
 .cardAction {
-  align-items: center;
-  background: var(--color-action);
-  border: 1px solid var(--color-action);
+  background: transparent;
+  border: 0;
+  color: transparent;
+  inset: 0;
+  margin: 0;
+  min-height: 0;
+  padding: 0;
+  position: absolute;
+  z-index: 0;
+}
+
+.cardLoadingAction {
+  block-size: 44px;
   border-radius: 8px;
-  color: var(--color-on-action);
-  display: flex;
-  font-size: 14px;
-  font-weight: 700;
-  gap: 8px;
-  justify-content: center;
-  margin: 0 16px 16px;
-  min-height: 44px;
-  padding: 10px 16px;
-  text-align: center;
-  text-decoration: none;
-}
-
-.cardAction:hover {
-  filter: brightness(0.96);
-}
-
-.cardActionSecondary {
-  background: var(--color-surface-primary);
-  border-color: var(--color-brand);
-  color: var(--color-brand);
-}
-
-.cardActionSecondary:hover {
-  background: var(--color-surface-secondary);
-  filter: none;
-}
-.cardAction > svg {
+  display: block;
   flex: 0 0 auto;
-  height: 16px;
-  width: 16px;
+  margin: 0 16px 16px;
+  width: calc(100% - 32px);
 }
 
 .galleryEmpty {
+  animation: listOpen 160ms ease-out;
   color: var(--color-text-secondary);
   display: grid;
   gap: 12px;
@@ -581,18 +559,37 @@
   .listIntro .primaryButton {
     width: 100%;
   }
-  .filters {
-    width: max-content;
+
+  .filterNav {
+    gap: 0;
+    width: 100%;
   }
 
-  .filter {
-    flex: 0 0 auto;
+  .filterTab {
+    flex: 1 1 0;
+    font-size: 13px;
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+
+  .filterCount {
+    display: none;
   }
 
   .cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .cardImage,
+  .imageFallback {
+    aspect-ratio: 4 / 3;
+  }
+
+  .cardBody {
+    gap: 8px;
+    padding: 12px;
+  }
   .state {
     border-inline: 0;
     border-radius: 0;

@@ -8,9 +8,6 @@ import { Toggle } from "@base-ui/react/toggle";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 import {
   AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  Clock3,
   Ellipsis,
   FileText,
   Plus,
@@ -45,7 +42,6 @@ import {
 import styles from "./product-list.module.css";
 
 const filterOptions = [
-  ["all", "Todos"],
   ["active", "Ativos"],
   ["pending", "Pendentes"],
   ["archived", "Arquivados"],
@@ -53,25 +49,21 @@ const filterOptions = [
 
 type ProductFilter = (typeof filterOptions)[number][0];
 
-function activityLabel(value: string | null | undefined) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  const today = new Date();
-  return date.toDateString() === today.toDateString()
-    ? "hoje"
-    : date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-}
-
 export function ProductList() {
   const [products, setProducts] = useState<ProductRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<ProductFilter>("all");
-  const [generations, setGenerations] = useState<Record<string, GenerationRecord | null>>({});
-  const [actionProduct, setActionProduct] = useState<ProductRecord | null>(null);
-  const [actionType, setActionType] = useState<"archive" | "delete" | null>(null);
+  const [filter, setFilter] = useState<ProductFilter>("active");
+  const [generations, setGenerations] = useState<
+    Record<string, GenerationRecord | null>
+  >({});
+  const [actionProduct, setActionProduct] = useState<ProductRecord | null>(
+    null,
+  );
+  const [actionType, setActionType] = useState<"archive" | "delete" | null>(
+    null,
+  );
   const [actionPending, setActionPending] = useState(false);
 
   const load = useCallback(async () => {
@@ -83,7 +75,10 @@ export function ProductList() {
       const entries = await Promise.all(
         nextProducts.map(async (product) => {
           try {
-            return [product.id, await getCurrentGenerationForProduct(product.id)] as const;
+            return [
+              product.id,
+              await getCurrentGenerationForProduct(product.id),
+            ] as const;
           } catch {
             return [product.id, null] as const;
           }
@@ -110,12 +105,11 @@ export function ProductList() {
     const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
     return products.filter((product) => {
       const matchesFilter =
-        filter === "all" ||
-        (filter === "active"
+        filter === "active"
           ? product.active
           : filter === "pending"
             ? product.readiness !== "READY" && product.active
-            : !product.active);
+            : !product.active;
       const matchesQuery =
         !normalizedQuery ||
         `${product.name} ${product.category} ${product.description}`
@@ -126,7 +120,6 @@ export function ProductList() {
   }, [filter, products, query]);
   const filterCounts = useMemo(
     () => ({
-      all: products.length,
       active: products.filter((product) => product.active).length,
       pending: products.filter(
         (product) => product.readiness !== "READY" && product.active,
@@ -195,31 +188,30 @@ export function ProductList() {
             value={query}
           />
         </div>
-        <div className={styles.filterScroller}>
-          <ToggleGroup
-            aria-label="Filtrar produtos"
-            className={styles.filters}
-            onValueChange={(value) => {
-              const nextFilter = value[0] as ProductFilter | undefined;
-              if (nextFilter) setFilter(nextFilter);
-            }}
-            value={[filter]}
-          >
-            {filterOptions.map(([value, label]) => (
-              <Toggle
-                className={styles.filter}
-                key={value}
-                value={value}
-              >
-                {label}
-                <span className={styles.filterCount}>
-                  {filterCounts[value]}
-                </span>
-              </Toggle>
-            ))}
-          </ToggleGroup>
-        </div>
+        <ToggleGroup
+          aria-label="Filtrar produtos"
+          className={styles.filterNav}
+          onValueChange={(value) => {
+            const nextFilter = value[0] as ProductFilter | undefined;
+            if (nextFilter) setFilter(nextFilter);
+          }}
+          value={[filter]}
+        >
+          {filterOptions.map(([value, label]) => (
+            <Toggle className={styles.filterTab} key={value} value={value}>
+              {label}
+              <span className={styles.filterCount}>{filterCounts[value]}</span>
+            </Toggle>
+          ))}
+        </ToggleGroup>
       </div>
+      <p aria-live="polite" className={styles.filterSummary}>
+        {loading
+          ? "Carregando produtos…"
+          : `${filteredProducts.length} ${
+              filteredProducts.length === 1 ? "produto" : "produtos"
+            }`}
+      </p>
       {loading ? (
         <ul aria-hidden="true" className={styles.cards}>
           {Array.from({ length: 6 }, (_, index) => (
@@ -239,10 +231,7 @@ export function ProductList() {
                   style={{ blockSize: 14, inlineSize: "60%" }}
                 />
               </div>
-              <Skeleton
-                className={styles.cardAction}
-                style={{ blockSize: 44, inlineSize: "100%" }}
-              />
+              <Skeleton className={styles.cardLoadingAction} />
             </li>
           ))}
         </ul>
@@ -258,7 +247,7 @@ export function ProductList() {
           </button>
         </div>
       ) : filteredProducts.length === 0 ? (
-        <div className={styles.galleryEmpty}>
+        <div className={styles.galleryEmpty} key={filter}>
           {products.length === 0 ? (
             <p>
               Nenhum produto por aqui ainda. Use Adicionar produto para começar
@@ -271,7 +260,7 @@ export function ProductList() {
                 className={styles.secondaryButton}
                 onClick={() => {
                   setQuery("");
-                  setFilter("all");
+                  setFilter("active");
                 }}
                 type="button"
               >
@@ -281,7 +270,11 @@ export function ProductList() {
           )}
         </div>
       ) : (
-        <ul aria-label="Produtos filtrados" className={styles.cards}>
+        <ul
+          aria-label="Produtos filtrados"
+          className={styles.cards}
+          key={filter}
+        >
           {filteredProducts.map((product) => {
             const firstImage = product.imageReferences[0];
             const imageUrl =
@@ -295,24 +288,23 @@ export function ProductList() {
             const analyzing = generation
               ? isActiveGeneration(generation.status)
               : product.readiness === "ANALYZING";
-            const projectionDegraded = generation?.code === "GEN-PROJECTION" &&
-              (generation.status === "SUCCEEDED" || generation.status === "SUCCEEDED_PARTIAL");
+            const projectionDegraded =
+              generation?.code === "GEN-PROJECTION" &&
+              (generation.status === "SUCCEEDED" ||
+                generation.status === "SUCCEEDED_PARTIAL");
             const ready =
               !projectionDegraded &&
-              ((generation?.status === "SUCCEEDED" || generation?.status === "SUCCEEDED_PARTIAL") ||
-              (!generation && product.readiness === "READY"));
+              (generation?.status === "SUCCEEDED" ||
+                generation?.status === "SUCCEEDED_PARTIAL" ||
+                (!generation && product.readiness === "READY"));
             const failed =
               !projectionDegraded &&
               (generation?.status === "FAILED" ||
-              generation?.status === "CANCELLED" ||
-              (!generation && product.readiness === "FAILED"));
-            const approved =
-              generation?.contents.filter((content) => content.status === "APPROVED")
-                .length ?? 0;
+                generation?.status === "CANCELLED" ||
+                (!generation && product.readiness === "FAILED"));
             const currentStage = generation?.stage
               ? stageMessage(generation.stage)
               : "Preparando a análise...";
-            const activity = activityLabel(generation?.finishedAt);
             return (
               <li className={styles.card} key={product.id}>
                 {imageUrl ? (
@@ -353,7 +345,11 @@ export function ProductList() {
                           Arquivar produto
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          render={<Link href={`/products/${encodeURIComponent(product.id)}`} />}
+                          render={
+                            <Link
+                              href={`/products/${encodeURIComponent(product.id)}?edit=1`}
+                            />
+                          }
                         >
                           Editar produto
                         </DropdownMenuItem>
@@ -370,7 +366,10 @@ export function ProductList() {
                     </DropdownMenu>
                   </div>
                   {analyzing ? (
-                    <div className={styles.cardProgress} aria-label={`Progresso da análise: ${currentStage}`}>
+                    <div
+                      className={styles.cardProgress}
+                      aria-label={`Progresso da análise: ${currentStage}`}
+                    >
                       <div className={styles.cardProgressHeader}>
                         <span>{currentStage}</span>
                       </div>
@@ -386,34 +385,30 @@ export function ProductList() {
                       Não foi possível concluir a análise.
                     </p>
                   ) : ready && generation ? (
-                    <>
-                      <div aria-label="Resumo operacional" className={styles.cardMetrics}>
-                        <span><FileText aria-hidden="true" /><strong>{generation.contents.length}</strong> conteúdos</span>
-                        {generation.status === "SUCCEEDED_PARTIAL" && <span><AlertTriangle aria-hidden="true" /><strong>{generation.missing.length}</strong> faltantes</span>}
-                        <span><CheckCircle2 aria-hidden="true" /><strong>{approved}</strong> aprovados</span>
-                        <span><Video aria-hidden="true" /><strong>4</strong> gravados</span>
-                      </div>
-                      {activity && (
-                        <p className={styles.cardActivity}>
-                          <Clock3 aria-hidden="true" />
-                          Última atividade: {activity}
-                        </p>
-                      )}
-                    </>
+                    <div
+                      aria-label="Resumo operacional"
+                      className={styles.cardMetrics}
+                    >
+                      <span>
+                        <FileText aria-hidden="true" />
+                        <strong>{generation.contents.length}</strong> conteúdos
+                      </span>
+                      <span>
+                        <Video aria-hidden="true" />
+                        <strong>4</strong> gravados
+                      </span>
+                    </div>
                   ) : (
                     <p className={styles.cardStatus}>
-                      <FileText aria-hidden="true" />
-                      0 conteúdos gerados
+                      <FileText aria-hidden="true" />0 conteúdos gerados
                     </p>
                   )}
                 </div>
                 <Link
-                  className={`${styles.cardAction} ${failed ? styles.cardActionSecondary : ""}`}
+                  aria-label={`Abrir produto ${product.name}`}
+                  className={styles.cardAction}
                   href={`/products/${encodeURIComponent(product.id)}`}
-                >
-                  {analyzing ? "Acompanhar análise" : failed ? "Tentar novamente" : ready ? "Revisar conteúdos" : "Abrir produto"}
-                  {!failed && <ArrowRight aria-hidden="true" />}
-                </Link>
+                />
               </li>
             );
           })}
@@ -421,7 +416,9 @@ export function ProductList() {
       )}
       {actionProduct && actionType && (
         <ConfirmationDialog
-          confirmLabel={actionType === "archive" ? "Arquivar produto" : "Excluir produto"}
+          confirmLabel={
+            actionType === "archive" ? "Arquivar produto" : "Excluir produto"
+          }
           description={
             actionType === "archive"
               ? `O produto “${actionProduct.name}” será arquivado e deixará de aparecer entre os produtos ativos. Os dados serão preservados.`
@@ -438,7 +435,9 @@ export function ProductList() {
           open
           pending={actionPending}
           pendingLabel={actionType === "archive" ? "Arquivando…" : "Excluindo…"}
-          title={actionType === "archive" ? "Arquivar produto?" : "Excluir produto?"}
+          title={
+            actionType === "archive" ? "Arquivar produto?" : "Excluir produto?"
+          }
           destructive={actionType === "delete"}
         />
       )}
