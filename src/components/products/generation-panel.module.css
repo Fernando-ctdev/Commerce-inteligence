@@ -1082,8 +1082,7 @@
   margin: 0;
 }
 
-/* Ação primária do card lateral ocupa o card; a recuperação em Conteúdos fica compacta no desktop. */
-.asideAction,
+/* Ação de recuperação em Conteúdos compacta no desktop e cheia no mobile. */
 .stateAction {
   justify-content: center;
   width: 100%;

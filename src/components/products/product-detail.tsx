@@ -559,7 +559,7 @@ export function ProductDetail({
             />
           </SectionSwitcherContent>
           <SectionSwitcherContent className={styles.tabContent} value="strategy">
-            <StrategyView job={generation.job} onOpenContents={() => changeTab("contents")} />
+            <StrategyView job={generation.job} />
           </SectionSwitcherContent>
           <SectionSwitcherContent className={styles.tabContent} value="history">
             <HistoryView error={historyError} history={history} loading={historyLoading} />

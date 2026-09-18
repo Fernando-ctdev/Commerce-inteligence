@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronLeft, ChevronRight, CircleAlert, Clapperboard, Compass, Gift, Heart, HeartCrack, Hourglass, Megaphone, Mic, ScrollText, Shield, Sparkles, Users, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, CircleAlert, Compass, Gift, Heart, HeartCrack, Hourglass, Megaphone, Mic, ScrollText, Shield, Sparkles, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import type { GenerationRecord } from "./generation-api";
@@ -341,10 +341,9 @@ export function OperationalSummaryCard({ className, job, readiness }: {
 }
 
 /** Aba Estratégia: tese comercial estruturada; Plano continua pertencendo à aba Conteúdos. */
-export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | null; onOpenContents?: () => void }) {
+export function StrategyView({ job }: { job: GenerationRecord | null }) {
   if (!job?.strategy) return <EmptyRegion>A estratégia aparece aqui quando a análise concluir.</EmptyRegion>;
   const strategy = strategyModel(job.strategy);
-  const contentsReady = (job.status === "SUCCEEDED" || job.status === "SUCCEEDED_PARTIAL") && job.contents.length > 0;
   const triplet = [
     { icon: HeartCrack, title: "Dores", items: strategy.pains },
     { icon: Heart, title: "Desejos", items: strategy.desires },
@@ -482,29 +481,13 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
           </div>
         </details>
       </div>
-      {(strategy.active || contentsReady) && (
+      {strategy.active && (
         <aside className={styles.strategyAside}>
-          {contentsReady && (
-            <section className={styles.asideCard}>
-              <h2>Conteúdos</h2>
-              <p>
-                {job.targetContentCount} {job.targetContentCount === 1 ? "conteúdo preparado" : "conteúdos preparados"} com esta estratégia
-              </p>
-              {onOpenContents && (
-                <Button className={styles.asideAction} onClick={onOpenContents} type="button">
-                  <Clapperboard aria-hidden="true" />
-                  Ver conteúdos
-                </Button>
-              )}
-            </section>
-          )}
-          {strategy.active && (
-            <section className={styles.asideCard}>
-              <h2>Estratégia</h2>
-              <p className={styles.asideStatus}>Ativa</p>
-              <p>Esta estratégia orienta os conteúdos deste produto.</p>
-            </section>
-          )}
+          <section className={styles.asideCard}>
+            <h2>Estratégia</h2>
+            <p className={styles.asideStatus}>Ativa</p>
+            <p>Esta estratégia orienta os conteúdos deste produto.</p>
+          </section>
         </aside>
       )}
     </div>
