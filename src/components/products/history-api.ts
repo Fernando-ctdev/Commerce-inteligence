@@ -3,13 +3,12 @@ export type HistoryCompleteness = "COMPLETE" | "PARTIAL" | "UNAVAILABLE";
 export type HistoryCost = { currency: string | null; amountMinor: string | null; completeness: HistoryCompleteness };
 export type ProductHistoryResponse = {
   jobs: Array<{
-    jobId: string;
     status: ProductHistoryStatus;
     createdAt: string;
     finishedAt: string | null;
     requestedContents: number;
     cost: HistoryCost;
-    contents: Array<{ contentId: string; position: number; cost: HistoryCost }>;
+    contents: Array<{ position: number; cost: HistoryCost }>;
   }>;
 };
 
@@ -42,31 +41,30 @@ function cost(value: unknown): HistoryCost {
 export function normalizeProductHistory(value: unknown): ProductHistoryResponse {
   const record = object(value);
   if (!record || !Array.isArray(record.jobs)) invalid();
-  return { jobs: record.jobs.map((raw) => {
-    const job = object(raw);
-    const jobId = requiredString(job?.jobId);
-    const status = job?.status;
-    const createdAt = requiredString(job?.createdAt);
-    const finishedAt = nullableString(job?.finishedAt);
-    const requestedContents = job?.requestedContents;
-    if (!jobId || typeof status !== "string" || !(status in statuses) || !createdAt || finishedAt === undefined ||
-      (typeof requestedContents !== "number" || !Number.isInteger(requestedContents) || requestedContents < 0) || !Array.isArray(job?.contents)) invalid();
-    return {
-      jobId,
-      status: status as ProductHistoryStatus,
-      createdAt,
-      finishedAt,
-      requestedContents,
-      cost: cost(job.cost),
-      contents: job.contents.map((rawContent) => {
-        const content = object(rawContent);
-        const contentId = requiredString(content?.contentId);
-        const position = content?.position;
-        if (!contentId || typeof position !== "number" || !Number.isInteger(position) || position < 1) invalid();
-        return { contentId, position, cost: cost(content.cost) };
-      }),
-    };
-  }) };
+  return {
+    jobs: record.jobs.map((raw) => {
+      const job = object(raw);
+      const status = job?.status;
+      const createdAt = requiredString(job?.createdAt);
+      const finishedAt = nullableString(job?.finishedAt);
+      const requestedContents = job?.requestedContents;
+      if (typeof status !== "string" || !(status in statuses) || !createdAt || finishedAt === undefined ||
+        (typeof requestedContents !== "number" || !Number.isInteger(requestedContents) || requestedContents < 0) || !Array.isArray(job?.contents)) invalid();
+      return {
+        status: status as ProductHistoryStatus,
+        createdAt,
+        finishedAt,
+        requestedContents,
+        cost: cost(job.cost),
+        contents: job.contents.map((rawContent) => {
+          const content = object(rawContent);
+          const position = content?.position;
+          if (typeof position !== "number" || !Number.isInteger(position) || position < 1) invalid();
+          return { position, cost: cost(content.cost) };
+        }),
+      };
+    }),
+  };
 }
 
 export async function loadProductHistory(productId: string): Promise<ProductHistoryResponse> {

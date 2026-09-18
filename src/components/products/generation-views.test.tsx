@@ -143,13 +143,12 @@ test("Histórico mostra apenas custo agregado e revela custos de Conteúdo sob d
   const { HistoryView } = await import("./generation-views");
   const history = {
     jobs: [{
-      jobId: "job-technical",
       status: "SUCCEEDED",
       createdAt: "2026-09-18T12:30:00.000Z",
       finishedAt: "2026-09-18T12:31:00.000Z",
       requestedContents: 2,
       cost: { currency: "BRL", amountMinor: "1234", completeness: "COMPLETE" },
-      contents: [{ contentId: "content-technical", position: 1, cost: { currency: "BRL", amountMinor: "234", completeness: "PARTIAL" } }],
+      contents: [{ position: 1, cost: { currency: "BRL", amountMinor: "234", completeness: "PARTIAL" } }],
     }],
   } as const;
   const html = renderToStaticMarkup(React.createElement(HistoryView, { history, loading: false, error: null }));
@@ -158,7 +157,7 @@ test("Histórico mostra apenas custo agregado e revela custos de Conteúdo sob d
   assert.match(html, /Ver custos por Conteúdo/);
   assert.match(html, /Conteúdo 1/);
   assert.match(html, /Parcial/);
-  for (const field of ["provider", "model", "tier", "tokens", "prompt", "latency", "job-technical", "content-technical"]) {
+  for (const field of ["provider", "model", "tier", "tokens", "prompt", "latency"]) {
     assert.doesNotMatch(html, new RegExp(field, "i"));
   }
 });
