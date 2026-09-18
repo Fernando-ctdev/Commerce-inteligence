@@ -171,11 +171,7 @@
 }
 
 .tabsList > button {
-  transition: color 160ms ease-out, transform 160ms ease-out;
-}
-
-.tabsList > button[aria-selected="true"] {
-  transform: translateY(-1px);
+  transition: color 160ms ease-out;
 }
 
 .tabContent {
