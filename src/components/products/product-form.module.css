@@ -453,19 +453,6 @@
   color: var(--color-danger);
 }
 
-@media (hover: hover) {
-  .imageRemoveButton {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .imageListItem:hover .imageRemoveButton,
-  .imageListItem:focus-within .imageRemoveButton {
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
-
 .imagePreview {
   align-items: center;
   aspect-ratio: 4 / 3;
@@ -599,6 +586,8 @@
 .commissionRow {
   display: flex;
   gap: 8px;
+  min-width: 0;
+  width: 100%;
 }
 
 .commissionRow input {

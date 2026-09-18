@@ -485,12 +485,14 @@ export function validateManualProductInput(
 }
 
 /**
- * Valida somente os fatos editáveis do PATCH: mesmo contrato do POST, sem a
- * preparação da primeira geração — não editável e ignorada se enviada.
+ * Valida somente os fatos editáveis do PATCH: mesmo contrato do POST, sem
+ * creatorPresence/targetContentCount — não editáveis e ignorados se enviados.
+ * constraints é opcional: presente, valida o limite (300) e normaliza o trim;
+ * string vazia limpa; ausente preserva o valor atual.
  */
 export function validateProductFacts(
   input: ManualProductInput,
-): ValidatedFacts & { submittedUrl: string | null } {
+): ValidatedFacts & { submittedUrl: string | null; constraints?: string } {
   const errors: Record<string, string> = {};
   const codes: Record<string, string> = {};
   const fail: Fail = (field, message, code) => {
@@ -504,8 +506,25 @@ export function validateProductFacts(
   // URL opcional: vazia limpa; presente precisa ser http(s).
   const submittedUrl = validateOptionalUrl(input.url, fail);
 
+  // RI-004 (rev): constraints é a única parte da preparação editável no PATCH.
+  let constraints: string | undefined;
+  if (input.constraints !== undefined) {
+    constraints = asTrimmedString(input.constraints) ?? "";
+    if (constraints.length > NOTES_MAX) {
+      fail(
+        "constraints",
+        `As observações devem ter até ${NOTES_MAX} caracteres.`,
+        "VAL-NOTES-LENGTH",
+      );
+    }
+  }
+
   throwIfErrors(errors, codes);
-  return { ...facts, submittedUrl };
+  return {
+    ...facts,
+    submittedUrl,
+    ...(constraints !== undefined ? { constraints } : {}),
+  };
 }
 
 export type ManualProductResult = { product: Product; replay: boolean };
@@ -590,7 +609,9 @@ export async function getTenantProduct(
 
 /**
  * Substitui os fatos editáveis do Product no Tenant da sessão, com controle
- * otimista de versão. Preparação não é editável aqui.
+ * otimista de versão. Da preparação, somente `constraints` é editável aqui:
+ * presente no PATCH atualiza (string vazia limpa), ausente preserva — e
+ * `creatorPresence`/`targetContentCount` nunca mudam neste caminho (RI-004).
  */
 export async function updateTenantProduct(
   tenantId: string,
@@ -599,6 +620,19 @@ export async function updateTenantProduct(
   expectedVersion: number,
 ): Promise<Product> {
   const facts = validateProductFacts(input);
+  const existing = await getTenantProduct(tenantId, id);
+  if (!existing) throw new ProductNotFoundError();
+  // creatorPresence atual é preservado; somente o texto de constraints muda.
+  const current = (existing.generationConstraints ?? {}) as {
+    creatorPresence?: string;
+  };
+  const generationConstraints: Prisma.InputJsonValue | undefined =
+    facts.constraints !== undefined
+      ? {
+          creatorPresence: current.creatorPresence ?? DEFAULT_CREATOR_PRESENCE,
+          constraints: facts.constraints,
+        }
+      : undefined;
   try {
     return await prisma.product.update({
       // Filtros extras no where (extendedWhereUnique): tenant, id e versão decidem juntos.
@@ -616,6 +650,7 @@ export async function updateTenantProduct(
         features: facts.features,
         images: facts.imageRefs,
         submittedUrl: facts.submittedUrl,
+        ...(generationConstraints ? { generationConstraints } : {}),
         version: { increment: 1 },
       },
     });

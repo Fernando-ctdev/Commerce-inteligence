@@ -827,7 +827,7 @@ test("PATCH atualiza fatos, persiste imagens por URL/data URL e bumpeia version"
   assert.equal(row.targetContentCount, 5);
   assert.deepEqual(row.generationConstraints, {
     creatorPresence: "either",
-    constraints: "sem gírias",
+    constraints: "mostrar detalhes",
   });
 
   const view = (await (
@@ -836,13 +836,37 @@ test("PATCH atualiza fatos, persiste imagens por URL/data URL e bumpeia version"
   assert.equal(view.version, saved.version);
   assert.equal(view.priceCurrency, "USD");
   assert.deepEqual(view.imageRefs, ["https://cdn.exemplo.com/nova.png", PNG]);
+  assert.equal(view.notes, "mostrar detalhes");
+
+  const cleared = await handleUpdateProduct(
+    patch(token, created.id, {
+      ...updateFacts,
+      constraints: "",
+      expectedVersion: saved.version,
+    }),
+    created.id,
+  );
+  assert.equal(cleared.status, 200);
+  const clearedMutation = (await cleared.json()) as { version: number };
+  const clearedRow = await prisma.product.findUniqueOrThrow({
+    where: { id: created.id },
+  });
+  assert.deepEqual(clearedRow.generationConstraints, {
+    creatorPresence: "either",
+    constraints: "",
+  });
+  const clearedView = (await (
+    await handleGetProduct(getById(token, created.id), created.id)
+  ).json()) as Record<string, unknown>;
+  assert.equal(clearedView.version, clearedMutation.version);
+  assert.equal(clearedView.notes, "");
 
   // Mesmas validações obrigatórias do POST: preço vazio é rejeitado com fieldErrors.
   const invalida = await handleUpdateProduct(
     patch(token, created.id, {
       ...updateFacts,
       price: "",
-      expectedVersion: saved.version,
+      expectedVersion: clearedMutation.version,
     }),
     created.id,
   );

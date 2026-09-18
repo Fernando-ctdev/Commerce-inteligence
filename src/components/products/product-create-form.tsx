@@ -911,9 +911,11 @@ export function ProductCreateForm({
       if (isEdit && product) {
         delete payload.targetContentCount;
         delete payload.creatorPresence;
-        delete payload.constraints;
         const mutation = await updateProduct(product.id, {
           ...payload,
+          /* buildManualProductPayload omite vazio; na edição constraints vai
+             explícito (string vazia limpa no backend). Criação mantém contrato. */
+          constraints: notes.trim(),
           expectedVersion: version,
         });
         const latest = await getProduct(mutation.id);
@@ -1280,6 +1282,24 @@ export function ProductCreateForm({
             type="url"
             value={draft.url ?? ""}
           />
+          {isEdit && (
+            <TextField
+              error={combinedErrors.constraints}
+              id={fieldId("constraints")}
+              help="Você pode informar preferências, restrições ou detalhes que devem orientar os conteúdos."
+              label={
+                <>
+                  Observações ou restrições{" "}
+                  <span className={styles.optionalMark}>Opcional</span>
+                </>
+              }
+              maxLength={300}
+              multiline
+              onChange={setNotes}
+              showCounter
+              value={notes}
+            />
+          )}
         </section>
       )}
 
