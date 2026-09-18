@@ -119,10 +119,14 @@ export function calculateCost(usage: TokenUsage | null, price: PriceBook | null)
   if (rIn != null && inputRest.value != null) { scaled += inputRest.value * rIn; buckets += 1; } else if (inputRest.value != null && rIn == null) { gap = true; }
   const outputRest = nonOverlapping(output, rReason != null ? reasoning : null);
   if (outputRest.inconsistent) gap = true;
-  if (reasoning != null && rReason != null) {
-    scaled += reasoning * rReason; buckets += 1;
-  } else if (reasoning != null && rReason == null && !(output != null && rOut != null)) {
-    gap = true; // sem rate próprio e sem output precificado: base não determinável
+  if (reasoning != null) {
+    if (rReason != null) {
+      scaled += reasoning * rReason; buckets += 1;
+      // reasoning ⊆ output: sem outputTokens a base do subconjunto é desconhecida → PARTIAL.
+      if (output == null) gap = true;
+    } else if (!(output != null && rOut != null)) {
+      gap = true; // sem rate próprio e sem output precificado: base não determinável
+    }
   }
   if (output != null) {
     if (rOut != null && outputRest.value != null) { scaled += outputRest.value * rOut; buckets += 1; } else if (rOut == null) { gap = true; }

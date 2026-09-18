@@ -473,6 +473,15 @@ export async function failJobAndReleaseReservation(
   return terminalized;
 }
 
+// Adaptador do delegate de preços: o client gerado ainda não expõe providerModelPrice
+// (npx prisma generate bloqueado por EPERM — query engine dll em uso pelo processo dev).
+// Lookup dinâmico e fail-loud; quando o generate rodar, passe `prisma` direto como PriceReader.
+function priceReader(db: object): PriceReader {
+  const delegate = (db as { providerModelPrice?: PriceReader["providerModelPrice"] }).providerModelPrice;
+  if (!delegate?.findMany) throw new Error("Delegate providerModelPrice ausente no PrismaClient: rode npx prisma generate");
+  return { providerModelPrice: delegate };
+}
+
 // Resolvedor do catálogo na finalização (preço é append-only; resolve "agora" do run).
 // provider/model ausentes ou catálogo inconsistente → null → UNAVAILABLE: custo nunca derruba o job.
 const costPriceResolver = (db: PriceReader) =>
@@ -1069,7 +1078,7 @@ export async function processGeneration(jobId: string, ownerId: string) {
     const sceneSets = [...output.sceneSets, ...backfillScenes];
     // Custo anexado por tentativa efetiva ANTES do metadata (fonte canônica: capabilities[]).
     // Mutation in place nos eventos — o mesmo objeto entra no metadata com pricing/cost.
-    await attachCapabilityCosts([...output.capabilities, ...backfillTracker.capabilities], costPriceResolver(prisma as unknown as PriceReader));
+    await attachCapabilityCosts([...output.capabilities, ...backfillTracker.capabilities], costPriceResolver(priceReader(prisma)));
     const runData = runMetadata(
       attempt,
       () => router.describe(),

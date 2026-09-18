@@ -132,6 +132,15 @@ test("cached tokens without input base mark PARTIAL and bill cached alone", () =
   assert.equal(result.amountMinor, "125");
 });
 
+test("reasoning with own rate but without outputTokens marks PARTIAL (subset base unknown)", () => {
+  const result = calculateCost(
+    usage({ reasoningTokens: 100 }),
+    { currency: "BRL", inputPerMillionMinor: null, outputPerMillionMinor: "2000000", reasoningPerMillionMinor: "1000000", cachedPerMillionMinor: null },
+  );
+  assert.equal(result.completeness, "PARTIAL");
+  assert.equal(result.amountMinor, "100");
+});
+
 test("reasoning without own rate rides priced output (documented subset, COMPLETE)", () => {
   const result = calculateCost(usage({ outputTokens: 400, reasoningTokens: 100 }), brlPrice);
   assert.equal(result.completeness, "COMPLETE");

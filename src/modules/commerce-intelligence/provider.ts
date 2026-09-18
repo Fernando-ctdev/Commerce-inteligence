@@ -244,6 +244,12 @@ const nestedObject = (source: Record<string, unknown>, key: string): Record<stri
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 };
 
+// Nested presente com a chave decide (mesmo inválido → null); sem a chave, cai para o campo plano.
+const detailToken = (usage: Record<string, unknown>, details: Record<string, unknown> | null, key: string): number | null => {
+  if (details && key in details) return usageToken(details[key]);
+  return firstToken(usage, [key]);
+};
+
 // Allowlist dos envelopes OpenAI-compatíveis conhecidos (design 2026-09-18): usage real é a
 // única fonte de tokens; ausência/ formato desconhecido → null. Contadores cached/reasoning são
 // preservados como reportados; a semântica de sobreposição (cached⊆input, reasoning⊆output)
@@ -256,8 +262,8 @@ export function normalizeProviderUsage(envelope: unknown): ProviderTokenUsage {
   return {
     inputTokens: firstToken(usage, ["prompt_tokens", "input_tokens"]),
     outputTokens: firstToken(usage, ["completion_tokens", "output_tokens"]),
-    reasoningTokens: completionDetails ? firstToken(completionDetails, ["reasoning_tokens"]) : firstToken(usage, ["reasoning_tokens"]),
-    cachedTokens: promptDetails ? firstToken(promptDetails, ["cached_tokens"]) : firstToken(usage, ["cached_tokens"]),
+    reasoningTokens: detailToken(usage, completionDetails, "reasoning_tokens"),
+    cachedTokens: detailToken(usage, promptDetails, "cached_tokens"),
   };
 }
 type FallbackFailure = {

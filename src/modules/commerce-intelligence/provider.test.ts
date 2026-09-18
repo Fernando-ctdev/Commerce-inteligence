@@ -665,6 +665,24 @@ test("normalizeProviderUsage preserva zero reportado como zero", () => {
   );
 });
 
+test("normalizeProviderUsage: nested sem a chave cai para o campo plano; chave nested inválida não cai", () => {
+  // nested objeto presente SEM cached_tokens → fallback plano
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { prompt_tokens: 10, prompt_tokens_details: {}, cached_tokens: 7 } }),
+    { inputTokens: 10, outputTokens: null, reasoningTokens: null, cachedTokens: 7 },
+  );
+  // chave nested PRESENTE porém inválida decide (null), sem fallback ao plano
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { prompt_tokens: 10, prompt_tokens_details: { cached_tokens: "x" }, cached_tokens: 7 } }),
+    { inputTokens: 10, outputTokens: null, reasoningTokens: null, cachedTokens: null },
+  );
+  // mesmo contrato para reasoning em completion_tokens_details
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { completion_tokens: 5, completion_tokens_details: {}, reasoning_tokens: 3 } }),
+    { inputTokens: null, outputTokens: 5, reasoningTokens: 3, cachedTokens: null },
+  );
+});
+
 test("onMetrics carrega provider + usage no sucesso e provider identity é sempre openai-compatible", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(JSON.stringify({ id: "gen-usage-1", usage: { prompt_tokens: 120, completion_tokens: 40, prompt_tokens_details: { cached_tokens: 20 }, completion_tokens_details: { reasoning_tokens: 10 } }, choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200 })) as typeof fetch;

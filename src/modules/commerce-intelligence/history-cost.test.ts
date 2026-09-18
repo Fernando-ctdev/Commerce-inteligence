@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { projectProductHistory } from "./history-cost";
+import { projectProductHistory, handleGetProductHistory } from "./history-cost";
+
+test("handleGetProductHistory sem sessão responde 401 uniforme antes de qualquer query", async () => {
+  const response = await handleGetProductHistory(new Request("https://app.test/api/products/p1/history"), "p1");
+  assert.equal(response.status, 401);
+  const body = (await response.json()) as { error: string; code: string };
+  assert.equal(body.code, "UNAUTHENTICATED");
+});
 
 // Fixtures mínimas: os campos extras das rows do Prisma são irrelevantes à projeção.
 type Row = { id: string; jobId: string; status: "SUCCEEDED" | "SUCCEEDED_PARTIAL" | "FAILED" | "CANCELLED"; createdAt: Date; finishedAt: Date | null; targetContentCount: number };

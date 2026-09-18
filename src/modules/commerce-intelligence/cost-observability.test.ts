@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildCapabilityUsageCosts, aggregateRunCosts, type RunCostInputEvent, type PriceSnapshot } from "./cost-observability";
+import { buildCapabilityUsageCosts, attachCapabilityCosts, aggregateRunCosts, type RunCostInputEvent, type PriceSnapshot } from "./cost-observability";
 import type { LogicalTask } from "./model-router";
+
+type AttachableEvent = RunCostInputEvent & { cost?: { amountMinor: string | null; completeness: string } };
 
 const BRL: PriceSnapshot = {
   versionId: "price-1",
@@ -87,10 +89,26 @@ test("resolver que lança degrada para UNAVAILABLE sem versionId nem moeda", asy
   assert.equal(records[0]?.cost.completeness, "UNAVAILABLE");
 });
 
-test("deduplica pela chave task/contentId/attempt/retry", async () => {
-  const event: RunCostInputEvent = { task: "CONTENT_BRIEF_REPAIR", contentId: "c1", attempt: 2, retry: 0, usage: usage({ inputTokens: 100 }) };
-  const records = await buildCapabilityUsageCosts([event, { ...event }], resolverByCurrency("BRL").resolve);
-  assert.equal(records.length, 1, "replay da mesma tentativa não duplica registro");
+test("dedupe é POR EVENTO: retry duplicado no mesmo evento não duplica; eventos repetidos são chamadas distintas", async () => {
+  // mesmo evento com attempts repetindo retry 0 → um único registro
+  const duplicated: RunCostInputEvent = { task: "CONTENT_BRIEF_REPAIR", contentId: "c1", attempt: 2, retry: 0, attempts: [{ usage: usage({ inputTokens: 100 }), retry: 0 }, { usage: usage({ inputTokens: 100 }), retry: 0 }] };
+  const single = await buildCapabilityUsageCosts([duplicated], resolverByCurrency("BRL").resolve);
+  assert.equal(single.length, 1);
+  // chunks repetidos da mesma task sem contentId são chamadas legítimas → N registros
+  const chunk: RunCostInputEvent = { task: "CONTENT_BRIEF_GENERATION", attempt: 1, retry: 0, usage: usage({ inputTokens: 100 }) };
+  const repeated = await buildCapabilityUsageCosts([chunk, { ...chunk }, { ...chunk }], resolverByCurrency("BRL").resolve);
+  assert.equal(repeated.length, 3, "eventos repetidos não se deduplicam entre si");
+});
+
+test("attach cruza registros por fila: eventos repetidos recebem seus próprios custos", async () => {
+  const events: AttachableEvent[] = [
+    { task: "CONTENT_BRIEF_GENERATION", provider: "p", model: "m", attempt: 1, retry: 0, usage: usage({ inputTokens: 100 }) },
+    { task: "CONTENT_BRIEF_GENERATION", provider: "p", model: "m", attempt: 1, retry: 0, usage: usage({ inputTokens: 300 }) },
+  ];
+  const records = await attachCapabilityCosts(events, resolverByCurrency("BRL").resolve);
+  assert.equal(records.length, 2);
+  assert.equal(events[0]?.cost?.amountMinor, "100");
+  assert.equal(events[1]?.cost?.amountMinor, "300", "segundo evento recebe o próprio registro");
 });
 
 test("contentId só aparece quando atribuído", async () => {

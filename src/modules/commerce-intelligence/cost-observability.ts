@@ -43,7 +43,6 @@ export async function buildCapabilityUsageCosts(
   resolvePrice: PriceSnapshotResolver,
 ): Promise<CapabilityUsageCost[]> {
   const records: CapabilityUsageCost[] = [];
-  const seen = new Set<string>();
   const priceCache = new Map<string, PriceSnapshot | null>();
   for (const event of events) {
     const perAttempt = event.attempts?.length
@@ -51,13 +50,16 @@ export async function buildCapabilityUsageCosts(
       : event.usage
         ? [{ usage: event.usage, retry: event.retry }]
         : [];
+    // Dedupe POR EVENTO (chave retry): callbacks distintas do mesmo evento são tentativas
+    // efetivas distintas; eventos repetidos (chunks da mesma task sem contentId) são
+    // chamadas legítimas e NUNCA se deduplicam entre si.
+    const seenRetries = new Set<number>();
     for (const attempt of perAttempt) {
       // Tentativa sem usage do provider não cria custo (nunca inferido de bytes/texto).
       const usage = attempt.usage ?? null;
       if (!usage) continue;
-      const key = recordKey({ task: event.task, contentId: event.contentId, attempt: event.attempt, retry: attempt.retry });
-      if (seen.has(key)) continue;
-      seen.add(key);
+      if (seenRetries.has(attempt.retry)) continue;
+      seenRetries.add(attempt.retry);
       let price: PriceSnapshot | null = null;
       try {
         price = await resolvePriceCached(event.provider, event.model, resolvePrice, priceCache);
@@ -101,7 +103,15 @@ export async function attachCapabilityCosts(
   resolvePrice: PriceSnapshotResolver,
 ): Promise<CapabilityUsageCost[]> {
   const records = await buildCapabilityUsageCosts(events, resolvePrice);
-  const byKey = new Map(records.map((record) => [recordKey(record), record] as const));
+  // Fila por chave: eventos repetidos (mesma task/contentId/attempt/retry) são chamadas
+  // distintas e consomem registros distintos na ordem de produção, sem trocar custos.
+  const queueByKey = new Map<string, CapabilityUsageCost[]>();
+  for (const record of records) {
+    const queue = queueByKey.get(recordKey(record)) ?? [];
+    queue.push(record);
+    queueByKey.set(recordKey(record), queue);
+  }
+  const take = (key: string): CapabilityUsageCost | undefined => queueByKey.get(key)?.shift();
   for (const event of events) {
     const attach = (target: Record<string, unknown>, record: CapabilityUsageCost | undefined) => {
       if (!record) return;
@@ -113,11 +123,11 @@ export async function attachCapabilityCosts(
     if (event.attempts?.length) {
       for (const attempt of event.attempts) {
         if (!attempt.usage) continue;
-        attach(attempt, byKey.get(recordKey({ task: event.task, contentId: event.contentId, attempt: event.attempt, retry: attempt.retry ?? 0 })));
+        attach(attempt, take(recordKey({ task: event.task, contentId: event.contentId, attempt: event.attempt, retry: attempt.retry ?? 0 })));
       }
-      attach(event, byKey.get(recordKey({ task: event.task, contentId: event.contentId, attempt: event.attempt, retry: event.attempts[event.attempts.length - 1]?.retry ?? event.retry })));
+      attach(event, take(recordKey({ task: event.task, contentId: event.contentId, attempt: event.attempt, retry: event.attempts[event.attempts.length - 1]?.retry ?? event.retry })));
     } else {
-      attach(event, byKey.get(recordKey({ task: event.task, contentId: event.contentId, attempt: event.attempt, retry: event.retry })));
+      attach(event, take(recordKey({ task: event.task, contentId: event.contentId, attempt: event.attempt, retry: event.retry })));
     }
   }
   return records;
