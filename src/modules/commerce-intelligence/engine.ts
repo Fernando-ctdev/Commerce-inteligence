@@ -44,6 +44,7 @@ import {
   diagnoseDevelopmentPoint,
   validDevelopmentPoint,
   validateBriefSet,
+  type DevelopmentBullet,
   type GatePattern,
   type GateReport,
 } from "./gates";
@@ -409,12 +410,21 @@ function buildRepairContrast(
 // Contrato estruturado compartilhado (design 2026-09-18): parser único do gate valida
 // shape/repertório (GEN-SCHEMA) e produz texto + diagnóstico sanitizado; o texto projetado
 // passa por validateContentBriefDraft e o conjunto por validateBriefSet (autoridade final).
+export function parseStructuredBriefDraft(
+  output: Record<string, unknown>,
+  evidence: EvidenceSnapshot,
+): { draft: ContentBriefDraft; bullets: DevelopmentBullet[] } {
+  const { texts } = parseStructuredDevelopment(output.development, evidence);
+  const bullets = Array.isArray(output.development) ? (output.development as DevelopmentBullet[]) : [];
+  return { draft: validateContentBriefDraft({ ...output, development: texts }), bullets };
+}
+
+// Compat: repair projeta apenas o draft; bullets ficam disponíveis via parseStructuredBriefDraft.
 export function parseStructuredRepairDraft(
   output: Record<string, unknown>,
   evidence: EvidenceSnapshot,
 ): ContentBriefDraft {
-  const { texts } = parseStructuredDevelopment(output.development, evidence);
-  return validateContentBriefDraft({ ...output, development: texts });
+  return parseStructuredBriefDraft(output, evidence).draft;
 }
 
 // ADR-019: geração de cenas por conteúdo — entrada é o briefing INTEIRO +
@@ -701,20 +711,6 @@ function isRootShapeSchemaError(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "GEN-SCHEMA" && "message" in error && typeof error.message === "string" && /deve ser um objeto JSON|Plano sem opportunities/.test(error.message));
 }
 // Primeira violação estrutural do item do lote, com issue sanitizada e sem payload.
-function findBriefItemIssue(
-  items: unknown[],
-): { item: number; issue: string } | null {
-  for (const [index, draft] of items.entries()) {
-    try {
-      validateContentBriefDraft(draft);
-    } catch (error) {
-      if (error instanceof ContractError)
-        return { item: index + 1, issue: error.message };
-      throw error;
-    }
-  }
-  return null;
-}
 function isBriefBatchSchemaError(error: unknown): error is GenerationError {
   return error instanceof GenerationError && error.code === "GEN-SCHEMA" &&
     Boolean(error.detail && typeof error.detail === "object" && "task" in error.detail && (error.detail as { task?: unknown }).task === "CONTENT_BRIEF_GENERATION");
@@ -1483,6 +1479,8 @@ export async function runFirstGeneration(
       typeof facts.category === "string" ? facts.category : undefined,
     );
   await emit("GENERATING_BRIEFS");
+  // Bullets estruturados efêmeros por contentId (judge/parte repair); nunca persistidos.
+  const bulletsByContentId = new Map<string, DevelopmentBullet[]>();
   const generateBatch = async (
     entries: Array<{
       opportunity: ContentOpportunity;
@@ -1558,7 +1556,7 @@ export async function runFirstGeneration(
               item: 0,
               issue: `cardinalidade divergente: esperado ${entries.length}, recebido ${items.length}`,
           }
-          : findBriefItemIssue(items);
+          : null;
       const validateBatch = (producer: Record<string, unknown>) => {
         const items = extractItems(producer);
         const issue = batchIssue(items);
@@ -1568,7 +1566,29 @@ export async function runFirstGeneration(
           true,
           { task: "CONTENT_BRIEF_GENERATION", item: issue.item, issue: issue.issue, expected: entries.length, received: items.length },
         );
-        return { items: assignServerBriefIds(items, input.jobId, 0) };
+        // Contrato estruturado: shape/repertório → GEN-SCHEMA tipado (retry do lote);
+        // texto projetado + bullets efêmeros por contentId para judge/parte-repair.
+        const parsed = items.map((item, index) => {
+          try {
+            if (!item || typeof item !== "object" || Array.isArray(item))
+              throw new ContractError("GEN-SCHEMA", "Brief inválido");
+            return parseStructuredBriefDraft(item as Record<string, unknown>, evidence);
+          } catch (error) {
+            if (error instanceof ContractError)
+              throw new GenerationError(
+                "GEN-SCHEMA",
+                "Lote de briefings invalido",
+                true,
+                { task: "CONTENT_BRIEF_GENERATION", item: index + 1, issue: error.message, expected: entries.length, received: items.length },
+              );
+            throw error;
+          }
+        });
+        const projected = parsed.map(({ draft }) => draft);
+        parsed.forEach(({ bullets }, index) => {
+          bulletsByContentId.set(`${input.jobId}-content-${entries[index]!.position}`, bullets);
+        });
+        return { items: assignServerBriefIds(projected, input.jobId, 0) };
       };
       const generateValidatedBatch = () => track(
         "CONTENT_BRIEF_GENERATION",
@@ -1731,9 +1751,11 @@ export async function runFirstGeneration(
               onMetrics,
             ),
           (output: Record<string, unknown>) => {
-            const draft = parseStructuredRepairDraft(output, evidence);
+            const parsed = parseStructuredBriefDraft(output, evidence);
+            // Bullets efêmeros do item substituído: judge/parte-repair continuam no mesmo contrato.
+            bulletsByContentId.set(c.brief.contentId, parsed.bullets);
             return {
-              ...draft,
+              ...parsed.draft,
               contentId: `${input.jobId}-content-${i + 1}`,
               briefVersionId: `${input.jobId}-brief-${i + 1}`,
               version: 1 as const,
@@ -1824,6 +1846,9 @@ export async function runFirstGeneration(
       const scenes = sceneSets[index];
       return {
         contentId: candidate.brief.contentId,
+        // Mesmo contrato estruturado efêmero recebido pelo judge (design 2026-09-18);
+        // o judge não o avalia factualmente — apenas contexto de leitura.
+        development: bulletsByContentId.get(candidate.brief.contentId) ?? [],
         parts: QUALITY_PARTS.map((part) => ({
           part,
           content: part === "scenes" ? scenes.scenes.map(({ description }) => description) : candidate.brief[part],

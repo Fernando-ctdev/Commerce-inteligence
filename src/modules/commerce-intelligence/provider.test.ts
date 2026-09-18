@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_PART_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION, JUDGE_EDITORIAL_GUIDANCE, PART_REPAIR_EDITORIAL_GUIDANCE, createHttpProvider, dollarsLexemeToMinor, extractReportedCostLexeme, normalizeProviderUsage, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
+import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_BRIEF_REPAIR_INSTRUCTION, CONTENT_PART_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION, JUDGE_EDITORIAL_GUIDANCE, PART_REPAIR_EDITORIAL_GUIDANCE, createHttpProvider, dollarsLexemeToMinor, extractReportedCostLexeme, normalizeProviderUsage, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
 import { CARDINALITY_POLICY } from "./contract";
 import { GenerationError } from "./errors";
 import { ROUTER_MAP } from "./model-router";
@@ -613,6 +613,26 @@ test("provider without schema support (HTTP 400) stays fail-closed: explicit err
   assert.equal(bodies.length, 1, "uma única chamada: sem downgrade silencioso para json_object");
   const format400 = recordOf(bodies[0].response_format);
   assert.equal(format400?.type, "json_schema", "sem downgrade silencioso de formato");
+});
+
+// ---- Contrato estruturado de development (design 2026-09-18) ----
+
+test("instruções de brief exigem bullets estruturados text/action/factRef/rationale e proíbem locators", () => {
+  for (const field of ["text", "action", "factRef", "rationale"]) {
+    assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes(field), `geração inicial exige campo estruturado ${field}`);
+    assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes(field), `repair exige campo estruturado ${field}`);
+  }
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("apenas como campo estruturado"), "factRef apenas como campo estruturado");
+  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("apenas como campo estruturado"), "factRef apenas como campo estruturado no repair");
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("development como lista de textos"), "geração não aceita mais development em texto plano");
+});
+
+test("instrução do judge recebe development estruturado e proíbe avaliação factual/grounding/gate", () => {
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("development estruturado"), "judge recebe bullets estruturados");
+  for (const proibido of ["factRef", "ancoragem", "conector", "cardinalidade", "gate"]) {
+    assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes(proibido), `judge proíbe avaliar ${proibido}`);
+  }
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("não valida"), "judge não valida factualidade");
 });
 
 test("escopo editorial: judge/repair guidance cobre weak_commercial_value, coerência intra-brief e cena visual-only", () => {
