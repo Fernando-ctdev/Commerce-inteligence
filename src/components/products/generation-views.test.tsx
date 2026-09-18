@@ -1,7 +1,10 @@
-// Gate 3 item 6 (rev. 5) — teste de renderização da view (react-dom/server, sem jsdom):
-// GenerationStatusCard para terminal degradado GEN-PROJECTION (RI-003-20) comunica a
-// anomalia (role alert), NÃO oferece "Revisar conteúdos" nem "Tentar novamente" e
-// mantém "Gerar faltantes" apenas no parcial. Positivo sem code segue como sucesso.
+// Gate 3 item 6 (rev. 6) — teste de renderização da view (react-dom/server, sem jsdom):
+// GenerationActions (bloco de ações da aba Conteúdos, sem card "Próxima ação"): PENDING
+// sem job oferece "Analisar produto" (com bloqueio preventivo), FAILED/CANCELLED oferece
+// "Tentar novamente", SUCCEEDED_PARTIAL oferece "Revisar conteúdos" + "Gerar faltantes",
+// sucesso pleno não renderiza ação e o terminal degradado GEN-PROJECTION (RI-003-20)
+// comunica a anomalia (role alert) sem "Revisar conteúdos" nem "Tentar novamente",
+// mantendo "Gerar faltantes" apenas no parcial.
 import { createRequire } from "node:module";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -36,7 +39,7 @@ const envelopeDegradado = (status: "SUCCEEDED" | "SUCCEEDED_PARTIAL") => ({
 
 const conteudoValido = (position: number) => ({ id: `c${position}`, position, status: "DRAFT", angle: "a", hook: "h", development: ["ponto completo", "ponto completo de apoio"], script: "s", cta: "c" });
 
-const stateOf = (job: GenerationRecord) => ({
+const stateOf = (job: GenerationRecord | null) => ({
   job,
   busy: false,
   error: null,
@@ -93,24 +96,62 @@ test("SUCCEEDED pleno continua exato-N: mismatch mantém o guard de publicação
   assert.match(html, /ainda não estão prontos/);
 });
 
-const renderCard = async (envelope: unknown) => {
-  const [{ GenerationStatusCard }, { normalizeGeneration }] = await Promise.all([import("./generation-views"), import("./generation-api")]);
+const renderActions = async (
+  envelope: unknown | null,
+  opts: { readiness?: GenerationRecord["readiness"]; failed?: boolean; generationAction?: { state: "BLOCKED"; reason: "GEN-ACTIVE"; nextAction: "VIEW_ACTIVE_ANALYSIS" } } = {},
+) => {
+  const [{ GenerationActions }, { normalizeGeneration }] = await Promise.all([import("./generation-views"), import("./generation-api")]);
   return renderToStaticMarkup(
-    React.createElement(GenerationStatusCard, {
-      productName: "Produto",
-      targetContentCount: 2,
-      readiness: "FAILED",
-      state: stateOf(normalizeGeneration(envelope)),
-      onOpenContents: () => {},
+    React.createElement(GenerationActions, {
+      generationAction: opts.generationAction,
       onGenerateMissing: () => {},
+      readiness: opts.readiness ?? "FAILED",
+      state: envelope
+        ? { ...stateOf(normalizeGeneration(envelope)), failed: opts.failed ?? false }
+        : stateOf(null),
     }),
   );
 };
 
-test("SUCCEEDED degradado: anomalia em role alert, sem Revisar conteúdos e sem Tentar novamente", async () => {
-  const html = await renderCard(envelopeDegradado("SUCCEEDED"));
+const envelopeFalha = () => ({
+  ...envelopeDegradado("SUCCEEDED"),
+  status: "FAILED",
+  code: undefined,
+  error: "O provedor de análise não respondeu.",
+  readiness: "FAILED",
+});
+
+test("PENDING sem job: Analisar produto habilitado e única ação", async () => {
+  const html = await renderActions(null, { readiness: "PENDING" });
+  assert.match(html, /Analisar produto/);
+  assert.doesNotMatch(html, /disabled=""/);
+  assert.doesNotMatch(html, /Tentar novamente|Gerar faltantes|Revisar conteúdos/);
+});
+
+test("PENDING com bloqueio preventivo: botão desabilitado com nota", async () => {
+  const html = await renderActions(null, { readiness: "PENDING", generationAction: { state: "BLOCKED", reason: "GEN-ACTIVE", nextAction: "VIEW_ACTIVE_ANALYSIS" } });
+  assert.match(html, /disabled=""/);
+  assert.match(html, /Uma análise já está em andamento/);
+});
+
+test("FAILED: Tentar novamente em role alert, sem Analisar produto", async () => {
+  const html = await renderActions(envelopeFalha(), { readiness: "FAILED", failed: true });
   assert.match(html, /role="alert"/);
-  assert.match(html, /Resultado da análise indisponível/);
+  assert.match(html, /Tentar novamente/);
+  assert.doesNotMatch(html, /Analisar produto/);
+});
+
+test("SUCCEEDED_PARTIAL: somente Gerar faltantes na aba Conteúdos", async () => {
+  const html = await renderActions(envelopeParcial(), { readiness: "READY" });
+  assert.match(html, /4 de 5 conteúdos prontos/);
+  assert.match(html, /Gerar faltantes/);
+  assert.doesNotMatch(html, /Revisar conteúdos/);
+  assert.doesNotMatch(html, /Tentar novamente/);
+});
+
+test("SUCCEEDED degradado: anomalia em role alert, sem Revisar conteúdos e sem Tentar novamente", async () => {
+  const html = await renderActions(envelopeDegradado("SUCCEEDED"));
+  assert.match(html, /role="alert"/);
   assert.match(html, /Não foi possível carregar o resultado desta análise/);
   assert.doesNotMatch(html, /Revisar conteúdos/);
   assert.doesNotMatch(html, /Tentar novamente/);
@@ -118,16 +159,15 @@ test("SUCCEEDED degradado: anomalia em role alert, sem Revisar conteúdos e sem 
 });
 
 test("SUCCEEDED_PARTIAL degradado: anomalia com Gerar faltantes, sem Revisar e sem Tentar novamente", async () => {
-  const html = await renderCard(envelopeDegradado("SUCCEEDED_PARTIAL"));
+  const html = await renderActions(envelopeDegradado("SUCCEEDED_PARTIAL"));
   assert.match(html, /role="alert"/);
-  assert.match(html, /Resultado da análise indisponível/);
   assert.match(html, /Gerar faltantes/);
   assert.doesNotMatch(html, /Revisar conteúdos/);
   assert.doesNotMatch(html, /Tentar novamente/);
 });
 
-test("SUCCEEDED sem code segue como sucesso: Revisar conteúdos presente, sem alert de anomalia", async () => {
-  const html = await renderCard({
+test("SUCCEEDED pleno: bloco não renderiza nenhuma ação", async () => {
+  const html = await renderActions({
     ...envelopeDegradado("SUCCEEDED"),
     code: undefined,
     error: null,
@@ -136,8 +176,7 @@ test("SUCCEEDED sem code segue como sucesso: Revisar conteúdos presente, sem al
     plan: { targetContentCount: 2 },
     contents: [conteudoValido(1), conteudoValido(2)],
   });
-  assert.match(html, /Revisar conteúdos/);
-  assert.doesNotMatch(html, /Resultado da análise indisponível/);
+  assert.equal(html, "");
 });
 
 test("Histórico mostra apenas custo agregado e revela custos de Conteúdo sob demanda", async () => {

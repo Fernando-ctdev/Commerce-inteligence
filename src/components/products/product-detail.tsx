@@ -21,7 +21,7 @@ import {
 import { loadProductHistory, type ProductHistoryResponse } from "./history-api";
 import {
   ContentsView,
-  GenerationStatusCard,
+  GenerationActions,
   HistoryView,
   OperationalSummaryCard,
   StrategyView,
@@ -477,16 +477,6 @@ export function ProductDetail({
                 )}
               </div>
               <aside className={styles.sideRail}>
-                <GenerationStatusCard
-                  className={styles.statusCard}
-                  generationAction={product.generationAction}
-                  onGenerateMissing={() => void generation.generateMissing()}
-                  onOpenContents={() => changeTab("contents")}
-                  productName={product.name}
-                  readiness={generation.readiness}
-                  state={generation}
-                  targetContentCount={product.targetContentCount}
-                />
                 <OperationalSummaryCard
                   className={styles.statusCard}
                   job={generation.job}
@@ -557,6 +547,12 @@ export function ProductDetail({
             </div>
           </SectionSwitcherContent>
           <SectionSwitcherContent className={styles.tabContent} value="contents">
+            <GenerationActions
+              generationAction={product.generationAction}
+              onGenerateMissing={() => void generation.generateMissing()}
+              readiness={generation.readiness}
+              state={generation}
+            />
             <ContentsView
               active={generation.active}
               job={generation.job}

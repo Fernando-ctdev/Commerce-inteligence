@@ -2,15 +2,12 @@
 
 import { useState } from "react";
 import { Check, ChevronLeft, ChevronRight, CircleAlert, Clapperboard, Compass, Gift, Heart, HeartCrack, Hourglass, Megaphone, Mic, ScrollText, Shield, Sparkles, Users, X } from "lucide-react";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Button } from "@/components/ui/button";
 
 import type { GenerationRecord } from "./generation-api";
 import {
   BLOCKED_ACTIVE_MESSAGE,
   blockedActionCopy,
-  canCancelGeneration,
-  generationStatusLabel,
   isActiveGeneration,
   phaseStateLabels,
   phaseStates,
@@ -205,66 +202,31 @@ function EmptyRegion({ children }: { children: React.ReactNode }) {
   return <div className={styles.panel}><p>{children}</p></div>;
 }
 
-/** Aba Visão geral: estado do job, ação primária, bloqueio preventivo e cancelamento (só QUEUED). */
-export function GenerationStatusCard({ className, productName, targetContentCount, readiness, state, generationAction, onOpenContents, onGenerateMissing }: {
-  className?: string;
-  productName: string;
-  targetContentCount: number;
+/** Aba Conteúdos: bloco de ações contextuais da análise, sem card "Próxima ação". */
+export function GenerationActions({ generationAction, onGenerateMissing, readiness, state }: {
+  generationAction?: GenerationActionProjection;
+  onGenerateMissing: () => void;
   readiness: GenerationRecord["readiness"];
   state: GenerationState;
-  generationAction?: GenerationActionProjection;
-  onOpenContents: () => void;
-  onGenerateMissing: () => void;
 }) {
-  const [cancelOpen, setCancelOpen] = useState(false);
-  const { job, busy, error, active, failed, blockedByOther, start, retry, cancel } = state;
-  const canCancel = !!job && canCancelGeneration(job.status);
+  const { job, busy, error, active, failed, blockedByOther, start, retry } = state;
   const partial = partialModel(job);
-  /* RI-003-20: GEN-PROJECTION em terminal positivo é anomalia de dados — a UI
-     comunica o estado degradado em vez de tratar como sucesso; retry suprimido
-     pelo código (/retry responderia 404); /complete só no parcial. */
+  /* RI-003-20: GEN-PROJECTION em terminal positivo é anomalia de dados —
+     retry suprimido (/retry responderia 404); /complete só no parcial degradado. */
   const degraded = projectionDegradedModel(job);
-  /* ADR-016: com a projeção presente, ela é a única fonte do bloqueio preventivo;
-     a inferência por GET current é só fallback para payload que ainda não a carrega. */
+  /* ADR-016: a projeção é a fonte do bloqueio preventivo; GET current é fallback
+     para payload que ainda não a carrega. */
   const projectedBlocked = generationAction?.state === "BLOCKED" ? generationAction : null;
   const projectedNote = projectedBlocked ? blockedActionCopy(projectedBlocked) : null;
   const fallbackNote = !generationAction && blockedByOther ? BLOCKED_ACTIVE_MESSAGE : null;
-  const heading = active && job
-    ? "Análise em andamento"
-    : failed && job
-      ? "Análise interrompida"
-      : degraded.degraded && job
-        ? "Resultado da análise indisponível"
-        : job?.status === "SUCCEEDED" || job?.status === "SUCCEEDED_PARTIAL"
-          ? "Revisar conteúdos"
-          : "Analisar produto";
-  const idleHeading = !active && !failed && job?.status !== "SUCCEEDED" && job?.status !== "SUCCEEDED_PARTIAL";
+  /* Em andamento o ContentsView já comunica o estado; sucesso pleno não oferece ação. */
+  if (active || (!job && readiness !== "PENDING") || (job?.status === "SUCCEEDED" && !degraded.degraded)) return null;
   return (
-    <section aria-busy={busy || active} aria-labelledby="generation-title" className={[styles.panel, className].filter(Boolean).join(" ")}>
-      <div className={styles.heading}>
-        <p className={styles.eyebrow}>Próxima ação</p>
-        <h2 id="generation-title">{heading}</h2>
-        {idleHeading && (
-          <p>Geraremos uma estratégia comercial e {targetContentCount} Briefings prontos para revisão.</p>
-        )}
-      </div>
-      {active && job ? (
-        <div aria-live="polite" className={styles.state} role="status">
+    <div aria-busy={busy} className={[styles.state, styles.contentsActions].join(" ")}>
+      {failed && job ? (
+        <div aria-live="polite" role="alert">
           <p className={styles.stateLine}>
-            <strong>{statusLabels[job.status]}</strong> · {stageMessage(job.stage)}
-          </p>
-          <div className={styles.actions}>
-            {/* SPEC/PLAN: a ação permanece visível-desabilitada enquanto o job ativo existe. */}
-            <Button disabled type="button">Analisar produto</Button>
-            {canCancel && (
-              <Button disabled={busy} onClick={() => setCancelOpen(true)} type="button" variant="outline">Cancelar</Button>
-            )}
-          </div>
-        </div>
-      ) : failed && job ? (
-        <div aria-live="polite" className={styles.state} role="alert">
-          <p className={styles.stateLine}>
-            <strong>{statusLabels[job.status]}</strong>{job.error ? ` · ${job.error}` : ` · ${statusMessage(job.status, productName)}`}
+            <strong>{statusLabels[job.status]}</strong>{job.error ? ` · ${job.error}` : ` · ${statusMessage(job.status)}`}
           </p>
           <div className={styles.actions}>
             <Button disabled={busy} onClick={() => void retry()} type="button">
@@ -273,7 +235,7 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
           </div>
         </div>
       ) : degraded.degraded && job ? (
-        <div aria-live="polite" className={styles.state} role="alert">
+        <div aria-live="polite" role="alert">
           <p className={styles.stateLine}>
             <strong>{statusLabels[job.status]}</strong> · Não foi possível carregar o resultado desta análise. Seus dados permanecem preservados.
           </p>
@@ -286,7 +248,7 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
           )}
         </div>
       ) : partial && job ? (
-        <div aria-live="polite" className={styles.state} role="status">
+        <div aria-live="polite" role="status">
           <p className={styles.stateLine}>
             <strong>{statusLabels[job.status]}</strong> · {`${partial.delivered} de ${partial.expected} conteúdos prontos.`}
           </p>
@@ -301,57 +263,23 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
             </ul>
           )}
           <div className={styles.actions}>
-            <Button className={styles.stateAction} onClick={onOpenContents} type="button" variant="outline">
-              <ScrollText aria-hidden="true" />
-              Revisar conteúdos
-            </Button>
             <Button className={styles.stateAction} disabled={busy} onClick={onGenerateMissing} type="button">
               {busy ? "Gerando faltantes…" : "Gerar faltantes"}
             </Button>
           </div>
         </div>
-      ) : job?.status === "SUCCEEDED" ? (
-        <div aria-live="polite" className={styles.state} role="status">
-          <p className={styles.stateLine}>
-            <strong>{statusLabels[job.status]}</strong> · {statusMessage(job.status, productName)}
-          </p>
-          <div className={styles.actions}>
-            <Button className={styles.stateAction} onClick={onOpenContents} type="button">
-              <ScrollText aria-hidden="true" />
-              Revisar conteúdos
-            </Button>
-          </div>
-        </div>
       ) : (
         <div className={styles.actions}>
-          {/* Estado inicial: sem job comprovado em mãos (nunca teve job ou carga falhou),
-              não há erro nem bloqueio — o backend segue autoritativo no POST. */}
+          {/* PENDING sem job: nunca teve análise comprovada em mãos (ou a carga
+              falhou antes) — o backend segue autoritativo no POST. */}
           <Button disabled={busy || blockedByOther || !!projectedBlocked} onClick={() => void start()} type="button">
             {busy ? "Iniciando análise…" : "Analisar produto"}
           </Button>
           {(projectedNote ?? fallbackNote) && <p className={styles.blockedNote}>{projectedNote ?? fallbackNote}</p>}
-          {job && readiness !== "PENDING" && !projectedBlocked && !blockedByOther && (
-            <p className={styles.error}>Este produto não está disponível para uma nova análise.</p>
-          )}
         </div>
       )}
       {error && <p className={styles.error} role="alert">{error}</p>}
-      {cancelOpen && (
-        <ConfirmationDialog
-          confirmLabel="Cancelar análise"
-          description="A análise na fila será cancelada. Os dados do produto permanecem preservados e você pode tentar novamente depois."
-          error={error}
-          onConfirm={async () => {
-            if (await cancel()) setCancelOpen(false);
-          }}
-          onOpenChange={setCancelOpen}
-          open
-          pending={busy}
-          pendingLabel="Cancelando…"
-          title="Cancelar análise?"
-        />
-      )}
-    </section>
+    </div>
   );
 }
 
@@ -622,7 +550,7 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
   const selected = items.find((item) => item.id === selectedId) ?? items[0] ?? null;
   const selectedIndex = selected ? items.indexOf(selected) : -1;
   return (
-    <section aria-label="Conteúdos" className={styles.panel} id="generated-contents">
+    <section aria-label="Conteúdos" className={styles.panel} id="generated-contents" tabIndex={-1}>
       {selected && (
         <BriefingDetail
           index={selectedIndex}

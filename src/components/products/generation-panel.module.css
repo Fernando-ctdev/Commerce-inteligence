@@ -126,6 +126,10 @@
   gap: 12px;
 }
 
+.contentsActions {
+  margin-bottom: 20px;
+}
+
 .stateLine {
   color: var(--color-text);
   font-size: 15px;
@@ -1061,11 +1065,15 @@
   margin: 0;
 }
 
-/* Ação primária do card, na largura do card como nos demais. */
+/* Ação primária do card lateral ocupa o card; a recuperação em Conteúdos fica compacta no desktop. */
 .asideAction,
 .stateAction {
   justify-content: center;
   width: 100%;
+}
+
+.contentsActions .stateAction {
+  width: auto;
 }
 
 .asideStatus {
@@ -1118,6 +1126,10 @@
   .strategyPanel,
   .asideCard {
     padding: 20px;
+  }
+
+  .contentsActions .stateAction {
+    width: 100%;
   }
 
   .strategyLayout {
