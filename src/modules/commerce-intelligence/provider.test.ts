@@ -716,6 +716,18 @@ test("extractReportedCostLexeme casa apenas a chave exata cost, nunca cost_detai
   assert.equal(extractReportedCostLexeme('{"usage":{"cost_details":{"upstream_inference_cost":19}}}'), null);
 });
 
+test("extractReportedCostLexeme ignora cost dentro do conteúdo gerado (string escapada) e só lê usage de topo", () => {
+  // conteúdo gerado contendo {"cost":123} — sem usage no envelope → null
+  const contentOnly = '{"choices":[{"message":{"content":"{\\"cost\\":123,\\"items\\":[]}"}}]}';
+  assert.equal(extractReportedCostLexeme(contentOnly), null, "cost do conteúdo nunca é custo do provider");
+  // conteúdo com cost + usage.cost presente → captura o do usage
+  const both = '{"usage":{"cost":0.009},"choices":[{"message":{"content":"{\\"cost\\":123}"}}]}';
+  assert.equal(extractReportedCostLexeme(both), "0.009");
+  // "usage" citado dentro do conteúdo não confunde o scanner string-aware
+  const usageInContent = '{"choices":[{"message":{"content":"{\\"usage\\":{\\"cost\\":99}}"}},{"usage":{"cost":0.5}}]}';
+  assert.equal(extractReportedCostLexeme(usageInContent), "0.5");
+});
+
 test("dollarsLexemeToMinor converte decimal exato para cents com HALF_UP documentado", () => {
   assert.equal(dollarsLexemeToMinor("0.009"), "1", "contrato: 0.009 → 1 centavo (HALF_UP)");
   assert.equal(dollarsLexemeToMinor("0.95"), "95");

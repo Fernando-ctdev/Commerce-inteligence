@@ -252,11 +252,65 @@ const detailToken = (usage: Record<string, unknown>, details: Record<string, unk
 };
 
 // Lexeme bruto de `usage.cost` extraído do TEXTO da resposta: JSON.parse produz double e
-// destruiria o invariante de aritmética exata. A regex casa apenas a chave exata "cost"
-// (nunca "upstream_inference_cost" — sem aspas imediatamente antes de "cost").
-const COST_LEXEME_RE = /"cost"\s*:\s*(\d+(?:\.\d+)?)/;
+// destruiria o invariante de aritmética exata. O scan é string-aware e confinado ao objeto
+// `usage` de topo do envelope: conteúdo gerado pelo modelo (dentro de message.content, uma
+// STRING com aspas escapadas) nunca é varrido; `cost_details`/`upstream_inference_cost` não
+// casam a chave exata "cost".
+function skipString(raw: string, start: number): number {
+  let i = start + 1;
+  while (i < raw.length) {
+    const ch = raw[i]!;
+    if (ch === "\\") { i += 2; continue; }
+    if (ch === '"') return i + 1;
+    i += 1;
+  }
+  return i;
+}
+
+function balancedEnd(raw: string, open: number): number {
+  let depth = 0;
+  let i = open;
+  while (i < raw.length) {
+    const ch = raw[i]!;
+    if (ch === '"') { i = skipString(raw, i); continue; }
+    if (ch === "{") depth += 1;
+    if (ch === "}") { depth -= 1; if (depth === 0) return i; }
+    i += 1;
+  }
+  return raw.length - 1;
+}
+
+// Devolve o texto do objeto balanceado que segue a chave `key` fora de strings; null se ausente.
+function balancedObjectAfterKey(raw: string, key: string): string | null {
+  const keyToken = `"${key}"`;
+  let i = 0;
+  while (i < raw.length) {
+    const ch = raw[i]!;
+    if (ch === '"') {
+      // Chave candidata: o token casa aqui E é seguido de ":" (contexto de chave, não valor).
+      if (raw.startsWith(keyToken, i)) {
+        let k = i + keyToken.length;
+        while (k < raw.length && /\s/.test(raw[k]!)) k += 1;
+        if (raw[k] === ":") {
+          let j = k + 1;
+          while (j < raw.length && /\s/.test(raw[j]!)) j += 1;
+          if (raw[j] === "{") return raw.slice(j, balancedEnd(raw, j) + 1);
+        }
+      }
+      i = skipString(raw, i);
+      continue;
+    }
+    i += 1;
+  }
+  return null;
+}
+
 export function extractReportedCostLexeme(rawText: string): string | null {
-  return COST_LEXEME_RE.exec(rawText)?.[1] ?? null;
+  const usageObject = balancedObjectAfterKey(rawText, "usage");
+  if (!usageObject) return null;
+  // Membro DIRETO do objeto usage: sempre no início ou após { , — nunca dentro de cost_details.
+  const costMatch = /(^|[,{])\s*"cost"\s*:\s*(\d+(?:\.\d+)?)/.exec(usageObject);
+  return costMatch?.[2] ?? null;
 }
 
 // Moeda do custo reportado: OpenRouter documenta créditos = USD; configurável no adapter.
