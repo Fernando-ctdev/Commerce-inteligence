@@ -94,6 +94,11 @@ export type CapabilityEvent = {
   model?: string;
   // Usage real normalizado do provider; metadata legado permanece válido sem o campo.
   usage?: ProviderTokenUsage;
+  // Todas as callbacks de métricas da execução (uma por tentativa efetiva do provider,
+  // inclusive a sacrificada em fallback); cost-observability achata em registros por tentativa.
+  attempts?: ProviderCallMetrics[];
+  // Atribuição por item apenas quando a capability é semanticamente de Content único.
+  contentId?: string;
   reasoning?: string;
   providerStatus?: number | null;
   durationMs: number;
@@ -559,6 +564,7 @@ export async function generateSceneSetsForBriefs(params: {
             );
             return { kept: gated.kept.length, dropped: gated.dropped };
           },
+          brief.contentId,
         );
         const gated = gateSceneSet(
           draft,
@@ -883,6 +889,8 @@ export type TrackFn = <T, R = T>(
   // Observabilidade determinística pós-validação (ex.: kept/dropped do
   // gateSceneSet) — mesclada no CapabilityEvent e no capability.completed.
   annotate?: (output: R) => { kept?: number; dropped?: number } | undefined,
+  // Atribuição opcional de Content (capabilitidades de item único).
+  contentId?: string,
 ) => Promise<R>;
 export type CapabilityTracker = { track: TrackFn; capabilities: CapabilityEvent[] };
 
@@ -903,10 +911,14 @@ export function createCapabilityTracker(opts: {
     ) => Promise<T>,
     validate?: (output: T) => R,
     annotate?: (output: R) => { kept?: number; dropped?: number } | undefined,
+    contentId?: string,
   ): Promise<R> => {
     const startedAt = Date.now();
     const contextBytes = Buffer.byteLength(JSON.stringify(context), "utf8");
-    let captured: ProviderCallMetrics | undefined;
+    // TODAS as callbacks de métricas são preservadas: fallback/retry do provider emitem
+    // uma callback por tentativa HTTP efetiva e nenhuma pode ser perdida para o custo.
+    const capturedAll: ProviderCallMetrics[] = [];
+    const captured = () => capturedAll[capturedAll.length - 1];
     emitJobEvent("capability.started", {
       jobId: opts.jobId,
       attempt: opts.attempt,
@@ -920,7 +932,7 @@ export function createCapabilityTracker(opts: {
     });
     try {
       const rawOutput = await run((metrics) => {
-        captured = metrics;
+        capturedAll.push(metrics);
       });
       const output = validate ? validate(rawOutput) : rawOutput as unknown as R;
       const outputRecord = output && typeof output === "object" && !Array.isArray(output)
@@ -934,38 +946,40 @@ export function createCapabilityTracker(opts: {
         tier: ROUTER_MAP[task],
         instructionVersion,
         instructionHash: opts.router?.hash?.(task),
-        provider: captured?.provider,
-        model: captured?.model ?? effectiveModel(task),
-        usage: captured?.usage,
-        reasoning: captured?.reasoning,
-        providerStatus: captured?.providerStatus ?? null,
+        contentId,
+        provider: captured()?.provider,
+        model: captured()?.model ?? effectiveModel(task),
+        usage: captured()?.usage,
+        attempts: capturedAll.length > 0 ? capturedAll : undefined,
+        reasoning: captured()?.reasoning,
+        providerStatus: captured()?.providerStatus ?? null,
         durationMs,
         contextBytes,
-        requestBytes: captured?.requestBytes,
-        trustedContextBytes: captured?.trustedContextBytes,
-        externalBytes: captured?.externalBytes,
+        requestBytes: captured()?.requestBytes,
+        trustedContextBytes: captured()?.trustedContextBytes,
+        externalBytes: captured()?.externalBytes,
         responseBytes,
         attempt: opts.attempt,
-        retry: captured?.retry ?? 0,
+        retry: captured()?.retry ?? 0,
         ok: true,
         cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
         kept: extras?.kept,
         dropped: extras?.dropped,
-        providerRequestId: captured?.providerRequestId,
-        providerRequestIdSource: captured?.providerRequestIdSource,
-        fallback: captured?.fallback,
+        providerRequestId: captured()?.providerRequestId,
+        providerRequestIdSource: captured()?.providerRequestIdSource,
+        fallback: captured()?.fallback,
       });
       emitJobEvent("capability.completed", {
         jobId: opts.jobId,
         attempt: opts.attempt,
         task,
         tier: ROUTER_MAP[task],
-        model: captured?.model ?? effectiveModel(task),
+        model: captured()?.model ?? effectiveModel(task),
         instructionHash: opts.router?.hash?.(task),
         durationMs,
-        requestBytes: captured?.requestBytes,
-        trustedContextBytes: captured?.trustedContextBytes,
-        externalBytes: captured?.externalBytes,
+        requestBytes: captured()?.requestBytes,
+        trustedContextBytes: captured()?.trustedContextBytes,
+        externalBytes: captured()?.externalBytes,
         responseBytes,
         arrayLength: Array.isArray(outputRecord.opportunities)
           ? outputRecord.opportunities.length
@@ -977,8 +991,8 @@ export function createCapabilityTracker(opts: {
         cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
         kept: extras?.kept,
         dropped: extras?.dropped,
-        providerRequestId: captured?.providerRequestId,
-        providerRequestIdSource: captured?.providerRequestIdSource,
+        providerRequestId: captured()?.providerRequestId,
+        providerRequestIdSource: captured()?.providerRequestIdSource,
       });
       return output;
     } catch (error) {
@@ -990,25 +1004,27 @@ export function createCapabilityTracker(opts: {
         task,
         tier: ROUTER_MAP[task],
         instructionVersion,
-        provider: captured?.provider,
-        model: captured?.model ?? effectiveModel(task),
-        usage: captured?.usage,
-        reasoning: captured?.reasoning,
-        providerStatus: captured?.providerStatus ?? null,
+        contentId,
+        provider: captured()?.provider,
+        model: captured()?.model ?? effectiveModel(task),
+        usage: captured()?.usage,
+        attempts: capturedAll.length > 0 ? capturedAll : undefined,
+        reasoning: captured()?.reasoning,
+        providerStatus: captured()?.providerStatus ?? null,
         durationMs,
         contextBytes,
-        requestBytes: captured?.requestBytes,
-        trustedContextBytes: captured?.trustedContextBytes,
-        externalBytes: captured?.externalBytes,
-        responseBytes: captured?.responseBytes ?? 0,
+        requestBytes: captured()?.requestBytes,
+        trustedContextBytes: captured()?.trustedContextBytes,
+        externalBytes: captured()?.externalBytes,
+        responseBytes: captured()?.responseBytes ?? 0,
         attempt: opts.attempt,
-        retry: captured?.retry ?? 0,
+        retry: captured()?.retry ?? 0,
         ok: false,
         cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
         errorCode,
-        providerRequestId: captured?.providerRequestId,
-        providerRequestIdSource: captured?.providerRequestIdSource,
-        fallback: captured?.fallback,
+        providerRequestId: captured()?.providerRequestId,
+        providerRequestIdSource: captured()?.providerRequestIdSource,
+        fallback: captured()?.fallback,
       });
       const safe =
         error instanceof GenerationError &&
@@ -1023,7 +1039,7 @@ export function createCapabilityTracker(opts: {
         attempt: opts.attempt,
         task,
         tier: ROUTER_MAP[task],
-        model: captured?.model ?? effectiveModel(task),
+        model: captured()?.model ?? effectiveModel(task),
         durationMs,
         errorCode,
         cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
@@ -1765,6 +1781,8 @@ export async function runFirstGeneration(
               version: 1 as const,
             } satisfies ContentBriefVersion;
           },
+          undefined,
+          c.brief.contentId,
         );
         candidates[i] = { brief: replacement, opportunity: c.opportunity };
         received += 1;

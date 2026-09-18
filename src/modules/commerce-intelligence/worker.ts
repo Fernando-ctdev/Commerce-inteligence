@@ -19,6 +19,8 @@ import { loadPlatformSkill } from "./platform-skill";
 import { GATE_POLICY_VERSION } from "./gates";
 import type { ContentBriefVersion } from "./contract";
 import { createHttpProvider } from "./provider";
+import { attachCapabilityCosts, type PriceSnapshot } from "./cost-observability";
+import { resolveProviderModelPrice, type PriceReader } from "./pricing";
 import type { ModelDescription } from "./model-router";
 import { QUALITY_PARTS, reasonText, type QualityAudit, type QualityPart } from "./semantic-quality";
 import { heartbeat } from "./runtime";
@@ -470,6 +472,14 @@ export async function failJobAndReleaseReservation(
     });
   return terminalized;
 }
+
+// Resolvedor do catálogo na finalização (preço é append-only; resolve "agora" do run).
+// provider/model ausentes ou catálogo inconsistente → null → UNAVAILABLE: custo nunca derruba o job.
+const costPriceResolver = (db: PriceReader) =>
+  (provider: string | undefined, model: string | undefined): Promise<PriceSnapshot | null> =>
+    provider && model
+      ? resolveProviderModelPrice(db, provider, model, new Date())
+      : Promise.resolve(null);
 
 export function runMetadata(
   attempt: number,
@@ -1057,6 +1067,9 @@ export async function processGeneration(jobId: string, ownerId: string) {
         "Fencing perdido antes da finalização",
       );
     const sceneSets = [...output.sceneSets, ...backfillScenes];
+    // Custo anexado por tentativa efetiva ANTES do metadata (fonte canônica: capabilities[]).
+    // Mutation in place nos eventos — o mesmo objeto entra no metadata com pricing/cost.
+    await attachCapabilityCosts([...output.capabilities, ...backfillTracker.capabilities], costPriceResolver(prisma as unknown as PriceReader));
     const runData = runMetadata(
       attempt,
       () => router.describe(),
