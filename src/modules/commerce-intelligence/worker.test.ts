@@ -187,7 +187,7 @@ test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlist
     { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s3", confidence: 0.9, evidenceRefs: ["product:name"] },
   ] };
   const strategy = { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
-  const badBullet = { text: "Destaque o tecido para o", action: "Destaque", factRef: "product:description", rationale: "para o" };
+  const badBullet = { text: "Prova os 999 kg de carga para o", action: "Prova", factRef: "product:description", rationale: "para o" };
   const goodBullet = { text: "Destaque o tecido respiravel para explicar o conforto no uso diario", action: "Destaque", factRef: "product:description", rationale: "para explicar o conforto no uso diario" };
   const judgeBatchPass = (input?: { trustedContext?: unknown }) => {
     const items = recordOf(input?.trustedContext)?.items;
@@ -228,11 +228,13 @@ test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlist
   assert.ok(Array.isArray(devFailed.developmentDiagnostics) && devFailed.developmentDiagnostics.length === 2, "diagnóstico por bullet presente");
   assert.equal(devFailed.developmentDiagnostics![0]!.rationaleGroundingMatched, 0);
   assert.equal(devFailed.developmentDiagnostics![0]!.connectorPresent, true, "conector presente; a falha é grounding abaixo do mínimo");
+  assert.ok(devFailed.issues.includes("feature_list") && devFailed.issues.includes("unverified_claim"), "rótulos fixos da cascata presentes");
+  assert.ok(devFailed.issues.every((issue) => ["feature_list", "unverified_claim", "gate_issue"].includes(issue)), "issues apenas rótulos fixos");
   const qualityFailed = byContent.get("j-diag-content-2")!;
   assert.ok(Array.isArray(qualityFailed.qualityDiagnostics) && qualityFailed.qualityDiagnostics.length > 0, "diagnóstico de qualidade allowlisted presente");
   assert.deepEqual(qualityFailed.qualityDiagnostics![0], { part: "hook", criterion: "hook_clarity", status: "REVIEW", reason: "unclear" });
   const serialized = JSON.stringify(result.partial.failedItems);
-  for (const sentinel of ["Destaque o tecido", "Tecido respirável", "Suporta 999 kg", "para explicar o conforto"]) {
+  for (const sentinel of ["Destaque o tecido", "Tecido respirável", "Suporta 999 kg", "para explicar o conforto", "999 kg"]) {
     assert.ok(!serialized.includes(sentinel), `sem texto de draft/fato no metadata: ${sentinel}`);
   }
 });

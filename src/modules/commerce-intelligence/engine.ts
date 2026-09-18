@@ -1042,12 +1042,19 @@ function diagnoseFailure(
 ): FailedItemDiagnostic {
   const checkCodes = new Set<PartialFailureCheckCode>();
   const diagnostic = { actionPresent: true, connectorPresent: true, minGroundingExpected: 2, minGroundingMatched: 2 };
+  // Issues de failedItems são rótulos FIXOS mapeados por regex da própria cascata —
+  // nunca o texto original (que pode embutir claim/fato/provider).
+  const labels = new Set<string>();
   for (const issue of report.issues) {
-    if (/duplicata|repetid/.test(issue)) continue;
-    if (/claim sem evidência|sem evidência autorizada|contradito|sem suporte|sem evidência verificável/.test(issue))
+    if (/duplicata|repetid/.test(issue)) { labels.add("variety_duplicate"); continue; }
+    if (/claim sem evidência|sem evidência autorizada|contradito|sem suporte|sem evidência verificável/.test(issue)) {
+      labels.add("unverified_claim");
       checkCodes.add("unverified_claim");
-    if (/script contém claim factual/.test(issue)) checkCodes.add("script_claim_missing");
+    }
+    if (/script contém claim factual/.test(issue)) { labels.add("script_claim_missing"); checkCodes.add("script_claim_missing"); }
+    if (/script contém metainstrução de cena|metacomentário/.test(issue)) labels.add("script_scene_metacomment");
     if (/orientar comunicação|lista de features|planos de gravação/.test(issue)) {
+      labels.add("feature_list");
       checkCodes.add("feature_list");
       for (const point of brief.development) {
         const d = diagnoseDevelopmentPoint(point, evidence);
@@ -1062,6 +1069,8 @@ function diagnoseFailure(
           diagnostic.minGroundingMatched = Math.min(diagnostic.minGroundingMatched, d.minGroundingMatched);
         }
       }
+    } else {
+      labels.add("gate_issue"); // issue sem mapeamento fixo: rótulo genérico, texto nunca copiado
     }
   }
   return {
@@ -1069,7 +1078,7 @@ function diagnoseFailure(
     position,
     reason,
     checkCodes: [...checkCodes],
-    issues: [...report.issues],
+    issues: [...labels],
     ...(quality && quality.length ? { quality } : {}),
     diagnostic,
   };
