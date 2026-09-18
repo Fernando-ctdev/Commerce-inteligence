@@ -18,6 +18,7 @@ import {
   ProductRecord,
   reactivateProduct,
 } from "./product-api";
+import { loadProductHistory, type ProductHistoryResponse } from "./history-api";
 import {
   ContentsView,
   GenerationStatusCard,
@@ -177,7 +178,9 @@ export function ProductDetail({
 }) {
   const [product, setProduct] = useState<ProductRecord | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<ProductHistoryResponse | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [reactivating, setReactivating] = useState(false);
   const [tab, setTab] = useState<ProductTab>(() =>
@@ -227,6 +230,26 @@ export function ProductDetail({
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  useEffect(() => {
+    let disposed = false;
+    setHistory(null);
+    setHistoryError(null);
+    setHistoryLoading(true);
+    void loadProductHistory(id)
+      .then((value) => {
+        if (!disposed) setHistory(value);
+      })
+      .catch((caught: unknown) => {
+        if (!disposed) setHistoryError(caught instanceof Error ? caught.message : "Não foi possível carregar o histórico agora.");
+      })
+      .finally(() => {
+        if (!disposed) setHistoryLoading(false);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [id]);
 
   // Deep-link do indicador global: /products/:id#generated-contents abre Conteúdos.
   useEffect(() => {
@@ -545,7 +568,7 @@ export function ProductDetail({
             <StrategyView job={generation.job} onOpenContents={() => changeTab("contents")} />
           </SectionSwitcherContent>
           <SectionSwitcherContent className={styles.tabContent} value="history">
-            <HistoryView job={generation.job} />
+            <HistoryView error={historyError} history={history} loading={historyLoading} />
           </SectionSwitcherContent>
         </SectionSwitcher>
       ) : (

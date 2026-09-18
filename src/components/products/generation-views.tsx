@@ -28,6 +28,8 @@ import {
   type GenerationActionProjection,
   type ScenesProjection,
 } from "./generation-ui-model";
+import type { ProductHistoryResponse } from "./history-api";
+import { historyViewModel } from "./history-ui-model";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import styles from "./generation-panel.module.css";
 
@@ -636,42 +638,52 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
   );
 }
 
-/** Aba Histórico: registro da análise mais recente conhecida pelo backend. */
-const historyDateFormat = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
-const formatHistoryDate = (value: string | null) => {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : historyDateFormat.format(date);
-};
-/* Duração legível em pt-BR: "45 s" ou "2 min 05 s". */
-const formatHistoryDuration = (start: string | null, end: string | null) => {
-  if (!start || !end) return null;
-  const ms = new Date(end).getTime() - new Date(start).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return null;
-  const totalSeconds = Math.round(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes === 0) return `${seconds} s`;
-  return `${minutes} min ${String(seconds).padStart(2, "0")} s`;
-};
-export function HistoryView({ job }: { job: GenerationRecord | null }) {
-  if (!job) return <EmptyRegion>Nenhuma análise registrada até agora.</EmptyRegion>;
-  const createdAt = formatHistoryDate(job.createdAt);
-  /* Estratégia e conteúdos passam a existir juntos, na conclusão do job. */
-  const publishedAt = job.status === "SUCCEEDED" ? formatHistoryDate(job.finishedAt ?? job.createdAt) : null;
-  /* Duração cobre o job inteiro (createdAt → finishedAt, inclusive retries);
-     startedAt só serve de início quando createdAt não existe. Falha terminal
-     também mede até o seu finishedAt. */
-  const duration = formatHistoryDuration(job.createdAt ?? job.startedAt, job.finishedAt);
+/** Aba Histórico: agregados financeiros, com detalhes por Conteúdo sob demanda. */
+export function HistoryView({
+  history,
+  loading,
+  error,
+}: {
+  history: ProductHistoryResponse | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  if (loading) return <EmptyRegion>Carregando o histórico de custos…</EmptyRegion>;
+  if (error) return <section className={styles.panel} role="alert"><p>{error}</p></section>;
+  if (!history || history.jobs.length === 0) return <EmptyRegion>Nenhuma análise registrada até agora.</EmptyRegion>;
+
+  const model = historyViewModel(history);
   return (
-    <section className={styles.panel}>
-      <p><strong>{generationStatusLabel(job.status)}</strong> · até {job.targetContentCount} Briefings solicitados</p>
-      {createdAt && <p>Análise criada em {createdAt}.</p>}
-      {publishedAt && <p>Estratégia e conteúdos criados em {publishedAt}.</p>}
-      {duration && <p>Tempo total da Commerce Intelligence: {duration}.</p>}
-      {job.status === "SUCCEEDED" && <p>Resultado completo disponível na aba Conteúdos.</p>}
-      {job.error && <p className={styles.error}>{job.error}</p>}
-      {job.previousRunId && <p>Esta análise substitui uma tentativa anterior do mesmo produto.</p>}
+    <section aria-label="Histórico de custos" className={styles.historyList}>
+      {model.jobs.map((item, index) => (
+        <article className={styles.historyItem} key={`${item.dateLabel}-${index}`}>
+          <div className={styles.historyHeader}>
+            <div>
+              <h2>{item.dateLabel}</h2>
+              <p>{item.statusLabel} · {item.requestedContentsLabel}</p>
+            </div>
+            <div aria-label={`Custo estimado: ${item.cost.label}. ${item.cost.completenessLabel}.`} className={styles.historyCost}>
+              <strong>{item.cost.label}</strong>
+              <span>{item.cost.completenessLabel}</span>
+            </div>
+          </div>
+          {item.contents.length > 0 && (
+            <details className={styles.disclosure}>
+              <summary>Ver custos por Conteúdo</summary>
+              <ul className={styles.historyContentList}>
+                {item.contents.map((content, contentIndex) => (
+                  <li key={`${content.positionLabel}-${contentIndex}`}>
+                    <span>{content.positionLabel}</span>
+                    <span aria-label={`Custo: ${content.cost.label}. ${content.cost.completenessLabel}.`}>
+                      {content.cost.label} · {content.cost.completenessLabel}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </article>
+      ))}
     </section>
   );
 }
