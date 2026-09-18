@@ -34,8 +34,6 @@ export type PriceSnapshot = ResolvedPrice;
 // Resolve o snapshot de preço por (provider, model); null = catálogo sem versão aplicável.
 export type PriceSnapshotResolver = (provider: string | undefined, model: string | undefined) => Promise<PriceSnapshot | null>;
 
-const NULL_USAGE: ProviderTokenUsage = { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null };
-
 // Chave lógica de unicidade: job (contexto do array) + capability + tentativa + retry.
 const recordKey = (record: { task: LogicalTask; contentId?: string; attempt: number; retry: number }): string =>
   `${record.task}|${record.contentId ?? ""}|${record.attempt}|${record.retry}`;
