@@ -1,0 +1,129 @@
+/* Retorno temporário do TikTok: mensagem de estado na coluna de leitura
+   (560–640px, DESIGN), premium minimalista — sem cards, sem eyebrow. */
+.page {
+  align-content: center;
+  background: var(--color-canvas);
+  display: grid;
+  justify-items: start;
+  min-height: 100dvh;
+  padding: 48px 32px 80px;
+}
+
+.content {
+  animation: callbackOpen 160ms ease-out;
+  display: grid;
+  gap: 16px;
+  margin-inline: auto;
+  max-width: 600px;
+  width: 100%;
+}
+
+/* Logo completa (mascote + wordmark), 146×56 no padrão do access-form;
+   tema escolhe a variante pelo token do documento (Light padrão). */
+.logo {
+  height: 56px;
+  margin-bottom: 8px;
+  object-fit: contain;
+  width: 146px;
+}
+
+.logoLight {
+  display: none;
+}
+
+:global(.dark) .logoDark {
+  display: none;
+}
+
+:global(.dark) .logoLight {
+  display: block;
+}
+
+.title {
+  align-items: center;
+  color: var(--color-text);
+  display: flex;
+  font-size: 28px;
+  gap: 10px;
+  letter-spacing: -0.03em;
+  line-height: 34px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Sucesso além da cor: o texto do título carrega o estado; o ícone assina. */
+.successIcon {
+  color: var(--color-success);
+  flex: 0 0 auto;
+  height: 24px;
+  width: 24px;
+}
+
+.lead {
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+}
+
+.note {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+  max-width: 46ch;
+}
+
+.legalNav {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Alvos ≥44px e foco visível, no padrão dos links legais do app. */
+.legalLink {
+  align-items: center;
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 500;
+  min-height: 44px;
+  padding: 10px 12px;
+  text-decoration: none;
+  transition: color 80ms ease, background-color 80ms ease;
+}
+
+.legalLink:hover,
+.legalLink:focus-visible {
+  background: var(--color-surface-secondary);
+  color: var(--color-action);
+}
+
+@keyframes callbackOpen {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content {
+    animation: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .page {
+    padding: 32px 16px 56px;
+  }
+
+  .title {
+    font-size: 24px;
+    line-height: 30px;
+  }
+}
