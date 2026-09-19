@@ -103,6 +103,46 @@ test("repairs only rejected briefs via per-item CONTENT_BRIEF_REPAIR/HIGH, prese
   const summary = recordOf(context.siblingSummary);
   assert.ok(Array.isArray(summary?.hooks) && Array.isArray(summary?.ctaFunctions), "sibling summary determinístico presente");
 });
+test("repair legacy string[] não remove a ancoragem factRef de item estruturado (sem bypass do gate)", async () => {
+  const taskCalls: string[] = [];
+  const repairContexts: Array<Record<string, unknown>> = [];
+  const badStructured = { text: "Prova os 999 kg de carga para o", action: "Prova", factRef: "product:description", rationale: "para o" };
+  const anchored = { text: "Destaque o tecido respiravel para explicar como o tecido respiravel ajuda no uso", action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel ajuda no uso" };
+  const router = {
+    describe,
+    complete: async (task: string, input?: { trustedContext?: unknown }) => {
+      if (task === "PRODUCT_UNDERSTANDING") return understanding;
+      if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
+      if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
+      if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
+      if (task === "CONTENT_BRIEF_GENERATION") { taskCalls.push(task); return { items: [{ angle: "x", hook: "h", development: [badStructured, badStructured], script: "testado com 999 kg de carga", cta: "c" }] }; }
+      if (task === "CONTENT_BRIEF_REPAIR") {
+        taskCalls.push(task);
+        repairContexts.push(input?.trustedContext as Record<string, unknown>);
+        // Round 1: repair LEGACY (string[]), texto-válido porém SEM termos do fato
+        // após o conector — sem a preservação do mapa, limparia bulletsByContentId
+        // e o gate v4 perderia a ancoragem factRef (bypass).
+        if (repairContexts.length === 1)
+          return { angle: "dem", hook: "Veja o tecido", development: ["Destaque o tecido respiravel para explicar o conforto no uso diario", "Destaque o tecido respiravel para explicar o conforto no uso diario"], script: "Fale sobre o produto", cta: "Confira as condições atuais na página do produto." };
+        // Round 2: estruturado ancorado converge.
+        return { angle: "dem", hook: "Veja o tecido", development: [anchored, anchored], script: "Fale sobre o produto", cta: "Confira as condições atuais na página do produto." };
+      }
+      if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
+      if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
+      return {};
+    },
+  };
+  const result = await runFirstGeneration({ productId: "p", jobId: "j-bypass", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
+  assert.deepEqual(taskCalls, ["CONTENT_BRIEF_GENERATION", "CONTENT_BRIEF_REPAIR", "CONTENT_BRIEF_REPAIR"], "repair legacy não converge: gate mantém a ancoragem factRef");
+  assert.equal(result.reports[0].decision, "PASS");
+  assert.equal(result.repairs, 2);
+  // Round 2 recebeu os bullets ESTRUTURADOS ORIGINAIS por índice (mapa preservado).
+  const diag = (repairContexts[1]?.developmentDiagnostics as Array<Record<string, unknown>>)[0]!;
+  assert.equal(diag.factGroundingApplicable, true);
+  assert.equal(diag.factTermsInRationale, 0, "bullets originais seguem atados aos textos reparados");
+  assert.deepEqual(repairContexts[1]?.failedBulletIndexes, [0, 1]);
+  assert.ok(JSON.stringify(repairContexts[1]?.issues).includes("factRef"), "issue da ancoragem factRef é a causa do round 2");
+});
 test("repair per-item carries each entry's own-position pattern when rejects are non-contiguous", async () => {
   const repairPositions: number[][] = [];
   let repairCalls = 0;

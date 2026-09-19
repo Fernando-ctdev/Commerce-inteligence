@@ -1798,8 +1798,12 @@ export async function runFirstGeneration(
             ),
           (output: Record<string, unknown>) => {
             const parsed = parseStructuredBriefDraft(output, evidence);
-            // Bullets efêmeros do item substituído: judge/parte-repair continuam no mesmo contrato.
-            bulletsByContentId.set(c.brief.contentId, parsed.bullets);
+            // Repair legacy string[] NUNCA limpa o mapa de um item estruturado:
+            // os bullets originais permanecem por índice e o hard gate segue
+            // exigindo a ancoragem factRef no trecho após o conector (sem bypass
+            // do gap 4). O mapa só é atualizado com bullets estruturados novos.
+            if (parsed.bullets.length > 0)
+              bulletsByContentId.set(c.brief.contentId, parsed.bullets);
             return {
               ...parsed.draft,
               contentId: `${input.jobId}-content-${i + 1}`,
