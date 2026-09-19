@@ -410,12 +410,19 @@ function buildRepairContrast(
 // Contrato estruturado compartilhado (design 2026-09-18): parser único do gate valida
 // shape/repertório (GEN-SCHEMA) e produz texto + diagnóstico sanitizado; o texto projetado
 // passa por validateContentBriefDraft e o conjunto por validateBriefSet (autoridade final).
+// Caminho legacy: development: string[] (pré-contrato) é aceito e projetado SEM bullets
+// estruturados — mapa vazio desliga a ancoragem factRef por índice no gate (ela só se
+// aplica com mapa alinhado). Objetos text/action/factRef/rationale são exigidos apenas
+// no formato estruturado novo; array misto (string+objeto) falha GEN-SCHEMA.
 export function parseStructuredBriefDraft(
   output: Record<string, unknown>,
   evidence: EvidenceSnapshot,
 ): { draft: ContentBriefDraft; bullets: DevelopmentBullet[] } {
-  const { texts } = parseStructuredDevelopment(output.development, evidence);
-  const bullets = Array.isArray(output.development) ? (output.development as DevelopmentBullet[]) : [];
+  const development = output.development;
+  if (Array.isArray(development) && development.every((item) => typeof item === "string"))
+    return { draft: validateContentBriefDraft({ ...output, development: development as string[] }), bullets: [] };
+  const { texts } = parseStructuredDevelopment(development, evidence);
+  const bullets = Array.isArray(development) ? (development as DevelopmentBullet[]) : [];
   return { draft: validateContentBriefDraft({ ...output, development: texts }), bullets };
 }
 

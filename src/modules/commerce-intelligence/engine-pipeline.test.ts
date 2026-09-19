@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runFirstGeneration } from "./engine";
+import { parseStructuredBriefDraft, runFirstGeneration } from "./engine";
 import { validateBriefSet } from "./gates";
+import { ContractError } from "./contract";
 import { loadPlatformSkill } from "./platform-skill";
 import { ctaTextFactualIssues } from "./gates";
 import { collectJobEvents, resetJobEvents } from "./observability";
@@ -35,6 +36,28 @@ const judgeBatchPass = (input?: { trustedContext?: unknown }) => {
 };
 const sceneIdeas = { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
 const describe = () => ({ provider: "test", model: "test-model", instructionVersion: "slice-003" });
+test("development: string[] legacy é aceito sem bullets estruturados; formato estruturado novo exige objetos", () => {
+  const evidence = { facts: ["Tecido respiravel"], refs: ["product:description"] };
+  const bullets = [
+    "Destaque o tecido respiravel para explicar o conforto no uso diario",
+    "Destaque o tecido respiravel para explicar o conforto no uso diario",
+  ];
+  const parsed = parseStructuredBriefDraft(
+    { angle: "a", hook: "Veja o tecido", development: bullets, script: "Tecido respiravel", cta: "c" },
+    evidence,
+  );
+  assert.deepEqual(parsed.draft.development, bullets, "strings são projetadas sem transformação");
+  assert.deepEqual(parsed.bullets, [], "string[] não gera mapa estruturado: ancoragem factRef por índice não se aplica");
+  // Array misto (string + objeto) falha fechado: repertório estrutural é GEN-SCHEMA.
+  assert.throws(
+    () => parseStructuredBriefDraft(
+      { angle: "a", hook: "h", development: ["texto", { text: "t", action: "Destaque", factRef: "product:description", rationale: "para algo" }], script: "s", cta: "c" },
+      evidence,
+    ),
+    (error: unknown) => error instanceof ContractError && error.code === "GEN-SCHEMA",
+  );
+});
+
 test("composes validated provider outputs into the pipeline (4 foundational + batched briefs)", async () => {
   const calls: string[] = [];
   const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => { calls.push(task); if (task === "PRODUCT_UNDERSTANDING") return understanding; if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope; if (task === "STRATEGY_SYNTHESIS") return strategyPayload; if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] }; if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "demonstração", hook: "Veja", development: sbPair("Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"), script: "Mostre o Produto", cta: "Confira" }] }; if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas; if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input); return {}; } };
