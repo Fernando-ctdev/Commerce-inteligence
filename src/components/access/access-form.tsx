@@ -19,6 +19,8 @@ type AccessResponse = {
 };
 
 type AccessFormProps = {
+  /** Server-side (NODE_ENV): cadastro fechado em produção — sem toggle e sem POST de registro. */
+  registrationEnabled: boolean;
   sessionExpired: boolean;
 };
 
@@ -26,8 +28,8 @@ function isAccessResponse(value: unknown): value is AccessResponse {
   return typeof value === "object" && value !== null;
 }
 
-export function AccessForm({ sessionExpired }: AccessFormProps) {
-  const [mode, setMode] = useState<AccessMode>("register");
+export function AccessForm({ registrationEnabled, sessionExpired }: AccessFormProps) {
+  const [mode, setMode] = useState<AccessMode>(registrationEnabled ? "register" : "login");
   const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,26 +107,28 @@ export function AccessForm({ sessionExpired }: AccessFormProps) {
           </p>
         )}
 
-        <div className={styles.modeSwitch} aria-label="Escolha o tipo de acesso">
-          <button
-            aria-pressed={mode === "register"}
-            className={mode === "register" ? styles.modeActive : styles.modeButton}
-            disabled={pending}
-            onClick={() => changeMode("register")}
-            type="button"
-          >
-            Criar conta
-          </button>
-          <button
-            aria-pressed={mode === "login"}
-            className={mode === "login" ? styles.modeActive : styles.modeButton}
-            disabled={pending}
-            onClick={() => changeMode("login")}
-            type="button"
-          >
-            Entrar
-          </button>
-        </div>
+        {registrationEnabled && (
+          <div className={styles.modeSwitch} aria-label="Escolha o tipo de acesso">
+            <button
+              aria-pressed={mode === "register"}
+              className={mode === "register" ? styles.modeActive : styles.modeButton}
+              disabled={pending}
+              onClick={() => changeMode("register")}
+              type="button"
+            >
+              Criar conta
+            </button>
+            <button
+              aria-pressed={mode === "login"}
+              className={mode === "login" ? styles.modeActive : styles.modeButton}
+              disabled={pending}
+              onClick={() => changeMode("login")}
+              type="button"
+            >
+              Entrar
+            </button>
+          </div>
+        )}
 
         <form aria-busy={pending} className={styles.form} method="post" onSubmit={submit} noValidate>
           {error && (
