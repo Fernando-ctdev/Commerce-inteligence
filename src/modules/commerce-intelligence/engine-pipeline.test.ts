@@ -62,6 +62,11 @@ test("repairs only rejected briefs via per-item CONTENT_BRIEF_REPAIR/HIGH, prese
   assert.match(result.repairCauses[0].causes.join(" "), /claim objetivo/);
   const context = repairContexts[0];
   assert.ok(context);
+  // Design 2026-09-18: o repair recebe o diagnóstico redigido por bullet do PRÓPRIO item.
+  assert.ok(Array.isArray(context.developmentDiagnostics) && context.developmentDiagnostics.length === 2, "developmentDiagnostics do item presente");
+  const diag = (context.developmentDiagnostics as Array<Record<string, unknown>>)[0]!;
+  assert.deepEqual(Object.keys(diag).sort(), ["actionPresent", "connectorPresent", "factRefAllowed", "index", "rationaleGroundingMatched", "shotList", "textGroundingMatched", "unverifiedClaim"]);
+  assert.equal(diag.rationaleGroundingMatched, 0, "bullet 'Carga...' sem conector: nenhum termo de rationale após o texto");
   assert.deepEqual(context.repairChecklist, { developmentAction: true, removeUnsupportedClaim: true });
   assert.equal((context.opportunity as Record<string, unknown>).angle, "demonstração");
   assert.ok((context.issues as string[]).length > 0);

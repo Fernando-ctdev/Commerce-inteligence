@@ -1737,6 +1737,9 @@ export async function runFirstGeneration(
         // pelo validDevelopmentPoint (efêmero); NUNCA previousBrief (ancora a
         // paráfrase inválida).
         developmentRequirements: developmentRequirements(evidence),
+        // Design 2026-09-18 (Task 2 Step 6): diagnóstico redigido por bullet do
+        // PRÓPRIO item — índice/flags/contagens apenas, sem texto de draft.
+        developmentDiagnostics: developmentDiagnosticsFor(c.brief.contentId) ?? [],
         repairContrast: buildRepairContrast(
           evidence.facts.filter(
             (_fact, index) => evidence.refs[index] !== "product:name",
