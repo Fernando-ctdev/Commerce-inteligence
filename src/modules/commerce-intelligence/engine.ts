@@ -1054,12 +1054,13 @@ function diagnoseFailure(
     if (/script contém claim factual/.test(issue)) { labels.add("script_claim_missing"); checkCodes.add("script_claim_missing"); }
     if (/script contém metainstrução de cena|metacomentário/.test(issue)) labels.add("script_scene_metacomment");
     if (/orientar comunicação|lista de features|planos de gravação/.test(issue)) {
-      labels.add("feature_list");
-      checkCodes.add("feature_list");
+      // feature_list (label + checkCode) deriva SOMENTE de shotList=true real —
+      // nunca da regex do issue (que também cobre ação/razão ausentes).
+      let anyShotList = false;
       for (const point of brief.development) {
         const d = diagnoseDevelopmentPoint(point, evidence);
+        anyShotList = anyShotList || d.shotList;
         if (!d.actionPresent) checkCodes.add("action_stem_missing");
-        if (d.shotList) checkCodes.add("feature_list");
         if (!d.connectorPresent) checkCodes.add("connector_missing");
         if (d.connectorPresent && d.minGroundingMatched < d.minGroundingExpected) checkCodes.add("grounding_below_min");
         if (d.unverified) checkCodes.add("unverified_claim");
@@ -1069,6 +1070,12 @@ function diagnoseFailure(
           diagnostic.minGroundingMatched = Math.min(diagnostic.minGroundingMatched, d.minGroundingMatched);
         }
       }
+      labels.add(anyShotList ? "feature_list" : "gate_issue");
+      if (anyShotList) checkCodes.add("feature_list");
+    } else if (/termos do fato apontado por factRef/.test(issue)) {
+      // Ancoragem factRef (v4): checkCode próprio da cascata, sem payload.
+      labels.add("factref_grounding");
+      checkCodes.add("factref_grounding_below_min");
     } else {
       labels.add("gate_issue"); // issue sem mapeamento fixo: rótulo genérico, texto nunca copiado
     }
@@ -1495,6 +1502,16 @@ export async function runFirstGeneration(
     const bullets = bulletsByContentId.get(contentId);
     return bullets ? parseStructuredDevelopment(bullets, evidence).diagnostics : undefined;
   };
+  // Alvo do repair (ADR-020): índices dos bullets que falham qualquer critério
+  // allowlisted do diagnóstico (design 2026-09-19) — factTermsInRationale conta
+  // apenas quando factGroundingApplicable.
+  const failedBulletIndexesFor = (contentId: string): number[] =>
+    (developmentDiagnosticsFor(contentId) ?? [])
+      .filter((d) =>
+        !d.actionPresent || !d.connectorPresent || d.shotList || d.unverifiedClaim ||
+        d.textGroundingMatched < 2 || d.rationaleGroundingMatched < 2 ||
+        (d.factGroundingApplicable && d.factTermsInRationale < 2))
+      .map((d) => d.index);
   const generateBatch = async (
     entries: Array<{
       opportunity: ContentOpportunity;
@@ -1677,6 +1694,9 @@ export async function runFirstGeneration(
       skill.version,
       selectedPatterns,
       projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
+      // v4: ancoragem factRef revalida com os bullets do próprio item; após o
+      // part repair o mapa mantém o factRef ORIGINAL por índice.
+      bulletsByContentId,
     );
   let reports = validateCandidates();
   const maxRepairs = Number(process.env.GENERATION_MAX_REPAIRS ?? 2);
@@ -1740,6 +1760,8 @@ export async function runFirstGeneration(
         // Design 2026-09-18 (Task 2 Step 6): diagnóstico redigido por bullet do
         // PRÓPRIO item — índice/flags/contagens apenas, sem texto de draft.
         developmentDiagnostics: developmentDiagnosticsFor(c.brief.contentId) ?? [],
+        // Design 2026-09-19: o repair mira os índices falhos (instrução correspondente).
+        failedBulletIndexes: failedBulletIndexesFor(c.brief.contentId),
         repairContrast: buildRepairContrast(
           evidence.facts.filter(
             (_fact, index) => evidence.refs[index] !== "product:name",
@@ -1811,6 +1833,7 @@ export async function runFirstGeneration(
     skill.version,
     selectedPatterns,
     projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
+    bulletsByContentId,
   );
   const hardIdx = candidates.map((_, i) => i).filter((i) => candidateReports[i].decision === "PASS");
   const hardFailIdx = candidates.map((_, i) => i).filter((i) => candidateReports[i].decision !== "PASS");
@@ -1922,6 +1945,7 @@ export async function runFirstGeneration(
       const hardReports = validateBriefSet(
         hard.map(({ brief }) => brief), evidence, "tiktok-commerce", skill.version,
         selectedPatterns, projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
+        bulletsByContentId,
       );
       const scene = sceneSets[updatedIndex];
       const gatedScenes = gateSceneSet(
@@ -2088,6 +2112,7 @@ export async function runFirstGeneration(
     skill.version,
     selectedPatterns,
     projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
+    bulletsByContentId,
   );
   const rankOf = (k: number): number[] => {
     const report = deliveredReports[k];
@@ -2112,6 +2137,7 @@ export async function runFirstGeneration(
       skill.version,
       selectedPatterns,
       projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
+      bulletsByContentId,
     );
   }
   const failedCount = count - delivered.length;
@@ -2140,6 +2166,7 @@ export async function runFirstGeneration(
     ...hardFailIdx.map((i) => ({
       ...diagnoseFailure(candidates[i].brief, candidateReports[i], evidence, "HARD_GATE", i + 1, []),
       developmentDiagnostics: developmentDiagnosticsFor(candidates[i].brief.contentId),
+      failedBulletIndexes: failedBulletIndexesFor(candidates[i].brief.contentId),
     })),
     ...[...objectiveFailureIdx].map((i) => ({
       contentId: hard[i].brief.contentId,

@@ -188,7 +188,8 @@ test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlist
   ] };
   const strategy = { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
   const badBullet = { text: "Prova os 999 kg de carga para o", action: "Prova", factRef: "product:description", rationale: "para o" };
-  const goodBullet = { text: "Destaque o tecido respiravel para explicar o conforto no uso diario", action: "Destaque", factRef: "product:description", rationale: "para explicar o conforto no uso diario" };
+  // v4: text carrega ≥2 termos do fato após o conector (contrato text/rationale explícito).
+  const goodBullet = { text: "Destaque o tecido respiravel para explicar como o tecido respiravel ajuda no uso diario", action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel ajuda no uso diario" };
   const judgeBatchPass = (input?: { trustedContext?: unknown }) => {
     const items = recordOf(input?.trustedContext)?.items;
     const list = Array.isArray(items) ? items as Array<Record<string, unknown>> : [];
@@ -228,8 +229,15 @@ test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlist
   assert.ok(Array.isArray(devFailed.developmentDiagnostics) && devFailed.developmentDiagnostics.length === 2, "diagnóstico por bullet presente");
   assert.equal(devFailed.developmentDiagnostics![0]!.rationaleGroundingMatched, 0);
   assert.equal(devFailed.developmentDiagnostics![0]!.connectorPresent, true, "conector presente; a falha é grounding abaixo do mínimo");
-  assert.ok(devFailed.issues.includes("feature_list") && devFailed.issues.includes("unverified_claim"), "rótulos fixos da cascata presentes");
-  assert.ok(devFailed.issues.every((issue) => ["feature_list", "unverified_claim", "gate_issue"].includes(issue)), "issues apenas rótulos fixos");
+  assert.equal(devFailed.developmentDiagnostics![0]!.factGroundingApplicable, true, "fato com ≥2 termos de ancoragem: regra aplicável");
+  assert.deepEqual(devFailed.failedBulletIndexes, [0, 1], "repair mira os índices falhos");
+  const firstDiag = devFailed.developmentDiagnostics![0]!;
+  assert.ok(firstDiag.unverifiedClaimParts.includes("value_token"), "parte localizada value_token do claim '999 kg'");
+  assert.ok(firstDiag.unverifiedClaimParts.every((part) => ["value_token", "attribute", "commercial_value"].includes(part)), "partes allowlisted do unverified_claim");
+  assert.ok(devFailed.issues.includes("unverified_claim"), "rótulo fixo da cascata presente");
+  assert.ok(!devFailed.issues.includes("feature_list"), "feature_list deriva SOMENTE de shotList=true; fixture não tem plano de gravação");
+  assert.ok(devFailed.issues.includes("factref_grounding"), "rótulo fixo da ancoragem factRef presente");
+  assert.ok(devFailed.issues.every((issue) => ["unverified_claim", "factref_grounding", "gate_issue"].includes(issue)), "issues apenas rótulos fixos");
   const qualityFailed = byContent.get("j-diag-content-2")!;
   assert.ok(Array.isArray(qualityFailed.qualityDiagnostics) && qualityFailed.qualityDiagnostics.length > 0, "diagnóstico de qualidade allowlisted presente");
   assert.deepEqual(qualityFailed.qualityDiagnostics![0], { part: "hook", criterion: "hook_clarity", status: "REVIEW", reason: "unclear" });

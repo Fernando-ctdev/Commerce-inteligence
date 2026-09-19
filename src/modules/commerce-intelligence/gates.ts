@@ -579,9 +579,11 @@ export function developmentGroundingTerms(value: string): string[] {
 
 // ADR-021: diagnóstico determinístico por ponto — MESMOS predicados do gate,
 // expostos para a assinatura residual por item (sem payload bruto).
-export function diagnoseDevelopmentPoint(point: string, evidence: EvidenceSnapshot): {
+export function diagnoseDevelopmentPoint(point: string, evidence: EvidenceSnapshot, factTerms?: readonly string[]): {
   valid: boolean; shotList: boolean; actionPresent: boolean; connectorPresent: boolean;
-  minGroundingExpected: number; minGroundingMatched: number; unverified: boolean;
+  minGroundingExpected: number; minGroundingMatched: number;
+  factGroundingApplicable: boolean; factTermsInRationale: number; unverified: boolean;
+  unverifiedParts: UnverifiedClaimPart[];
 } {
   const normalized = attrStems(normalizeForVariety(point));
   const action = DEVELOPMENT_COMMUNICATION_ACTION.exec(normalized);
@@ -599,17 +601,27 @@ export function diagnoseDevelopmentPoint(point: string, evidence: EvidenceSnapsh
   const experienceContext = action && experienceRationale
     ? developmentGroundingTerms(normalized.slice(action[0].length, experienceRationale.index)).length > 0
     : false;
-  const unverified = unverifiedObjectiveClaims(point, evidence);
+  const unverifiedParts = unverifiedObjectiveClaimParts(point, evidence);
+  const unverified = unverifiedParts.length > 0;
   const actionPresent = Boolean(action) && !shotList;
   const connectorPresent = rationaleAt >= 0 || Boolean(experienceRationale);
   const minGroundingExpected = 2;
   const minGroundingMatched = Math.min(minGroundingExpected, rationaleTerms.size);
+  // Ancoragem factRef (design 2026-09-19): o trecho após o conector deve conter
+  // ≥2 termos do fato apontado. Aplicável SOMENTE com factRef resolvido em fato
+  // autorizado com ≥2 termos de ancoragem (factGroundingApplicable); caso
+  // contrário a regra é vacuamente satisfeita — checks textuais nunca reduzem.
+  const factGroundingApplicable = factTerms !== undefined && factTerms.length >= 2;
+  const factTermsInRationale = factGroundingApplicable
+    ? [...rationaleTerms].filter((term) => factTerms!.includes(term)).length
+    : 0;
   const valid =
     actionPresent &&
     connectorPresent &&
     (rationaleAt >= 0 ? rationaleTerms.size >= 2 : experienceContext) &&
+    (!factGroundingApplicable || factTermsInRationale >= 2) &&
     !unverified;
-  return { valid, shotList, actionPresent, connectorPresent, minGroundingExpected, minGroundingMatched, unverified };
+  return { valid, shotList, actionPresent, connectorPresent, minGroundingExpected, minGroundingMatched, factGroundingApplicable, factTermsInRationale, unverified, unverifiedParts };
 }
 
 export function validDevelopmentPoint(point: string, evidence: EvidenceSnapshot): boolean {
@@ -618,6 +630,10 @@ export function validDevelopmentPoint(point: string, evidence: EvidenceSnapshot)
 
 // ---- Contrato estruturado de development (design 2026-09-18) ----
 // Fonte única do contrato: MESMOS predicados do gate (stems, conectores, fold + stopwords).
+// Contrato text/rationale (2026-09-19): text é o ÚNICO campo persistido e contém a
+// ação de comunicação, um conector e ao menos dois termos do fato apontado por
+// factRef no trecho após o conector; rationale é APENAS espelho desse trecho
+// (conector + termos do fato), nunca conteúdo novo.
 // Erros ESTRUTURAIS (shape/factRef/action/rationale ausentes ou fora do repertório) → GEN-SCHEMA
 // (batch retry). Bullet com shape válido porém QUALIDADE inválida → texto + diagnóstico sanitizado
 // seguem para o fluxo existente (gate decide repair; nunca publicação antecipada).
@@ -630,8 +646,11 @@ export type DevelopmentBulletDiagnostic = {
   connectorPresent: boolean;
   textGroundingMatched: number;
   rationaleGroundingMatched: number;
+  factGroundingApplicable: boolean;
+  factTermsInRationale: number;
   shotList: boolean;
   unverifiedClaim: boolean;
+  unverifiedClaimParts: UnverifiedClaimPart[];
 };
 
 export function developmentRequirements(evidence: EvidenceSnapshot) {
@@ -689,7 +708,12 @@ export function parseStructuredDevelopment(
     if (!rationale || !DEVELOPMENT_RATIONALE.test(rationale))
       throw new ContractError("GEN-SCHEMA", "rationale sem conector do gate", "development");
     // Qualidade: diagnóstico sanitizado por bullet; texto é projetado e o GATE decide.
-    const point = diagnoseDevelopmentPoint(text, evidence);
+    // factTerms do PRÓPRIO factRef (fatos não-name já garantidos pelo check estrutural).
+    const point = diagnoseDevelopmentPoint(
+      text,
+      evidence,
+      developmentGroundingTerms(evidence.facts[evidence.refs.indexOf(factRef)] ?? ""),
+    );
     diagnostics.push({
       index,
       actionPresent: point.actionPresent,
@@ -697,8 +721,11 @@ export function parseStructuredDevelopment(
       connectorPresent: point.connectorPresent,
       textGroundingMatched: factTermsMatched(text, evidence),
       rationaleGroundingMatched: point.minGroundingMatched,
+      factGroundingApplicable: point.factGroundingApplicable,
+      factTermsInRationale: point.factTermsInRationale,
       shotList: point.shotList,
       unverifiedClaim: point.unverified,
+      unverifiedClaimParts: point.unverifiedParts,
     });
     texts.push(text);
   });
@@ -774,19 +801,29 @@ export function ctaTextFactualIssues(
 // Claims promocionais de valor/marca não cobertos pelo léxico de atributos:
 // assertion de valor comercial exige fato autorizado com o mesmo teor.
 const UNSUPPORTED_VALUE_CLAIMS = /\b(valoriza|agrega valor|da valor|vale a pena|marca reconhecida|qualidade premium|referencia de qualidade)\b/;
-function unverifiedObjectiveClaims(text: string, evidence: EvidenceSnapshot): boolean {
+// Partes localizadas de claim objetivo sem evidência — enums allowlisted,
+// nunca texto do claim/fato (design 2026-09-19).
+export type UnverifiedClaimPart = "value_token" | "attribute" | "commercial_value";
+export function unverifiedObjectiveClaimParts(text: string, evidence: EvidenceSnapshot): UnverifiedClaimPart[] {
   const normalizedClaimText = normalizeForVariety(text);
-  const unsupportedValueClaim = UNSUPPORTED_VALUE_CLAIMS.test(normalizedClaimText) &&
+  const parts: UnverifiedClaimPart[] = [];
+  if (UNSUPPORTED_VALUE_CLAIMS.test(normalizedClaimText) &&
     !evidence.facts.some((fact, factIndex) =>
       evidence.refs[factIndex] !== "product:name" && UNSUPPORTED_VALUE_CLAIMS.test(normalizeForVariety(fact)),
-    );
-  const unsupportedToken = techTokens(text).some(({ unit, value }) => !evidence.facts.some((fact, factIndex) =>
+    ))
+    parts.push("commercial_value");
+  if (techTokens(text).some(({ unit, value }) => !evidence.facts.some((fact, factIndex) =>
     evidence.refs[factIndex] !== "product:name" && techTokens(fact).some((authorized) => authorized.unit === unit && authorized.value === value),
-  ));
-  const unsupportedAttribute = detectAttributes(text).some((group) => !evidence.facts.some((fact, factIndex) =>
+  )))
+    parts.push("value_token");
+  if (detectAttributes(text).some((group) => !evidence.facts.some((fact, factIndex) =>
     evidence.refs[factIndex] !== "product:name" && ATTRIBUTE_LEXICON[group].some((stem) => attrStems(fact.toLowerCase()).includes(stem)),
-  ));
-  return unsupportedToken || unsupportedAttribute || unsupportedValueClaim;
+  )))
+    parts.push("attribute");
+  return parts;
+}
+function unverifiedObjectiveClaims(text: string, evidence: EvidenceSnapshot): boolean {
+  return unverifiedObjectiveClaimParts(text, evidence).length > 0;
 }
 
 // Produção incompatível com creator solo: antipadrões exigem equipamento declarado.
@@ -809,6 +846,7 @@ export function validateBriefSet(
   skillVersion: string = TIKTOK_COMMERCE_SKILL.version,
   selectedPatterns: SelectedBriefPatterns = [],
   creatorContext: CreatorRecordingContext = {},
+  structuredDevelopment?: ReadonlyMap<string, readonly DevelopmentBullet[]>,
 ): GateReport[] {
   const seenBriefs = new Set<string>();
   const seenHooks = new Set<string>();
@@ -905,6 +943,26 @@ export function validateBriefSet(
     if (developmentUnverified) issues.push("development contém claim sem evidência verificável");
     if (brief.development.some((point) => !validDevelopmentPoint(point, evidence)))
       issues.push("development deve orientar comunicação com ação e razão/fato, sem lista de features ou planos de gravação");
+    // v4 — ancoragem factRef (hard gate; judge permanece advisory): com os bullets
+    // estruturados do próprio item disponíveis (mesma ordem/cardinalidade dos
+    // textos), o trecho após o conector deve conter ≥2 termos do fato apontado
+    // por factRef. CONTENT_PART_REPAIR revalida com o factRef ORIGINAL por índice
+    // (o mapa não é atualizado pelo part repair). Cardinalidade divergente ou
+    // ausência do mapa → requisito não se aplica; checks textuais seguem intactos.
+    const structuredBullets = structuredDevelopment?.get(brief.contentId);
+    if (structuredBullets && structuredBullets.length === brief.development.length) {
+      const factRefDrift = brief.development.some((point, bulletIndex) => {
+        const factValue = evidence.facts[evidence.refs.indexOf(structuredBullets[bulletIndex]!.factRef)];
+        const check = diagnoseDevelopmentPoint(
+          point,
+          evidence,
+          typeof factValue === "string" ? developmentGroundingTerms(factValue) : undefined,
+        );
+        return check.factGroundingApplicable && check.factTermsInRationale < 2;
+      });
+      if (factRefDrift)
+        issues.push("development não repete termos do fato apontado por factRef no trecho após o conector");
+    }
     const developmentText = normalizeForVariety(brief.development.join(" "));
     const developmentTokens = techTokens(developmentText);
     const developmentAttributes = detectAttributes(developmentText);

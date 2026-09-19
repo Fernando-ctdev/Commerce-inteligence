@@ -143,6 +143,11 @@ test("parseStructuredDevelopment aceita bullet válido e projeta o texto canôni
   assert.equal(d.shotList, false);
   assert.equal(d.unverifiedClaim, false);
   assert.ok(d.rationaleGroundingMatched >= 2);
+  // v4: contagem real e aplicabilidade expostas (facto tem ≥2 termos, rationale
+  // do fixture não repete nenhum — exatamente o caso que o gate passa a reprovar).
+  assert.equal(d.factGroundingApplicable, true);
+  assert.equal(d.factTermsInRationale, 0);
+  assert.deepEqual(d.unverifiedClaimParts, []);
 });
 
 test("parseStructuredDevelopment: shape/factRef/action/rationale estruturalmente inválidos viram GEN-SCHEMA", () => {
@@ -171,7 +176,7 @@ test("parseStructuredDevelopment: diagnóstico contém apenas índice/flags/cont
   const parsed = parseStructuredDevelopment([validBullet], evidenceStruct);
   const serialized = JSON.stringify(parsed.diagnostics);
   assert.ok(!serialized.includes("tartaruga"), "texto do bullet nunca entra no diagnóstico");
-  assert.deepEqual(Object.keys(parsed.diagnostics[0]!).sort(), ["actionPresent", "connectorPresent", "factRefAllowed", "index", "rationaleGroundingMatched", "shotList", "textGroundingMatched", "unverifiedClaim"]);
+  assert.deepEqual(Object.keys(parsed.diagnostics[0]!).sort(), ["actionPresent", "connectorPresent", "factGroundingApplicable", "factRefAllowed", "factTermsInRationale", "index", "rationaleGroundingMatched", "shotList", "textGroundingMatched", "unverifiedClaim", "unverifiedClaimParts"]);
 });
 
 test("developmentRequirements é exportado do gate com requisitos derivados da evidência", () => {
@@ -202,4 +207,30 @@ test("regressão feature_list/connector: bullet sem ação+conector é diagnosti
   assert.equal(validDevelopmentPoint(fixed.text, evidence), true);
   const fixedReport = validateBriefSet([{ contentId: "c2", briefVersionId: "c2-v", version: 1 as const, angle: "a", hook: "h", development: [fixedParsed.texts[0]!, fixedParsed.texts[0]!], script: "Tecido respiravel", cta: "c" }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined)[0];
   assert.equal(fixedReport.decision, "PASS");
+});
+
+test("gate v4: trecho após o conector deve conter 2 termos do fato apontado por factRef (hard gate; judge advisory)", () => {
+  const evidence: EvidenceSnapshot = { facts: ["Tecido respiravel"], refs: ["product:description"] };
+  // Rationale sem termos do fato: passa nos checks textuais; sem o mapa estruturado
+  // o requisito factRef não se aplica (comportamento textual existente preservado).
+  const drifting = { text: "Destaque o tecido respiravel para explicar o conforto no uso diario", action: "Destaque", factRef: "product:description", rationale: "para explicar o conforto no uso diario" };
+  const brief = { contentId: "c-v4", briefVersionId: "c-v4-v", version: 1 as const, angle: "a", hook: "Veja o tecido", development: [drifting.text, drifting.text], script: "Tecido respiravel", cta: "c" };
+  const withoutMap = validateBriefSet([brief], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined)[0]!;
+  assert.equal(withoutMap.decision, "PASS", "sem bullets estruturados o requisito factRef não se aplica");
+  const withMap = validateBriefSet([brief], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined, new Map([[brief.contentId, [drifting, drifting]]]))[0]!;
+  assert.equal(withMap.decision, "REPAIR");
+  assert.ok(withMap.issues.some((issue) => issue.includes("factRef")), "issue própria da ancoragem factRef");
+  // Convergência: rationale/texto espelha ≥2 termos do fato → PASS.
+  const grounded = { ...drifting, text: "Destaque o tecido respiravel para explicar como o tecido respiravel ajuda no uso", rationale: "para explicar como o tecido respiravel ajuda no uso" };
+  const groundedReport = validateBriefSet([{ ...brief, development: [grounded.text, grounded.text] }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined, new Map([[brief.contentId, [grounded, grounded]]]))[0]!;
+  assert.equal(groundedReport.decision, "PASS");
+  // Fato com <2 termos de ancoragem: regra vacuamente satisfeita (nunca falso positivo).
+  const currencyBullet = { text: "Destaque o preço para explicar a oferta", action: "Destaque", factRef: "fact:priceCurrency", rationale: "para explicar a oferta" };
+  const currencyReport = validateBriefSet(
+    [{ ...brief, contentId: "c-cur", briefVersionId: "c-cur-v", development: [currencyBullet.text, currencyBullet.text], script: "Fale sobre o preço" }],
+    { facts: ["R$"], refs: ["fact:priceCurrency"] },
+    "tiktok-commerce", "tiktok-commerce@1.2", [], undefined,
+    new Map([["c-cur", [currencyBullet, currencyBullet]]]),
+  )[0]!;
+  assert.ok(!currencyReport.issues.some((issue) => issue.includes("factRef")), "fato sem 2 termos: requisito não aplicável");
 });
