@@ -20,7 +20,7 @@ uma confirmação implícita nem cria Product antes da ação explícita de salv
 ## Escopo
 
 - Consultar somente `GET https://api.captapi.com/v1/tiktok-shop/product-details`.
-- Enviar `url` com a URL pública validada e `region=BR`.
+- Enviar `url` com a URL final de produto validada — short links `vt.tiktok.com`/`vm.tiktok.com` são resolvidos antes — e `region=BR`.
 - Enviar `Authorization: Bearer <CAPTAPI_API_KEY>`, com o valor vindo somente
   do ambiente do servidor.
 - Normalizar a resposta em um `ProductCandidate` factual, não confiável e
@@ -104,7 +104,19 @@ atual de imagens/capa.
 ## CaptAPI e normalização
 
 - O servidor valida a URL antes de qualquer chamada: HTTPS, host/path público
-  permitido do TikTok Shop, sem credenciais embutidas e sem destino privado.
+  permitido do TikTok Shop — incluindo short links mobile
+  `https://vt.tiktok.com/<token>` e `https://vm.tiktok.com/<token>` com um
+  único segmento não vazio —, sem credenciais embutidas e sem destino privado.
+- Short links são resolvidos server-side antes da CaptAPI: `fetch` com
+  `redirect: "manual"`, cada `Location` revalidado contra HTTPS, hosts TikTok
+  permitidos (`vt.tiktok.com`, `vm.tiktok.com`, `shop.tiktok.com`,
+  `www.tiktok.com`) e ausência de credenciais, com no máximo 5 hops, detecção
+  de loop e nenhum follow automático de destino arbitrário. A consulta só
+  prossegue se a URL final for uma rota completa de produto válida, que é a
+  única forma enviada à CaptAPI e usada como `sourceUrl` do Candidate. URLs
+  completas `shop.tiktok.com`/`www.tiktok.com` não passam por resolução.
+  Falhas de resolução (fora do TikTok, loop, hop, timeout ou final
+  não-produto) caem no fallback manual com erro sanitizado.
 - A requisição externa ocorre fora da transação curta de persistência.
 - `CAPTAPI_API_KEY` é lida exclusivamente no servidor, nunca no browser,
   código de teste como segredo real, resposta ou log.
@@ -188,8 +200,9 @@ cadastro.
   autoridade.
 - Importação e confirmação exigem sessão; origem/CSRF segue o contrato manual.
 - Ids e chaves de idempotência são escopados ao Tenant.
-- O servidor faz allowlist de URL/host, limita timeout e tamanho da resposta,
-  não segue destinos inseguros e não aceita credenciais na URL.
+- O servidor faz allowlist de URL/host, limita o timeout total (resolução de
+  short link + CaptAPI) a 60s e o tamanho da resposta, não segue destinos
+  fora do allowlist TikTok e não aceita credenciais na URL.
 - CaptAPI é o único egress desta entrada. Não há browser, portal, MCP, cookies
   ou login TikTok em runtime.
 - Conteúdo do provider é dado não confiável: nunca instrução, regra, autorização
@@ -213,6 +226,11 @@ cadastro.
 Testes determinísticos, sem créditos reais e sem segredos:
 
 - URL válida, região BR, endpoint CaptAPI e header de Authorization mockado;
+- short link `vt`/`vm.tiktok.com` resolvido server-side com cadeia multi-hop e
+  `Location` relativo, enviando somente a URL final à CaptAPI;
+- redirect para fora do TikTok, loop, excesso de hops e término sem produto
+  rejeitados sem seguir destino e sem payload bruto;
+- URL completa de produto sem nenhuma chamada de resolução;
 - payload completo e payload parcial com `price: null` retornando Candidate;
 - campos ausentes preservados como ausentes, sem valores inventados;
 - `salesCount`, `ratingValue` e `reviewCount` válidos somente como leitura;

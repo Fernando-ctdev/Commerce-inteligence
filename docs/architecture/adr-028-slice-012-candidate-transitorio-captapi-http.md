@@ -36,8 +36,28 @@ consulta e a confirmação usam idempotência distinta, ambas escopadas ao Tenan
 segredos, Authorization, cookies, tokens e payload bruto não aparecem em logs,
 respostas ou testes.
 
+A entrada aceita também short links mobile `https://vt.tiktok.com/<token>` e
+`https://vm.tiktok.com/<token>` (HTTPS, sem credenciais, um único segmento não
+vazio). Esses links são resolvidos server-side antes da CaptAPI com `fetch` em
+modo `redirect: "manual"`: cada `Location` é revalidado contra HTTPS, os hosts
+TikTok permitidos (`vt.tiktok.com`, `vm.tiktok.com`, `shop.tiktok.com`,
+`www.tiktok.com`) e a ausência de credenciais, com no máximo 5 hops, detecção
+de loop e nenhum follow automático de destino arbitrário. Somente a URL final,
+se for uma rota completa de produto aceita pelo validador, é enviada à CaptAPI
+e usada como `sourceUrl`; URLs completas de produto não passam por resolução.
+O timeout total da consulta (resolução + CaptAPI) é de 60s, pois a captura
+autenticada real da CaptAPI levou ~46s e o limite anterior de 8s derrubava
+consultas válidas; o aborto segue `AbortController` com erro sanitizado
+(`IMPORT-TIMEOUT`) e falhas de resolução caem no fallback manual com erro
+sanitizado, sem expor a cadeia de redirects.
+
 ## Consequências
 
+- O cliente (browser) não faz resolução de redirect nem fetch ao TikTok: a
+  resolução do short link é server-side, feita pelo backend via `fetch` com
+  `redirect: "manual"` restrito ao allowlist TikTok antes da CaptAPI, que
+  recebe somente URLs finais de produto — o egress ao TikTok fica limitado a
+  essa resolução fechada e o browser continua sem falar com TikTok.
 - O fluxo URL-first pode ser revisado e completado sem uma etapa paralela.
 - A confirmação humana continua sendo a fronteira de persistência e mantém o
   fallback manual já existente.

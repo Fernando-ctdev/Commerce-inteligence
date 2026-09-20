@@ -12,10 +12,21 @@
 - [x] Fallback manual preservado para URL inválida, configuração ausente,
   rede/timeout, 4xx/5xx, JSON/shape inválidos e dados incompletos, sem criar
   Product inválido.
-- [x] Allowlist de URLs restrita às rotas oficiais de produto; resposta CaptAPI
-  limitada incrementalmente a 1 MB e abortada ao exceder esse limite.
-- [x] Testes determinísticos com `fetch` mockado: 14 passaram, 0 falharam e 31
-  foram pulados por `DATABASE_URL` inacessível; nenhum crédito real consumido.
-- [ ] Typecheck: não concluído neste merge por dependências do ambiente.
+- [x] Allowlist de URLs restrita às rotas oficiais de produto e aos short
+  links mobile `https://vt.tiktok.com/<token>` e `https://vm.tiktok.com/<token>`
+  (HTTPS, sem credenciais, um único segmento); resposta CaptAPI limitada
+  incrementalmente a 1 MB e abortada ao exceder esse limite.
+- [x] Short links resolvidos server-side antes da CaptAPI com `redirect:
+  "manual"`: cada `Location` revalidado contra HTTPS, allowlist TikTok
+  (`vt`/`vm`/`shop`/`www.tiktok.com`) e ausência de credenciais, máximo de 5
+  hops, detecção de loop, sem follow de destino arbitrário; somente a URL
+  final de produto válida é enviada à CaptAPI e vira `sourceUrl`. URLs
+  completas seguem sem resolução. Nenhum payload bruto persistido.
+- [x] Timeout total (resolução + CaptAPI) elevado de 8s para 60s: a captura
+  autenticada real levou ~46s e estourava o limite anterior; `AbortController`
+  e erro sanitizado (`IMPORT-TIMEOUT`) preservados.
+- [x] Testes determinísticos com `fetch` mockado (focused captapi + service):
+  53 passaram, 0 falharam e 0 pulados; nenhum crédito real consumido.
+- [x] Typecheck: `tsc --noEmit` concluído sem erros neste ambiente.
 - [ ] QA desktop/mobile: não executado neste merge.
 - [ ] Validação real depende de `CAPTAPI_API_KEY` configurada no ambiente.

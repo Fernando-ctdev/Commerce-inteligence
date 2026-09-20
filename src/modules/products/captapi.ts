@@ -1,6 +1,11 @@
 const CAPTAPI_URL = "https://api.captapi.com/v1/tiktok-shop/product-details";
-const ALLOWED_HOSTS = new Set(["shop.tiktok.com", "www.tiktok.com"]);
+const ALLOWED_HOSTS: Record<string, true> = { "vt.tiktok.com": true, "vm.tiktok.com": true, "shop.tiktok.com": true, "www.tiktok.com": true };
+const SHORT_HOSTS: Record<string, true> = { "vt.tiktok.com": true, "vm.tiktok.com": true };
+const REDIRECT_STATUSES: Record<number, true> = { 301: true, 302: true, 303: true, 307: true, 308: true };
+const MAX_REDIRECTS = 5;
+const CAPTAPI_TIMEOUT_MS = 60_000;
 const MAX_RESPONSE_BYTES = 1_000_000;
+const UNRESOLVED_SHORT_LINK = "Não foi possível resolver o short link do TikTok; preencha os dados manualmente.";
 
 export type CandidateGap =
   | "name"
@@ -41,6 +46,21 @@ export class CaptApiImportError extends Error {
   }
 }
 
+function isProductPath(host: string, pathSegments: string[]): boolean {
+  const numericId = /^\d+$/.test(pathSegments[pathSegments.length - 1] ?? "");
+  const validViewPath = host === "shop.tiktok.com" &&
+    pathSegments.length === 3 &&
+    pathSegments[0] === "view" &&
+    pathSegments[1] === "product" &&
+    numericId;
+  const validLocalePdpPath = pathSegments.length === 4 &&
+    /^[a-z]{2}$/i.test(pathSegments[0] ?? "") &&
+    pathSegments[1]?.toLowerCase() === "pdp" &&
+    Boolean(pathSegments[2]) &&
+    numericId;
+  return validViewPath || validLocalePdpPath;
+}
+
 export function validateTikTokShopUrl(value: unknown): URL {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new CaptApiImportError("IMPORT-URL-INVALID", "Cole uma URL pública do TikTok Shop válida.");
@@ -53,22 +73,48 @@ export function validateTikTokShopUrl(value: unknown): URL {
   }
   const host = url.hostname.toLowerCase();
   const pathSegments = url.pathname.split("/").filter(Boolean);
-  const numericId = /^\d+$/.test(pathSegments[pathSegments.length - 1] ?? "");
-  const validViewPath = host === "shop.tiktok.com" &&
-    pathSegments.length === 3 &&
-    pathSegments[0] === "view" &&
-    pathSegments[1] === "product" &&
-    numericId;
-  const validLocalePdpPath = pathSegments.length === 4 &&
-    /^[a-z]{2}$/i.test(pathSegments[0] ?? "") &&
-    pathSegments[1]?.toLowerCase() === "pdp" &&
-    Boolean(pathSegments[2]) &&
-    numericId;
-  const validProductPath = validViewPath || validLocalePdpPath;
-  if (url.protocol !== "https:" || !ALLOWED_HOSTS.has(host) || url.username || url.password || !validProductPath) {
+  const validShortPath = SHORT_HOSTS[host] === true && pathSegments.length === 1;
+  if (url.protocol !== "https:" || ALLOWED_HOSTS[host] !== true || url.username || url.password || (!validShortPath && !isProductPath(host, pathSegments))) {
     throw new CaptApiImportError("IMPORT-URL-INVALID", "Use uma URL https pública do TikTok Shop.");
   }
   return url;
+}
+
+function validateResolvedProductUrl(url: URL): URL {
+  const host = url.hostname.toLowerCase();
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+  if (url.protocol !== "https:" || ALLOWED_HOSTS[host] !== true || url.username || url.password || !isProductPath(host, pathSegments)) {
+    throw new CaptApiImportError("IMPORT-URL-INVALID", UNRESOLVED_SHORT_LINK);
+  }
+  return url;
+}
+
+async function resolveShortLink(url: URL, fetchImpl: typeof fetch, signal: AbortSignal): Promise<URL> {
+  if (SHORT_HOSTS[url.hostname.toLowerCase()] !== true) return url;
+  const visited = new Set([url.href]);
+  let current = url;
+  for (let hops = 0; ; hops++) {
+    if (hops > MAX_REDIRECTS) {
+      throw new CaptApiImportError("IMPORT-URL-INVALID", UNRESOLVED_SHORT_LINK);
+    }
+    const response = await fetchImpl(current, { redirect: "manual", signal });
+    void response.body?.cancel();
+    if (REDIRECT_STATUSES[response.status] !== true) return current;
+    let next: URL | null = null;
+    const location = response.headers.get("location");
+    if (location) {
+      try {
+        next = new URL(location, current);
+      } catch {
+        // tratado abaixo como Location inválido
+      }
+    }
+    if (!next || next.protocol !== "https:" || ALLOWED_HOSTS[next.hostname.toLowerCase()] !== true || next.username || next.password || visited.has(next.href)) {
+      throw new CaptApiImportError("IMPORT-URL-INVALID", UNRESOLVED_SHORT_LINK);
+    }
+    visited.add(next.href);
+    current = next;
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -202,15 +248,16 @@ export async function fetchCaptApiProduct(
   submittedUrl: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<ProductCandidate> {
-  const url = validateTikTokShopUrl(submittedUrl);
+  const requested = validateTikTokShopUrl(submittedUrl);
   const apiKey = process.env.CAPTAPI_API_KEY?.trim();
   if (!apiKey) throw new CaptApiImportError("IMPORT-CONFIG-MISSING", "A importação automática está indisponível; preencha os dados manualmente.");
-  const endpoint = new URL(CAPTAPI_URL);
-  endpoint.searchParams.set("url", url.toString());
-  endpoint.searchParams.set("region", "BR");
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8_000);
+  const timeout = setTimeout(() => controller.abort(), CAPTAPI_TIMEOUT_MS);
   try {
+    const url = validateResolvedProductUrl(await resolveShortLink(requested, fetchImpl, controller.signal));
+    const endpoint = new URL(CAPTAPI_URL);
+    endpoint.searchParams.set("url", url.toString());
+    endpoint.searchParams.set("region", "BR");
     const response = await fetchImpl(endpoint, {
       method: "GET",
       headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
