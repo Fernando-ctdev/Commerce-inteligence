@@ -1,12 +1,31 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { EvidenceSnapshot } from "./contract";
-import { validateBriefSet, parseStructuredDevelopment, developmentRequirements, validDevelopmentPoint, isActionableCta } from "./gates";
+import { validateBriefSet, parseStructuredDevelopment, diagnoseDevelopmentPoint, developmentRequirements, validDevelopmentPoint, isActionableCta } from "./gates";
 import { ContractError } from "./contract";
 
 test("structured development derives action and rationale from provider text", () => {
+  const text = "Destaque o tecido respiravel para explicar o conforto no uso";
+  const evidence = { facts: ["Tecido respiravel"], refs: ["fact:features"] };
+  const diagnosis = diagnoseDevelopmentPoint(text, evidence, undefined, "Confira o produto na página.");
+  assert.equal(diagnosis.action, "Destaque");
+  assert.equal(diagnosis.rationale, "para explicar o conforto no uso");
+  assert.equal(diagnosis.grounded, true);
+  assert.equal(diagnosis.connectorValid, true);
+  assert.equal(diagnosis.ctaValid, true);
+  assert.deepEqual(diagnosis.issues, []);
   const parsed = parseStructuredDevelopment([
-    { text: "Destaque o tecido respiravel para explicar o conforto no uso", factRefs: ["fact:features"], cta: "Confira o produto na página." },
+    { text, factRefs: ["fact:features"], cta: "Confira o produto na página." },
+  ], evidence);
+  assert.equal(parsed.bullets[0]!.action, "Destaque");
+  assert.equal(parsed.bullets[0]!.rationale, "para explicar o conforto no uso");
+  assert.equal(parsed.diagnostics[0]!.grounded, true);
+});
+
+test("structured development ignores provider action/rationale and derives both from text", () => {
+  const text = "Destaque o tecido respiravel para explicar o conforto no uso";
+  const parsed = parseStructuredDevelopment([
+    { text, action: "Ação inventada", rationale: "rationale inventada", factRefs: ["fact:features"], cta: "Confira o produto na página." },
   ], { facts: ["Tecido respiravel"], refs: ["fact:features"] });
   assert.equal(parsed.bullets[0]!.action, "Destaque");
   assert.equal(parsed.bullets[0]!.rationale, "para explicar o conforto no uso");
@@ -195,7 +214,7 @@ test("parseStructuredDevelopment: diagnóstico contém apenas índice/flags/cont
   const parsed = parseStructuredDevelopment([validBullet], evidenceStruct);
   const serialized = JSON.stringify(parsed.diagnostics);
   assert.ok(!serialized.includes("tartaruga"), "texto do bullet nunca entra no diagnóstico");
-  assert.deepEqual(Object.keys(parsed.diagnostics[0]!).sort(), ["actionPresent", "connectorPresent", "ctaValid", "factGroundingApplicable", "factRefAllowed", "factTermsInRationale", "index", "rationaleGroundingMatched", "shotList", "textGroundingMatched", "unverifiedClaim", "unverifiedClaimParts"]);
+  assert.deepEqual(Object.keys(parsed.diagnostics[0]!).sort(), ["actionPresent", "connectorPresent", "connectorValid", "ctaValid", "factGroundingApplicable", "factRefAllowed", "factTermsInRationale", "grounded", "index", "issues", "rationaleGroundingMatched", "shotList", "textGroundingMatched", "unverifiedClaim", "unverifiedClaimParts"]);
 });
 
 test("developmentRequirements é exportado do gate com requisitos derivados da evidência", () => {
@@ -211,7 +230,9 @@ test("developmentRequirements é exportado do gate com requisitos derivados da e
 test("regressão feature_list/connector: bullet sem ação+conector é diagnosticado, gate reprova e corrigido converge", () => {
   const evidence: EvidenceSnapshot = { facts: ["Tecido respiravel"], refs: ["product:description"] };
   const featureList = { text: "Camisa leve, tecido respiravel, bolso frontal", factRefs: ["product:description"], cta: "Confira o produto na página." };
-  assert.throws(() => parseStructuredDevelopment([featureList], evidence), /action/);
+  const featureParsed = parseStructuredDevelopment([featureList], evidence);
+  assert.equal(featureParsed.diagnostics[0]!.actionPresent, false);
+  assert.equal(featureParsed.diagnostics[0]!.connectorValid, false);
   // texto projetado segue para o gate, que reprova (fail-closed preservado)
   const report = validateBriefSet([{ contentId: "c1", briefVersionId: "c1-v", version: 1 as const, angle: "a", hook: "h", development: [featureList.text, featureList.text], script: "Fale sobre o produto", cta: "c" }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined)[0];
   assert.ok(["REPAIR", "REJECT"].includes(report.decision), `gate reprova fail-closed: ${report.decision} ${JSON.stringify(report.issues)}`);
@@ -295,12 +316,10 @@ test("rationale sem conector é espelhado do trecho de text após o conector; se
   );
   assert.equal(parsed.bullets[0]!.rationale, "para explicar como o tecido respiravel ajuda no uso", "rationale vira o trecho de text após o conector");
   assert.deepEqual(parsed.diagnostics.map((d) => d.factTermsInRationale), [2]);
-  // Sem conector em AMBOS → violação estrutural (fail-closed mantido).
-  assert.throws(
-    () => parseStructuredDevelopment(
-      [{ text: "Destaque o tecido respiravel no uso diario", action: "Destaque", factRefs: ["product:description"], rationale: "explicar o conforto", cta: "Confira o produto." }],
-      evidence,
-    ),
-    (error: unknown) => error instanceof ContractError && error.code === "GEN-SCHEMA",
+  // Sem conector em ambos, o texto é preservado e o diagnóstico reprova.
+  const missingConnector = parseStructuredDevelopment(
+    [{ text: "Destaque o tecido respiravel no uso diario", action: "Destaque", factRefs: ["product:description"], rationale: "explicar o conforto", cta: "Confira o produto." }],
+    evidence,
   );
+  assert.equal(missingConnector.diagnostics[0]!.connectorValid, false);
 });

@@ -604,12 +604,18 @@ export function developmentGroundingTerms(value: string): string[] {
 
 // ADR-021: diagnóstico determinístico por ponto — MESMOS predicados do gate,
 // expostos para a assinatura residual por item (sem payload bruto).
-export function diagnoseDevelopmentPoint(point: string, evidence: EvidenceSnapshot, factTermsPerRef?: ReadonlyArray<readonly string[]>): {
+export function diagnoseDevelopmentPoint(point: string, evidence: EvidenceSnapshot, factTermsPerRef?: ReadonlyArray<readonly string[]>, cta?: string): {
   valid: boolean; shotList: boolean; actionPresent: boolean; connectorPresent: boolean;
   minGroundingExpected: number; minGroundingMatched: number;
   factGroundingApplicable: boolean; factTermsInRationale: number; unverified: boolean;
-  unverifiedParts: UnverifiedClaimPart[];
+  unverifiedParts: UnverifiedClaimPart[]; action: string; rationale: string;
+  grounded: boolean; connectorValid: boolean; ctaValid: boolean; issues: string[];
+  
 } {
+  const rawRationaleAt = point.search(DEVELOPMENT_RATIONALE);
+  const rawAction = (rawRationaleAt >= 0 ? point.slice(0, rawRationaleAt) : point)
+    .match(new RegExp(`\\b(${DEVELOPMENT_ACTION_STEMS.join("|")})\\w*`, "i"))?.[0] ?? "";
+  const rawRationale = rawRationaleAt >= 0 ? point.slice(rawRationaleAt) : "";
   const normalized = attrStems(normalizeForVariety(point));
   const action = DEVELOPMENT_COMMUNICATION_ACTION.exec(normalized);
   const shotList = DEVELOPMENT_SHOT_LIST.test(normalized);
@@ -647,21 +653,73 @@ export function diagnoseDevelopmentPoint(point: string, evidence: EvidenceSnapsh
     (rationaleAt >= 0 ? rationaleTerms.size >= 2 : experienceContext) &&
     (!factGroundingApplicable || factTermsInRationale >= 2) &&
     !unverified;
-  return { valid, shotList, actionPresent, connectorPresent, minGroundingExpected, minGroundingMatched, factGroundingApplicable, factTermsInRationale, unverified, unverifiedParts };
+  const grounded = rationaleAt >= 0 ? minGroundingMatched >= minGroundingExpected : experienceContext;
+  const connectorValid = connectorPresent && grounded;
+  const ctaValid = cta === undefined || (isActionableCta(cta) && ctaTextFactualIssues(cta, evidence).decision === "deliverable");
+  const issues = [
+    ...(!actionPresent ? ["action"] : []),
+    ...(!connectorPresent ? ["connector"] : []),
+    ...(!grounded ? ["grounding"] : []),
+    ...(!factGroundingApplicable || factTermsInRationale >= 2 ? [] : ["factGrounding"]),
+    ...(shotList ? ["shotList"] : []),
+    ...(unverified ? ["unverified"] : []),
+    ...(!ctaValid ? ["cta"] : []),
+  ];
+  return { valid, shotList, actionPresent, connectorPresent, minGroundingExpected, minGroundingMatched, factGroundingApplicable, factTermsInRationale, unverified, unverifiedParts, action: rawAction, rationale: rawRationale, grounded, connectorValid, ctaValid, issues };
 }
 
 export function validDevelopmentPoint(point: string, evidence: EvidenceSnapshot): boolean {
   return diagnoseDevelopmentPoint(point, evidence).valid;
 }
 
+export function developmentDiagnosticNeedsRepair(diagnostic: DevelopmentBulletDiagnostic): boolean {
+  return diagnostic.issues.length > 0 || !diagnostic.ctaValid;
+}
+
+export function diagnoseStructuredDevelopmentBullet(
+  bullet: Pick<DevelopmentBullet, "text" | "factRefs" | "cta">,
+  index: number,
+  evidence: EvidenceSnapshot,
+): { point: ReturnType<typeof diagnoseDevelopmentPoint>; diagnostic: DevelopmentBulletDiagnostic } {
+  const perRef = bullet.factRefs.map((ref) =>
+    developmentGroundingTerms(evidence.facts[evidence.refs.indexOf(ref)] ?? ""),
+  );
+  const point = diagnoseDevelopmentPoint(bullet.text, evidence, perRef.length ? perRef : undefined, bullet.cta);
+  const ctaValid = isActionableCta(bullet.cta) && ctaTextFactualIssues(bullet.cta, evidence).decision === "deliverable";
+  return {
+    point,
+    diagnostic: {
+      index,
+      actionPresent: point.actionPresent,
+      factRefAllowed: bullet.factRefs.every((ref) => evidence.refs.includes(ref) && ref !== "product:name"),
+      connectorPresent: point.connectorPresent,
+      textGroundingMatched: factTermsMatched(bullet.text, evidence),
+      rationaleGroundingMatched: point.minGroundingMatched,
+      factGroundingApplicable: point.factGroundingApplicable,
+      factTermsInRationale: point.factTermsInRationale,
+      ctaValid,
+      shotList: point.shotList,
+      unverifiedClaim: point.unverified,
+      unverifiedClaimParts: point.unverifiedParts,
+      grounded: point.grounded,
+      connectorValid: point.connectorValid,
+      issues: [
+        ...point.issues,
+        ...(factTermsMatched(bullet.text, evidence) < 2 ? ["textGrounding"] : []),
+        ...(bullet.factRefs.every((ref) => evidence.refs.includes(ref) && ref !== "product:name") ? [] : ["factRef"]),
+      ],
+    },
+  };
+}
+
 // ---- Contrato estruturado de development (cutover v2 — Blueprint) ----
 // Tipos canônicos: contract.ts (DevelopmentBullet/DevelopmentBulletDiagnostic).
-// Entrada/persistência de jobs novos são SEMPRE bullets {text, action, rationale,
-// factRefs[], cta}; development: string[] é apenas projeção derivada. Primeira
+// Entrada/persistência de jobs novos são SEMPRE bullets {text, factRefs[], cta};
+// action/rationale são projeções derivadas. development: string[] é apenas projeção derivada. Primeira
 // pessoa e persuasão são permitidas (técnica de creator copy, inclusive
 // experienciais) — o limite é factualidade objetiva/absurdo material; NÃO existe
-// gate ético/testemunho. Erros ESTRUTURAIS (shape/factRefs/action/rationale/cta
-// ausentes ou fora do repertório) → GEN-SCHEMA (batch retry). Bullet com shape
+// gate ético/testemunho. Erros ESTRUTURAIS (shape/factRefs/cta ausentes ou fora
+// do repertório) → GEN-SCHEMA (batch retry). Bullet com shape
 // válido porém QUALIDADE inválida → diagnóstico sanitizado por bullet (TODOS os
 // bullets são diagnosticados — sem curto-circuito) e o GATE decide repair.
 export function parseStructuredDevelopment(
@@ -678,9 +736,6 @@ export function parseStructuredDevelopment(
       throw new ContractError("GEN-SCHEMA", "bullet estruturado inválido", "development");
     const bullet = item as Record<string, unknown>;
     const text = typeof bullet.text === "string" ? bullet.text.trim() : "";
-    const rationaleAt = text.search(DEVELOPMENT_RATIONALE);
-    const action = (rationaleAt >= 0 ? text.slice(0, rationaleAt) : text).match(new RegExp(`\\b(${DEVELOPMENT_ACTION_STEMS.join("|")})\\w*`, "i"))?.[0] ?? "";
-    const rationale = rationaleAt >= 0 ? text.slice(rationaleAt) : "";
     // Contrato "rationale apenas espelha text": sem conector no campo, o espelho
     // determinístico é o PRÓPRIO trecho de text após o conector (nada inventado).
     // Sem conector em AMBOS → violação estrutural real (GEN-SCHEMA abaixo).
@@ -692,36 +747,15 @@ export function parseStructuredDevelopment(
     if (!text) throw new ContractError("GEN-SCHEMA", "bullet sem text", "development");
     if (!factRefs.length || factRefs.some((ref) => ref === "product:name" || !evidence.refs.includes(ref)))
       throw new ContractError("GEN-SCHEMA", `factRefs fora do snapshot autorizado (${factRefs.join(",") || "ausentes"})`, "development");
-    if (!action || !DEVELOPMENT_ACTION_STEMS.some((stem) => action.toLowerCase().startsWith(stem)))
-      throw new ContractError("GEN-SCHEMA", "action fora do repertório do gate", "development");
-    if (!rationale || !DEVELOPMENT_RATIONALE.test(rationale))
-      throw new ContractError("GEN-SCHEMA", "rationale sem conector do gate", "development");
     if (!cta) throw new ContractError("GEN-SCHEMA", "bullet sem cta", "development");
     // Qualidade: diagnóstico sanitizado por bullet — TODOS os bullets são
     // diagnosticados (sem curto-circuito); texto é projetado e o GATE decide.
     // Ancoragem factRefs: cada fato citado aplicável exige ≥2 termos próprios no
     // trecho após o conector; contagem do bullet = MÍNIMO entre os factRefs.
-    const perRef = factRefs.map((ref) =>
-      developmentGroundingTerms(evidence.facts[evidence.refs.indexOf(ref)] ?? ""),
-    );
-    const point = diagnoseDevelopmentPoint(text, evidence, perRef.length ? perRef : undefined);
-    const ctaValid = isActionableCta(cta) && ctaTextFactualIssues(cta, evidence).decision === "deliverable";
-    diagnostics.push({
-      index,
-      actionPresent: point.actionPresent,
-      factRefAllowed: true,
-      connectorPresent: point.connectorPresent,
-      textGroundingMatched: factTermsMatched(text, evidence),
-      rationaleGroundingMatched: point.minGroundingMatched,
-      factGroundingApplicable: point.factGroundingApplicable,
-      factTermsInRationale: point.factTermsInRationale,
-      ctaValid,
-      shotList: point.shotList,
-      unverifiedClaim: point.unverified,
-      unverifiedClaimParts: point.unverifiedParts,
-    });
+    const checked = diagnoseStructuredDevelopmentBullet({ text, factRefs, cta }, index, evidence);
+    diagnostics.push(checked.diagnostic);
     texts.push(text);
-    bullets.push({ text, action, rationale, factRefs, cta });
+    bullets.push({ text, action: checked.point.action, rationale: checked.point.rationale, factRefs, cta });
   });
   return { texts, diagnostics, bullets };
 }
@@ -980,14 +1014,9 @@ export function validateBriefSet(
       let anyFactRefDrift = false;
       let anyCtaInvalid = false;
       structuredBullets.forEach((bullet, bulletIndex) => {
-        const point = brief.development[bulletIndex] ?? "";
-        const perRef = bullet.factRefs.map((ref) => {
-          const factValue = evidence.facts[evidence.refs.indexOf(ref)];
-          return typeof factValue === "string" ? developmentGroundingTerms(factValue) : [];
-        });
-        const check = diagnoseDevelopmentPoint(point, evidence, perRef);
+        const check = diagnoseStructuredDevelopmentBullet(bullet, bulletIndex, evidence).diagnostic;
         if (check.factGroundingApplicable && check.factTermsInRationale < 2) anyFactRefDrift = true;
-        if (!isActionableCta(bullet.cta) || ctaTextFactualIssues(bullet.cta, evidence).decision !== "deliverable") anyCtaInvalid = true;
+        if (!check.ctaValid) anyCtaInvalid = true;
       });
       if (anyFactRefDrift)
         issues.push("development não repete termos do fato apontado por factRef no trecho após o conector");

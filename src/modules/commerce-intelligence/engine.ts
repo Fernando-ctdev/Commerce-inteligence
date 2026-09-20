@@ -42,6 +42,7 @@ import {
   deliverableHookBuckets,
   developmentRequirements,
   parseStructuredDevelopment,
+  developmentDiagnosticNeedsRepair,
   gateSceneSet,
   diagnoseDevelopmentPoint,
   validDevelopmentPoint,
@@ -1588,10 +1589,7 @@ export async function runFirstGeneration(
   const failedBulletTargetsFor = (contentId: string): Array<{ index: number; factRefs: string[]; terms: string[] }> =>
     (developmentDiagnosticsFor(contentId) ?? [])
       .map((d) => ({ d }))
-      .filter(({ d }) =>
-        !d.actionPresent || !d.connectorPresent || d.shotList || d.unverifiedClaim || !d.ctaValid ||
-        d.textGroundingMatched < 2 || d.rationaleGroundingMatched < 2 ||
-        (d.factGroundingApplicable && d.factTermsInRationale < 2))
+      .filter(({ d }) => developmentDiagnosticNeedsRepair(d))
       .map(({ d }) => {
         const refs = bulletsByContentId.get(contentId)?.[d.index]?.factRefs ?? [];
         const terms = [...new Set(refs.flatMap((ref) => developmentGroundingTerms(evidence.facts[evidence.refs.indexOf(ref)] ?? "")))].slice(0, 12);

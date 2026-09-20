@@ -99,7 +99,7 @@ test("repairs only rejected briefs via per-item CONTENT_BRIEF_REPAIR/HIGH, prese
   // Design 2026-09-18: o repair recebe o diagnóstico redigido por bullet do PRÓPRIO item.
   assert.ok(Array.isArray(context.developmentDiagnostics) && context.developmentDiagnostics.length === 2, "developmentDiagnostics do item presente");
   const diag = (context.developmentDiagnostics as Array<Record<string, unknown>>)[0]!;
-  assert.deepEqual(Object.keys(diag).sort(), ["actionPresent", "connectorPresent", "ctaValid", "factGroundingApplicable", "factRefAllowed", "factTermsInRationale", "index", "rationaleGroundingMatched", "shotList", "textGroundingMatched", "unverifiedClaim", "unverifiedClaimParts"]);
+  assert.deepEqual(Object.keys(diag).sort(), ["actionPresent", "connectorPresent", "connectorValid", "ctaValid", "factGroundingApplicable", "factRefAllowed", "factTermsInRationale", "grounded", "index", "issues", "rationaleGroundingMatched", "shotList", "textGroundingMatched", "unverifiedClaim", "unverifiedClaimParts"]);
   assert.equal(diag.rationaleGroundingMatched, 2, "claim unsupported ainda contém dois termos do rationale após o conector");
   assert.deepEqual(context.failedBulletIndexes, [0, 1], "repair mira os índices falhos (design 2026-09-19)");
   assert.deepEqual(context.repairChecklist, { developmentAction: true, removeUnsupportedClaim: true });

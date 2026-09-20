@@ -42,6 +42,9 @@ export type DevelopmentBulletDiagnostic = {
   shotList: boolean;
   unverifiedClaim: boolean;
   unverifiedClaimParts: string[];
+  grounded: boolean;
+  connectorValid: boolean;
+  issues: string[];
 };
 export type FailedItemDiagnostic = {
   contentId: string;
