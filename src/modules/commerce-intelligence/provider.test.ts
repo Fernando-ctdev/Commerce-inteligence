@@ -137,7 +137,12 @@ test("brief provider instruction makes development strategic, evidence-grounded,
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("angle e mecanismo da oportunidade orientam o recorte, mas não são fonte de fatos"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("todo fato técnico no script deve estar em relevantFacts e representado em development"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não retorne scenes nem qualquer campo de cena"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use selectedPatterns[index].cta.text literalmente como cta"));
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use selectedPatterns[index].cta.text literalmente como cta"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("adapte o wording"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("mesma função"));
+  assert.ok(!CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("selectedPatterns[index].cta.text literalmente"));
+  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("adapte o wording"));
+  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("mesma função"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Mantenha cta separado de hook, development e script"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Bom:"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Ruim:"));
