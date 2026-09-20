@@ -1129,6 +1129,64 @@ export function ProductCreateForm({
               melhor estratégia de conteúdo.
             </p>
           </div>
+          {/* Entrada URL-first (DESIGN.md): URL e ação primária de análise
+              abrem a seção, antes dos fatos manuais. */}
+          <TextField
+            error={combinedErrors.url}
+            help="Cole o link público (https) de um produto do TikTok Shop."
+            id={fieldId("url")}
+            label={
+              <>
+                URL do produto{" "}
+                <span className={styles.optionalMark}>Opcional</span>
+              </>
+            }
+            placeholder="https://exemplo.com/seu-produto"
+            onChange={(value) => update("url", value)}
+            type="url"
+            value={draft.url ?? ""}
+          />
+          {!isEdit && (
+            <>
+              <div className={styles.importAction}>
+                <Button
+                  disabled={importDisabled(importing, saving)}
+                  onClick={importFromUrl}
+                  type="button"
+                >
+                  {importing ? "Analisando…" : "Analisar produto"}
+                </Button>
+                <p>Se a consulta falhar, você pode continuar preenchendo os dados manualmente.</p>
+              </div>
+              {/* Status único da importação: anunciado sem roubar foco;
+                  gaps e sinais são texto, nunca só cor. */}
+              <div aria-live="polite" className={styles.importStatus} role="status">
+                {importState !== "idle" && (
+                  <p>{importStatusAnnouncement(importState, importMessage ?? undefined)}</p>
+                )}
+                {importGaps.length > 0 && (
+                  <p className={styles.importGaps}>
+                    <strong>Campos que faltaram: </strong>
+                    {gapLabels(importGaps).join(", ")}.
+                  </p>
+                )}
+                {importSignals && (
+                  <div className={styles.importSignals}>
+                    <p className={styles.importSignalsTitle}>
+                      Sinais do TikTok Shop (somente leitura)
+                    </p>
+                    <ul>
+                      {candidateSignalsForDisplay(importSignals).map((signal) => (
+                        <li key={signal.label}>
+                          <strong>{signal.label}:</strong> {signal.value}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
           <TextField
             error={combinedErrors.name}
             id={fieldId("name")}
@@ -1352,63 +1410,6 @@ export function ProductCreateForm({
               )}
             </div>
           </div>
-          <TextField
-            error={combinedErrors.url}
-            help="Cole o link público (https) de um produto do TikTok Shop."
-            id={fieldId("url")}
-            label={
-              <>
-                URL do produto{" "}
-                <span className={styles.optionalMark}>Opcional</span>
-              </>
-            }
-            placeholder="https://exemplo.com/seu-produto"
-            onChange={(value) => update("url", value)}
-            type="url"
-            value={draft.url ?? ""}
-          />
-          {!isEdit && (
-            <>
-              <div className={styles.importAction}>
-                <Button
-                  disabled={importDisabled(importing, saving)}
-                  onClick={importFromUrl}
-                  type="button"
-                  variant="outline"
-                >
-                  {importing ? "Importando…" : "Importar do TikTok Shop"}
-                </Button>
-                <p>Se a consulta falhar, você pode continuar preenchendo os dados manualmente.</p>
-              </div>
-              {/* Status único da importação: anunciado sem roubar foco;
-                  gaps e sinais são texto, nunca só cor. */}
-              <div aria-live="polite" className={styles.importStatus} role="status">
-                {importState !== "idle" && (
-                  <p>{importStatusAnnouncement(importState, importMessage ?? undefined)}</p>
-                )}
-                {importGaps.length > 0 && (
-                  <p className={styles.importGaps}>
-                    <strong>Campos que faltaram: </strong>
-                    {gapLabels(importGaps).join(", ")}.
-                  </p>
-                )}
-                {importSignals && (
-                  <div className={styles.importSignals}>
-                    <p className={styles.importSignalsTitle}>
-                      Sinais do TikTok Shop (somente leitura)
-                    </p>
-                    <ul>
-                      {candidateSignalsForDisplay(importSignals).map((signal) => (
-                        <li key={signal.label}>
-                          <strong>{signal.label}:</strong> {signal.value}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
           {isEdit && (
             <TextField
               error={combinedErrors.constraints}
