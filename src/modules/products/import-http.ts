@@ -1,4 +1,5 @@
 import { isValidIdempotencyKey } from "./service";
+import { URL_IMPORT_ENABLED } from "./import-config";
 import { CaptApiImportError, fetchCaptApiProduct, validateTikTokShopUrl } from "./captapi";
 import { SESSION_COOKIE, json, readCookie, readJsonBody, sameOriginRequest } from "../identity/http";
 import { resolveSession } from "../identity/service";
@@ -12,6 +13,12 @@ function candidateResponse(body: unknown): Response {
 
 export async function handleImportProduct(req: Request): Promise<Response> {
   if (!sameOriginRequest(req)) return json(403, { error: "Origem não permitida." });
+  if (!URL_IMPORT_ENABLED) {
+    return json(503, {
+      error: "A importação por URL está temporariamente indisponível; preencha os dados manualmente.",
+      code: "IMPORT-DISABLED",
+    });
+  }
   const token = readCookie(req, SESSION_COOKIE);
   const session = token ? await resolveSession(token) : null;
   if (!session) return json(401, { error: "Sessão necessária para importar o Product.", code: "AUTH-SESSION" });

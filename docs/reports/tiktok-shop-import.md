@@ -1,5 +1,14 @@
 # TikTok Shop Import — implementação
 
+- [x] **Fluxo de importação URL DESATIVADO** (`URL_IMPORT_ENABLED = false` em
+  `src/modules/products/import-config.ts`): o endpoint `POST /api/products/import`
+  responde `503 IMPORT-DISABLED` sanitizado sem tocar sessão, idempotência ou
+  CaptAPI; o client `importProduct` recusa a chamada sem rede; a UI mantém
+  somente o campo URL (manual, opcional) sem botão de importação, status,
+  gaps ou sinais. Cadastro manual inalterado. A arquitetura (validator,
+  resolução de short links vt/vm, contrato do Candidate) permanece
+  implementada e os testes de importação ficam pulados com o motivo, para
+  reabilitação futura por decisão documentada.
 - [x] Importação URL-only candidate: consulta o endpoint HTTP normal da CaptAPI
   `GET /v1/tiktok-shop/product-details` com `region=BR`; a chave vem somente do
   ambiente do servidor e nunca aparece em testes, respostas ou logs.
@@ -25,8 +34,11 @@
 - [x] Timeout total (resolução + CaptAPI) elevado de 8s para 60s: a captura
   autenticada real levou ~46s e estourava o limite anterior; `AbortController`
   e erro sanitizado (`IMPORT-TIMEOUT`) preservados.
-- [x] Testes determinísticos com `fetch` mockado (focused captapi + service):
-  53 passaram, 0 falharam e 0 pulados; nenhum crédito real consumido.
+- [x] Testes focused (captapi + product-api + service) com `fetch` mockado no
+  estado desativado: 53 passaram, 0 falharam; 9 testes do contrato de
+  importação (7 client + 2 endpoint) pulados com o motivo da desativação.
+  Cadastro manual (criação/validação/idempotência) segue passando com DB.
+  Nenhum crédito real consumido.
 - [x] Typecheck: `tsc --noEmit` concluído sem erros neste ambiente.
 - [ ] QA desktop/mobile: não executado neste merge.
 - [ ] Validação real depende de `CAPTAPI_API_KEY` configurada no ambiente.

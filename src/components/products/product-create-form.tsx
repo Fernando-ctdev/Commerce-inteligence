@@ -28,7 +28,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   createProduct,
   getProduct,
-  importProduct,
   ProductApiError,
   type ProductRecord,
   updateProduct,
@@ -51,15 +50,7 @@ import {
   type ProductManualFieldErrors,
 } from "./product-form-model";
 import {
-  candidateSignalsForDisplay,
-  gapLabels,
-  importDisabled,
-  importStatusAnnouncement,
-  mergeImportedCandidate,
-  type CandidateGap,
   type ContentPreparationPreferences,
-  type ImportStatusState,
-  type ProductSignals,
 } from "./product-import-model";
 import styles from "./product-form.module.css";
 
@@ -680,14 +671,6 @@ export function ProductCreateForm({
   const submitIntent = useRef<"save" | "analyze">("save");
   const [notes, setNotes] = useState(product?.observations ?? "");
   const [saving, setSaving] = useState(false);
-  /* Estados visíveis da importação por URL (SPEC Slice 012): idle,
-     importing, ready, partial e fallback. Mensagem/gaps/sinais ficam locais;
-     proveniência só existe depois de um candidato aplicado. */
-  const [importState, setImportState] = useState<ImportStatusState>("idle");
-  const importing = importState === "importing";
-  const [importMessage, setImportMessage] = useState<string | null>(null);
-  const [importGaps, setImportGaps] = useState<CandidateGap[]>([]);
-  const [importSignals, setImportSignals] = useState<ProductSignals | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ProductManualFieldErrors>({});
   const [validationVisible, setValidationVisible] = useState(false);
@@ -709,19 +692,11 @@ export function ProductCreateForm({
   /* Uma chave por tentativa lógica: gerada no primeiro submit e reutilizada
      em todo retry; limpa só após sucesso (novo formulário = novo mount). */
   const idempotencyKey = useRef<string | undefined>(undefined);
-  const importIdempotencyKey = useRef<string | undefined>(undefined);
 
   function update(field: keyof ProductManualDraft, value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
     setError(null);
-    if (field === "url" && !value.trim()) {
-      /* URL limpa = formulário manual do zero: sem status de importação. */
-      setImportState("idle");
-      setImportMessage(null);
-      setImportGaps([]);
-      setImportSignals(null);
-    }
   }
 
   function updateImageLinks(value: string) {
@@ -852,64 +827,6 @@ export function ProductCreateForm({
     setError(null);
     setFormStep("preparation");
   }
-
-  async function importFromUrl() {
-    if (isEdit || importDisabled(importing, saving)) return;
-    const url = draft.url?.trim() ?? "";
-    if (!url) {
-      const message = "Cole uma URL pública do TikTok Shop para importar.";
-      setFieldErrors((current) => ({ ...current, url: message }));
-      setError(message);
-      return;
-    }
-    setError(null);
-    setFieldErrors((current) => ({ ...current, url: undefined }));
-    setImportState("importing");
-    setImportMessage(null);
-    setImportGaps([]);
-    setImportSignals(null);
-    try {
-      /* Uma chave por tentativa lógica: reutilizada em retry, renovada
-         quando a consulta anterior respondeu. */
-      const key = importIdempotencyKey.current ?? createIdempotencyKey();
-      importIdempotencyKey.current = key;
-      const result = await importProduct(url, key);
-      /* Merge não destrutivo: fatos ausentes não apagam o que o creator
-         já digitou. A confirmação continua sendo o botão de salvar. */
-      /* Imagens do creator têm prioridade: a primeira imagem importada só
-         entra quando não existe imagem manual/upload. */
-      const manualImages = imageReferenceLines(draft.imageReferences ?? "");
-      const firstImage =
-        manualImages.length === 0 ? result.candidate.imageRefs[0] : undefined;
-      setDraft(mergeImportedCandidate(draft, result.candidate));
-      if (firstImage) {
-        /* Primeira imagem apenas: substitui links e arquivos escolhidos. */
-        setImageLinksInput(firstImage);
-        setUploadedImages([]);
-        setSelectedImage(null);
-      }
-      setImportState(result.partial ? "partial" : "ready");
-      setImportMessage(result.message);
-      setImportGaps(result.gaps);
-      setImportSignals(result.candidate.signals ?? null);
-      importIdempotencyKey.current = undefined;
-    } catch (caught) {
-      /* Fallback manual: valores preservados; erro no campo de URL e no
-         status ao lado, sem toast e sem anúncio duplicado. */
-      const message = caught instanceof ProductApiError
-        ? caught.message
-        : "Não foi possível importar agora. Continue com o preenchimento manual; seus dados continuam aqui.";
-      setFieldErrors((current) => ({
-        ...current,
-        url: caught instanceof ProductApiError
-          ? caught.fieldErrors.url ?? message
-          : message,
-      }));
-      setImportState("fallback");
-      setImportMessage(message);
-    }
-  }
-
 
   function continueToSummary() {
     setValidationVisible(true);
@@ -1146,47 +1063,6 @@ export function ProductCreateForm({
             type="url"
             value={draft.url ?? ""}
           />
-          {!isEdit && (
-            <>
-              <div className={styles.importAction}>
-                <Button
-                  disabled={importDisabled(importing, saving)}
-                  onClick={importFromUrl}
-                  type="button"
-                >
-                  {importing ? "Analisando…" : "Analisar produto"}
-                </Button>
-                <p>Se a consulta falhar, você pode continuar preenchendo os dados manualmente.</p>
-              </div>
-              {/* Status único da importação: anunciado sem roubar foco;
-                  gaps e sinais são texto, nunca só cor. */}
-              <div aria-live="polite" className={styles.importStatus} role="status">
-                {importState !== "idle" && (
-                  <p>{importStatusAnnouncement(importState, importMessage ?? undefined)}</p>
-                )}
-                {importGaps.length > 0 && (
-                  <p className={styles.importGaps}>
-                    <strong>Campos que faltaram: </strong>
-                    {gapLabels(importGaps).join(", ")}.
-                  </p>
-                )}
-                {importSignals && (
-                  <div className={styles.importSignals}>
-                    <p className={styles.importSignalsTitle}>
-                      Sinais do TikTok Shop (somente leitura)
-                    </p>
-                    <ul>
-                      {candidateSignalsForDisplay(importSignals).map((signal) => (
-                        <li key={signal.label}>
-                          <strong>{signal.label}:</strong> {signal.value}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
           <TextField
             error={combinedErrors.name}
             id={fieldId("name")}

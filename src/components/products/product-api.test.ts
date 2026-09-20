@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { importProduct, ProductApiError } from "./product-api";
+import { URL_IMPORT_ENABLED } from "../../modules/products/import-config";
 
 type FetchCall = { input: RequestInfo | URL; init?: RequestInit };
 
@@ -25,7 +26,23 @@ function mockFetch(body: unknown, status = 200) {
 
 const IMPORT_URL = "https://shop.tiktok.com/view/product/12345";
 
-test("importação envia somente { url } no corpo e a chave de idempotência no header", async () => {
+test("importação desativada não dispara requisição e falha com erro sanitizado", async () => {
+  const mock = mockFetch({
+    candidate: { features: [], imageRefs: [], sourceUrl: IMPORT_URL, gaps: [] },
+  });
+
+  try {
+    await assert.rejects(
+      importProduct(IMPORT_URL, "chave-123"),
+      (caught: unknown) => caught instanceof ProductApiError,
+    );
+    assert.equal(mock.calls.length, 0);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("importação envia somente { url } no corpo e a chave de idempotência no header", { skip: !URL_IMPORT_ENABLED && "importação por URL desativada" }, async () => {
   const mock = mockFetch({
     candidate: { features: [], imageRefs: [], sourceUrl: IMPORT_URL, gaps: [] },
     partial: true,
@@ -47,7 +64,7 @@ test("importação envia somente { url } no corpo e a chave de idempotência no 
   }
 });
 
-test("candidato completo é reduzido ao contrato público, sem seller/brand/variants/payload bruto", async () => {
+test("candidato completo é reduzido ao contrato público, sem seller/brand/variants/payload bruto", { skip: !URL_IMPORT_ENABLED && "importação por URL desativada" }, async () => {
   const mock = mockFetch({
     candidate: {
       name: "Escova Alisadora",
@@ -104,7 +121,7 @@ test("candidato completo é reduzido ao contrato público, sem seller/brand/vari
   }
 });
 
-test("fatos vazios ou nulos ficam ausentes; gaps e sinais inválidos são filtrados", async () => {
+test("fatos vazios ou nulos ficam ausentes; gaps e sinais inválidos são filtrados", { skip: !URL_IMPORT_ENABLED && "importação por URL desativada" }, async () => {
   const mock = mockFetch({
     candidate: {
       name: "Produto parcial",
@@ -144,7 +161,7 @@ test("fatos vazios ou nulos ficam ausentes; gaps e sinais inválidos são filtra
   }
 });
 
-test("zero é sinal válido e sinais nulos ficam ausentes", async () => {
+test("zero é sinal válido e sinais nulos ficam ausentes", { skip: !URL_IMPORT_ENABLED && "importação por URL desativada" }, async () => {
   const mock = mockFetch({
     candidate: {
       features: [],
@@ -166,7 +183,7 @@ test("zero é sinal válido e sinais nulos ficam ausentes", async () => {
   }
 });
 
-test("sourceUrl ausente cai na URL consultada e mensagem ausente usa texto padrão", async () => {
+test("sourceUrl ausente cai na URL consultada e mensagem ausente usa texto padrão", { skip: !URL_IMPORT_ENABLED && "importação por URL desativada" }, async () => {
   const mock = mockFetch({
     candidate: { features: [], imageRefs: [], gaps: [] },
     partial: true,
@@ -182,7 +199,7 @@ test("sourceUrl ausente cai na URL consultada e mensagem ausente usa texto padr�
   }
 });
 
-test("resposta de erro sanitizada vira ProductApiError sem expor segredo", async () => {
+test("resposta de erro sanitizada vira ProductApiError sem expor segredo", { skip: !URL_IMPORT_ENABLED && "importação por URL desativada" }, async () => {
   const mock = mockFetch(
     { error: "URL inválida para importação.", code: "INVALID_URL" },
     400,
@@ -204,7 +221,7 @@ test("resposta de erro sanitizada vira ProductApiError sem expor segredo", async
   }
 });
 
-test("falha de rede preserva dados manuais com erro recuperável", async () => {
+test("falha de rede preserva dados manuais com erro recuperável", { skip: !URL_IMPORT_ENABLED && "importação por URL desativada" }, async () => {
   const original = globalThis.fetch;
   globalThis.fetch = (async () => {
     throw new Error("network down");

@@ -9,6 +9,7 @@ import {
   type ProductImportResult,
   type ProductSignals,
 } from "./product-import-model";
+import { URL_IMPORT_ENABLED } from "../../modules/products/import-config";
 
 export type ProductReadiness = "PENDING" | "ANALYZING" | "READY" | "FAILED";
 
@@ -371,6 +372,13 @@ export async function importProduct(
   url: string,
   idempotencyKey: string,
 ): Promise<ProductImportResult> {
+  if (!URL_IMPORT_ENABLED) {
+    throw new ProductApiError({
+      status: 503,
+      message: "A importação por URL está temporariamente indisponível; preencha os dados manualmente.",
+      code: "IMPORT-DISABLED",
+    });
+  }
   const data = await request<unknown>("/api/products/import", {
     method: "POST",
     headers: { "Idempotency-Key": idempotencyKey },

@@ -1,6 +1,6 @@
 # ADR-028: Slice 012 com Candidate transitório via CaptAPI HTTP
 
-**Status:** Accepted for Slice 012 documentation
+**Status:** Accepted for Slice 012 documentation — **fluxo de importação URL DESATIVADO em runtime** (`URL_IMPORT_ENABLED = false` em `src/modules/products/import-config.ts`); a decisão técnica abaixo permanece válida e o endpoint responde `503 IMPORT-DISABLED` com erro sanitizado enquanto desativado. Reabilitar exige decisão de produto documentada.
 
 ## Contexto
 
