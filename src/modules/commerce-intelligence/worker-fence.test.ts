@@ -553,3 +553,49 @@ test("fence perdido: sceneOutcomes NÃO persistem no IntelligenceRun pelo owner 
     await limpar();
   }
 });
+
+// ADR-021/SPEC B-003-10: o modo complete reutiliza a Strategy ACTIVE do job
+// parcial original — finalize NUNCA cria uma segunda ACTIVE (índice parcial
+// único product_strategies_active_product). Regressão do job 5fa687db
+// (GEN-PERSISTENCE em tx.productStrategy.create).
+test("complete-mode finalize com Strategy ACTIVE existente: única ACTIVE e plano vinculado a ela", async (t) => {
+  if (!dbUp) return t.skip();
+  const { job, limpar } = await criarJobQueued();
+  // Job parcial original (row apenas para a FK da Strategy e proveniência).
+  const originalJob = await prisma.commerceIntelligenceJob.create({
+    data: { tenantId: job.tenantId, userId: job.userId, productId: job.productId, idempotencyKey: randomUUID(), fingerprint: randomUUID(), targetContentCount: 5, generatedContentsMonth: monthUtc(), status: "SUCCEEDED_PARTIAL", stage: "FINALIZING" },
+  });
+  const originalStrategy = await prisma.productStrategy.create({
+    data: { id: `${originalJob.id}-strategy`, tenantId: job.tenantId, productId: job.productId, jobId: originalJob.id, platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", payload: { id: `${originalJob.id}-strategy`, productId: job.productId, jobId: originalJob.id, version: 1, status: "ACTIVE" } },
+  });
+  try {
+    const claimed = await claimGeneration(new Date(), "owner-c", job.id);
+    assert.ok(claimed);
+    // Engine re-carimba a strategy reutilizada com o id do job atual (ADR-021).
+    const output = syntheticOutput(`${job.id}-strategy`);
+    await finalizeGeneration(job, "owner-c", claimed.attempt, output, [], {}, originalStrategy.id);
+    const strategies = await prisma.productStrategy.findMany({ where: { productId: job.productId } });
+    assert.equal(strategies.length, 1, "nenhuma segunda Strategy ACTIVE criada");
+    assert.equal(strategies[0].id, originalStrategy.id);
+    assert.equal(strategies[0].status, "ACTIVE");
+    assert.equal(strategies[0].jobId, originalJob.id, "proveniência original preservada");
+    const plan = await prisma.contentPlan.findFirstOrThrow({ where: { jobId: job.id } });
+    assert.equal(plan.strategyId, originalStrategy.id, "plano do job atual vinculado à Strategy reutilizada");
+    const estado = await estadoPublicacao(job.id, job.tenantId);
+    assert.equal(estado.job.status, "SUCCEEDED");
+    assert.equal(estado.reservation.status, "CONFIRMED");
+    assert.equal(estado.publicados.runs, 1);
+  } finally {
+    // Ordem FK-safe local: filhos do job atual → Strategy reutilizada (por id)
+    // → job original → limpar() finaliza reservation/run/job/product/tenant.
+    await prisma.briefValidationReport.deleteMany({ where: { jobId: job.id } });
+    await prisma.contentBriefVersion.deleteMany({ where: { jobId: job.id } });
+    await prisma.contentSceneSet.deleteMany({ where: { jobId: job.id } });
+    await prisma.content.deleteMany({ where: { jobId: job.id } });
+    await prisma.contentOpportunity.deleteMany({ where: { jobId: job.id } });
+    await prisma.contentPlan.deleteMany({ where: { jobId: job.id } });
+    await prisma.productStrategy.deleteMany({ where: { id: originalStrategy.id } });
+    await prisma.commerceIntelligenceJob.deleteMany({ where: { id: originalJob.id } }).catch(() => {});
+    await limpar();
+  }
+});
