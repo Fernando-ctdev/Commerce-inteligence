@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { EvidenceSnapshot } from "./contract";
-import { validateBriefSet, parseStructuredDevelopment, diagnoseDevelopmentPoint, developmentRequirements, validDevelopmentPoint, isActionableCta } from "./gates";
+import { validateBriefSet, parseStructuredDevelopment, diagnoseDevelopmentPoint, diagnoseStructuredDevelopmentBullet, developmentDiagnosticNeedsRepair, developmentRequirements, validDevelopmentPoint, isActionableCta } from "./gates";
 import { ContractError } from "./contract";
 
 test("structured development derives action and rationale from provider text", () => {
@@ -29,6 +29,47 @@ test("structured development ignores provider action/rationale and derives both 
   ], { facts: ["Tecido respiravel"], refs: ["fact:features"] });
   assert.equal(parsed.bullets[0]!.action, "Destaque");
   assert.equal(parsed.bullets[0]!.rationale, "para explicar o conforto no uso");
+});
+
+test("diagnóstico canônico inclui CTA inválido e faz o gate reprovar", () => {
+  const evidence = { facts: ["Tecido respiravel"], refs: ["fact:features"] };
+  const checked = diagnoseStructuredDevelopmentBullet({
+    text: "Destaque o tecido respiravel para explicar o tecido respiravel no uso",
+    factRefs: ["fact:features"],
+    cta: "O produto é leve e confortável",
+  }, 0, evidence);
+  assert.equal(checked.point.ctaValid, false);
+  assert.equal(checked.point.valid, false);
+  assert.ok(checked.point.issues.includes("cta"));
+  assert.equal(checked.diagnostic.ctaValid, false);
+  assert.equal(developmentDiagnosticNeedsRepair(checked.diagnostic), true);
+  const brief = {
+    contentId: "cta-canonical",
+    briefVersionId: "cta-canonical-v1",
+    version: 1 as const,
+    angle: "uso",
+    hook: "Veja o tecido",
+    development: [checked.point.action + " o tecido respiravel para explicar o tecido respiravel no uso", checked.point.action + " o tecido respiravel para explicar o tecido respiravel no uso"],
+    script: "Fale sobre o tecido respiravel",
+    cta: "Confira o produto",
+  };
+  const structuredBullet = {
+    text: "Destaque o tecido respiravel para explicar o tecido respiravel no uso",
+    action: "Destaque",
+    rationale: "para explicar o tecido respiravel no uso",
+    factRefs: ["fact:features"],
+    cta: "O produto é leve e confortável",
+  };
+  const report = validateBriefSet(
+    [brief],
+    evidence,
+    "tiktok-commerce",
+    "tiktok-commerce@1.2",
+    [],
+    undefined,
+    new Map([[brief.contentId, [structuredBullet, structuredBullet]]]),
+  )[0]!;
+  assert.ok(["REPAIR", "REJECT"].includes(report.decision));
 });
 
 test("structured development rejects malformed factRefs without filtering", () => {

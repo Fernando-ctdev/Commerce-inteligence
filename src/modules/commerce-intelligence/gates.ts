@@ -647,15 +647,16 @@ export function diagnoseDevelopmentPoint(point: string, evidence: EvidenceSnapsh
   const factTermsInRationale = factGroundingApplicable
     ? Math.min(...factTermsPerRef.map((terms) => [...rationaleTerms].filter((term) => terms.includes(term)).length))
     : 0;
+  const ctaValid = cta === undefined || (isActionableCta(cta) && ctaTextFactualIssues(cta, evidence).decision === "deliverable");
   const valid =
     actionPresent &&
     connectorPresent &&
     (rationaleAt >= 0 ? rationaleTerms.size >= 2 : experienceContext) &&
     (!factGroundingApplicable || factTermsInRationale >= 2) &&
-    !unverified;
+    !unverified &&
+    ctaValid;
   const grounded = rationaleAt >= 0 ? minGroundingMatched >= minGroundingExpected : experienceContext;
   const connectorValid = connectorPresent && grounded;
-  const ctaValid = cta === undefined || (isActionableCta(cta) && ctaTextFactualIssues(cta, evidence).decision === "deliverable");
   const issues = [
     ...(!actionPresent ? ["action"] : []),
     ...(!connectorPresent ? ["connector"] : []),
@@ -673,7 +674,7 @@ export function validDevelopmentPoint(point: string, evidence: EvidenceSnapshot)
 }
 
 export function developmentDiagnosticNeedsRepair(diagnostic: DevelopmentBulletDiagnostic): boolean {
-  return diagnostic.issues.length > 0 || !diagnostic.ctaValid;
+  return diagnostic.issues.length > 0;
 }
 
 export function diagnoseStructuredDevelopmentBullet(
@@ -685,7 +686,6 @@ export function diagnoseStructuredDevelopmentBullet(
     developmentGroundingTerms(evidence.facts[evidence.refs.indexOf(ref)] ?? ""),
   );
   const point = diagnoseDevelopmentPoint(bullet.text, evidence, perRef.length ? perRef : undefined, bullet.cta);
-  const ctaValid = isActionableCta(bullet.cta) && ctaTextFactualIssues(bullet.cta, evidence).decision === "deliverable";
   return {
     point,
     diagnostic: {
@@ -697,7 +697,7 @@ export function diagnoseStructuredDevelopmentBullet(
       rationaleGroundingMatched: point.minGroundingMatched,
       factGroundingApplicable: point.factGroundingApplicable,
       factTermsInRationale: point.factTermsInRationale,
-      ctaValid,
+      ctaValid: point.ctaValid,
       shotList: point.shotList,
       unverifiedClaim: point.unverified,
       unverifiedClaimParts: point.unverifiedParts,
@@ -997,10 +997,22 @@ export function validateBriefSet(
                 : "claim contradito",
             ]),
       );
-    const developmentUnverified = brief.development.some((point) => unverifiedObjectiveClaims(point, evidence));
-    if (developmentUnverified) issues.push("development contém claim sem evidência verificável");
-    if (brief.development.some((point) => !validDevelopmentPoint(point, evidence)))
-      issues.push("development deve orientar comunicação com ação e razão/fato, sem lista de features ou planos de gravação");
+    const structuredBullets = structuredDevelopment?.get(brief.contentId);
+    const hasStructuredDevelopment = Boolean(structuredBullets && structuredBullets.length === brief.development.length);
+    const structuredChecks = hasStructuredDevelopment
+      ? structuredBullets!.map((bullet, bulletIndex) => diagnoseStructuredDevelopmentBullet(bullet, bulletIndex, evidence))
+      : [];
+    if (hasStructuredDevelopment) {
+      if (structuredChecks.some(({ point }) => point.unverifiedParts.length > 0))
+        issues.push("development contém claim sem evidência verificável");
+      if (structuredChecks.some(({ diagnostic }) => developmentDiagnosticNeedsRepair(diagnostic)))
+        issues.push("development deve orientar comunicação com ação e razão/fato, sem lista de features ou planos de gravação");
+    } else {
+      const developmentUnverified = brief.development.some((point) => unverifiedObjectiveClaims(point, evidence));
+      if (developmentUnverified) issues.push("development contém claim sem evidência verificável");
+      if (brief.development.some((point) => !validDevelopmentPoint(point, evidence)))
+        issues.push("development deve orientar comunicação com ação e razão/fato, sem lista de features ou planos de gravação");
+    }
     // v2 — ancoragem factRefs + CTA por bullet (hard gate; judge permanece advisory):
     // com os bullets estruturados do próprio item disponíveis (mesma ordem/
     // cardinalidade dos textos), o trecho após o conector deve conter ≥2 termos de
@@ -1009,12 +1021,10 @@ export function validateBriefSet(
     // (o mapa não é atualizado pelo part repair antes da composição). Cardinalidade
     // divergente ou ausência do mapa → requisito não se aplica; checks textuais
     // seguem intactos. TODOS os bullets são avaliados (sem curto-circuito).
-    const structuredBullets = structuredDevelopment?.get(brief.contentId);
-    if (structuredBullets && structuredBullets.length === brief.development.length) {
+    if (hasStructuredDevelopment) {
       let anyFactRefDrift = false;
       let anyCtaInvalid = false;
-      structuredBullets.forEach((bullet, bulletIndex) => {
-        const check = diagnoseStructuredDevelopmentBullet(bullet, bulletIndex, evidence).diagnostic;
+      structuredChecks.forEach(({ diagnostic: check }) => {
         if (check.factGroundingApplicable && check.factTermsInRationale < 2) anyFactRefDrift = true;
         if (!check.ctaValid) anyCtaInvalid = true;
       });

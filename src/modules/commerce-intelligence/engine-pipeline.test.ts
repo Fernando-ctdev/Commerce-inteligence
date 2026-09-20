@@ -588,6 +588,26 @@ test("geração inicial aceita development estruturado e projeta bullets para st
   assert.deepEqual(result.briefs[0]!.development, [structuredBullet.text, structuredBullet.text]);
 });
 
+test("judge recebe development somente com campos propostos pelo provider", async () => {
+  let judgeContext: Record<string, unknown> | undefined;
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+    if (task === "PRODUCT_UNDERSTANDING") return understanding;
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
+    if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
+    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: [structuredBullet, structuredBullet], script: "Produto na prática", cta: "c" }] };
+    if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
+    if (task === "CONTENT_QUALITY_JUDGE") { judgeContext = recordOf(input?.trustedContext); return judgeBatchPass(input); }
+    return {};
+  } };
+  await runFirstGeneration({ productId: "p", jobId: "j-judge-fields", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
+  const items = judgeContext?.items as Array<Record<string, unknown>>;
+  const development = items[0]?.development as Array<Record<string, unknown>>;
+  assert.deepEqual(Object.keys(development[0]!).sort(), ["cta", "factRefs", "text"]);
+  assert.equal("action" in development[0]!, false);
+  assert.equal("rationale" in development[0]!, false);
+});
+
 test("bullet estruturado com factRef desconhecido falha GEN-SCHEMA após retry único do lote", async () => {
   let briefCalls = 0;
   const badBullet = { ...structuredBullet, factRefs: ["fact:inexistente"], cta: "Confira o produto na página." };

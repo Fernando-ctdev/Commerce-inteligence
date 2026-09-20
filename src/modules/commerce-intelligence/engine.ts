@@ -1989,7 +1989,7 @@ export async function runFirstGeneration(
         contentId: candidate.brief.contentId,
         // Mesmo contrato estruturado efêmero recebido pelo judge (design 2026-09-18);
         // o judge não o avalia factualmente — apenas contexto de leitura.
-        development: bulletsByContentId.get(candidate.brief.contentId) ?? [],
+        development: (bulletsByContentId.get(candidate.brief.contentId) ?? []).map(({ text, factRefs, cta }) => ({ text, factRefs, cta })),
         parts: QUALITY_PARTS.map((part) => ({
           part,
           content: part === "scenes" ? scenes.scenes.map(({ description }) => description) : candidate.brief[part],
