@@ -1122,12 +1122,15 @@ function sceneClaimsUnauthorized(description: string, evidence: EvidenceSnapshot
     });
 }
 
+// Contrato nomeado do gateSceneSet (consumido por engine/worker; evita
+// ReturnType como contrato).
+export type SceneGateResult = { kept: SceneIdea[]; dropped: number; causes: string[] };
 export function gateSceneSet(
   scenes: SceneIdea[],
   brief: { angle: string; hook: string; development: string[]; script: string; cta: string },
   evidence: EvidenceSnapshot,
   creatorContext: CreatorRecordingContext = {},
-): { kept: SceneIdea[]; dropped: number; causes: string[] } {
+): SceneGateResult {
   const anchors = sceneTerms(attrStems(normalizeForVariety(
     [brief.angle, brief.hook, ...brief.development, brief.script, brief.cta, ...evidence.facts].join(" "),
   )));

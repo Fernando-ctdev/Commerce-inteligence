@@ -89,4 +89,67 @@ export function emitJobEvent(event: JobEventName, fields: JobEventFields): void 
   buffer.push(text);
 }
 export function collectJobEvents(): string[] { return [...buffer]; }
+
+// ADR-026 (pós-job ace9e417): telemetria sanitizada de cenas no caminho de
+// FALHA — mesmo padrão de sanitizeGateReports. Allowlist ESTRITA: status do
+// enum efetivo do SceneSetOutcome; errorCode do vocabulário fechado de códigos
+// GEN-*; contentId no formato server-derived `${jobId}-content-N`; contagens
+// inteiras não-negativas com teto; causas em vocabulário fechado. Qualquer
+// outro valor colapsa (UNKNOWN/GEN-UNKNOWN/scene_gate_issue/vazio) — nunca
+// mensagem, payload ou descrição de cena transportados.
+export type SanitizedSceneOutcomeAttempt = { attempt: number; status: "completed" | "failed"; kept: number | null; dropped: number | null; errorCode: string | null; durationMs: number };
+export type SanitizedSceneOutcome = { contentId: string; status: string; generated: number; dropped: number; causes: string[]; attempts: SanitizedSceneOutcomeAttempt[] };
+const SCENE_OUTCOME_STATUS = ["AVAILABLE", "FILTERED", "ERROR"] as const;
+const SCENE_GATE_CAUSES = ["acao_ausente", "ancora_ausente", "claim_nao_autorizado", "locator_interno", "producao_nao_declarada"] as const;
+const SCENE_ERROR_CODES = ["GEN-SCHEMA", "GEN-PROVIDER", "GEN-FACT", "GEN-SKILL", "GEN-VARIETY"] as const;
+const SCENE_COUNT_CEILING = 100;
+const SCENE_DURATION_CEILING_MS = 3_600_000;
+const SCENE_CONTENT_ID = /^[A-Za-z0-9_-]+-content-\d+$/;
+function safeSceneCause(value: unknown): string {
+  if (typeof value !== "string") return "scene_gate_issue";
+  // gateSceneSet emite "causa" ou "causa:contagem" — só códigos do vocabulário
+  // fechado passam; qualquer outra string colapsa para scene_gate_issue.
+  const separator = value.indexOf(":");
+  const code = separator === -1 ? value : value.slice(0, separator);
+  if (!(SCENE_GATE_CAUSES as readonly string[]).includes(code)) return "scene_gate_issue";
+  return separator === -1 ? code : /^\d+$/.test(value.slice(separator + 1)) ? value : code;
+}
+function safeSceneCount(value: unknown, ceiling = SCENE_COUNT_CEILING): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= ceiling ? value : null;
+}
+function safeSceneContentId(value: unknown): string {
+  return typeof value === "string" && SCENE_CONTENT_ID.test(value) ? value.slice(0, 200) : "";
+}
+export function projectSceneOutcomes(value: unknown): SanitizedSceneOutcome[] {
+  const records = Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+    : [];
+  return records.map((item) => ({
+    contentId: safeSceneContentId(item.contentId),
+    status: typeof item.status === "string" && (SCENE_OUTCOME_STATUS as readonly string[]).includes(item.status) ? item.status : "UNKNOWN",
+    generated: safeSceneCount(item.generated) ?? 0,
+    dropped: safeSceneCount(item.dropped) ?? 0,
+    causes: Array.isArray(item.causes) ? item.causes.map(safeSceneCause).slice(0, 10) : [],
+    attempts: Array.isArray(item.attempts)
+      ? item.attempts
+        .filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row)))
+        .slice(0, 10)
+        .map((row) => {
+          const attempt = typeof row.attempt === "number" && Number.isInteger(row.attempt) && row.attempt >= 1 && row.attempt <= 10 ? row.attempt : 0;
+          const failed = row.status === "failed";
+          const rawCode = typeof row.errorCode === "string" && (SCENE_ERROR_CODES as readonly string[]).includes(row.errorCode) ? row.errorCode : null;
+          return {
+            attempt,
+            status: failed ? ("failed" as const) : ("completed" as const),
+            kept: safeSceneCount(row.kept),
+            dropped: safeSceneCount(row.dropped),
+            // Tentativa concluída não carrega código; tentativa falha com código
+            // fora do vocabulário colapsa para GEN-UNKNOWN (nunca texto arbitrário).
+            errorCode: failed ? (rawCode ?? "GEN-UNKNOWN") : rawCode,
+            durationMs: safeSceneCount(row.durationMs, SCENE_DURATION_CEILING_MS) ?? 0,
+          };
+        })
+      : [],
+  }));
+}
 export function resetJobEvents(): void { buffer.length = 0; }
