@@ -53,11 +53,18 @@ export function validateTikTokShopUrl(value: unknown): URL {
   }
   const host = url.hostname.toLowerCase();
   const pathSegments = url.pathname.split("/").filter(Boolean);
-  const pdpIndex = pathSegments.findIndex((segment) => segment.toLowerCase() === "pdp");
-  const validProductPath = pdpIndex >= 0 &&
-    Boolean(pathSegments[pdpIndex + 1]) &&
-    /^\d+$/.test(pathSegments[pathSegments.length - 1] ?? "") &&
-    pdpIndex + 2 === pathSegments.length - 1;
+  const numericId = /^\d+$/.test(pathSegments[pathSegments.length - 1] ?? "");
+  const validViewPath = host === "shop.tiktok.com" &&
+    pathSegments.length === 3 &&
+    pathSegments[0] === "view" &&
+    pathSegments[1] === "product" &&
+    numericId;
+  const validLocalePdpPath = pathSegments.length === 4 &&
+    /^[a-z]{2}$/i.test(pathSegments[0] ?? "") &&
+    pathSegments[1]?.toLowerCase() === "pdp" &&
+    Boolean(pathSegments[2]) &&
+    numericId;
+  const validProductPath = validViewPath || validLocalePdpPath;
   if (url.protocol !== "https:" || !ALLOWED_HOSTS.has(host) || url.username || url.password || !validProductPath) {
     throw new CaptApiImportError("IMPORT-URL-INVALID", "Use uma URL https pública do TikTok Shop.");
   }

@@ -8,9 +8,14 @@ const response = (body: unknown, status = 200) => new Response(JSON.stringify(bo
 test("valida somente URLs públicas de produto sem credenciais embutidas", () => {
   assert.equal(validateTikTokShopUrl(productUrl).hostname, "shop.tiktok.com");
   assert.equal(validateTikTokShopUrl("https://www.tiktok.com/br/pdp/produto/1735872517465343013").hostname, "www.tiktok.com");
+  const officialViewUrl = validateTikTokShopUrl("https://shop.tiktok.com/view/product/1735872517465343013?source=feed");
+  assert.equal(officialViewUrl.pathname, "/view/product/1735872517465343013");
+  assert.equal(officialViewUrl.search, "?source=feed");
   for (const invalid of [
     "https://shop.tiktok.com/",
     "https://shop.tiktok.com/br/category/1735872517465343013",
+    "https://shop.tiktok.com/account/pdp/falso/123",
+    "https://shop.tiktok.com/arbitrary/pdp/falso/123",
     "https://www.tiktok.com/video/1735872517465343013",
     "https://user:pass@shop.tiktok.com/br/pdp/produto/1735872517465343013",
     "https://attacker.example/br/pdp/produto/1735872517465343013",
