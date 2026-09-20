@@ -529,11 +529,21 @@ export function validateProductFacts(
 
 export type ManualProductResult = { product: Product; replay: boolean };
 
+export async function findTenantProductByIdempotencyKey(
+  tenantId: string,
+  idempotencyKey: string,
+): Promise<Product | null> {
+  return prisma.product.findUnique({
+    where: { tenantId_createIdempotencyKey: { tenantId, createIdempotencyKey: idempotencyKey } },
+  });
+}
+
 /** Cria o Product no Tenant resolvido; chave já usada no Tenant devolve o mesmo registro (replay). */
 export async function createManualProduct(
   tenantId: string,
   input: ManualProductInput,
   idempotencyKey: string,
+  provenanceOrigin: "manual" | "captapi" = "manual",
 ): Promise<ManualProductResult> {
   const data = validateManualProductInput(input);
 
@@ -563,7 +573,7 @@ export async function createManualProduct(
         features: data.features,
         images: data.imageRefs,
         submittedUrl: data.submittedUrl,
-        provenance: { origin: "manual" },
+        provenance: { origin: provenanceOrigin },
         targetContentCount: data.targetContentCount,
         generationConstraints: data.generationConstraints,
         createIdempotencyKey: idempotencyKey,

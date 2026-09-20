@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   createProduct,
   getProduct,
+  importProduct,
   ProductApiError,
   type ProductRecord,
   updateProduct,
@@ -669,6 +670,7 @@ export function ProductCreateForm({
   const submitIntent = useRef<"save" | "analyze">("save");
   const [notes, setNotes] = useState(product?.observations ?? "");
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ProductManualFieldErrors>({});
   const [validationVisible, setValidationVisible] = useState(false);
@@ -690,6 +692,7 @@ export function ProductCreateForm({
   /* Uma chave por tentativa lógica: gerada no primeiro submit e reutilizada
      em todo retry; limpa só após sucesso (novo formulário = novo mount). */
   const idempotencyKey = useRef<string | undefined>(undefined);
+  const importIdempotencyKey = useRef<string | undefined>(undefined);
 
   function update(field: keyof ProductManualDraft, value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -824,6 +827,38 @@ export function ProductCreateForm({
     setFieldErrors({});
     setError(null);
     setFormStep("preparation");
+  }
+
+  async function importFromUrl() {
+    if (isEdit || importing || saving) return;
+    const url = draft.url?.trim() ?? "";
+    if (!url) {
+      const message = "Cole uma URL pública do TikTok Shop para importar.";
+      setFieldErrors((current) => ({ ...current, url: message }));
+      setError(message);
+      return;
+    }
+    setImporting(true);
+    setError(null);
+    setFieldErrors((current) => ({ ...current, url: undefined }));
+    try {
+      const key = importIdempotencyKey.current ?? createIdempotencyKey();
+      importIdempotencyKey.current = key;
+      const result = await importProduct(url, key);
+      toast.success("Produto importado.");
+      importIdempotencyKey.current = undefined;
+      router.push(`/products/${result.id}`);
+    } catch (caught) {
+      const message = caught instanceof ProductApiError
+        ? caught.message
+        : "Não foi possível importar agora. Os dados manuais continuam disponíveis.";
+      const urlError = caught instanceof ProductApiError ? caught.fieldErrors.url : undefined;
+      setFieldErrors((current) => ({ ...current, url: urlError ?? message }));
+      setError(message);
+      toast.error(message);
+    } finally {
+      setImporting(false);
+    }
   }
 
 
@@ -1282,6 +1317,14 @@ export function ProductCreateForm({
             type="url"
             value={draft.url ?? ""}
           />
+          {!isEdit && (
+            <div className={styles.importAction}>
+              <Button disabled={importing || saving} onClick={importFromUrl} type="button" variant="outline">
+                {importing ? "Importando…" : "Importar do TikTok Shop"}
+              </Button>
+              <p>Se a consulta falhar, você pode continuar preenchendo os dados manualmente.</p>
+            </div>
+          )}
           {isEdit && (
             <TextField
               error={combinedErrors.constraints}

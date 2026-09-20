@@ -1,0 +1,43 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { CaptApiImportError, fetchCaptApiProduct } from "./captapi";
+
+const productUrl = "https://shop.tiktok.com/br/pdp/produto/1735872517465343013?source=feed";
+const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+test("mapeia produto BR da CaptAPI sem expor segredo e envia região", async () => {
+  const previous = process.env.CAPTAPI_API_KEY;
+  process.env.CAPTAPI_API_KEY = "test-only-key";
+  let requested: URL | undefined;
+  let authorization = "";
+  try {
+    const product = await fetchCaptApiProduct(productUrl, async (input, init) => {
+      requested = new URL(input.toString());
+      authorization = String(init?.headers && new Headers(init.headers).get("authorization"));
+      return response({ success: true, data: { title: "Tripé", description: "Tripé retrátil", price: 39.9, currency: "BRL", url: productUrl, categories: [{ name: "Eletrônicos" }], saleProperties: [{ values: [{ name: "Preto" }] }], images: ["https://cdn.example/image.jpg"], discount: "10%" } });
+    });
+    assert.equal(requested?.searchParams.get("region"), "BR");
+    assert.equal(requested?.searchParams.get("url"), productUrl);
+    assert.equal(authorization, "Bearer test-only-key");
+    assert.deepEqual(product, { name: "Tripé", description: "Tripé retrátil", category: "Eletrônicos", features: ["Preto", "Eletrônicos"], price: "39.9", priceCurrency: "R$", imageRefs: ["https://cdn.example/image.jpg"], url: productUrl, discountType: "PERCENTAGE", discountValue: "10" });
+  } finally {
+    if (previous === undefined) delete process.env.CAPTAPI_API_KEY; else process.env.CAPTAPI_API_KEY = previous;
+  }
+});
+
+test("falhas da CaptAPI são recuperáveis e não fazem nova tentativa escondida", async () => {
+  const previous = process.env.CAPTAPI_API_KEY;
+  process.env.CAPTAPI_API_KEY = "test-only-key";
+  try {
+    await assert.rejects(() => fetchCaptApiProduct("https://example.com/pdp/1", async () => response({})), { code: "IMPORT-URL-INVALID" });
+    await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => response({ success: true, data: { title: "Sem preço" } })), { code: "IMPORT-SHAPE-INCOMPLETE" });
+    await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => response({ success: true, data: { title: "Produto", description: "Descrição", price: 10, currency: "BRL", categories: [{ name: "Categoria" }], discount: "101%" } })), { code: "IMPORT-SHAPE-INCOMPLETE" });
+    await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => ({ ok: true, text: async () => { throw new Error("invalid json"); } } as unknown as Response)), { code: "IMPORT-JSON-INVALID" });
+    await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => response({}, 503)), { code: "IMPORT-PROVIDER-ERROR" });
+    await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => { throw new Error("offline"); }), { code: "IMPORT-NETWORK" });
+    await assert.rejects(() => fetchCaptApiProduct("https://www.tiktok.com/video/1", async () => response({})), { code: "IMPORT-URL-INVALID" });
+    await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => response("x".repeat(1_000_001))), { code: "IMPORT-RESPONSE-TOO-LARGE" });
+  } finally {
+    if (previous === undefined) delete process.env.CAPTAPI_API_KEY; else process.env.CAPTAPI_API_KEY = previous;
+  }
+});

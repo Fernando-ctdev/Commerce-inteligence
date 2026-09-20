@@ -25,6 +25,7 @@ import {
   reactivateTenantProduct,
   validateManualProductInput,
 } from "./service.js";
+import { handleImportProduct } from "./import-http.js";
 import { startCommerceIntelligence } from "../commerce-intelligence/service.js";
 import { handleGet, handleRetry } from "../commerce-intelligence/http-status.js";
 import { GenerationError } from "../commerce-intelligence/errors.js";
@@ -422,6 +423,51 @@ const get = (token: string) =>
     method: "GET",
     headers: { cookie: `${SESSION_COOKIE}=${token}` },
   });
+
+test("importação CaptAPI BR mapeia e persiste pelo service existente", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+  const previousKey = process.env.CAPTAPI_API_KEY;
+  const previousFetch = globalThis.fetch;
+  process.env.CAPTAPI_API_KEY = "test-only-key";
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    success: true,
+    data: {
+      title: "Tripé retrátil para celular",
+      description: "Tripé com luz LED e Bluetooth.",
+      price: 89.9,
+      currency: "BRL",
+      categories: [{ name: "Eletrônicos" }],
+      saleProperties: [{ values: [{ name: "Preto" }] }],
+      images: ["https://cdn.example/tripe.jpg"],
+      url: "https://shop.tiktok.com/br/pdp/tripe/1735872517465343013",
+    },
+  }), { status: 200, headers: { "content-type": "application/json" } });
+  try {
+    const res = await handleImportProduct(new Request(`${ORIGIN}/api/products/import`, {
+      method: "POST",
+      headers: {
+        origin: ORIGIN,
+        "sec-fetch-site": "same-origin",
+        cookie: `${SESSION_COOKIE}=${token}`,
+        "idempotency-key": "captapi-import-test-key",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ url: "https://shop.tiktok.com/br/pdp/tripe/1735872517465343013" }),
+    }));
+    assert.equal(res.status, 200);
+    const body = await res.json() as { id: string };
+    const product = await prisma.product.findFirst({ where: { id: body.id, tenantId } });
+    assert.equal(product?.name, "Tripé retrátil para celular");
+    assert.equal(product?.priceCurrency, "R$");
+    assert.deepEqual(product?.features, ["Preto", "Eletrônicos"]);
+    assert.equal(product?.submittedUrl, "https://shop.tiktok.com/br/pdp/tripe/1735872517465343013");
+    assert.deepEqual(product?.provenance, { origin: "captapi" });
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.CAPTAPI_API_KEY; else process.env.CAPTAPI_API_KEY = previousKey;
+  }
+});
 
 test("POST sem Idempotency-Key é rejeitado antes de persistir", async (t) => {
   if (!dbUp) return t.skip();

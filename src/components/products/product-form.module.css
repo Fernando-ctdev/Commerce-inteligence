@@ -310,6 +310,19 @@
   min-height: 44px;
 }
 
+.importAction {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.importAction p {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  margin: 0;
+}
+
 .imageManager {
   align-items: stretch;
   display: grid;
