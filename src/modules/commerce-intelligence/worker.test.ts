@@ -46,19 +46,22 @@ test("run metadata carries engineVersion and gateVersion snapshots", () => {
   assert.deepEqual(metadata.patternReplacements, [{ field: "cta", replacedWithId: "cta-x", reason: "função promo sem pattern deliverable" }]);
   assert.deepEqual(metadata.understandingReductions, [{ field: "purchaseBarriers", received: 9, kept: 8 }]);
 });
-test("brief persistence keeps development bullets and strips legacy scenes", () => {
-  const payload = briefPayloadForPersistence({ contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: ["Ponto de desenvolvimento", "Ponto de desenvolvimento"], script: "Roteiro oral", cta: "CTA", scenes: ["cena antiga"] } as never);
-  assert.deepEqual(payload.development, ["Ponto de desenvolvimento", "Ponto de desenvolvimento"]);
+const v2Bullet = { text: "Ponto de desenvolvimento", action: "Mostre", rationale: "para destacar o ponto", factRefs: ["fact:features"], cta: "Confira o produto." };
+test("brief persistence keeps development bullets and strips legacy scenes (v2)", () => {
+  const payload = briefPayloadForPersistence({ contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: ["Ponto de desenvolvimento", "Ponto de desenvolvimento"], script: "Roteiro oral", cta: "CTA", scenes: ["cena antiga"] } as never, [v2Bullet, v2Bullet]);
+  assert.equal(payload.version, 2, "payload v2 carrega marcador de versão");
+  assert.deepEqual(payload.development, [v2Bullet, v2Bullet], "persistência é DevelopmentBullet[] canônico");
   assert.equal("scenes" in payload, false);
 });
 test("brief persistence rejects missing development", () => {
   assert.throws(() => briefPayloadForPersistence({ contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", script: "Roteiro oral", cta: "CTA" } as never), /development/);
 });
-test("brief persistence rejects empty, oversized, or non-string development bullets", () => {
+test("brief persistence rejects missing/misaligned structured bullets (string[] não é persistido)", () => {
   const base = { contentId: "c1", briefVersionId: "b1", version: 1 as const, angle: "a", hook: "h", script: "Roteiro oral", cta: "CTA" };
-  for (const development of [[], ["1", "2", "3", "4", "5", "6", "7"], ["válido", 2]]) {
-    assert.throws(() => briefPayloadForPersistence({ ...base, development } as never), /development/);
-  }
+  assert.throws(() => briefPayloadForPersistence({ ...base, development: [{ text: "Ponto de desenvolvimento", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Ponto de desenvolvimento", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }] } as never), /bullets estruturados/);
+  assert.throws(() => briefPayloadForPersistence({ ...base, development: [{ text: "Ponto de desenvolvimento", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Outro ponto", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }] } as never, [v2Bullet, v2Bullet]), /bullets estruturados/);
+  assert.throws(() => briefPayloadForPersistence({ ...base, development: [{ text: "Ponto de desenvolvimento", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Ponto de desenvolvimento", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }] } as never, [{ ...v2Bullet, factRefs: [] }, v2Bullet]), /bullets estruturados/);
+  assert.throws(() => briefPayloadForPersistence({ ...base, development: [{ text: "1", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "2", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "3", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "4", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "5", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "6", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "7", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }] } as never), /development/);
 });
 test("failure metadata persists internal code, current stage and sanitized causes per brief", () => {
   const metadata = internalFailureMetadata("GEN-REPAIR-EXHAUSTED", "GENERATING_BRIEFS", {
@@ -187,9 +190,9 @@ test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlist
     { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s3", confidence: 0.9, evidenceRefs: ["product:name"] },
   ] };
   const strategy = { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
-  const badBullet = { text: "Prova os 999 kg de carga para o", action: "Prova", factRef: "product:description", rationale: "para o" };
+  const badBullet = { text: "Prova os 999 kg de carga para o", action: "Prova", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para o" };
   // v4: text carrega ≥2 termos do fato após o conector (contrato text/rationale explícito).
-  const goodBullet = { text: "Destaque o tecido respiravel para explicar como o tecido respiravel ajuda no uso diario", action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel ajuda no uso diario" };
+  const goodBullet = { text: "Destaque o tecido respiravel para explicar como o tecido respiravel ajuda no uso diario", action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel ajuda no uso diario" };
   const judgeBatchPass = (input?: { trustedContext?: unknown }) => {
     const items = recordOf(input?.trustedContext)?.items;
     const list = Array.isArray(items) ? items as Array<Record<string, unknown>> : [];
@@ -208,7 +211,7 @@ test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlist
     if (task === "PRODUCT_UNDERSTANDING") return understanding;
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
     if (task === "STRATEGY_SYNTHESIS") return strategy;
-    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: envelope.opportunities.map((_opportunity, index) => ({ commercialObjective: `c${index + 1}`, angle: `a${index + 1}`, coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: envelope.opportunities.map((_opportunity, index) => ({ commercialObjective: `c${index + 1}`, angle: `a${index + 1}`, coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] })) };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [
       { angle: "a1", hook: "h1", development: [badBullet, badBullet], script: "Fale sobre o produto", cta: "c1" },
       { angle: "a2", hook: "h2", development: [goodBullet, goodBullet], script: "Fale sobre o produto", cta: "c2" },

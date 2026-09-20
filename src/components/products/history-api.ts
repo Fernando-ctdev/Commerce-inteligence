@@ -8,6 +8,9 @@ export type ProductHistoryResponse = {
     finishedAt: string | null;
     requestedContents: number;
     cost: HistoryCost;
+    /** Contrato de observabilidade: presentes quando o backend os expuser; ausentes → UI exibe estado indisponível. */
+    jobId?: string;
+    usage?: { inputTokens: number | null; outputTokens: number | null };
     contents: Array<{ position: number; cost: HistoryCost }>;
   }>;
 };
@@ -38,6 +41,22 @@ function cost(value: unknown): HistoryCost {
   return { currency, amountMinor, completeness: state as HistoryCompleteness };
 }
 
+/** Contrato de observabilidade: repassa jobId/usage allowlist apenas quando presentes; null preservado distinto de 0. Provider/modelo/tier/prompt/metadata bruta nunca são lidos. */
+function optionalObservability(rawJob: Record<string, unknown>): { jobId?: string; usage?: { inputTokens: number | null; outputTokens: number | null } } {
+  const jobId = typeof rawJob.jobId === "string" && rawJob.jobId.trim() ? rawJob.jobId.trim() : undefined;
+  const usageRecord = object(rawJob.usage);
+  const usage = usageRecord
+    ? {
+        inputTokens: typeof usageRecord.inputTokens === "number" && Number.isFinite(usageRecord.inputTokens) ? usageRecord.inputTokens : null,
+        outputTokens: typeof usageRecord.outputTokens === "number" && Number.isFinite(usageRecord.outputTokens) ? usageRecord.outputTokens : null,
+      }
+    : undefined;
+  return {
+    ...(jobId ? { jobId } : {}),
+    ...(usage ? { usage } : {}),
+  };
+}
+
 export function normalizeProductHistory(value: unknown): ProductHistoryResponse {
   const record = object(value);
   if (!record || !Array.isArray(record.jobs)) invalid();
@@ -56,6 +75,7 @@ export function normalizeProductHistory(value: unknown): ProductHistoryResponse 
         finishedAt,
         requestedContents,
         cost: cost(job.cost),
+        ...optionalObservability(job),
         contents: job.contents.map((rawContent) => {
           const content = object(rawContent);
           const position = content?.position;

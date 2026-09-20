@@ -196,6 +196,25 @@ function summarize(entries: CostTotal[]): CostTotal {
   return { currency: withAmount[0]!.currency, amountMinor, completeness: allComplete ? "COMPLETE" : "PARTIAL" };
 }
 
+// Agregado de USO por run (envelope/history): soma as dimensões presentes nas
+// capabilities (e attempts); dimensão sem contador confiável permanece null
+// (nunca 0 inferido) e run sem dados projeta tudo null — ausência NUNCA vira zero.
+export function aggregateRunUsage(metadata: unknown): ProviderTokenUsage {
+  const raw = (metadata as { capabilities?: unknown } | null)?.capabilities;
+  const entries: RunCostInputEvent[] = Array.isArray(raw) ? (raw as RunCostInputEvent[]) : [];
+  const totals: ProviderTokenUsage = { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null };
+  const add = (usage: ProviderTokenUsage | undefined) => {
+    if (!usage) return;
+    for (const key of ["inputTokens", "outputTokens", "reasoningTokens", "cachedTokens"] as const)
+      if (typeof usage[key] === "number") totals[key] = (totals[key] ?? 0) + (usage[key] as number);
+  };
+  for (const entry of entries) {
+    if (Array.isArray(entry.attempts)) for (const attempt of entry.attempts) add(attempt.usage);
+    else if (entry.usage || entry.reportedCost) add(entry.usage);
+  }
+  return totals;
+}
+
 export function aggregateRunCosts(metadata: unknown): RunCostAggregates {
   const raw = (metadata as { capabilities?: unknown } | null)?.capabilities;
   const entries: CostRecordLike[] = Array.isArray(raw) ? (raw as CostRecordLike[]) : [];

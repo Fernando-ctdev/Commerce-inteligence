@@ -32,7 +32,7 @@ const qualityPass = { parts: [
   { part: "cta", status: "PASS", criterion: "cta_clarity", reason: "meets_criteria" },
   { part: "scenes", status: "PASS", criterion: "scenes_actionable", reason: "meets_criteria" },
 ] };
-const developmentOk = [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso" }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso" }];
+const developmentOk = [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso" }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso" }];
 
 test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, parcial 3/5 só por falha objetiva e script sem metainstrução de cena", async () => {
   const judgeCallSizes: number[] = [];
@@ -43,7 +43,7 @@ test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, parcial 3/
     if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["barreira"], evidenceRefs: ["product:name"] };
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 5 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
-    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 5, opportunities: Array.from({ length: 5 }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstração direta", "teste demonstrativo do tecido", "mostrando o resultado no tecido", "prova de resistência do tecido"][i % 4], noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 5, opportunities: Array.from({ length: 5 }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstration", "problem", "discovery", "price-value", "other"][i], noveltyTargets: ["n"] })) };
     if (task === "CONTENT_BRIEF_GENERATION") {
       briefCalls += 1;
       const size = [4, 1][briefCalls - 1];
@@ -52,7 +52,7 @@ test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, parcial 3/
         return {
           angle: `a${position}`,
           hook: `Gancho ${position}`,
-          development: developmentOk.map((b) => ({ text: b.text, action: b.action, factRef: b.factRef, rationale: b.rationale })),
+          development: developmentOk.map((b) => ({ text: b.text, action: b.action, factRefs: b.factRefs, cta: b.cta, rationale: b.rationale })),
           // Vazamento registrado na rodada real: instrução de objeto destinada a
           // cenas no script do Content 02 — hoje detectada pelo hard gate (§5).
           script: position === 2 ? "[mostra a etiqueta por dentro] Tecido respiravel" : "Tecido respiravel",
@@ -63,7 +63,7 @@ test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, parcial 3/
     if (task === "CONTENT_BRIEF_REPAIR") {
       briefRepairContexts.push(recordOf(input?.trustedContext) ?? {});
       // Contrato do repair (adendo 2): development estruturado {text, action, factRef, rationale}.
-      return { angle: "a2", hook: "Gancho 2", development: [{ text: developmentOk[0].text, action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }, { text: developmentOk[0].text, action: "Destaque", factRef: "product:description", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }], script: "Tecido respiravel", cta: "cta 2" };
+      return { angle: "a2", hook: "Gancho 2", development: [{ text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }, { text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }], script: "Tecido respiravel", cta: "cta 2" };
     }
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
     if (task === "CONTENT_QUALITY_JUDGE") {

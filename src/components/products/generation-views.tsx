@@ -23,6 +23,7 @@ import {
   scenesProjection,
   type GenerationActionProjection,
   type ScenesProjection,
+  executionObservability,
 } from "./generation-ui-model";
 import type { ProductHistoryResponse } from "./history-api";
 import { historyViewModel } from "./history-ui-model";
@@ -379,6 +380,19 @@ export function OperationalSummaryCard({ className, job, readiness }: {
               </li>
             ))}
           </ol>
+          {/* Contrato de observabilidade: jobId/status/timestamps/uso/custo sob demanda,
+              com estado indisponível explícito; provider/modelo/prompt/metadata não existem nesta projeção. */}
+          <details className={styles.disclosure}>
+            <summary>Dados da execução</summary>
+            <dl className={styles.historyMeta}>
+              {executionObservability(job).map((row) => (
+                <div className={styles.metaItem} key={row.label}>
+                  <dt>{row.label}</dt>
+                  <dd className={row.mono ? styles.monoId : undefined}>{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
         </>
       )}
     </section>
@@ -543,9 +557,29 @@ export function StrategyView({ job }: { job: GenerationRecord | null }) {
 export function ContentsView({ job, active }: { job: GenerationRecord | null; active: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   if (active) {
+    /* Estado vivo (Método 3S): headline + copy de continuidade na coluna de
+       leitura e etapa real derivada de status/stage — sem percentual ou ETA.
+       A trilha completa fica na Visão geral (OperationalSummaryCard). */
+    const current = job ? phaseStates(job.status, job.stage).find((phase) => phase.state === "active") ?? null : null;
     return (
-      <section className={styles.panel} id="generated-contents">
-        <p>A análise está em andamento. Os Briefings aparecem aqui quando concluir — nenhum conteúdo parcial é exibido.</p>
+      <section aria-busy="true" className={styles.panel} id="generated-contents">
+        <div className={styles.runningState}>
+          <p className={[styles.eyebrow, styles.runningEyebrow].join(" ")}>
+            <span aria-hidden="true" className={styles.runningDot} />
+            Commerce Intelligence
+          </p>
+          <h2 className={styles.runningTitle}>Seus Briefings estão sendo preparados</h2>
+          <p className={styles.runningStep} role="status">
+            {job
+              ? current
+                ? `${statusLabels[job.status]} · ${stageMessage(current.stage)}`
+                : statusLabels[job.status]
+              : "Recuperando o estado da análise..."}
+          </p>
+          <p className={styles.runningNote}>
+            Eles aparecem aqui quando a análise concluir — nenhum conteúdo parcial é exibido.
+          </p>
+        </div>
       </section>
     );
   }
@@ -621,6 +655,20 @@ export function HistoryView({
               <span>{item.cost.completenessLabel}</span>
             </div>
           </div>
+          <dl className={styles.historyMeta}>
+            <div className={styles.metaItem}>
+              <dt>Job</dt>
+              <dd className={item.jobId ? styles.monoId : undefined}>{item.jobId ?? "Job indisponível"}</dd>
+            </div>
+            <div className={styles.metaItem}>
+              <dt>Concluída em</dt>
+              <dd>{item.finishedLabel ?? "Indisponível"}</dd>
+            </div>
+            <div className={styles.metaItem}>
+              <dt>Uso</dt>
+              <dd>{item.usageLabel ?? "Uso indisponível"}</dd>
+            </div>
+          </dl>
           {item.contents.length > 0 && (
             <details className={styles.disclosure}>
               <summary>Ver custos por Conteúdo</summary>

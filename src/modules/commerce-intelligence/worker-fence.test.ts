@@ -60,7 +60,9 @@ function syntheticOutput(strategyId = `strat-${randomUUID()}`, opts: { includeBr
     partial: null,
   };
   if (opts.includeBrief) {
-    output.briefs = [{ contentId, briefVersionId, version: 1, angle: "demonstração", hook: "Gancho do teste de fence", development: ["Destaque o uso do produto para orientar a conversa sobre o uso", "Destaque o uso do produto para orientar a conversa sobre o uso"], script: "Fale sobre o uso do produto", cta: "cta do teste" }];
+    // Cutover v2: persistência exige DevelopmentBullet[] canônico alinhado à projeção.
+    const bulletsV2 = ["Destaque o uso do produto para orientar a conversa sobre o uso", "Destaque o uso do produto para orientar a conversa sobre o uso"].map((text) => ({ text, action: "Destaque", rationale: "para orientar a conversa sobre o uso", factRefs: ["product:description"], cta: "Confira o produto." }));
+    output.briefs = [{ contentId, briefVersionId, version: 1, angle: "demonstração", hook: "Gancho do teste de fence", development: bulletsV2.map(({ text }) => text), bullets: bulletsV2, script: "Fale sobre o uso do produto", cta: "cta do teste" } as never];
     output.reports = [{ briefId: `${contentId}:${briefVersionId}`, gateVersion: 1, factualStatus: "SUPPORTED", claimType: "objetivo", evidenceRefs: [], structuralStatus: "PASS", platformStatus: "PASS", varietyStatus: "PASS", issues: [], decision: "PASS" }];
   }
   return output;
@@ -87,6 +89,7 @@ async function criarJobQueued() {
       generatedContentsMonth: monthUtc(),
       status: "QUEUED",
       stage: "UNDERSTANDING_PRODUCT",
+      nextAttemptAt: new Date(Date.now() - 60_000),
     },
   });
   await prisma.generationUsageReservation.create({

@@ -36,6 +36,10 @@ function safeGateIssue(value: unknown): string {
   if (/claim .*sem evidência autorizada/i.test(value)) return "claim sem suporte em evidência";
   if (/development contém claim sem evidência/i.test(value)) return "development inválido";
   if (/duplicata|repetid|usado como/i.test(value)) return "variety_issue";
+  // v2: códigos específicos por check do gate de development/CTA (sem conteúdo).
+  if (/factRef/i.test(value)) return "factref_grounding_below_min";
+  if (/cta sem suporte/i.test(value)) return "cta_invalid";
+  if (/grounding/i.test(value)) return "grounding_below_min";
   if (/development/i.test(value)) return "development_issue";
   if (/produção incompatível/i.test(value)) return "production_issue";
   if (/skill da plataforma/i.test(value)) return "platform_issue";

@@ -8,6 +8,11 @@ import {
   canCancelGeneration,
   contentStatusLabel,
   contentsSummaryLabel,
+  executionObservability,
+  formatAmount,
+  formatCostLabel,
+  formatTimestamp,
+  formatUsageLabel,
   generationStatusLabel,
   isActiveGeneration,
   isActiveLimitError,
@@ -16,6 +21,7 @@ import {
   isToastDismissed,
   missingReasonLabel,
   normalizeGenerationAction,
+  OBSERVABILITY_UNAVAILABLE,
   partialModel,
   projectionDegradedModel,
   phaseStateLabels,
@@ -283,4 +289,57 @@ test("positivos sem code e terminais de falha não entram no estado degradado", 
   assert.equal(projectionDegradedModel({ code: undefined, status: "SUCCEEDED_PARTIAL" }).degraded, false);
   assert.equal(projectionDegradedModel({ code: "GEN-PROJECTION", status: "FAILED" }).degraded, false);
   assert.equal(projectionDegradedModel(null).degraded, false);
+});
+
+test("timestamps do contrato de observabilidade: ausente ou inválido fica indisponível", () => {
+  assert.equal(formatTimestamp(null), null);
+  assert.equal(formatTimestamp(undefined), null);
+  assert.equal(formatTimestamp("invalid"), null);
+  assert.match(formatTimestamp("2026-09-18T12:30:00.000Z") ?? "", /^\d{2}\/\d{2}\/\d{4}/);
+});
+
+test("uso e custo agregados: null quando nada é conhecível, formatados quando presentes", () => {
+  assert.equal(formatUsageLabel(null), null);
+  assert.equal(formatUsageLabel({ inputTokens: null, outputTokens: null }), null);
+  assert.equal(formatUsageLabel({ inputTokens: 1200, outputTokens: 340 }), "1.200 entrada · 340 saída (tokens)");
+  assert.equal(formatCostLabel(null), null);
+  assert.equal(formatCostLabel({ currency: null, amountMinor: "1234" }), null);
+  assert.equal(formatCostLabel({ currency: "BRL", amountMinor: "1234" }), "R$ 12,34");
+  assert.equal(formatAmount("1234567", "BRL"), "R$ 12.345,67");
+});
+
+test("executionObservability expõe jobId/status/timestamps/uso/custo com indisponíveis explícitos", () => {
+  const rows = executionObservability({
+    id: "job-7",
+    status: "RUNNING",
+    createdAt: "2026-09-18T12:30:00.000Z",
+    startedAt: null,
+    finishedAt: null,
+  });
+  const byLabel = Object.fromEntries(rows.map((row) => [row.label, row]));
+  assert.equal(byLabel["Job"]?.value, "job-7");
+  assert.equal(byLabel["Job"]?.mono, true);
+  assert.equal(byLabel["Status"]?.value, "Analisando");
+  assert.notEqual(byLabel["Solicitada em"]?.value, OBSERVABILITY_UNAVAILABLE);
+  assert.equal(byLabel["Iniciada em"]?.value, OBSERVABILITY_UNAVAILABLE);
+  assert.equal(byLabel["Concluída em"]?.value, OBSERVABILITY_UNAVAILABLE);
+  assert.equal(byLabel["Uso"]?.value, "Uso indisponível");
+  assert.equal(byLabel["Custo"]?.value, "Custo indisponível");
+  assert.equal(executionObservability(null).length, 0);
+});
+
+test("projeção de observabilidade nunca carrega provider, modelo, prompt ou metadata", () => {
+  const rows = executionObservability({
+    id: "job-7",
+    status: "SUCCEEDED",
+    createdAt: null,
+    startedAt: null,
+    finishedAt: null,
+    usage: { inputTokens: 1, outputTokens: 2 },
+    cost: { currency: "BRL", amountMinor: "10" },
+  });
+  const serialized = JSON.stringify(rows);
+  for (const field of ["provider", "model", "tier", "prompt", "latency", "logs"]) {
+    assert.equal(serialized.includes(field), false, field);
+  }
 });

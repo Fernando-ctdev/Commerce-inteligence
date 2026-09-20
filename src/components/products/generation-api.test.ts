@@ -177,3 +177,17 @@ test("terminal positivo NÃO degradado continua fail-fast (GEN-SCHEMA sem conten
   delete (semConteudo as Record<string, unknown>).code;
   assert.throws(() => normalizeGeneration(semConteudo), (error: unknown) => error instanceof GenerationApiError && error.code === "GEN-SCHEMA");
 });
+
+test("repassa usage/cost do contrato de observabilidade preservando null distinto de 0", () => {
+  const withMeta = normalizeGeneration({ id: "job-1", productId: "product-1", status: "QUEUED", stage: null, targetContentCount: 2, usage: { inputTokens: 0, outputTokens: null }, cost: { currency: "BRL", amountMinor: "0" } });
+  assert.deepEqual(withMeta.usage, { inputTokens: 0, outputTokens: null });
+  assert.deepEqual(withMeta.cost, { currency: "BRL", amountMinor: "0" });
+
+  const withoutMeta = normalizeGeneration({ id: "job-1", productId: "product-1", status: "QUEUED", stage: null, targetContentCount: 2 });
+  assert.equal(withoutMeta.usage, undefined);
+  assert.equal(withoutMeta.cost, undefined);
+
+  const sanitized = normalizeGeneration({ id: "job-1", productId: "product-1", status: "QUEUED", stage: null, targetContentCount: 2, usage: "x", cost: { amountMinor: "12abc", provider: "openai", model: "gpt" } });
+  assert.equal(sanitized.usage, undefined);
+  assert.deepEqual(sanitized.cost, { currency: null, amountMinor: null });
+});

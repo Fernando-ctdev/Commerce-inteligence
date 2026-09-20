@@ -96,6 +96,49 @@ test("SUCCEEDED pleno continua exato-N: mismatch mantém o guard de publicação
   assert.match(html, /ainda não estão prontos/);
 });
 
+const renderContentsActive = async (envelope: unknown) => {
+  const [{ ContentsView }, { normalizeGeneration }] = await Promise.all([import("./generation-views"), import("./generation-api")]);
+  return renderToStaticMarkup(
+    React.createElement(ContentsView, { job: normalizeGeneration(envelope) as GenerationRecord, active: true }),
+  );
+};
+
+const envelopeRodando = () => ({
+  id: "job-running",
+  productId: "product-1",
+  status: "RUNNING",
+  stage: "GENERATING_BRIEFS",
+  targetContentCount: 4,
+  error: null,
+  readiness: "ANALYZING",
+  strategy: {},
+  plan: {},
+  contents: [],
+  createdAt: "2026-01-01T00:00:00.000Z",
+  startedAt: "2026-01-01T00:00:01.000Z",
+  finishedAt: null,
+  attempt: 1,
+});
+
+test("RUNNING: estado vivo anuncia etapa real, sem percentual/ETA nem conteúdo parcial", async () => {
+  const html = await renderContentsActive(envelopeRodando());
+  assert.match(html, /aria-busy="true"/);
+  assert.match(html, /Seus Briefings estão sendo preparados/);
+  assert.match(html, /Analisando/);
+  assert.match(html, /Preparando os Briefings/);
+  assert.match(html, /nenhum conteúdo parcial é exibido/);
+  assert.match(html, /role="status"/);
+  assert.match(html, /aria-hidden="true"/);
+  assert.doesNotMatch(html, /%/);
+});
+
+test("QUEUED sem stage: estado vivo mostra apenas o status da fila", async () => {
+  const html = await renderContentsActive({ ...envelopeRodando(), status: "QUEUED", stage: null });
+  assert.match(html, /aria-busy="true"/);
+  assert.match(html, /Na fila/);
+  assert.doesNotMatch(html, /Preparando os Briefings/);
+});
+
 const renderActions = async (
   envelope: unknown | null,
   opts: { readiness?: GenerationRecord["readiness"]; failed?: boolean; generationAction?: { state: "BLOCKED"; reason: "GEN-ACTIVE"; nextAction: "VIEW_ACTIVE_ANALYSIS" } } = {},
@@ -197,7 +240,68 @@ test("Histórico mostra apenas custo agregado e revela custos de Conteúdo sob d
   assert.match(html, /Ver custos por Conteúdo/);
   assert.match(html, /Conteúdo 1/);
   assert.match(html, /Parcial/);
-  for (const field of ["provider", "model", "tier", "tokens", "prompt", "latency"]) {
+  for (const field of ["provider", "model", "tier", "prompt", "latency"]) {
+    assert.doesNotMatch(html, new RegExp(field, "i"));
+  }
+});
+
+test("Histórico expõe jobId, conclusão e uso com indisponíveis explícitos quando o DTO não os traz", async () => {
+  // Static import não funciona aqui: o stub de .module.css precisa existir antes do primeiro import da view (ver cabeçalho do arquivo).
+  const { HistoryView } = await import("./generation-views");
+  const base = {
+    status: "SUCCEEDED" as const,
+    createdAt: "2026-09-18T12:30:00.000Z",
+    finishedAt: null,
+    requestedContents: 1,
+    cost: { currency: null, amountMinor: null, completeness: "UNAVAILABLE" as const },
+    contents: [],
+  };
+  const withoutMeta = renderToStaticMarkup(React.createElement(HistoryView, { history: { jobs: [base] }, loading: false, error: null }));
+  assert.match(withoutMeta, /Job indisponível/);
+  assert.match(withoutMeta, /Concluída em/);
+  assert.match(withoutMeta, /Uso indisponível/);
+
+  const withMeta = renderToStaticMarkup(React.createElement(HistoryView, {
+    history: { jobs: [{ ...base, jobId: "job-42", usage: { inputTokens: 1200, outputTokens: 340 } }] },
+    loading: false,
+    error: null,
+  }));
+  assert.match(withMeta, /job-42/);
+  assert.match(withMeta, /1\.200 entrada · 340 saída \(tokens\)/);
+});
+
+test("Resumo operacional expõe Dados da execução com jobId e indisponíveis explícitos, sem dados técnicos", async () => {
+  // Static import não funciona aqui: o stub de .module.css precisa existir antes do primeiro import da view (ver cabeçalho do arquivo).
+  const { OperationalSummaryCard } = await import("./generation-views");
+  const job = {
+    id: "job-obs",
+    productId: "product-1",
+    status: "SUCCEEDED",
+    stage: null,
+    targetContentCount: 1,
+    error: null,
+    code: null,
+    strategy: {},
+    plan: {},
+    contents: [],
+    readiness: "READY",
+    createdAt: "2026-09-18T12:30:00.000Z",
+    startedAt: "2026-09-18T12:30:01.000Z",
+    finishedAt: "2026-09-18T12:31:00.000Z",
+    expectedCount: 1,
+    deliveredCount: 1,
+    failedCount: 0,
+    missing: [],
+  } as GenerationRecord;
+  const html = renderToStaticMarkup(React.createElement(OperationalSummaryCard, { job, readiness: "READY" }));
+  assert.match(html, /Dados da execução/);
+  assert.match(html, /job-obs/);
+  assert.match(html, /Solicitada em/);
+  assert.match(html, /Iniciada em/);
+  assert.match(html, /Concluída em/);
+  assert.match(html, /Uso indisponível/);
+  assert.match(html, /Custo indisponível/);
+  for (const field of ["provider", "model", "tier", "prompt", "latency", "logs"]) {
     assert.doesNotMatch(html, new RegExp(field, "i"));
   }
 });

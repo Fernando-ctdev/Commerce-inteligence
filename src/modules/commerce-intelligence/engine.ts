@@ -7,6 +7,7 @@ import {
   validateContentBriefDraft,
   validateContentOpportunity,
   validateContentPlan,
+  validatePlanCreativeOpportunity,
   validateContentSceneSetDraft,
   validateProductStrategy,
   validateProductUnderstanding,
@@ -26,6 +27,7 @@ import {
   type PartialFailureCheckCode,
   type SceneIdea,
 } from "./contract";
+import { buildPlanSkeleton, PLAN_POLICY_VERSION, type PlanSkeleton } from "./planner";
 import {
   loadPlatformSkill,
   projectPlatformSkillSlice,
@@ -45,8 +47,10 @@ import {
   validDevelopmentPoint,
   validateBriefSet,
   type DevelopmentBullet,
+  type DevelopmentBulletDiagnostic,
   type GatePattern,
   type GateReport,
+  developmentGroundingTerms,
 } from "./gates";
 import {
   assertProviderOutput,
@@ -127,6 +131,23 @@ export type CapabilityEvent = {
     durationMs: number;
   };
 };
+// Diagnóstico interno de falha de gate (env-gated: GEN_DEBUG_GATE=1): issues EXATAS
+// + developmentDiagnostics por bullet, para fechamento de causa raiz. NUNCA cruza
+// para o envelope creator-facing; tenant-scoped no metadata do job/run.
+const debugGateIssues = (reports: GateReport[], diagnosticsFor: (contentId: string) => DevelopmentBulletDiagnostic[] | undefined) =>
+  process.env.GEN_DEBUG_GATE === "1"
+    ? reports.map((report) => ({
+        briefId: report.briefId,
+        decision: report.decision,
+        issues: [...report.issues],
+        developmentDiagnostics: diagnosticsFor(report.briefId.split(":")[0] ?? "") ?? [],
+      }))
+    : undefined;
+const hardExhaustedDetail = (extra: Record<string, unknown>) => ({
+  ...extra,
+  ...(process.env.GEN_DEBUG_GATE === "1" ? { genDebugGate: true } : {}),
+});
+
 export type EngineResult = {
   productUnderstanding: Record<string, unknown>;
   strategy: Record<string, unknown>;
@@ -146,6 +167,9 @@ export type EngineResult = {
   qualityRepairs: Array<{ contentId: string; part: QualityPart; round: number; criterion: string; outcome: "REPAIRED" }>;
   validated: number;
   briefOpportunityPositions: number[];
+  // Cutover v2: bullets estruturados canônicos por contentId ENTREGUE — fonte da
+  // persistência v2 (payload.development = bullets); strings são projeção.
+  developmentBullets?: Array<{ contentId: string; bullets: DevelopmentBullet[] }>;
   partial: EnginePartial | null;
 };
 
@@ -407,22 +431,16 @@ function buildRepairContrast(
     : undefined;
 }
 
-// Contrato estruturado compartilhado (design 2026-09-18): parser único do gate valida
-// shape/repertório (GEN-SCHEMA) e produz texto + diagnóstico sanitizado; o texto projetado
-// passa por validateContentBriefDraft e o conjunto por validateBriefSet (autoridade final).
-// Caminho legacy: development: string[] (pré-contrato) é aceito e projetado SEM bullets
-// estruturados — mapa vazio desliga a ancoragem factRef por índice no gate (ela só se
-// aplica com mapa alinhado). Objetos text/action/factRef/rationale são exigidos apenas
-// no formato estruturado novo; array misto (string+objeto) falha GEN-SCHEMA.
+// Contrato canônico compartilhado (cutover v2 — Blueprint): entrada de provider é
+// SEMPRE DevelopmentBullet[] {text, action, rationale, factRefs[], cta}; string[]
+// NÃO é aceito em jobs novos (GEN-SCHEMA) — leitura de histórico legado é papel do
+// leitor versionado (projectBriefPayload). O texto projetado passa por
+// validateContentBriefDraft e o conjunto por validateBriefSet (autoridade final).
 export function parseStructuredBriefDraft(
   output: Record<string, unknown>,
   evidence: EvidenceSnapshot,
 ): { draft: ContentBriefDraft; bullets: DevelopmentBullet[] } {
-  const development = output.development;
-  if (Array.isArray(development) && development.every((item) => typeof item === "string"))
-    return { draft: validateContentBriefDraft({ ...output, development: development as string[] }), bullets: [] };
-  const { texts } = parseStructuredDevelopment(development, evidence);
-  const bullets = Array.isArray(development) ? (development as DevelopmentBullet[]) : [];
+  const { texts, bullets } = parseStructuredDevelopment(output.development, evidence);
   return { draft: validateContentBriefDraft({ ...output, development: texts }), bullets };
 }
 
@@ -825,8 +843,8 @@ async function callCapability(
 function isHookVarietyError(error: unknown): error is ContractError {
   return (
     error instanceof ContractError &&
-    error.code === "GEN-VARIETY" &&
-    /hookMechanism/.test(error.message)
+    /hookMechanism/.test(error.message) &&
+    (error.code === "GEN-VARIETY" || (error.code === "GEN-PATTERN" && /fora do allowlist/.test(error.message)))
   );
 }
 // ADR-025 §1 + B-003-11 (fail-closed): falha isolável por lote é SOMENTE a tipada
@@ -1080,9 +1098,13 @@ function diagnoseFailure(
       labels.add(anyShotList ? "feature_list" : "gate_issue");
       if (anyShotList) checkCodes.add("feature_list");
     } else if (/termos do fato apontado por factRef/.test(issue)) {
-      // Ancoragem factRef (v4): checkCode próprio da cascata, sem payload.
+      // Ancoragem factRef (v2): checkCode próprio da cascata, sem payload.
       labels.add("factref_grounding");
       checkCodes.add("factref_grounding_below_min");
+    } else if (/bullets com cta sem suporte/.test(issue)) {
+      // CTA por bullet (v2): checkCode próprio da cascata, sem payload.
+      labels.add("cta_invalid");
+      checkCodes.add("cta_invalid");
     } else {
       labels.add("gate_issue"); // issue sem mapeamento fixo: rótulo genérico, texto nunca copiado
     }
@@ -1326,8 +1348,18 @@ export async function runFirstGeneration(
       ),
     );
     const strategy = strategyOutput;
+    // Task 1 (deterministic plan skeleton): alocação server-owned sai do provider.
+    const planSkeleton = buildPlanSkeleton({
+      jobId: input.jobId,
+      productId: input.productId,
+      targetContentCount: count,
+      deliverableHookMechanisms,
+      memory: (input.memory ?? {}) as Record<string, unknown>,
+    });
     const planContext = {
       productId: input.productId,
+      planPolicyVersion: planSkeleton.policyVersion,
+      planSlots: planSkeleton.slots,
       deliverableHookMechanisms,
       strategySlice: {
         primaryPositioning: strategy.primaryPositioning,
@@ -1366,25 +1398,36 @@ export async function runFirstGeneration(
       enforceHookVariety = true,
     ): ContentPlan => {
       if (!Array.isArray(value.opportunities)) throw new ContractError("GEN-SCHEMA", "Plano sem opportunities", "opportunities");
+      if (value.opportunities.length !== count)
+        throw new ContractError("GEN-COUNT-RANGE", "Plano deve conter a quantidade exata de oportunidades", "opportunities");
+      // Task 1: provider retorna SOMENTE campos criativos; hookMechanism deve
+      // pertencer ao allowlist do slot correspondente (mesma posição/ordem).
+      const creatives = value.opportunities.map((opportunity) => validatePlanCreativeOpportunity(opportunity));
       // ADR-020: recompute dos fatos atuais — mecanismo sem repertório
       // deliverable é rejeitado no PLANO (cedo, causa acionável, retry causal
       // existente via isHookVarietyError), nunca fallback silencioso.
       const deliverableNow = deliverableHookBuckets(baseEvidence, eligibleHooks);
-      for (const opportunity of value.opportunities) {
-        const mechanism = opportunity && typeof opportunity === "object" && typeof (opportunity as Record<string, unknown>).hookMechanism === "string"
-          ? String((opportunity as Record<string, unknown>).hookMechanism)
-          : "";
-        if (!deliverableNow.includes(classifyHookMechanism(mechanism)))
+      creatives.forEach((creative, index) => {
+        const slot = planSkeleton.slots[index];
+        if (!slot || !slot.eligibleHookMechanisms.includes(creative.hookMechanism))
+          // Violação de allowlist do slot: GEN-PATTERN; mantém retry causal.
+          // mantém o retry causal existente (causa = allowlist do slot).
           throw new ContractError(
-            "GEN-VARIETY",
-            `hookMechanism "${mechanism}" sem repertório deliverable no catálogo para a evidência atual`,
+            "GEN-PATTERN",
+            `hookMechanism "${creative.hookMechanism}" fora do allowlist do slot ${index + 1} (${slot?.eligibleHookMechanisms.join(", ") || "vazio"})`,
             "hookMechanism",
           );
-      }
-      const opportunities = value.opportunities.map((opportunity, index) =>
+        if (!deliverableNow.includes(classifyHookMechanism(creative.hookMechanism)))
+          throw new ContractError(
+            "GEN-VARIETY",
+            `hookMechanism "${creative.hookMechanism}" sem repertório deliverable no catálogo para a evidência atual`,
+            "hookMechanism",
+          );
+      });
+      const opportunities = creatives.map((creative, index) =>
         validateContentOpportunity(
           {
-            ...(opportunity && typeof opportunity === "object" ? opportunity as Record<string, unknown> : {}),
+            ...creative,
             id: `${input.jobId}-opportunity-${index + 1}`,
           },
           allowedSourceIds,
@@ -1513,12 +1556,22 @@ export async function runFirstGeneration(
   // allowlisted do diagnóstico (design 2026-09-19) — factTermsInRationale conta
   // apenas quando factGroundingApplicable.
   const failedBulletIndexesFor = (contentId: string): number[] =>
+    failedBulletTargetsFor(contentId).map(({ index }) => index);
+  // Alvo determinístico do repair (v2): para cada bullet falho, os TERMOS
+  // autorizados do próprio factRef (de developmentRequirements, sem inventar
+  // fatos) — o provider ancora o trecho pós-conector nesses termos.
+  const failedBulletTargetsFor = (contentId: string): Array<{ index: number; factRefs: string[]; terms: string[] }> =>
     (developmentDiagnosticsFor(contentId) ?? [])
-      .filter((d) =>
-        !d.actionPresent || !d.connectorPresent || d.shotList || d.unverifiedClaim ||
+      .map((d) => ({ d }))
+      .filter(({ d }) =>
+        !d.actionPresent || !d.connectorPresent || d.shotList || d.unverifiedClaim || !d.ctaValid ||
         d.textGroundingMatched < 2 || d.rationaleGroundingMatched < 2 ||
         (d.factGroundingApplicable && d.factTermsInRationale < 2))
-      .map((d) => d.index);
+      .map(({ d }) => {
+        const refs = bulletsByContentId.get(contentId)?.[d.index]?.factRefs ?? [];
+        const terms = [...new Set(refs.flatMap((ref) => developmentGroundingTerms(evidence.facts[evidence.refs.indexOf(ref)] ?? "")))].slice(0, 12);
+        return { index: d.index, factRefs: refs, terms };
+      });
   const generateBatch = async (
     entries: Array<{
       opportunity: ContentOpportunity;
@@ -1655,18 +1708,29 @@ export async function runFirstGeneration(
       }
       rawBatch = validatedBatch;
     } else {
+      // Fallback determinístico (testes): fixtures COMPLIANTES com o contrato v2 —
+      // bullets ancorados no primeiro fato autorizado não-name; sem fato não-name
+      // o fallback falha EXPLICITAMENTE (nunca bullets vazios/factRefs vazios).
+      const factIndex = evidence.facts.findIndex((_fact, i) => evidence.refs[i] !== "product:name");
+      if (factIndex < 0)
+        throw new ContractError("GEN-FACT", "Fallback determinístico exige fato autorizado (não product:name) para montar bullets compliantes");
+      const fact = String(evidence.facts[factIndex]);
+      const ref = String(evidence.refs[factIndex]);
       rawBatch = entries.map((entry) => {
         const position = entry.position;
         return {
           angle: `Ângulo ${position}`,
           hook: `Veja como ${input.name} pode ajudar`,
           development: [
-            "Mostre o produto real em uso",
-            "Comente o benefício principal observável",
+            { text: `Mostre ${fact} para explicar como ${fact} ajuda no uso`, action: "Mostre", rationale: `para explicar como ${fact} ajuda no uso`, factRefs: [ref], cta: "Confira o produto na página." },
+            { text: `Comente ${fact} para conectar ${fact} ao dia a dia`, action: "Comente", rationale: `para conectar ${fact} ao dia a dia`, factRefs: [ref], cta: "Confira o produto na página." },
           ],
           script: `Apresente ${input.name} de forma natural e demonstre o uso.`,
           cta: "Confira o produto.",
         };
+      });
+      (rawBatch as Array<{ development: DevelopmentBullet[] }>).forEach((item, index) => {
+        bulletsByContentId.set(`${input.jobId}-content-${entries[index]!.position}`, item.development);
       });
     }
     const assigned = validatedBatch ?? assignServerBriefIds(rawBatch, input.jobId, 0);
@@ -1769,6 +1833,8 @@ export async function runFirstGeneration(
         developmentDiagnostics: developmentDiagnosticsFor(c.brief.contentId) ?? [],
         // Design 2026-09-19: o repair mira os índices falhos (instrução correspondente).
         failedBulletIndexes: failedBulletIndexesFor(c.brief.contentId),
+        // v2: termos autorizados por bullet falho — ancoragem determinística, sem inventar fatos.
+        failedBullets: failedBulletTargetsFor(c.brief.contentId),
         repairContrast: buildRepairContrast(
           evidence.facts.filter(
             (_fact, index) => evidence.refs[index] !== "product:name",
@@ -1859,6 +1925,7 @@ export async function runFirstGeneration(
         expected: count,
         received: 0,
         rejected: sanitizeGateReports(candidateReports.filter((report) => report.decision !== "PASS")),
+        ...(debugGateIssues(candidateReports.filter((report) => report.decision !== "PASS"), developmentDiagnosticsFor) ?? {}),
       },
     );
   const hard = hardIdx.map((i) => candidates[i]);
@@ -2044,16 +2111,26 @@ export async function runFirstGeneration(
           const candidate = hard[index];
           // ADR-025 §1: validação individual da parte retornada — falha isola o
           // item (a parte original é preservada), nunca os irmãos do lote.
+          // Cutover v2: development chega como DevelopmentBullet[] e é validado
+          // pelo parser canônico; o mapa de bullets é atualizado quando a
+          // composição passa (nunca com strings).
+          let developmentBullets: DevelopmentBullet[] | undefined;
           let replacement: unknown;
           try {
             replacement = part === "scenes"
               ? validateContentSceneSetDraft({ scenes: content })
-              : validateContentBriefDraft({
-                  angle: candidate.brief.angle, hook: part === "hook" ? content : candidate.brief.hook,
-                  development: part === "development" ? content : candidate.brief.development,
-                  script: part === "script" ? content : candidate.brief.script,
-                  cta: part === "cta" ? content : candidate.brief.cta,
-                })[part];
+              : part === "development"
+                ? (() => {
+                    const parsedDev = parseStructuredDevelopment(content, evidence);
+                    developmentBullets = parsedDev.bullets;
+                    return parsedDev.texts;
+                  })()
+                : validateContentBriefDraft({
+                    angle: candidate.brief.angle, hook: part === "hook" ? content : candidate.brief.hook,
+                    development: candidate.brief.development,
+                    script: part === "script" ? content : candidate.brief.script,
+                    cta: part === "cta" ? content : candidate.brief.cta,
+                  })[part];
           } catch (error) {
             // B-003-11: somente violação de contrato do validador server-side isola
             // o item; qualquer outro erro repropaga (fail-closed).
@@ -2064,7 +2141,11 @@ export async function runFirstGeneration(
           if (part === "scenes") {
             const repairedScenes = replacement as SceneIdea[];
             sceneSets[index] = { ...sceneSets[index], status: "AVAILABLE", scenes: repairedScenes, generated: repairedScenes.length, dropped: 0 };
-          } else hard[index] = { ...candidate, brief: composed.brief };
+          } else {
+            hard[index] = { ...candidate, brief: composed.brief };
+            if (part === "development" && developmentBullets)
+              bulletsByContentId.set(candidate.brief.contentId, developmentBullets);
+          }
           const compositionReports = hardGateComposition(index);
           if (compositionReports.length) {
             // ADR-021: composição reprovada falha o item, não o job.
@@ -2169,6 +2250,10 @@ export async function runFirstGeneration(
           ...compositionDiagnostics,
           ...sceneDiagnostics,
         ],
+        ...(debugGateIssues(
+          [...candidateReports.filter((_, i) => hardFailIdx.includes(i)), ...deliveredReports.filter((report) => report.decision !== "PASS")],
+          developmentDiagnosticsFor,
+        ) ?? {}),
       },
     );
   // Assinatura residual por item (ADR-021 decisão 5): checkCodes da cascata +
@@ -2233,6 +2318,9 @@ export async function runFirstGeneration(
     qualityRepairs,
     validated: delivered.length,
     briefOpportunityPositions: delivered.map((i) => hardIdx[i]),
+    developmentBullets: delivered
+      .map((i) => ({ contentId: hard[i].brief.contentId, bullets: bulletsByContentId.get(hard[i].brief.contentId) }))
+      .filter((entry): entry is { contentId: string; bullets: DevelopmentBullet[] } => Array.isArray(entry.bullets) && entry.bullets.length > 0),
     partial: failedCount > 0 ? { expectedCount: count, deliveredCount: delivered.length, failedCount, failedItems } : null,
   };
 }

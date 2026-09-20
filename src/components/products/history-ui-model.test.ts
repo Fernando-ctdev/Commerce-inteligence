@@ -61,9 +61,41 @@ test("normaliza o DTO público sem identificadores técnicos", () => {
   assert.equal("contentId" in normalized.jobs[0]!.contents[0]!, false);
 });
 
+test("expõe jobId, conclusão e uso apenas quando o DTO os traz", () => {
+  const withMeta = historyViewModel(history({ jobId: "job-1", usage: { inputTokens: 1200, outputTokens: 340 } }));
+  assert.equal(withMeta.jobs[0]?.jobId, "job-1");
+  assert.ok(withMeta.jobs[0]?.finishedLabel);
+  assert.equal(withMeta.jobs[0]?.usageLabel, "1.200 entrada · 340 saída (tokens)");
+
+  const withoutMeta = historyViewModel(history({ finishedAt: null, usage: { inputTokens: null, outputTokens: null } }));
+  assert.equal(withoutMeta.jobs[0]?.jobId, null);
+  assert.equal(withoutMeta.jobs[0]?.finishedLabel, null);
+  assert.equal(withoutMeta.jobs[0]?.usageLabel, null);
+});
+
 test("modelo creator-facing não contém campos técnicos", () => {
   const serialized = JSON.stringify(historyViewModel(history()));
-  for (const field of ["provider", "model", "tier", "tokens", "prompt", "latency", "logs"]) {
+  for (const field of ["provider", "model", "tier", "prompt", "latency", "logs"]) {
     assert.equal(serialized.includes(field), false, field);
   }
+});
+
+test("repassa jobId/usage do DTO quando presentes e preserva null distinto de 0", () => {
+  const normalized = normalizeProductHistory({
+    jobs: [{
+      status: "SUCCEEDED",
+      createdAt: "2026-09-18T12:30:00.000Z",
+      finishedAt: null,
+      requestedContents: 1,
+      cost: cost("1234", "COMPLETE"),
+      jobId: "job-9",
+      usage: { inputTokens: 0, outputTokens: null },
+      contents: [],
+    }],
+  });
+  assert.equal(normalized.jobs[0]?.jobId, "job-9");
+  assert.deepEqual(normalized.jobs[0]?.usage, { inputTokens: 0, outputTokens: null });
+  const model = historyViewModel(normalized);
+  assert.equal(model.jobs[0]?.jobId, "job-9");
+  assert.equal(model.jobs[0]?.usageLabel, "0 entrada (tokens)");
 });

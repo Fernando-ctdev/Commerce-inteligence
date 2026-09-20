@@ -7,6 +7,14 @@ import { validateTargetContentCount } from "./contract";
 import { monthUtc } from "../entitlements/generation";
 
 export async function startCommerceIntelligence(input: { tenantId: string; userId: string; productId: string; idempotencyKey: string; targetContentCount?: number; mode?: "standard" | "retry" | "complete" }) {
+  // Bloqueio operacional (2026-09-19): identities de teste slice002-*@teste.local
+  // não enfileiram geração — rejeição sanitizada ANTES de locks/reserva/enqueue
+  // (nenhum job é criado; o claim herda o bloqueio por não existirem jobs).
+  const owner = await prisma.user.findUnique({ where: { id: input.userId }, select: { email: true } });
+  if (owner && /^slice002-.*@teste\.local$/i.test(owner.email)) {
+    console.info("[generation-blocked]", { tenantId: input.tenantId, userId: input.userId, code: "GEN-IDENTITY-BLOCKED" });
+    throw new GenerationError("GEN-IDENTITY-BLOCKED", "Análise indisponível para esta conta.");
+  }
   // ADR-021: idempotência por modo/quantidade — mesma chave com modo ou alvo
   // distinto é rejeitada (GEN-IDEMPOTENCY); replay idêntico devolve o mesmo job.
   const mode = input.mode ?? "standard";

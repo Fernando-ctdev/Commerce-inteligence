@@ -164,3 +164,26 @@ test("terminal degradado GEN-PROJECTION não tem recuperação /retry nem /compl
   assert.equal(completeStatuses.includes("SUCCEEDED"), false, "complete não aceita SUCCEEDED");
   assert.equal(completeStatuses.includes("SUCCEEDED_PARTIAL"), true, "complete aceita SUCCEEDED_PARTIAL");
 });
+
+test("cutover v2: persistência real é DevelopmentBullet[] e a projeção é strings allowlisted (sem factRefs/rationale)", async () => {
+  const { briefPayloadForPersistence } = await import("./worker");
+  const { projectBriefPayload } = await import("./http-status");
+  const evidence = { facts: ["Tecido respiravel"], refs: ["product:description"] };
+  const bullets = [
+    { text: "Destaque o tecido respiravel para explicar como o tecido respiravel ajuda no uso", action: "Destaque", factRefs: ["product:description"], rationale: "para explicar como o tecido respiravel ajuda no uso", cta: "Confira o produto na página." },
+    { text: "Mostre o tecido respiravel porque o tecido respiravel reduz o calor", action: "Mostre", factRefs: ["product:description"], rationale: "porque o tecido respiravel reduz o calor", cta: "Confira o produto." },
+  ];
+  const brief = { contentId: "c-v2r", briefVersionId: "b-v2r", version: 1 as const, angle: "a", hook: "Veja o tecido", development: bullets.map(({ text }) => text), script: "Fale sobre o tecido", cta: "cta" };
+  const persisted = briefPayloadForPersistence(brief, bullets) as Record<string, unknown>;
+  assert.equal(persisted.version, 2);
+  assert.equal(Array.isArray(persisted.development) && typeof persisted.development[0] === "object", true, "persistência é object[] canônico");
+  assert.deepEqual(Object.keys((persisted.development as Record<string, unknown>[])[0]!).sort(), ["action", "cta", "factRefs", "rationale", "text"]);
+  const projected = projectBriefPayload(persisted);
+  assert.deepEqual(projected.development, bullets.map(({ text }) => text));
+  const serialized = JSON.stringify(projected);
+  // Chaves de bullet (factRefs/rationale) não atravessam; cta de nível-brief permanece (chave própria do briefing).
+  for (const proibido of ["factRefs", "rationale"]) {
+    assert.ok(!serialized.includes(proibido), `${proibido} não atravessa a projeção`);
+  }
+  assert.ok(serialized.includes('"cta"'), "cta de nível-brief permanece no envelope");
+});

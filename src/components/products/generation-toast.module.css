@@ -38,6 +38,17 @@
   line-height: 18px;
 }
 
+/* jobId + timestamp do contrato de observabilidade; id em Geist Mono (DESIGN.md, type.code). */
+.meta {
+  margin-top: 2px;
+}
+
+.monoId {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+
 .actions {
   align-items: center;
   display: flex;
