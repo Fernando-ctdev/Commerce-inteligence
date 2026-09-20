@@ -9,7 +9,7 @@ Commerce Intelligence transforma um Produto confirmado em uma `ProductStrategy`,
 
 O MVP cobre:
 
-- entrada vigente: **cadastro manual** dos fatos do Produto em `/products/new`, com validação server-side e proveniência (`ADR-022`); a entrada URL-first via Product Importer agentic, Browser Harness e Chromium headless (`ProductCandidate` + confirmação humana) é **direção futura** e não constitui fluxo vigente;
+- entrada: **cadastro manual** dos fatos do Produto em `/products/new` e entrada URL-first via CaptAPI HTTP normal (Slice 012, ADR-027/028), ambas convergindo no mesmo formulário, confirmação humana e serviço de Product; Browser Harness, Chromium, portal e MCP em runtime permanecem fora;
 - ação explícita `Analisar produto` como único momento de criação do `CommerceIntelligenceJob`;
 - `CommerceIntelligenceJob` assíncrono e durável — **um job ativo por usuário no MVP** — com indicador global no App Shell;
 - Commerce Intelligence Engine composta por orchestrator + capabilities com contratos, gates de qualidade e variedade, repair loop e `ProductMemorySnapshot` estruturada;
@@ -25,7 +25,7 @@ Fontes: `docs/product/PRD.md` (produto geral), `PRD-Importation-product.md` (ent
 
 ## 2. Forma do sistema
 
-Monólito modular em TypeScript/Next.js com PostgreSQL/Prisma como fonte de registro. Não há componente de importação no fluxo vigente: Product Importer, Agent Runner, Browser Harness e Chromium headless pertencem à direção futura da importação URL-first (ADR-022) e só entram com novo slice e ADR.
+Monólito modular em TypeScript/Next.js com PostgreSQL/Prisma como fonte de registro. A entrada URL-first do Slice 012 é um componente HTTP do monólito que chama a CaptAPI; Product Importer, Agent Runner, Browser Harness e Chromium headless não entram no runtime deste fluxo.
 
 ```text
 Creator → Web/API → Application Use Cases → Domain Modules
@@ -44,13 +44,13 @@ Creator → Web/API → Application Use Cases → Domain Modules
 |---|---|---|
 | **Identity / Tenant** | sessão server-side, usuário, Tenant/workspace pessoal, autorização | colaboração, RBAC, SSO, billing |
 | **Product (entrada vigente)** | cadastro manual de fatos em `/products/new` com validação server-side, origem/proveniência, correções do creator, readiness derivada (PENDING/ANALYZING/READY/FAILED) | decisão comercial, descoberta automática de fatos |
-| **Product Import (direção futura, ADR-022)** | quando retomado: Product Importer, Agent Runner, Browser Harness, Chromium headless, tentativa de importação, normalização, `ProductCandidate`, fallback manual | fatos sem confirmação humana, contexto estratégico, existência sem slice próprio |
+| **Product Import (Slice 012, ADR-027/028)** | validar URL, chamar CaptAPI HTTP, normalizar `ProductCandidate`, expor lacunas no formulário e encaminhar confirmação ao caso de uso manual | persistência prematura, fatos sem confirmação humana, Browser/portal/MCP, contexto estratégico |
 | **Commerce Intelligence** | `CommerceIntelligenceJob`, `IntelligenceRun`, orchestrator e capabilities (Product Understanding, Commercial Opportunity Mapping, Strategy Builder, Content Portfolio Planner, Brief Generator, Fact Validator, Quality Judge, Variety Gate, Repair), `ProductMemorySnapshot`, Platform Skill | revisão/aprovação, lotes, gravação |
 | **Content Operations** | `Content`, `ContentBriefVersion`, revisão/edição/regeneração/aprovação/descarte, `RecordingBatch` + `RecordingBatchItem`, Agenda e Estúdio | estratégia, chamada direta a modelo |
 | **Entitlements** | limites por plano, reserva/confirmação/liberação transacional, virada mensal | qualidade diferente por plano, cobrança |
 | **Model Router / LLM Gateway** | tarefas lógicas → `IntelligenceTier` → provider adapter, validação de saída | decisão estratégica, regra de negócio |
 
-Módulos são limites de código, não serviços. Não há componente de importação no fluxo vigente (ADR-022); quando a importação for retomada, o Product Importer será um único componente/container, sem Browser Service separado, portal ou microserviço adicional.
+Módulos são limites de código, não serviços. O Product Import é um componente do monólito que chama a CaptAPI por HTTP; não há Browser Service, portal, MCP em runtime, container adicional ou microserviço para esta entrada.
 
 ## 4. Fluxo do domínio
 
@@ -93,31 +93,34 @@ Worker ────────┼──> Application Use Cases ───> Domai
                                    Infrastructure Adapters
 ```
 
-- Web e worker chamam casos de uso; não acessam banco, CDP, provider ou quota diretamente. (Na direção futura de importação, ADR-022, o Product Importer também chamará casos de uso.)
+- Web e worker chamam casos de uso; não acessam banco, CDP, provider ou quota diretamente. O componente de importação do Slice 012 chama o caso de uso da CaptAPI e encaminha o Candidate transitório ao fluxo manual.
 - O domínio não conhece Next.js, Prisma, HTTP, CDP, Browser Harness, prompts ou SDKs de provider.
 - Ports existem para persistência, sessão, browser, fila e provider de modelo somente quando há fronteira real.
 - Um módulo não lê tabelas de outro para contornar seu contrato.
 
 ## 6. Domínio, aplicação e infraestrutura
 
-**Domínio:** Product e fatos confirmados com proveniência (cadastro manual vigente; Candidate não confiável permanece conceito da direção futura de importação — ADR-022); `ProductStrategy` versionada (ACTIVE/SUPERSEDED/STALE); `ContentPlan`/`ContentOpportunity`; `Content` + `ContentBriefVersion` imutáveis; `RecordingBatch`/`RecordingBatchItem`; regras derivadas de estado do lote; memória estruturada com pesos `gerado < aprovado < concluído`.
+**Domínio:** Product e fatos confirmados com proveniência (cadastro manual e Candidate não confiável do Slice 012); `ProductStrategy` versionada (ACTIVE/SUPERSEDED/STALE); `ContentPlan`/`ContentOpportunity`; `Content` + `ContentBriefVersion` imutáveis; `RecordingBatch`/`RecordingBatchItem`; regras derivadas de estado do lote; memória estruturada com pesos `gerado < aprovado < concluído`.
 
-**Aplicação:** cadastrar Product (cadastro manual), `Analisar produto` (criar job + reserva), consultar status, expor Strategy/Plan/Briefings, ações de revisão, criar/agendar lote, concluir conteúdo e resolver Entitlements. Iniciar importação, executar o Agent Runner e confirmar Candidate são casos de uso da direção futura (ADR-022), sem implementação vigente. Chama o provider fora de transação; transações curtas.
+**Aplicação:** importar URL por CaptAPI, apresentar/confirmar Candidate no formulário manual, cadastrar Product, `Analisar produto` (criar job + reserva), consultar status, expor Strategy/Plan/Briefings, ações de revisão, criar/agendar lote, concluir conteúdo e resolver Entitlements. A chamada CaptAPI ocorre fora da transação; a confirmação usa a transação curta do serviço manual.
 
-**Infraestrutura:** Next.js, sessão server-side, PostgreSQL/Prisma, fila no PostgreSQL, worker, LLM Gateway/adapters de provider. A infraestrutura de importação (Product Importer com Docker, Chromium headless e Browser Harness) pertence à direção futura (ADR-022). Sem Browser Service separado, portal ou infraestrutura visual.
+**Infraestrutura:** Next.js, sessão server-side, PostgreSQL/Prisma, fila no PostgreSQL, cliente HTTP da CaptAPI, worker, LLM Gateway/adapters de provider. Não há Browser Service, Chromium headless, portal, MCP ou infraestrutura visual para importação.
 
 ## 7. Contratos
 
-### Entrada de Product (vigente: cadastro manual, ADR-022)
+### Entrada de Product (manual + CaptAPI, Slice 012)
 
 - Fatos do Produto informados pelo creator em `/products/new` e validados server-side; nenhum campo estratégico; proveniência declarada (`submittedUrl`/`sourceUrl` informados, não verificados).
 - Salvamento nunca cria job; a ação explícita `Analisar produto` é o único momento de criação do `CommerceIntelligenceJob`.
+- URL e manual convergem em `/products/new`; a importação retorna Candidate e não persiste.
+- A confirmação humana no mesmo formulário usa o serviço manual e valida todos os campos do contrato vigente.
 
-### Importação (direção futura, ADR-022)
+### Importação por CaptAPI HTTP (Slice 012, ADR-027/028)
 
-- `ProductCandidate` factual: nome, descrição, preço/moeda, categoria, marca, características, imagens, seller, variantes relevantes, `sourceUrl` — lacunas permanecem lacunas; nenhum campo estratégico.
-- Confirmação humana é a única fronteira para `Product` ativo; correções confirmadas prevalecem sobre reextração; proveniência por fato (`browser-extraction | creator-confirmed`).
-- A aplicação guarda apenas `tenantId → browserProfileId` e estado operacional mínimo. Nunca senha, cookie, token ou conteúdo do profile.
+- `ProductCandidate` factual: somente campos suportados pelo formulário/serviço; lacunas permanecem lacunas; `imageRefs` contém apenas `data.images[0]`.
+- `salesCount`, `ratingValue` e `reviewCount` são sinais opcionais de leitura, sem invenção e sem persistência no Product.
+- Confirmação humana é a única fronteira para `Product` ativo; correções confirmadas prevalecem sobre a extração; proveniência segue o mecanismo existente.
+- A única credencial é `CAPTAPI_API_KEY` no servidor. Nunca senha, cookie, token do TikTok, payload bruto ou segredo em UI/log.
 
 ### Commerce Intelligence
 
@@ -153,14 +156,18 @@ Engine Capability → Logical Intelligence Task → Model Router
 
 ### Persistência
 
-PostgreSQL é a fonte de registro: tenants/sessions, products, strategy versions, plans/opportunities, contents/brief versions, recording batches/items, intelligence jobs/runs, memory stats, entitlements/uso. `product_import_attempts` permanece no schema como remanescente da importação removida (sem fluxo que a popule — ADR-022); `product_candidates` não existe. A infraestrutura de browser do Product Importer não existe no fluxo vigente e é detalhe operacional da direção futura.
+PostgreSQL é a fonte de registro: tenants/sessions, products, strategy versions, plans/opportunities, contents/brief versions, recording batches/items, intelligence jobs/runs, memory stats, entitlements/uso. O Slice 012 não cria tabela de Candidate nem altera schema: a consulta é transitória e só o Product confirmado é persistido pelo serviço manual. `product_import_attempts` permanece como remanescente legado até decisão própria.
 ### Autorização e isolamento
 
-Cookie opaco → sessão server-side → usuário + Tenant. Todo caso de uso aplica escopo; `tenantId` do cliente nunca é autoridade. Product, job e resultados são escopados ao Tenant (na direção futura de importação, Candidate também será). A validação de URL, egress, limites e isolamento do Chromium pertence ao Product Importer da direção futura (ADR-022).
+Cookie opaco → sessão server-side → usuário + Tenant. Todo caso de uso aplica escopo; `tenantId` do cliente nunca é autoridade. Candidate e Product são escopados ao Tenant da sessão. A importação valida URL/egress, limita timeout e tamanho da resposta e chama somente a CaptAPI HTTP allowlisted; não executa Browser, portal ou MCP.
 
-### Browser headless (direção futura, ADR-022)
+### Importação HTTP externa (Slice 012, ADR-027/028)
 
-Nenhum componente de browser existe no fluxo vigente. Quando a importação URL-first for retomada, o Product Importer executará Chromium headless e Agent Runner com Browser Harness — sem browser interativo, noVNC, portal, handoff ou autenticação manual do creator. Conteúdo da página é dado não confiável; ferramentas, duração, tokens, rede e navegação são limitados. Falha de acesso ou extração é recuperável e nunca produz candidato inventado.
+CaptAPI é chamada fora da transação de persistência. Conteúdo retornado é dado
+não confiável; schema, tamanho, cardinalidade, preço, moeda, imagens e sinais
+são validados antes de aparecer no Candidate. Falha de URL, configuração, rede,
+HTTP, JSON ou shape é recuperável e mantém o fallback manual. Nenhum browser,
+portal, MCP, cookie ou login é necessário ou permitido no runtime.
 ### Processamento assíncrono
 
 O salvamento do cadastro manual persiste o Product **sem** criar job. A ação explícita `Analisar produto` executa uma transação curta que cria o `CommerceIntelligenceJob`, reserva Entitlement e devolve; o worker reivindica com lease, executa a engine fora de transação e finaliza em transação curta. `job.id` é a chave idempotente compartilhada com a reserva; retry técnico não duplica Strategy/Plan/Briefings nem consumo. MVP: um job ativo por usuário — `Analisar produto` fica desabilitado com explicação enquanto `QUEUED`/`RUNNING`. O job sobrevive a navegação e fechamento de aba; reabrir restaura o indicador global. Falha preserva Product e fatos; retry reutiliza o contexto confirmado.
@@ -193,8 +200,10 @@ Fila visual de análises e central de atividades (após validação); notificaç
 | ADR-005 | processamento assíncrono durável — `CommerceIntelligenceJob`, um job ativo por usuário, indicador global |
 | ADR-006 | Entitlements e reserva transacional |
 | ADR-007 | fronteira de produção de mídia futura |
-| ADR-008 | superseded pelo ADR-022 — URL-first/Candidate é direção futura; princípios de confirmação humana e segurança de URL permanecem referência |
-| ADR-022 | entrada vigente de Product: cadastro manual + ação explícita `Analisar produto`; importação URL-first é direção futura |
+| ADR-008 | superseded pelo ADR-022/ADR-027 — confirmação humana e segurança de URL permanecem referência |
+| ADR-022 | decisão anterior de entrada manual; substituído para URL-first pelo Slice 012/ADR-027 |
+| ADR-027 | integração URL-first por CaptAPI HTTP |
+| ADR-028 | Candidate transitório, confirmação no formulário e limites do Slice 012 |
 | ADR-009 | identidade, Tenant e autorização |
 | ADR-010 | superseded (API oficial) |
 | ADR-011 | superseded — arquitetura Browser Service/portal/HITL removida |
@@ -209,6 +218,6 @@ Se a implementação contrariar um ADR, o ADR é revisado antes. Se apenas conec
 
 ## 12. Registro das decisões desta revisão
 
-Novos: [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md) (contratos canônicos da engine), [ADR-013](./adr-013-model-router-e-intelligence-tier.md) (Model Router e `IntelligenceTier`), [ADR-014](./adr-014-platform-skill-versionada.md) (Platform Skill versionada) e [ADR-015](./adr-015-content-operations-e-recording-batch.md) (Content Operations e `RecordingBatch`).
+Novos: [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md) (contratos canônicos da engine), [ADR-013](./adr-013-model-router-e-intelligence-tier.md) (Model Router e `IntelligenceTier`), [ADR-014](./adr-014-platform-skill-versionada.md) (Platform Skill versionada) e [ADR-015](./adr-015-content-operations-e-recording-batch.md) (Content Operations e `RecordingBatch`). ADR-028 complementa ADR-027 para formalizar Candidate transitório, confirmação explícita e limites do Slice 012.
 
 Revisões in-place: ADR-002 (contrato v1 superseded), ADR-004 (pesos de sinal e descarte como sinal), ADR-005 (`CommerceIntelligenceJob`, um job ativo por usuário, indicador global). ADR-008 foi alinhado ao Product Importer. ADR-011 foi superseded após a remoção do Browser Service, portal, HITL e profiles por usuário.
