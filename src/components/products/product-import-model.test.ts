@@ -57,15 +57,25 @@ test("merge substitui nome, descrição, categoria e preço presentes no candida
   assert.equal(merged.characteristics, "Cerdas macias");
 });
 
-test("merge usa somente a primeira imagem e só substitui quando existe", () => {
-  const withImage = mergeImportedCandidate(
+test("merge preserva imagens manuais e aplica a importada só em formulário sem imagem", () => {
+  /* Review blocker: imagem manual/upload do creator tem prioridade —
+     a importada não substitui o que já existe. */
+  const withManual = mergeImportedCandidate(
     manualDraft,
     candidate({ imageRefs: ["https://img/1.jpg", "https://img/2.jpg"] }),
   );
-  assert.equal(withImage.imageReferences, "https://img/1.jpg");
+  assert.equal(withManual.imageReferences, manualDraft.imageReferences);
 
-  const withoutImage = mergeImportedCandidate(manualDraft, candidate({}));
-  assert.equal(withoutImage.imageReferences, manualDraft.imageReferences);
+  /* Fluxo URL-first com imagens vazias: primeira imagem importada apenas. */
+  const emptyImageDraft: ProductManualDraft = { ...manualDraft, imageReferences: "" };
+  const applied = mergeImportedCandidate(
+    emptyImageDraft,
+    candidate({ imageRefs: ["https://img/1.jpg", "https://img/2.jpg"] }),
+  );
+  assert.equal(applied.imageReferences, "https://img/1.jpg");
+
+  const untouched = mergeImportedCandidate(emptyImageDraft, candidate({}));
+  assert.equal(untouched.imageReferences, "");
 
   const withoutFeatures = mergeImportedCandidate(manualDraft, candidate({}));
   assert.equal(withoutFeatures.characteristics, manualDraft.characteristics);

@@ -50,9 +50,6 @@ export type ProductPayload = {
   commissionValue?: string;
   discountType?: DiscountType;
   discountValue?: string;
-  /* Slice 012: marca allowlisted de proveniência. O backend só aceita
-     "captapi"; qualquer outro valor vira "manual" no servidor. */
-  provenanceOrigin?: "captapi" | "manual";
 };
 
 /* Máscara do Preço: o input exibe pt-BR (10,50) e o draft guarda o
@@ -227,7 +224,6 @@ export function buildManualProductPayload(
   draft: ProductManualDraft,
   preparation: ContentPreparationPreferences,
   idempotencyKey?: string,
-  provenanceOrigin?: "captapi" | "manual",
 ): ProductPayload {
   const price = cleanNullable(draft.price);
   /* O draft guarda o formato da máscara (39.90); a API espera pt-BR (39,90). */
@@ -254,7 +250,6 @@ export function buildManualProductPayload(
     creatorPresence: preparation.creatorPresence,
     ...discountFields(draft),
     ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
-    ...(provenanceOrigin ? { provenanceOrigin } : {}),
   };
 }
 export function validateProductManualDraft(

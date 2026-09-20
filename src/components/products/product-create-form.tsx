@@ -688,7 +688,6 @@ export function ProductCreateForm({
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [importGaps, setImportGaps] = useState<CandidateGap[]>([]);
   const [importSignals, setImportSignals] = useState<ProductSignals | null>(null);
-  const [importedFromCaptApi, setImportedFromCaptApi] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ProductManualFieldErrors>({});
   const [validationVisible, setValidationVisible] = useState(false);
@@ -717,8 +716,7 @@ export function ProductCreateForm({
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
     setError(null);
     if (field === "url" && !value.trim()) {
-      /* URL limpa = formulário manual do zero: sem proveniência nem status. */
-      setImportedFromCaptApi(false);
+      /* URL limpa = formulário manual do zero: sem status de importação. */
       setImportState("idle");
       setImportMessage(null);
       setImportGaps([]);
@@ -878,8 +876,12 @@ export function ProductCreateForm({
       const result = await importProduct(url, key);
       /* Merge não destrutivo: fatos ausentes não apagam o que o creator
          já digitou. A confirmação continua sendo o botão de salvar. */
-      setDraft((current) => mergeImportedCandidate(current, result.candidate));
-      const firstImage = result.candidate.imageRefs[0];
+      /* Imagens do creator têm prioridade: a primeira imagem importada só
+         entra quando não existe imagem manual/upload. */
+      const manualImages = imageReferenceLines(draft.imageReferences ?? "");
+      const firstImage =
+        manualImages.length === 0 ? result.candidate.imageRefs[0] : undefined;
+      setDraft(mergeImportedCandidate(draft, result.candidate));
       if (firstImage) {
         /* Primeira imagem apenas: substitui links e arquivos escolhidos. */
         setImageLinksInput(firstImage);
@@ -890,7 +892,6 @@ export function ProductCreateForm({
       setImportMessage(result.message);
       setImportGaps(result.gaps);
       setImportSignals(result.candidate.signals ?? null);
-      setImportedFromCaptApi(true);
       importIdempotencyKey.current = undefined;
     } catch (caught) {
       /* Fallback manual: valores preservados; erro no campo de URL e no
@@ -990,7 +991,6 @@ export function ProductCreateForm({
         draft,
         contentPreferences,
         isEdit ? undefined : key,
-        isEdit ? undefined : importedFromCaptApi ? "captapi" : undefined,
       );
       if (isEdit && product) {
         delete payload.targetContentCount;

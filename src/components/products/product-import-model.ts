@@ -57,6 +57,12 @@ export function contentPreparationPreferencesAreValid(preferences: ContentPrepar
 
 /* Merge não destrutivo: só fatos presentes no candidato sobrescrevem o
    manual; ausência não apaga o que o creator digitou. */
+function hasManualImages(draft: Pick<ProductManualDraft, "imageReferences">) {
+  return (draft.imageReferences ?? "")
+    .split(/\r?\n/)
+    .some((line) => line.trim().length > 0);
+}
+
 export function mergeImportedCandidate(
   draft: ProductManualDraft,
   candidate: ProductImportCandidate,
@@ -73,8 +79,9 @@ export function mergeImportedCandidate(
     ...(candidate.features.length > 0
       ? { characteristics: candidate.features.join("\n") }
       : {}),
-    // Primeira imagem apenas: a galeria restante não entra no contrato.
-    ...(candidate.imageRefs[0]
+    /* Primeira imagem importada apenas — e somente quando o creator ainda
+       não tem imagem manual/upload; imagens existentes têm prioridade. */
+    ...(candidate.imageRefs[0] && !hasManualImages(draft)
       ? { imageReferences: candidate.imageRefs[0] }
       : {}),
     url: candidate.sourceUrl || draft.url || "",
