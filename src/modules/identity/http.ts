@@ -12,6 +12,12 @@ import {
 
 export const SESSION_COOKIE = "ci_session";
 
+/** Cadastro fechado em produção (produto em desenvolvimento): NODE_ENV=production
+    desabilita criação de conta; next dev local permanece aberto. */
+export function isRegistrationEnabled(): boolean {
+  return process.env.NODE_ENV !== "production";
+}
+
 const APP_ORIGINS = new Set((process.env.APP_ORIGIN ?? "").split(",").map((s) => s.trim()).filter(Boolean));
 const SECURE = process.env.NODE_ENV === "production" ? " Secure;" : "";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -103,6 +109,8 @@ function validate(
 }
 
 export async function handleRegister(req: Request): Promise<Response> {
+  // Fail-closed antes de ler/validar/persistir qualquer body (chamada manual incluída).
+  if (!isRegistrationEnabled()) return json(403, { error: "Criação de conta indisponível neste ambiente." });
   if (!originOk(req)) return json(403, { error: "Origem não permitida." });
   const body = await readJsonBody(req);
   if (!body) return json(400, { error: "Requisição inválida." });

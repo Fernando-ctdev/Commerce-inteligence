@@ -35,17 +35,16 @@ import {
   type PlatformSkill,
 } from "./platform-skill";
 import {
-  DEVELOPMENT_ACTION_STEMS,
-  DEVELOPMENT_CONNECTORS,
-  DEVELOPMENT_RATIONALE,
   ctaTextFactualIssues,
   GATE_POLICY_VERSION,
   deliverableHookBuckets,
-  developmentGroundingTerms,
+  developmentRequirements,
+  parseStructuredDevelopment,
   gateSceneSet,
   diagnoseDevelopmentPoint,
   validDevelopmentPoint,
   validateBriefSet,
+  type DevelopmentBullet,
   type GatePattern,
   type GateReport,
 } from "./gates";
@@ -55,6 +54,8 @@ import {
   type LogicalTask,
   type ModelRouter,
   type ProviderCallMetrics,
+  type ProviderReportedCost,
+  type ProviderTokenUsage,
 } from "./model-router";
 import { emitJobEvent, sanitizeGateReports } from "./observability";
 import { GenerationError } from "./errors";
@@ -89,7 +90,17 @@ export type CapabilityEvent = {
   tier: string;
   instructionVersion?: string;
   instructionHash?: string;
+  provider?: string;
   model?: string;
+  // Usage real normalizado do provider; metadata legado permanece válido sem o campo.
+  usage?: ProviderTokenUsage;
+  // Custo monetário relatado pelo provider (ex.: usage.cost OpenRouter); primário sobre snapshots.
+  reportedCost?: ProviderReportedCost;
+  // Todas as callbacks de métricas da execução (uma por tentativa efetiva do provider,
+  // inclusive a sacrificada em fallback); cost-observability achata em registros por tentativa.
+  attempts?: ProviderCallMetrics[];
+  // Atribuição por item apenas quando a capability é semanticamente de Content único.
+  contentId?: string;
   reasoning?: string;
   providerStatus?: number | null;
   durationMs: number;
@@ -370,28 +381,8 @@ function siblingSummary(
     ),
   };
 }
-// ADR-020 adendo 2: requirements server-derived do development — projeção das
-// constantes/predicados do PRÓPRIO gate (reuso, sem critério novo); efêmero.
-function developmentRequirements(evidence: EvidenceSnapshot) {
-  return {
-    allowedActionStems: DEVELOPMENT_ACTION_STEMS,
-    connectors: DEVELOPMENT_CONNECTORS,
-    factRefs: evidence.facts
-      .map((value, index) => ({ value, ref: evidence.refs[index] }))
-      .filter(({ ref }) => ref !== "product:name")
-      .map(({ value, ref }) => ({
-        ref,
-        value,
-        terms: developmentGroundingTerms(value),
-      })),
-    noShotList: true,
-    minGrounding: {
-      factTermsInPoint: 2,
-      factTermsInRationale: 2,
-      contextTerms: 1,
-    },
-  };
-}
+// ADR-020 adendo 2: requirements server-derived do development vivem NO GATE
+// (fonte única dos predicados); engine apenas importa developmentRequirements.
 
 // Contraste determinístico por item, PRÉ-VALIDADO pelo gate
 // (validDevelopmentPoint): contexto efêmero — nunca persistência/fabricação.
@@ -416,40 +407,31 @@ function buildRepairContrast(
     : undefined;
 }
 
-// Output contract do CONTENT_BRIEF_REPAIR (adendo 2): partes estruturadas por
-// bullet {text, action, factRef, rationale}; SOMENTE text é projetado para o
-// ContentBriefVersion canônico. Partes NUNCA autorizam texto falho — após as
-// checagens de partes, o texto passa por validateContentBriefDraft e o conjunto
-// por validateBriefSet (gate é a autoridade).
+// Contrato estruturado compartilhado (design 2026-09-18): parser único do gate valida
+// shape/repertório (GEN-SCHEMA) e produz texto + diagnóstico sanitizado; o texto projetado
+// passa por validateContentBriefDraft e o conjunto por validateBriefSet (autoridade final).
+// Caminho legacy: development: string[] (pré-contrato) é aceito e projetado SEM bullets
+// estruturados — mapa vazio desliga a ancoragem factRef por índice no gate (ela só se
+// aplica com mapa alinhado). Objetos text/action/factRef/rationale são exigidos apenas
+// no formato estruturado novo; array misto (string+objeto) falha GEN-SCHEMA.
+export function parseStructuredBriefDraft(
+  output: Record<string, unknown>,
+  evidence: EvidenceSnapshot,
+): { draft: ContentBriefDraft; bullets: DevelopmentBullet[] } {
+  const development = output.development;
+  if (Array.isArray(development) && development.every((item) => typeof item === "string"))
+    return { draft: validateContentBriefDraft({ ...output, development: development as string[] }), bullets: [] };
+  const { texts } = parseStructuredDevelopment(development, evidence);
+  const bullets = Array.isArray(development) ? (development as DevelopmentBullet[]) : [];
+  return { draft: validateContentBriefDraft({ ...output, development: texts }), bullets };
+}
+
+// Compat: repair projeta apenas o draft; bullets ficam disponíveis via parseStructuredBriefDraft.
 export function parseStructuredRepairDraft(
   output: Record<string, unknown>,
   evidence: EvidenceSnapshot,
 ): ContentBriefDraft {
-  if (!Array.isArray(output.development))
-    throw new ContractError("GEN-SCHEMA", "development estruturado inválido", "development");
-  const texts = output.development.map((item): string => {
-    if (!item || typeof item !== "object" || Array.isArray(item))
-      throw new ContractError("GEN-SCHEMA", "bullet estruturado inválido", "development");
-    const bullet = item as Record<string, unknown>;
-    const factRef = typeof bullet.factRef === "string" ? bullet.factRef : undefined;
-    const action = typeof bullet.action === "string" ? bullet.action : undefined;
-    const rationale = typeof bullet.rationale === "string" ? bullet.rationale : undefined;
-    const text = typeof bullet.text === "string" ? bullet.text.trim() : undefined;
-    if (!text)
-      throw new ContractError("GEN-SCHEMA", "bullet sem text", "development");
-    if (!factRef || factRef === "product:name" || !evidence.refs.includes(factRef))
-      throw new ContractError(
-        "GEN-SCHEMA",
-        `factRef fora do snapshot autorizado (${factRef ?? "ausente"})`,
-        "development",
-      );
-    if (!action || !DEVELOPMENT_ACTION_STEMS.some((stem) => action.toLowerCase().startsWith(stem)))
-      throw new ContractError("GEN-SCHEMA", "action fora do repertório do gate", "development");
-    if (!rationale || !DEVELOPMENT_RATIONALE.test(rationale))
-      throw new ContractError("GEN-SCHEMA", "rationale sem conector do gate", "development");
-    return text;
-  });
-  return validateContentBriefDraft({ ...output, development: texts });
+  return parseStructuredBriefDraft(output, evidence).draft;
 }
 
 // ADR-019: geração de cenas por conteúdo — entrada é o briefing INTEIRO +
@@ -555,6 +537,7 @@ export async function generateSceneSetsForBriefs(params: {
             );
             return { kept: gated.kept.length, dropped: gated.dropped };
           },
+          brief.contentId,
         );
         const gated = gateSceneSet(
           draft,
@@ -735,20 +718,6 @@ function isRootShapeSchemaError(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "GEN-SCHEMA" && "message" in error && typeof error.message === "string" && /deve ser um objeto JSON|Plano sem opportunities/.test(error.message));
 }
 // Primeira violação estrutural do item do lote, com issue sanitizada e sem payload.
-function findBriefItemIssue(
-  items: unknown[],
-): { item: number; issue: string } | null {
-  for (const [index, draft] of items.entries()) {
-    try {
-      validateContentBriefDraft(draft);
-    } catch (error) {
-      if (error instanceof ContractError)
-        return { item: index + 1, issue: error.message };
-      throw error;
-    }
-  }
-  return null;
-}
 function isBriefBatchSchemaError(error: unknown): error is GenerationError {
   return error instanceof GenerationError && error.code === "GEN-SCHEMA" &&
     Boolean(error.detail && typeof error.detail === "object" && "task" in error.detail && (error.detail as { task?: unknown }).task === "CONTENT_BRIEF_GENERATION");
@@ -879,6 +848,8 @@ export type TrackFn = <T, R = T>(
   // Observabilidade determinística pós-validação (ex.: kept/dropped do
   // gateSceneSet) — mesclada no CapabilityEvent e no capability.completed.
   annotate?: (output: R) => { kept?: number; dropped?: number } | undefined,
+  // Atribuição opcional de Content (capabilitidades de item único).
+  contentId?: string,
 ) => Promise<R>;
 export type CapabilityTracker = { track: TrackFn; capabilities: CapabilityEvent[] };
 
@@ -899,10 +870,14 @@ export function createCapabilityTracker(opts: {
     ) => Promise<T>,
     validate?: (output: T) => R,
     annotate?: (output: R) => { kept?: number; dropped?: number } | undefined,
+    contentId?: string,
   ): Promise<R> => {
     const startedAt = Date.now();
     const contextBytes = Buffer.byteLength(JSON.stringify(context), "utf8");
-    let captured: ProviderCallMetrics | undefined;
+    // TODAS as callbacks de métricas são preservadas: fallback/retry do provider emitem
+    // uma callback por tentativa HTTP efetiva e nenhuma pode ser perdida para o custo.
+    const capturedAll: ProviderCallMetrics[] = [];
+    const captured = () => capturedAll[capturedAll.length - 1];
     emitJobEvent("capability.started", {
       jobId: opts.jobId,
       attempt: opts.attempt,
@@ -916,7 +891,7 @@ export function createCapabilityTracker(opts: {
     });
     try {
       const rawOutput = await run((metrics) => {
-        captured = metrics;
+        capturedAll.push(metrics);
       });
       const output = validate ? validate(rawOutput) : rawOutput as unknown as R;
       const outputRecord = output && typeof output === "object" && !Array.isArray(output)
@@ -930,36 +905,41 @@ export function createCapabilityTracker(opts: {
         tier: ROUTER_MAP[task],
         instructionVersion,
         instructionHash: opts.router?.hash?.(task),
-        model: captured?.model ?? effectiveModel(task),
-        reasoning: captured?.reasoning,
-        providerStatus: captured?.providerStatus ?? null,
+        contentId,
+        provider: captured()?.provider,
+        model: captured()?.model ?? effectiveModel(task),
+        usage: captured()?.usage,
+        reportedCost: captured()?.reportedCost,
+        attempts: capturedAll.length > 0 ? capturedAll : undefined,
+        reasoning: captured()?.reasoning,
+        providerStatus: captured()?.providerStatus ?? null,
         durationMs,
         contextBytes,
-        requestBytes: captured?.requestBytes,
-        trustedContextBytes: captured?.trustedContextBytes,
-        externalBytes: captured?.externalBytes,
+        requestBytes: captured()?.requestBytes,
+        trustedContextBytes: captured()?.trustedContextBytes,
+        externalBytes: captured()?.externalBytes,
         responseBytes,
         attempt: opts.attempt,
-        retry: captured?.retry ?? 0,
+        retry: captured()?.retry ?? 0,
         ok: true,
         cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
         kept: extras?.kept,
         dropped: extras?.dropped,
-        providerRequestId: captured?.providerRequestId,
-        providerRequestIdSource: captured?.providerRequestIdSource,
-        fallback: captured?.fallback,
+        providerRequestId: captured()?.providerRequestId,
+        providerRequestIdSource: captured()?.providerRequestIdSource,
+        fallback: captured()?.fallback,
       });
       emitJobEvent("capability.completed", {
         jobId: opts.jobId,
         attempt: opts.attempt,
         task,
         tier: ROUTER_MAP[task],
-        model: captured?.model ?? effectiveModel(task),
+        model: captured()?.model ?? effectiveModel(task),
         instructionHash: opts.router?.hash?.(task),
         durationMs,
-        requestBytes: captured?.requestBytes,
-        trustedContextBytes: captured?.trustedContextBytes,
-        externalBytes: captured?.externalBytes,
+        requestBytes: captured()?.requestBytes,
+        trustedContextBytes: captured()?.trustedContextBytes,
+        externalBytes: captured()?.externalBytes,
         responseBytes,
         arrayLength: Array.isArray(outputRecord.opportunities)
           ? outputRecord.opportunities.length
@@ -971,8 +951,8 @@ export function createCapabilityTracker(opts: {
         cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
         kept: extras?.kept,
         dropped: extras?.dropped,
-        providerRequestId: captured?.providerRequestId,
-        providerRequestIdSource: captured?.providerRequestIdSource,
+        providerRequestId: captured()?.providerRequestId,
+        providerRequestIdSource: captured()?.providerRequestIdSource,
       });
       return output;
     } catch (error) {
@@ -984,23 +964,28 @@ export function createCapabilityTracker(opts: {
         task,
         tier: ROUTER_MAP[task],
         instructionVersion,
-        model: captured?.model ?? effectiveModel(task),
-        reasoning: captured?.reasoning,
-        providerStatus: captured?.providerStatus ?? null,
+        contentId,
+        provider: captured()?.provider,
+        model: captured()?.model ?? effectiveModel(task),
+        usage: captured()?.usage,
+        reportedCost: captured()?.reportedCost,
+        attempts: capturedAll.length > 0 ? capturedAll : undefined,
+        reasoning: captured()?.reasoning,
+        providerStatus: captured()?.providerStatus ?? null,
         durationMs,
         contextBytes,
-        requestBytes: captured?.requestBytes,
-        trustedContextBytes: captured?.trustedContextBytes,
-        externalBytes: captured?.externalBytes,
-        responseBytes: captured?.responseBytes ?? 0,
+        requestBytes: captured()?.requestBytes,
+        trustedContextBytes: captured()?.trustedContextBytes,
+        externalBytes: captured()?.externalBytes,
+        responseBytes: captured()?.responseBytes ?? 0,
         attempt: opts.attempt,
-        retry: captured?.retry ?? 0,
+        retry: captured()?.retry ?? 0,
         ok: false,
         cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
         errorCode,
-        providerRequestId: captured?.providerRequestId,
-        providerRequestIdSource: captured?.providerRequestIdSource,
-        fallback: captured?.fallback,
+        providerRequestId: captured()?.providerRequestId,
+        providerRequestIdSource: captured()?.providerRequestIdSource,
+        fallback: captured()?.fallback,
       });
       const safe =
         error instanceof GenerationError &&
@@ -1015,7 +1000,7 @@ export function createCapabilityTracker(opts: {
         attempt: opts.attempt,
         task,
         tier: ROUTER_MAP[task],
-        model: captured?.model ?? effectiveModel(task),
+        model: captured()?.model ?? effectiveModel(task),
         durationMs,
         errorCode,
         cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
@@ -1064,17 +1049,25 @@ function diagnoseFailure(
 ): FailedItemDiagnostic {
   const checkCodes = new Set<PartialFailureCheckCode>();
   const diagnostic = { actionPresent: true, connectorPresent: true, minGroundingExpected: 2, minGroundingMatched: 2 };
+  // Issues de failedItems são rótulos FIXOS mapeados por regex da própria cascata —
+  // nunca o texto original (que pode embutir claim/fato/provider).
+  const labels = new Set<string>();
   for (const issue of report.issues) {
-    if (/duplicata|repetid/.test(issue)) continue;
-    if (/claim sem evidência|sem evidência autorizada|contradito|sem suporte|sem evidência verificável/.test(issue))
+    if (/duplicata|repetid/.test(issue)) { labels.add("variety_duplicate"); continue; }
+    if (/claim sem evidência|sem evidência autorizada|contradito|sem suporte|sem evidência verificável/.test(issue)) {
+      labels.add("unverified_claim");
       checkCodes.add("unverified_claim");
-    if (/script contém claim factual/.test(issue)) checkCodes.add("script_claim_missing");
+    }
+    if (/script contém claim factual/.test(issue)) { labels.add("script_claim_missing"); checkCodes.add("script_claim_missing"); }
+    if (/script contém metainstrução de cena|metacomentário/.test(issue)) labels.add("script_scene_metacomment");
     if (/orientar comunicação|lista de features|planos de gravação/.test(issue)) {
-      checkCodes.add("feature_list");
+      // feature_list (label + checkCode) deriva SOMENTE de shotList=true real —
+      // nunca da regex do issue (que também cobre ação/razão ausentes).
+      let anyShotList = false;
       for (const point of brief.development) {
         const d = diagnoseDevelopmentPoint(point, evidence);
+        anyShotList = anyShotList || d.shotList;
         if (!d.actionPresent) checkCodes.add("action_stem_missing");
-        if (d.shotList) checkCodes.add("feature_list");
         if (!d.connectorPresent) checkCodes.add("connector_missing");
         if (d.connectorPresent && d.minGroundingMatched < d.minGroundingExpected) checkCodes.add("grounding_below_min");
         if (d.unverified) checkCodes.add("unverified_claim");
@@ -1084,6 +1077,14 @@ function diagnoseFailure(
           diagnostic.minGroundingMatched = Math.min(diagnostic.minGroundingMatched, d.minGroundingMatched);
         }
       }
+      labels.add(anyShotList ? "feature_list" : "gate_issue");
+      if (anyShotList) checkCodes.add("feature_list");
+    } else if (/termos do fato apontado por factRef/.test(issue)) {
+      // Ancoragem factRef (v4): checkCode próprio da cascata, sem payload.
+      labels.add("factref_grounding");
+      checkCodes.add("factref_grounding_below_min");
+    } else {
+      labels.add("gate_issue"); // issue sem mapeamento fixo: rótulo genérico, texto nunca copiado
     }
   }
   return {
@@ -1091,7 +1092,7 @@ function diagnoseFailure(
     position,
     reason,
     checkCodes: [...checkCodes],
-    issues: [...report.issues],
+    issues: [...labels],
     ...(quality && quality.length ? { quality } : {}),
     diagnostic,
   };
@@ -1501,6 +1502,23 @@ export async function runFirstGeneration(
       typeof facts.category === "string" ? facts.category : undefined,
     );
   await emit("GENERATING_BRIEFS");
+  // Bullets estruturados efêmeros por contentId (judge/parte repair); nunca persistidos.
+  const bulletsByContentId = new Map<string, DevelopmentBullet[]>();
+  // Diagnóstico redigido por bullet para itens que falharam no gate de development.
+  const developmentDiagnosticsFor = (contentId: string) => {
+    const bullets = bulletsByContentId.get(contentId);
+    return bullets ? parseStructuredDevelopment(bullets, evidence).diagnostics : undefined;
+  };
+  // Alvo do repair (ADR-020): índices dos bullets que falham qualquer critério
+  // allowlisted do diagnóstico (design 2026-09-19) — factTermsInRationale conta
+  // apenas quando factGroundingApplicable.
+  const failedBulletIndexesFor = (contentId: string): number[] =>
+    (developmentDiagnosticsFor(contentId) ?? [])
+      .filter((d) =>
+        !d.actionPresent || !d.connectorPresent || d.shotList || d.unverifiedClaim ||
+        d.textGroundingMatched < 2 || d.rationaleGroundingMatched < 2 ||
+        (d.factGroundingApplicable && d.factTermsInRationale < 2))
+      .map((d) => d.index);
   const generateBatch = async (
     entries: Array<{
       opportunity: ContentOpportunity;
@@ -1576,7 +1594,7 @@ export async function runFirstGeneration(
               item: 0,
               issue: `cardinalidade divergente: esperado ${entries.length}, recebido ${items.length}`,
           }
-          : findBriefItemIssue(items);
+          : null;
       const validateBatch = (producer: Record<string, unknown>) => {
         const items = extractItems(producer);
         const issue = batchIssue(items);
@@ -1586,7 +1604,29 @@ export async function runFirstGeneration(
           true,
           { task: "CONTENT_BRIEF_GENERATION", item: issue.item, issue: issue.issue, expected: entries.length, received: items.length },
         );
-        return { items: assignServerBriefIds(items, input.jobId, 0) };
+        // Contrato estruturado: shape/repertório → GEN-SCHEMA tipado (retry do lote);
+        // texto projetado + bullets efêmeros por contentId para judge/parte-repair.
+        const parsed = items.map((item, index) => {
+          try {
+            if (!item || typeof item !== "object" || Array.isArray(item))
+              throw new ContractError("GEN-SCHEMA", "Brief inválido");
+            return parseStructuredBriefDraft(item as Record<string, unknown>, evidence);
+          } catch (error) {
+            if (error instanceof ContractError)
+              throw new GenerationError(
+                "GEN-SCHEMA",
+                "Lote de briefings invalido",
+                true,
+                { task: "CONTENT_BRIEF_GENERATION", item: index + 1, issue: error.message, expected: entries.length, received: items.length },
+              );
+            throw error;
+          }
+        });
+        const projected = parsed.map(({ draft }) => draft);
+        parsed.forEach(({ bullets }, index) => {
+          bulletsByContentId.set(`${input.jobId}-content-${entries[index]!.position}`, bullets);
+        });
+        return { items: assignServerBriefIds(projected, input.jobId, 0) };
       };
       const generateValidatedBatch = () => track(
         "CONTENT_BRIEF_GENERATION",
@@ -1661,6 +1701,9 @@ export async function runFirstGeneration(
       skill.version,
       selectedPatterns,
       projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
+      // v4: ancoragem factRef revalida com os bullets do próprio item; após o
+      // part repair o mapa mantém o factRef ORIGINAL por índice.
+      bulletsByContentId,
     );
   let reports = validateCandidates();
   const maxRepairs = Number(process.env.GENERATION_MAX_REPAIRS ?? 2);
@@ -1721,6 +1764,11 @@ export async function runFirstGeneration(
         // pelo validDevelopmentPoint (efêmero); NUNCA previousBrief (ancora a
         // paráfrase inválida).
         developmentRequirements: developmentRequirements(evidence),
+        // Design 2026-09-18 (Task 2 Step 6): diagnóstico redigido por bullet do
+        // PRÓPRIO item — índice/flags/contagens apenas, sem texto de draft.
+        developmentDiagnostics: developmentDiagnosticsFor(c.brief.contentId) ?? [],
+        // Design 2026-09-19: o repair mira os índices falhos (instrução correspondente).
+        failedBulletIndexes: failedBulletIndexesFor(c.brief.contentId),
         repairContrast: buildRepairContrast(
           evidence.facts.filter(
             (_fact, index) => evidence.refs[index] !== "product:name",
@@ -1749,14 +1797,22 @@ export async function runFirstGeneration(
               onMetrics,
             ),
           (output: Record<string, unknown>) => {
-            const draft = parseStructuredRepairDraft(output, evidence);
+            const parsed = parseStructuredBriefDraft(output, evidence);
+            // Repair legacy string[] NUNCA limpa o mapa de um item estruturado:
+            // os bullets originais permanecem por índice e o hard gate segue
+            // exigindo a ancoragem factRef no trecho após o conector (sem bypass
+            // do gap 4). O mapa só é atualizado com bullets estruturados novos.
+            if (parsed.bullets.length > 0)
+              bulletsByContentId.set(c.brief.contentId, parsed.bullets);
             return {
-              ...draft,
+              ...parsed.draft,
               contentId: `${input.jobId}-content-${i + 1}`,
               briefVersionId: `${input.jobId}-brief-${i + 1}`,
               version: 1 as const,
             } satisfies ContentBriefVersion;
           },
+          undefined,
+          c.brief.contentId,
         );
         candidates[i] = { brief: replacement, opportunity: c.opportunity };
         received += 1;
@@ -1788,6 +1844,7 @@ export async function runFirstGeneration(
     skill.version,
     selectedPatterns,
     projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
+    bulletsByContentId,
   );
   const hardIdx = candidates.map((_, i) => i).filter((i) => candidateReports[i].decision === "PASS");
   const hardFailIdx = candidates.map((_, i) => i).filter((i) => candidateReports[i].decision !== "PASS");
@@ -1840,6 +1897,9 @@ export async function runFirstGeneration(
       const scenes = sceneSets[index];
       return {
         contentId: candidate.brief.contentId,
+        // Mesmo contrato estruturado efêmero recebido pelo judge (design 2026-09-18);
+        // o judge não o avalia factualmente — apenas contexto de leitura.
+        development: bulletsByContentId.get(candidate.brief.contentId) ?? [],
         parts: QUALITY_PARTS.map((part) => ({
           part,
           content: part === "scenes" ? scenes.scenes.map(({ description }) => description) : candidate.brief[part],
@@ -1896,6 +1956,7 @@ export async function runFirstGeneration(
       const hardReports = validateBriefSet(
         hard.map(({ brief }) => brief), evidence, "tiktok-commerce", skill.version,
         selectedPatterns, projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
+        bulletsByContentId,
       );
       const scene = sceneSets[updatedIndex];
       const gatedScenes = gateSceneSet(
@@ -2062,6 +2123,7 @@ export async function runFirstGeneration(
     skill.version,
     selectedPatterns,
     projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
+    bulletsByContentId,
   );
   const rankOf = (k: number): number[] => {
     const report = deliveredReports[k];
@@ -2086,6 +2148,7 @@ export async function runFirstGeneration(
       skill.version,
       selectedPatterns,
       projectCreatorContext("CONTENT_BRIEF_GENERATION", input.creatorContext),
+      bulletsByContentId,
     );
   }
   const failedCount = count - delivered.length;
@@ -2111,7 +2174,11 @@ export async function runFirstGeneration(
   // Assinatura residual por item (ADR-021 decisão 5): checkCodes da cascata +
   // diagnóstico determinístico; nunca payload do provider.
   const failedItems: FailedItemDiagnostic[] = [
-    ...hardFailIdx.map((i) => diagnoseFailure(candidates[i].brief, candidateReports[i], evidence, "HARD_GATE", i + 1, [])),
+    ...hardFailIdx.map((i) => ({
+      ...diagnoseFailure(candidates[i].brief, candidateReports[i], evidence, "HARD_GATE", i + 1, []),
+      developmentDiagnostics: developmentDiagnosticsFor(candidates[i].brief.contentId),
+      failedBulletIndexes: failedBulletIndexesFor(candidates[i].brief.contentId),
+    })),
     ...[...objectiveFailureIdx].map((i) => ({
       contentId: hard[i].brief.contentId,
       position: hardIdx[i] + 1,
@@ -2124,6 +2191,10 @@ export async function runFirstGeneration(
           : [],
       quality: projectQualityFailures(qualityAudits.filter((audit) => audit.contentId === hard[i].brief.contentId))
         .map(({ part, round, criterion, reason }) => ({ part, round, criterion, reason: reasonText(reason) })),
+      // part/criterion/status/reason allowlisted (enum original, sem texto livre).
+      qualityDiagnostics: qualityAudits
+        .filter((audit) => audit.contentId === hard[i].brief.contentId)
+        .flatMap((audit) => audit.parts),
     })),
     ...[...varietyDropped].map((i) => ({
       contentId: hard[i].brief.contentId,

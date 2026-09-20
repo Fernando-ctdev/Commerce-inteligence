@@ -324,6 +324,16 @@ export async function createProduct(payload: ProductPayload) {
   );
 }
 
+export async function importProduct(url: string, idempotencyKey: string) {
+  return mutationFromResponse(
+    await request<unknown>("/api/products/import", {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify({ url }),
+    }),
+  );
+}
+
 export async function updateProduct(id: string, payload: ProductPayload) {
   return mutationFromResponse(
     await request<unknown>(`/api/products/${encodeURIComponent(id)}`, {

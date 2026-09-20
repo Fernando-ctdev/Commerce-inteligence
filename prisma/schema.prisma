@@ -487,3 +487,24 @@ model ProductMemorySnapshot {
   @@unique([tenantId, sourceJobId])
   @@map("product_memory_snapshots")
 }
+
+// Preço versionado e imutável (append-only) por provider/model/moeda/vigência.
+// Rates em unidades monetárias menores por milhão de tokens; Decimal exato, nunca float.
+// Dimensões não precificadas permanecem nulas; custos históricos nunca usam versão mais nova.
+model ProviderModelPrice {
+  id String @id @default(uuid())
+  provider String
+  model String
+  currency String
+  version Int
+  inputPerMillionMinor Decimal? @db.Decimal(20, 6)
+  outputPerMillionMinor Decimal? @db.Decimal(20, 6)
+  reasoningPerMillionMinor Decimal? @db.Decimal(20, 6)
+  cachedPerMillionMinor Decimal? @db.Decimal(20, 6)
+  effectiveFrom DateTime
+  effectiveTo DateTime?
+  createdAt DateTime @default(now())
+  @@unique([provider, model, currency, version])
+  @@index([provider, model, currency, effectiveFrom, effectiveTo])
+  @@map("provider_model_prices")
+}

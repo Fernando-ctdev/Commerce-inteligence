@@ -1,16 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleAlert, Clapperboard, Compass, Gift, Heart, HeartCrack, Hourglass, Megaphone, Mic, ScrollText, Shield, Sparkles, Users, X } from "lucide-react";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { useEffect, useState } from "react";
+import { Check, ChevronLeft, ChevronRight, CircleAlert, Compass, Copy, Gift, Heart, HeartCrack, Hourglass, Megaphone, Mic, ScrollText, Shield, Sparkles, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import type { GenerationRecord } from "./generation-api";
 import {
   BLOCKED_ACTIVE_MESSAGE,
   blockedActionCopy,
-  canCancelGeneration,
-  generationStatusLabel,
   isActiveGeneration,
   phaseStateLabels,
   phaseStates,
@@ -20,8 +17,6 @@ import {
   statusMessage,
   partialModel,
   briefingItems,
-  contentStatusLabel,
-  contentsSummaryLabel,
   strategyModel,
   type BriefingItem,
   scriptParagraphs,
@@ -29,6 +24,8 @@ import {
   type GenerationActionProjection,
   type ScenesProjection,
 } from "./generation-ui-model";
+import type { ProductHistoryResponse } from "./history-api";
+import { historyViewModel } from "./history-ui-model";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import styles from "./generation-panel.module.css";
 
@@ -47,12 +44,48 @@ export type GenerationState = {
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
 /** Rótulo de seção do Briefing com âncora visual de traço simples. */
-function SectionLabel({ icon: Icon, children }: { icon: typeof Mic; children: string }) {
+function SectionLabel({ icon: Icon, iconClassName, className, children }: { icon: typeof Mic; iconClassName?: string; className?: string; children: string }) {
   return (
-    <p className={styles.sectionLabel}>
-      <Icon aria-hidden="true" className={styles.sectionIcon} />
+    <p className={[styles.sectionLabel, className].filter(Boolean).join(" ")}>
+      <Icon aria-hidden="true" className={[styles.sectionIcon, iconClassName].filter(Boolean).join(" ")} />
       {children}
     </p>
+  );
+}
+
+/** Cópia do roteiro inteiro (texto bruto, com quebras originais) para a área de
+    transferência; ícone e aria-label comunicam copiado/erro por 2s. */
+function CopyScriptButton({ script }: { script: string }) {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
+  useEffect(() => {
+    if (copyState === "idle") return;
+    const timer = setTimeout(() => setCopyState("idle"), 2000);
+    return () => clearTimeout(timer);
+  }, [copyState]);
+  const label = copyState === "copied"
+    ? "Roteiro copiado"
+    : copyState === "error"
+      ? "Não foi possível copiar o roteiro"
+      : "Copiar roteiro";
+  return (
+    <Button
+      aria-label={label}
+      className={styles.copyScriptButton}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(script);
+          setCopyState("copied");
+        } catch {
+          setCopyState("error");
+        }
+      }}
+      size="icon"
+      title={label}
+      type="button"
+      variant="ghost"
+    >
+      {copyState === "copied" ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+    </Button>
   );
 }
 
@@ -73,20 +106,20 @@ function ScenesNote({ scenes }: { scenes: ScenesProjection }) {
   if (scenes.status === "ERROR")
     return <p className={styles.scenesNote}>Não foi possível gerar as cenas agora.</p>;
   return (
-    <ol aria-label="Sugestões de cenas" className={styles.bulletList}>
+    <ol aria-label="Sugestões de cenas" className={styles.sceneList}>
       {scenes.scenes.map((scene, index) => (
-        <li key={`${index}-${scene.description.slice(0, 24)}`}>{scene.description}</li>
+        <li className={styles.sceneItem} key={`${index}-${scene.description.slice(0, 24)}`}>
+          <span aria-hidden="true" className={styles.sceneIndex}>{pad2(index + 1)}</span>
+          <p>{scene.description}</p>
+        </li>
       ))}
     </ol>
   );
 }
 
-/** Sentinela: usuário pediu explicitamente voltar à lista (mobile). Diferente de "nunca selecionou". */
-const LIST_VIEW = "__list__";
-function BriefingDetail({ index, item, onBack, onNavigate, total }: {
+function BriefingDetail({ index, item, onNavigate, total }: {
   index: number;
   item: BriefingItem;
-  onBack: () => void;
   onNavigate: (nextIndex: number) => void;
   total: number;
 }) {
@@ -104,20 +137,20 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
   ].filter((pair): pair is [string, string] => !!pair[1]);
   return (
     <article className={styles.detail}>
-      <Button className={styles.mobileBack} onClick={onBack} type="button" variant="outline">
-        <ArrowLeft aria-hidden="true" />
-        Conteúdos
-      </Button>
       <header className={styles.detailHeader}>
         <h3 className={styles.detailTitle}>{`Conteúdo ${pad2(item.position)}`}</h3>
-        <p className={styles.statusTag}>{contentStatusLabel(item.status)}</p>
+        <div className={styles.detailMeta}>
+          <span className={styles.contentProgress}>
+            {`${String(index + 1).padStart(2, "0")}/${String(total).padStart(2, "0")}`}
+          </span>
+        </div>
       </header>
       <Tabs className={styles.detailTabs} defaultValue="script">
         <TabsList aria-label="Seções do conteúdo" variant="line">
           <TabsTrigger value="script">Script</TabsTrigger>
           <TabsTrigger value="cenas">Cenas</TabsTrigger>
         </TabsList>
-        <TabsContent value="script">
+        <TabsContent className={styles.scriptFlow} value="script">
       <section aria-label="Gancho" className={styles.hookBlock}>
         <p className={styles.sectionLabel}>
           <Mic aria-hidden="true" className={[styles.sectionIcon, styles.sectionIconIntelligence].join(" ")} />
@@ -127,15 +160,30 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
       </section>
       {item.development.length > 0 && (
         <section aria-label="Desenvolvimento" className={styles.detailSection}>
-          <SectionLabel icon={Sparkles}>DESENVOLVIMENTO</SectionLabel>
-          <ul className={styles.bulletList}>
+          <SectionLabel className={styles.sectionLabelBrand} icon={Sparkles} iconClassName={styles.sectionIconBrand}>DESENVOLVIMENTO</SectionLabel>
+          <ul className={styles.developmentList}>
             {item.development.map((point, index) => <li key={`${index}-${point}`}>{point}</li>)}
           </ul>
         </section>
       )}
+      {item.cta && (
+        <section
+          aria-label="CTA"
+          className={item.development.length > 0 ? [styles.detailSection, styles.ctaSection].join(" ") : styles.detailSection}
+        >
+          <SectionLabel className={styles.sectionLabelBrand} icon={Megaphone} iconClassName={styles.sectionIconBrand}>CTA</SectionLabel>
+          <p className={[styles.readingText, styles.ctaText].join(" ")}>{item.cta}</p>
+        </section>
+      )}
       {item.script.trim() !== "" && (
-        <section aria-label="Roteiro" className={styles.detailSection}>
-          <SectionLabel icon={ScrollText}>ROTEIRO</SectionLabel>
+        <section
+          aria-label="Roteiro"
+          className={[styles.detailSection, styles.scriptSection].join(" ")}
+        >
+          <div className={styles.scriptHeader}>
+            <SectionLabel icon={ScrollText} iconClassName={styles.sectionIconIntelligence}>ROTEIRO</SectionLabel>
+            <CopyScriptButton script={item.script} />
+          </div>
           <div className={styles.scriptParagraphs}>
             {scriptParagraphs(item.script).map((paragraph, index) => (
               <p className={styles.readingText} key={`${index}-${paragraph.slice(0, 20)}`}>{paragraph}</p>
@@ -143,10 +191,6 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
           </div>
         </section>
       )}
-      <section aria-label="CTA" className={styles.detailSection}>
-        <SectionLabel icon={Megaphone}>CTA</SectionLabel>
-        <p className={styles.readingText}>{item.cta}</p>
-      </section>
       {context.length > 0 && (
         <section className={styles.contextRow}>
           {context.map(([label, value]) => (
@@ -173,14 +217,25 @@ function BriefingDetail({ index, item, onBack, onNavigate, total }: {
           <ScenesNote scenes={item.scenes} />
         </TabsContent>
       </Tabs>
-      <nav aria-label={`Navegação entre conteúdos: conteúdo ${index + 1} de ${total}`} className={styles.contentsNav}>
-        <Button disabled={index <= 0} onClick={() => onNavigate(index - 1)} type="button" variant="outline">
+      <nav aria-label="Navegação entre conteúdos" className={styles.contentsNav}>
+        <Button
+          className={styles.readerNavButton}
+          disabled={index <= 0}
+          onClick={() => onNavigate(index - 1)}
+          type="button"
+          variant="outline"
+        >
           <ChevronLeft aria-hidden="true" />
           Anterior
         </Button>
-        <span>{`${index + 1} de ${total}`}</span>
-        <Button disabled={index >= total - 1} onClick={() => onNavigate(index + 1)} type="button" variant="outline">
-          Próximo
+        <Button
+          className={styles.readerNavButton}
+          disabled={index >= total - 1}
+          onClick={() => onNavigate(index + 1)}
+          type="button"
+          variant="outline"
+        >
+          Próximo conteúdo
           <ChevronRight aria-hidden="true" />
         </Button>
       </nav>
@@ -192,66 +247,31 @@ function EmptyRegion({ children }: { children: React.ReactNode }) {
   return <div className={styles.panel}><p>{children}</p></div>;
 }
 
-/** Aba Visão geral: estado do job, ação primária, bloqueio preventivo e cancelamento (só QUEUED). */
-export function GenerationStatusCard({ className, productName, targetContentCount, readiness, state, generationAction, onOpenContents, onGenerateMissing }: {
-  className?: string;
-  productName: string;
-  targetContentCount: number;
+/** Aba Conteúdos: bloco de ações contextuais da análise, sem card "Próxima ação". */
+export function GenerationActions({ generationAction, onGenerateMissing, readiness, state }: {
+  generationAction?: GenerationActionProjection;
+  onGenerateMissing: () => void;
   readiness: GenerationRecord["readiness"];
   state: GenerationState;
-  generationAction?: GenerationActionProjection;
-  onOpenContents: () => void;
-  onGenerateMissing: () => void;
 }) {
-  const [cancelOpen, setCancelOpen] = useState(false);
-  const { job, busy, error, active, failed, blockedByOther, start, retry, cancel } = state;
-  const canCancel = !!job && canCancelGeneration(job.status);
+  const { job, busy, error, active, failed, blockedByOther, start, retry } = state;
   const partial = partialModel(job);
-  /* RI-003-20: GEN-PROJECTION em terminal positivo é anomalia de dados — a UI
-     comunica o estado degradado em vez de tratar como sucesso; retry suprimido
-     pelo código (/retry responderia 404); /complete só no parcial. */
+  /* RI-003-20: GEN-PROJECTION em terminal positivo é anomalia de dados —
+     retry suprimido (/retry responderia 404); /complete só no parcial degradado. */
   const degraded = projectionDegradedModel(job);
-  /* ADR-016: com a projeção presente, ela é a única fonte do bloqueio preventivo;
-     a inferência por GET current é só fallback para payload que ainda não a carrega. */
+  /* ADR-016: a projeção é a fonte do bloqueio preventivo; GET current é fallback
+     para payload que ainda não a carrega. */
   const projectedBlocked = generationAction?.state === "BLOCKED" ? generationAction : null;
   const projectedNote = projectedBlocked ? blockedActionCopy(projectedBlocked) : null;
   const fallbackNote = !generationAction && blockedByOther ? BLOCKED_ACTIVE_MESSAGE : null;
-  const heading = active && job
-    ? "Análise em andamento"
-    : failed && job
-      ? "Análise interrompida"
-      : degraded.degraded && job
-        ? "Resultado da análise indisponível"
-        : job?.status === "SUCCEEDED" || job?.status === "SUCCEEDED_PARTIAL"
-          ? "Revisar conteúdos"
-          : "Analisar produto";
-  const idleHeading = !active && !failed && job?.status !== "SUCCEEDED" && job?.status !== "SUCCEEDED_PARTIAL";
+  /* Em andamento o ContentsView já comunica o estado; sucesso pleno não oferece ação. */
+  if (active || (!job && readiness !== "PENDING") || (job?.status === "SUCCEEDED" && !degraded.degraded)) return null;
   return (
-    <section aria-busy={busy || active} aria-labelledby="generation-title" className={[styles.panel, className].filter(Boolean).join(" ")}>
-      <div className={styles.heading}>
-        <p className={styles.eyebrow}>Próxima ação</p>
-        <h2 id="generation-title">{heading}</h2>
-        {idleHeading && (
-          <p>Geraremos uma estratégia comercial e {targetContentCount} Briefings prontos para revisão.</p>
-        )}
-      </div>
-      {active && job ? (
-        <div aria-live="polite" className={styles.state} role="status">
+    <div aria-busy={busy} className={[styles.state, styles.contentsActions].join(" ")}>
+      {failed && job ? (
+        <div aria-live="polite" role="alert">
           <p className={styles.stateLine}>
-            <strong>{statusLabels[job.status]}</strong> · {stageMessage(job.stage)}
-          </p>
-          <div className={styles.actions}>
-            {/* SPEC/PLAN: a ação permanece visível-desabilitada enquanto o job ativo existe. */}
-            <Button disabled type="button">Analisar produto</Button>
-            {canCancel && (
-              <Button disabled={busy} onClick={() => setCancelOpen(true)} type="button" variant="outline">Cancelar</Button>
-            )}
-          </div>
-        </div>
-      ) : failed && job ? (
-        <div aria-live="polite" className={styles.state} role="alert">
-          <p className={styles.stateLine}>
-            <strong>{statusLabels[job.status]}</strong>{job.error ? ` · ${job.error}` : ` · ${statusMessage(job.status, productName)}`}
+            <strong>{statusLabels[job.status]}</strong>{job.error ? ` · ${job.error}` : ` · ${statusMessage(job.status)}`}
           </p>
           <div className={styles.actions}>
             <Button disabled={busy} onClick={() => void retry()} type="button">
@@ -260,7 +280,7 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
           </div>
         </div>
       ) : degraded.degraded && job ? (
-        <div aria-live="polite" className={styles.state} role="alert">
+        <div aria-live="polite" role="alert">
           <p className={styles.stateLine}>
             <strong>{statusLabels[job.status]}</strong> · Não foi possível carregar o resultado desta análise. Seus dados permanecem preservados.
           </p>
@@ -273,7 +293,7 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
           )}
         </div>
       ) : partial && job ? (
-        <div aria-live="polite" className={styles.state} role="status">
+        <div aria-live="polite" role="status">
           <p className={styles.stateLine}>
             <strong>{statusLabels[job.status]}</strong> · {`${partial.delivered} de ${partial.expected} conteúdos prontos.`}
           </p>
@@ -288,57 +308,23 @@ export function GenerationStatusCard({ className, productName, targetContentCoun
             </ul>
           )}
           <div className={styles.actions}>
-            <Button className={styles.stateAction} onClick={onOpenContents} type="button" variant="outline">
-              <ScrollText aria-hidden="true" />
-              Revisar conteúdos
-            </Button>
             <Button className={styles.stateAction} disabled={busy} onClick={onGenerateMissing} type="button">
               {busy ? "Gerando faltantes…" : "Gerar faltantes"}
             </Button>
           </div>
         </div>
-      ) : job?.status === "SUCCEEDED" ? (
-        <div aria-live="polite" className={styles.state} role="status">
-          <p className={styles.stateLine}>
-            <strong>{statusLabels[job.status]}</strong> · {statusMessage(job.status, productName)}
-          </p>
-          <div className={styles.actions}>
-            <Button className={styles.stateAction} onClick={onOpenContents} type="button">
-              <ScrollText aria-hidden="true" />
-              Revisar conteúdos
-            </Button>
-          </div>
-        </div>
       ) : (
         <div className={styles.actions}>
-          {/* Estado inicial: sem job comprovado em mãos (nunca teve job ou carga falhou),
-              não há erro nem bloqueio — o backend segue autoritativo no POST. */}
+          {/* PENDING sem job: nunca teve análise comprovada em mãos (ou a carga
+              falhou antes) — o backend segue autoritativo no POST. */}
           <Button disabled={busy || blockedByOther || !!projectedBlocked} onClick={() => void start()} type="button">
             {busy ? "Iniciando análise…" : "Analisar produto"}
           </Button>
           {(projectedNote ?? fallbackNote) && <p className={styles.blockedNote}>{projectedNote ?? fallbackNote}</p>}
-          {job && readiness !== "PENDING" && !projectedBlocked && !blockedByOther && (
-            <p className={styles.error}>Este produto não está disponível para uma nova análise.</p>
-          )}
         </div>
       )}
       {error && <p className={styles.error} role="alert">{error}</p>}
-      {cancelOpen && (
-        <ConfirmationDialog
-          confirmLabel="Cancelar análise"
-          description="A análise na fila será cancelada. Os dados do produto permanecem preservados e você pode tentar novamente depois."
-          error={error}
-          onConfirm={async () => {
-            if (await cancel()) setCancelOpen(false);
-          }}
-          onOpenChange={setCancelOpen}
-          open
-          pending={busy}
-          pendingLabel="Cancelando…"
-          title="Cancelar análise?"
-        />
-      )}
-    </section>
+    </div>
   );
 }
 
@@ -400,10 +386,9 @@ export function OperationalSummaryCard({ className, job, readiness }: {
 }
 
 /** Aba Estratégia: tese comercial estruturada; Plano continua pertencendo à aba Conteúdos. */
-export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | null; onOpenContents?: () => void }) {
+export function StrategyView({ job }: { job: GenerationRecord | null }) {
   if (!job?.strategy) return <EmptyRegion>A estratégia aparece aqui quando a análise concluir.</EmptyRegion>;
   const strategy = strategyModel(job.strategy);
-  const contentsReady = job.status === "SUCCEEDED" && job.contents.length === job.targetContentCount;
   const triplet = [
     { icon: HeartCrack, title: "Dores", items: strategy.pains },
     { icon: Heart, title: "Desejos", items: strategy.desires },
@@ -541,40 +526,20 @@ export function StrategyView({ job, onOpenContents }: { job: GenerationRecord | 
           </div>
         </details>
       </div>
-      {(strategy.active || contentsReady) && (
+      {strategy.active && (
         <aside className={styles.strategyAside}>
-          {contentsReady && (
-            <section className={styles.asideCard}>
-              <h2>Conteúdos</h2>
-              <p>
-                {job.targetContentCount} {job.targetContentCount === 1 ? "conteúdo preparado" : "conteúdos preparados"} com esta estratégia
-              </p>
-              {onOpenContents && (
-                <Button className={styles.asideAction} onClick={onOpenContents} type="button">
-                  <Clapperboard aria-hidden="true" />
-                  Ver conteúdos
-                </Button>
-              )}
-            </section>
-          )}
-          {strategy.active && (
-            <section className={styles.asideCard}>
-              <h2>Estratégia</h2>
-              <p className={styles.asideStatus}>Ativa</p>
-              <p>Esta estratégia orienta os conteúdos deste produto.</p>
-            </section>
-          )}
+          <section className={styles.asideCard}>
+            <h2>Estratégia</h2>
+            <p className={styles.asideStatus}>Ativa</p>
+            <p>Esta estratégia orienta os conteúdos deste produto.</p>
+          </section>
         </aside>
       )}
     </div>
   );
 }
 
-/**
- * Aba Conteúdos: estação de revisão de Briefings em master-detail — lista
- * compacta para navegar (escala para 20+), painel do Briefing selecionado.
- * Mobile usa fluxo lista → detalhe; nunca exibe resultado parcial.
- */
+/** Aba Conteúdos: leitor de Briefings com navegação linear entre conteúdos. */
 export function ContentsView({ job, active }: { job: GenerationRecord | null; active: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   if (active) {
@@ -592,8 +557,17 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
       </section>
     );
   }
+  // SUCCEEDED_PARTIAL publica os D itens aprovados pelo envelope (server-
+  // authoritative); SUCCEEDED pleno permanece exato-N (ADR-021).
   const expectedPublished = job.status === "SUCCEEDED" ? job.targetContentCount : job.deliveredCount ?? -1;
-  if (job.contents.length !== expectedPublished) {
+  if (job.status !== "SUCCEEDED_PARTIAL" && job.contents.length !== expectedPublished) {
+    return (
+      <section className={styles.panel} id="generated-contents">
+        <p role="alert">Os conteúdos ainda não estão prontos. Nenhum resultado parcial será apresentado. Tente novamente em instantes.</p>
+      </section>
+    );
+  }
+  if (job.contents.length < 1) {
     return (
       <section className={styles.panel} id="generated-contents">
         <p role="alert">Os conteúdos ainda não estão prontos. Nenhum resultado parcial será apresentado. Tente novamente em instantes.</p>
@@ -601,95 +575,69 @@ export function ContentsView({ job, active }: { job: GenerationRecord | null; ac
     );
   }
   const items = briefingItems(job.contents);
-  const approved = items.filter((item) => item.status === "APPROVED").length;
-  // A aba abre sempre com um Briefing ativo: sem seleção (ou id de outro job),
-  // recai sobre o primeiro conteúdo. Só o pedido explícito de voltar (LIST_VIEW)
-  // exibe a lista sem detalhe.
-  const selected = selectedId === LIST_VIEW
-    ? null
-    : items.find((item) => item.id === selectedId) ?? items[0] ?? null;
+  const selected = items.find((item) => item.id === selectedId) ?? items[0] ?? null;
   const selectedIndex = selected ? items.indexOf(selected) : -1;
   return (
-    <section aria-labelledby="contents-title" className={styles.panel} id="generated-contents">
-      <header className={styles.contentsHeader}>
-        <h2 id="contents-title">Conteúdos</h2>
-        <p>{job.status === "SUCCEEDED_PARTIAL" ? `${items.length} de ${job.expectedCount ?? job.targetContentCount} conteúdos` : contentsSummaryLabel(items.length, approved)}</p>
-      </header>
-      <div className={styles.contentsLayout} data-selected={selected ? "true" : "false"}>
-        <ol aria-label="Lista de conteúdos" className={styles.contentsList}>
-          {items.map((item) => (
-            <li key={item.id}>
-              <button
-                aria-current={item.id === selected?.id ? "true" : undefined}
-                className={styles.contentRow}
-                data-selected={item.id === selected?.id ? "true" : undefined}
-                onClick={() => setSelectedId(item.id)}
-                type="button"
-              >
-                <span className={styles.contentRowTop}>
-                  <span className={styles.contentRowPosition}>{pad2(item.position)}</span>
-                  <span className={styles.statusTag}>{contentStatusLabel(item.status)}</span>
-                </span>
-                <span className={styles.contentRowHook}>{item.hook}</span>
-              </button>
-            </li>
-          ))}
-        </ol>
-        <div className={styles.detailPane}>
-          {selected ? (
-            <BriefingDetail
-              index={selectedIndex}
-              item={selected}
-              key={selected.id}
-              onBack={() => setSelectedId(LIST_VIEW)}
-              onNavigate={(nextIndex) => setSelectedId(items[nextIndex]?.id ?? LIST_VIEW)}
-              total={items.length}
-            />
-          ) : (
-            <p className={styles.blockedNote}>Selecione um conteúdo para revisar o Briefing.</p>
-          )}
-        </div>
-      </div>
+    <section aria-label="Conteúdos" className={styles.panel} id="generated-contents" tabIndex={-1}>
+      {selected && (
+        <BriefingDetail
+          index={selectedIndex}
+          item={selected}
+          key={selected.id}
+          onNavigate={(nextIndex) => setSelectedId(items[nextIndex]?.id ?? null)}
+          total={items.length}
+        />
+      )}
     </section>
   );
 }
 
-/** Aba Histórico: registro da análise mais recente conhecida pelo backend. */
-const historyDateFormat = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
-const formatHistoryDate = (value: string | null) => {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : historyDateFormat.format(date);
-};
-/* Duração legível em pt-BR: "45 s" ou "2 min 05 s". */
-const formatHistoryDuration = (start: string | null, end: string | null) => {
-  if (!start || !end) return null;
-  const ms = new Date(end).getTime() - new Date(start).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return null;
-  const totalSeconds = Math.round(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes === 0) return `${seconds} s`;
-  return `${minutes} min ${String(seconds).padStart(2, "0")} s`;
-};
-export function HistoryView({ job }: { job: GenerationRecord | null }) {
-  if (!job) return <EmptyRegion>Nenhuma análise registrada até agora.</EmptyRegion>;
-  const createdAt = formatHistoryDate(job.createdAt);
-  /* Estratégia e conteúdos passam a existir juntos, na conclusão do job. */
-  const publishedAt = job.status === "SUCCEEDED" ? formatHistoryDate(job.finishedAt ?? job.createdAt) : null;
-  /* Duração cobre o job inteiro (createdAt → finishedAt, inclusive retries);
-     startedAt só serve de início quando createdAt não existe. Falha terminal
-     também mede até o seu finishedAt. */
-  const duration = formatHistoryDuration(job.createdAt ?? job.startedAt, job.finishedAt);
+/** Aba Histórico: agregados financeiros, com detalhes por Conteúdo sob demanda. */
+export function HistoryView({
+  history,
+  loading,
+  error,
+}: {
+  history: ProductHistoryResponse | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  if (loading) return <EmptyRegion>Carregando o histórico de custos…</EmptyRegion>;
+  if (error) return <section className={styles.panel} role="alert"><p>{error}</p></section>;
+  if (!history || history.jobs.length === 0) return <EmptyRegion>Nenhuma análise registrada até agora.</EmptyRegion>;
+
+  const model = historyViewModel(history);
   return (
-    <section className={styles.panel}>
-      <p><strong>{generationStatusLabel(job.status)}</strong> · até {job.targetContentCount} Briefings solicitados</p>
-      {createdAt && <p>Análise criada em {createdAt}.</p>}
-      {publishedAt && <p>Estratégia e conteúdos criados em {publishedAt}.</p>}
-      {duration && <p>Tempo total da Commerce Intelligence: {duration}.</p>}
-      {job.status === "SUCCEEDED" && <p>Resultado completo disponível na aba Conteúdos.</p>}
-      {job.error && <p className={styles.error}>{job.error}</p>}
-      {job.previousRunId && <p>Esta análise substitui uma tentativa anterior do mesmo produto.</p>}
+    <section aria-label="Histórico de custos" className={styles.historyList}>
+      {model.jobs.map((item, index) => (
+        <article className={styles.historyItem} key={`${item.dateLabel}-${index}`}>
+          <div className={styles.historyHeader}>
+            <div>
+              <h2>{item.dateLabel}</h2>
+              <p>{item.statusLabel} · {item.requestedContentsLabel}</p>
+            </div>
+            <div aria-label={`Custo estimado: ${item.cost.label}. ${item.cost.completenessLabel}.`} className={styles.historyCost}>
+              <strong>{item.cost.label}</strong>
+              <span>{item.cost.completenessLabel}</span>
+            </div>
+          </div>
+          {item.contents.length > 0 && (
+            <details className={styles.disclosure}>
+              <summary>Ver custos por Conteúdo</summary>
+              <ul className={styles.historyContentList}>
+                {item.contents.map((content, contentIndex) => (
+                  <li key={`${content.positionLabel}-${contentIndex}`}>
+                    <span>{content.positionLabel}</span>
+                    <span aria-label={`Custo: ${content.cost.label}. ${content.cost.completenessLabel}.`}>
+                      {content.cost.label} · {content.cost.completenessLabel}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </article>
+      ))}
     </section>
   );
 }

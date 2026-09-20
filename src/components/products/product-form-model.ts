@@ -278,16 +278,16 @@ export function validateProductManualDraft(
     errors.currency = "Informe uma moeda válida.";
   const commissionType = draft.commissionType?.trim() ?? "";
   const commission = draft.commission?.trim() ?? "";
-  if (commission && !commissionType)
-    errors.commissionType = "Escolha se a comissão é % ou valor.";
-  if (commissionType && !COMMISSION_TYPES.includes(commissionType as CommissionType))
-    errors.commissionType = "Informe um tipo de comissão válido.";
-  if (commissionType && !commission)
-    errors.commission = "Informe o valor da comissão.";
-  else if (commission && !/^\d+(?:[.,]\d{1,2})?$/.test(commission))
-    errors.commission = "Informe um valor não negativo com até duas casas.";
-  else if (commissionType === "PERCENT" && Number(commission.replace(",", ".")) > 100)
-    errors.commission = "A comissão percentual deve estar entre 0 e 100.";
+  if (commission) {
+    if (!commissionType)
+      errors.commissionType = "Escolha se a comissão é % ou valor.";
+    else if (!COMMISSION_TYPES.includes(commissionType as CommissionType))
+      errors.commissionType = "Informe um tipo de comissão válido.";
+    else if (!/^\d+(?:[.,]\d{1,2})?$/.test(commission))
+      errors.commission = "Informe um valor não negativo com até duas casas.";
+    else if (commissionType === "PERCENT" && Number(commission.replace(",", ".")) > 100)
+      errors.commission = "A comissão percentual deve estar entre 0 e 100.";
+  }
   const discountType = draft.discountType === "FIXED" ? "FIXED" : "PERCENTAGE";
   const discountValue = (draft.discountValue?.trim() || "").trim();
   if (discountValue && !/^\d+(?:[.,]\d{1,2})?$/.test(discountValue)) {

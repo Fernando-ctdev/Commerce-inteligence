@@ -266,8 +266,8 @@ test("SUCCEEDED degradado: sem retry e sem revisão — anomalia, não sucesso",
   assert.equal(actions.retry, false); // /retry responderia 404 (fora da partição)
   assert.equal(actions.reviewContents, false); // nada projetável para revisar
   assert.equal(actions.generateMissing, false);
-  // A view troca o heading de sucesso pelo estado de anomalia (branch degradado
-  // em GenerationStatusCard, antes do branch SUCCEEDED de "Revisar conteúdos").
+  // A view (GenerationActions) comunica o estado de anomalia em role alert e
+  // não renderiza nenhuma ação quando degraded sem generateMissing.
 });
 
 test("SUCCEEDED_PARTIAL degradado: /complete acessível, sem retry e sem revisão", () => {

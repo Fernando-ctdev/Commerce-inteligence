@@ -2,7 +2,7 @@
    Tokens semânticos em globals.css; contrato responsivo em DESIGN.md v1.5. */
 
 .sidebarHeader {
-  padding: 28px 16px 0;
+  padding: 16px 16px 0;
 }
 
 .sidebarContent {
@@ -51,7 +51,7 @@
   align-items: center;
   color: var(--color-text);
   display: flex;
-  margin: 0 8px 36px;
+  margin: 0 8px 16px;
   min-height: 44px;
   text-decoration: none;
 }
@@ -65,10 +65,24 @@
 
 .brandLogoText {
   display: block;
-  height: auto;
-  max-width: 100%;
+  height: 64px;
   object-fit: contain;
+  object-position: left center;
+  transform: scale(1.2);
+  transform-origin: left center;
   width: 168px;
+}
+
+.brandLogoTextLight {
+  display: none;
+}
+
+:global(.dark) .brandLogoTextDark {
+  display: none;
+}
+
+:global(.dark) .brandLogoTextLight {
+  display: block;
 }
 
 .navMenu {

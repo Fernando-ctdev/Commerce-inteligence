@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildEvidenceCatalog, runFirstGeneration } from "./engine";
+import { buildEvidenceCatalog, createCapabilityTracker, runFirstGeneration } from "./engine";
 import { ctaTextFactualIssues, validDevelopmentPoint } from "./gates";
 import { CARDINALITY_POLICY_VERSION } from "./contract";
 import { collectJobEvents, resetJobEvents } from "./observability";
@@ -982,4 +982,33 @@ test("ADR-020 adendo 2: saída inicial permanece string[] com exact-N e IDs est�
   assert.deepEqual(result.briefs.map((brief) => brief.contentId), ["j-strings-content-1", "j-strings-content-2"]);
   assert.ok(result.briefs.every((brief) => Array.isArray(brief.development) && brief.development.every((point) => typeof point === "string")), "development canônico permanece string[]");
   assert.ok(result.reports.every((report) => report.decision === "PASS"));
+});
+
+// ---- Usage real por tentativa (design 2026-09-18): tracker copia provider/usage do metrics ----
+
+test("createCapabilityTracker copia provider/usage no evento de sucesso e de falha, por tentativa", async () => {
+  const metricsWithUsage = { provider: "openai-compatible", model: "m1", reasoning: "low", providerStatus: 200, requestBytes: 10, trustedContextBytes: 5, externalBytes: 0, responseBytes: 20, durationMs: 5, usage: { inputTokens: 100, outputTokens: 40, reasoningTokens: 10, cachedTokens: 25 }, retry: 1 };
+  let calls = 0;
+  const router: ModelRouter = {
+    describe,
+    complete: async (_task, _input, _signal, onMetrics) => {
+      calls += 1;
+      if (onMetrics) onMetrics(calls === 1 ? { ...metricsWithUsage, retry: 0 } : { ...metricsWithUsage, providerStatus: 503, usage: undefined });
+      if (calls === 2) throw new GenerationError("GEN-PROVIDER", "falha com usage ausente");
+      return { ok: true };
+    },
+  };
+  const tracker = createCapabilityTracker({ jobId: "j-usage", attempt: 1, router });
+  await tracker.track("PRODUCT_UNDERSTANDING", {}, (onMetrics) => router.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, onMetrics));
+  await tracker.track("PRODUCT_UNDERSTANDING", {}, (onMetrics) => router.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, onMetrics)).catch(() => undefined);
+  assert.equal(tracker.capabilities.length, 2, "uma tentativa efetiva por track");
+  const success = tracker.capabilities[0]!;
+  assert.equal(success.ok, true);
+  assert.equal(success.provider, "openai-compatible");
+  assert.deepEqual(success.usage, { inputTokens: 100, outputTokens: 40, reasoningTokens: 10, cachedTokens: 25 });
+  assert.equal(success.retry, 0);
+  const failure = tracker.capabilities[1]!;
+  assert.equal(failure.ok, false);
+  assert.equal(failure.usage, undefined, "falha sem usage do provider não inventa contadores");
+  assert.equal(failure.provider, "openai-compatible");
 });

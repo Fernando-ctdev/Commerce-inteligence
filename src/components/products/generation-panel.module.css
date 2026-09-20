@@ -11,6 +11,84 @@
   width: 100%;
 }
 
+.historyList {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.historyItem {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 20px;
+}
+
+.historyHeader {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.historyHeader h2,
+.historyHeader p,
+.historyCost strong,
+.historyCost span {
+  margin: 0;
+}
+
+.historyHeader h2 {
+  color: var(--color-text);
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.historyHeader p,
+.historyCost span {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.historyCost {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  text-align: right;
+}
+
+.historyCost strong {
+  color: var(--color-text);
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.historyContentList {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.historyContentList li {
+  align-items: baseline;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding-top: 8px;
+}
+
+.historyContentList li span:last-child {
+  color: var(--color-text-secondary);
+  text-align: right;
+}
+
 .heading,
 .heading h2,
 .heading p,
@@ -46,6 +124,27 @@
 /* Bloco compacto de status/action: uma linha de sinal + ações. */
 .state {
   gap: 12px;
+}
+
+.contentsActions {
+  margin-bottom: 20px;
+}
+
+.contentsActions > [role="alert"],
+.contentsActions > [role="status"] {
+  align-items: center;
+  column-gap: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 12px;
+}
+
+.contentsActions > [role="alert"] > .actions,
+.contentsActions > [role="status"] > .actions {
+  align-self: center;
+  grid-column: 2;
+  grid-row: 1 / -1;
+  justify-content: flex-end;
 }
 
 .stateLine {
@@ -239,134 +338,14 @@
   margin: 0;
 }
 
-/* Aba Conteúdos: master-detail — lista compacta de navegação + Briefing selecionado. */
-.contentsHeader {
-  display: grid;
-  gap: 4px;
-}
 
-.contentsHeader h2 {
-  font-size: 20px;
-  line-height: 26px;
-  margin: 0;
-}
 
-.contentsHeader p {
-  color: var(--color-text-secondary);
-  font-size: 15px;
-  line-height: 22px;
-  margin: 0;
-}
-
-.contentsLayout {
-  display: grid;
-  gap: 20px;
-  min-width: 0;
-}
-
-.contentsList {
-  align-content: start;
-  display: grid;
-  gap: 4px;
-  list-style: none;
-  margin: 0;
-  max-height: 70vh;
-  overflow-y: auto;
-  padding: 0;
-}
-
-.contentRow {
-  background: transparent;
-  border: 0;
-  border-left: 2px solid transparent;
-  color: var(--color-text);
-  cursor: pointer;
-  display: grid;
-  font: inherit;
-  gap: 3px;
-  padding: 8px 10px;
-  text-align: left;
-  width: 100%;
-}
-
-.contentRow:hover {
-  background: var(--color-surface-secondary);
-}
-
-.contentRow:focus-visible {
-  outline: 3px solid var(--color-focus);
-  outline-offset: -3px;
-}
-
-.contentRow[data-selected="true"] {
-  background: var(--color-surface-secondary);
-  border-left-color: var(--color-brand);
-}
-
-.contentRowTop {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
-}
-
-.contentRowPosition {
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 18px;
-}
-
-/* Status como tag pill neutra (radius.pill), na lista e no Briefing. */
-.statusTag {
-  background: var(--color-surface-secondary);
-  border-radius: 9999px;
-  color: var(--color-text-secondary);
-  flex-shrink: 0;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 16px;
-  margin: 0;
-  padding: 2px 10px;
-  white-space: nowrap;
-}
-
-.contentRowHook {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  font-size: 14px;
-  line-height: 20px;
-  overflow: hidden;
-}
-
-.detailPane {
-  align-content: start;
-  display: grid;
-  gap: 16px;
-  min-width: 0;
-}
-
-/* Desktop: navegador com largura estável + divisor vertical real entre
-   lista e Briefing — separação por composição, não só por posição. */
-@media (min-width: 768px) {
-  .contentsLayout {
-    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  }
-
-  .detailPane {
-    border-left: 1px solid var(--color-border);
-    padding-left: 24px;
-  }
-}
-
-/* O painel ocupa todo o espaço, mas a linha de leitura não. */
+/* Leitor ocupa a largura do painel; o texto controla a medida por bloco. */
 .detail {
   animation: briefingOpen 160ms ease-out;
   display: grid;
   gap: 24px;
-  max-width: 760px;
+  max-width: none;
 }
 
 @keyframes briefingOpen {
@@ -387,6 +366,19 @@
   justify-content: space-between;
 }
 
+.detailMeta {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.contentProgress {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .detailTitle {
   display: -webkit-box;
   font-size: 17px;
@@ -402,16 +394,22 @@
 /* Hook é o conteúdo dominante do Briefing: superfície levemente destacada,
    assinada pela cor de inteligência (geração) — o início do vídeo. */
 .hookBlock {
-  background: var(--color-surface-secondary);
-  border-left: 2px solid var(--color-intelligence);
-  border-radius: 8px;
+  background: var(--color-text);
+  border: 0;
+  border-radius: 10px;
+  color: var(--color-surface);
   display: grid;
   gap: 8px;
   padding: 20px 24px;
 }
 
+.hookBlock .sectionLabel {
+  color: var(--color-intelligence);
+}
+
 /* type.heading-1: o hook é a frase que abre o vídeo. */
 .briefingHook {
+  color: var(--color-surface);
   font-size: 24px;
   font-weight: 600;
   line-height: 30px;
@@ -460,6 +458,65 @@
   color: var(--color-intelligence);
 }
 
+/* Desenvolvimento e CTA no desenho aprovado: ícone em brand; rótulo e texto do
+   CTA em action (texto normal ≥ 4.5:1 — brand só 4.17:1 em Light). */
+.sectionLabelBrand {
+  color: var(--color-action);
+}
+
+.sectionIconBrand {
+  color: var(--color-brand);
+}
+
+/* Texto do CTA em action; os pontos do Desenvolvimento permanecem escuros. */
+.ctaText {
+  color: var(--color-action);
+}
+
+/* Desenvolvimento: bolinha sólida pequena por ponto, sem réguas entre itens. */
+.developmentList {
+  color: var(--color-text);
+  display: grid;
+  font-size: 15px;
+  line-height: 22px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.developmentList li {
+  padding: 10px 0 10px 16px;
+  position: relative;
+}
+
+.developmentList li::before {
+  background: var(--color-text-secondary);
+  border-radius: 50%;
+  content: "";
+  height: 5px;
+  left: 2px;
+  position: absolute;
+  top: 18px;
+  width: 5px;
+}
+
+/* Cabeçalho do Roteiro: rótulo à esquerda, cópia discreta à direita. */
+.scriptHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Ação de cópia: ícone only, cor auxiliar; alvo de toque 44px do Button.
+   Base em text.secondary (5.36:1 em Light — ícone significativo ≥ 3:1). */
+.copyScriptButton {
+  color: var(--color-text-secondary);
+}
+
+.copyScriptButton:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
 /* Leitura editorial: ~65–75 caracteres por linha, sem correr o painel todo. */
 /* Roteiro para leitura start-to-end: uma frase completa por parágrafo, com pausa visual entre frases. */
 .scriptParagraphs {
@@ -496,12 +553,38 @@
   padding: 0;
 }
 
-/* Seções do Briefing separadas por divisão sutil, não por cards. */
+/* Seções do Briefing: sem réguas genéricas; o ritmo vem do fluxo da aba e o
+   único divisor é o border-top condicional do CTA (.ctaSection). */
 .detailSection {
-  border-top: 1px solid var(--color-border);
   display: grid;
   gap: 8px;
+}
+
+/* Fluxo da aba Script: espaçamento uniforme entre blocos sem réguas. */
+.scriptFlow {
+  display: grid;
+  gap: 24px;
+}
+
+/* Divisor único e sutil: apenas o CTA, quando há Desenvolvimento antes. */
+.ctaSection {
+  border-top: 1px solid var(--color-border);
   padding-top: 24px;
+}
+
+.scriptSection {
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-intelligence);
+  border-radius: 0 10px 10px 0;
+  border-top: 0;
+  margin-top: 16px;
+  padding: 18px 16px;
+}
+
+.scriptSection .readingText {
+  font-size: 17px;
+  line-height: 1.58;
 }
 
 /* Cenas como sequência de produção: índice + descrição, não parágrafo. */
@@ -520,7 +603,9 @@
 }
 
 .sceneItem p {
+  color: var(--color-text);
   margin: 0;
+  max-width: 62ch;
 }
 
 .sceneIndex {
@@ -537,44 +622,44 @@
   display: flex;
   gap: 8px;
 }
-
-/* Navegação mobile (voltar à lista / anterior-próximo): só < 768px.
-   Dupla classe vence o display do Button sem depender da ordem do bundle. */
-.mobileBack.mobileBack,
-.contentsNav {
-  display: none;
-}
-
+/* Navegação linear do leitor: anterior à esquerda, próximo à direita. */
 .contentsNav {
   align-items: center;
-  justify-content: space-between;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+
+.readerNavButton {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-secondary);
+  min-width: 0;
+  padding-inline: 0;
+  width: 100%;
+}
+
+.readerNavButton:first-child {
+  justify-content: flex-start;
+}
+
+.readerNavButton:last-child {
+  justify-content: flex-end;
+}
+
+.readerNavButton:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-brand);
+}
+
 
 @media (max-width: 767px) {
-  .mobileBack.mobileBack {
-    display: inline-flex;
-    justify-self: start;
-  }
-
   .contentsNav {
-    display: flex;
-    gap: 12px;
-  }
-
-  .contentsLayout[data-selected="true"] .contentsList {
-    display: none;
-  }
-
-  .contentsLayout[data-selected="false"] .detailPane {
-    display: none;
+    gap: 8px;
   }
 }
 
-.blockedNote {
-  color: var(--color-text-secondary);
-  margin: 0;
-  overflow-wrap: anywhere;
-}
 
 .phaseList {
   display: grid;
@@ -1069,11 +1154,14 @@
   margin: 0;
 }
 
-/* Ação primária do card, na largura do card como nos demais. */
-.asideAction,
+/* Ação de recuperação em Conteúdos compacta no desktop e cheia no mobile. */
 .stateAction {
   justify-content: center;
   width: 100%;
+}
+
+.contentsActions .stateAction {
+  width: auto;
 }
 
 .asideStatus {
@@ -1126,6 +1214,23 @@
   .strategyPanel,
   .asideCard {
     padding: 20px;
+  }
+
+  .contentsActions .stateAction {
+    width: 100%;
+  }
+
+  .contentsActions > [role="alert"],
+  .contentsActions > [role="status"] {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .contentsActions > [role="alert"] > .actions,
+  .contentsActions > [role="status"] > .actions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-content: stretch;
   }
 
   .strategyLayout {

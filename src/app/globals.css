@@ -91,6 +91,21 @@ button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 input, textarea { cursor: text; }
 
+input[type="range"] {
+  cursor: pointer;
+}
+
+/* Contenção estrutural mobile: containers de layout e seus descendentes
+   podem encolher abaixo do min-content (min-width só impacta itens
+   flex/grid; ícones com flex-basis fixo ficam preservados). Sem isso
+   tracks aninhados de grid estouram a viewport. Não mascara overflow. */
+@media (max-width: 767px) {
+  :where(main, [role="main"], form, section, article, nav),
+  :where(main, [role="main"], form, section, article, nav) * {
+    min-width: 0;
+  }
+}
+
 :focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 3px;

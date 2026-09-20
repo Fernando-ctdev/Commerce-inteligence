@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   createProduct,
   getProduct,
+  importProduct,
   ProductApiError,
   type ProductRecord,
   updateProduct,
@@ -669,6 +670,7 @@ export function ProductCreateForm({
   const submitIntent = useRef<"save" | "analyze">("save");
   const [notes, setNotes] = useState(product?.observations ?? "");
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ProductManualFieldErrors>({});
   const [validationVisible, setValidationVisible] = useState(false);
@@ -690,6 +692,7 @@ export function ProductCreateForm({
   /* Uma chave por tentativa lógica: gerada no primeiro submit e reutilizada
      em todo retry; limpa só após sucesso (novo formulário = novo mount). */
   const idempotencyKey = useRef<string | undefined>(undefined);
+  const importIdempotencyKey = useRef<string | undefined>(undefined);
 
   function update(field: keyof ProductManualDraft, value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -826,6 +829,38 @@ export function ProductCreateForm({
     setFormStep("preparation");
   }
 
+  async function importFromUrl() {
+    if (isEdit || importing || saving) return;
+    const url = draft.url?.trim() ?? "";
+    if (!url) {
+      const message = "Cole uma URL pública do TikTok Shop para importar.";
+      setFieldErrors((current) => ({ ...current, url: message }));
+      setError(message);
+      return;
+    }
+    setImporting(true);
+    setError(null);
+    setFieldErrors((current) => ({ ...current, url: undefined }));
+    try {
+      const key = importIdempotencyKey.current ?? createIdempotencyKey();
+      importIdempotencyKey.current = key;
+      const result = await importProduct(url, key);
+      toast.success("Produto importado.");
+      importIdempotencyKey.current = undefined;
+      router.push(`/products/${result.id}`);
+    } catch (caught) {
+      const message = caught instanceof ProductApiError
+        ? caught.message
+        : "Não foi possível importar agora. Os dados manuais continuam disponíveis.";
+      const urlError = caught instanceof ProductApiError ? caught.fieldErrors.url : undefined;
+      setFieldErrors((current) => ({ ...current, url: urlError ?? message }));
+      setError(message);
+      toast.error(message);
+    } finally {
+      setImporting(false);
+    }
+  }
+
 
   function continueToSummary() {
     setValidationVisible(true);
@@ -911,9 +946,11 @@ export function ProductCreateForm({
       if (isEdit && product) {
         delete payload.targetContentCount;
         delete payload.creatorPresence;
-        delete payload.constraints;
         const mutation = await updateProduct(product.id, {
           ...payload,
+          /* buildManualProductPayload omite vazio; na edição constraints vai
+             explícito (string vazia limpa no backend). Criação mantém contrato. */
+          constraints: notes.trim(),
           expectedVersion: version,
         });
         const latest = await getProduct(mutation.id);
@@ -1015,11 +1052,11 @@ export function ProductCreateForm({
         <ol aria-label="Etapas do cadastro" className={styles.formSteps}>
           <li aria-current={formStep === "facts" ? "step" : undefined}>
             <span aria-hidden="true">1</span>
-            <strong>Informações do produto</strong>
+            <strong>Informações</strong>
           </li>
           <li aria-current={formStep === "preparation" ? "step" : undefined}>
             <span aria-hidden="true">2</span>
-            <strong>Preparação dos conteúdos</strong>
+            <strong>Conteúdos</strong>
           </li>
           <li aria-current={formStep === "summary" ? "step" : undefined}>
             <span aria-hidden="true">3</span>
@@ -1280,6 +1317,32 @@ export function ProductCreateForm({
             type="url"
             value={draft.url ?? ""}
           />
+          {!isEdit && (
+            <div className={styles.importAction}>
+              <Button disabled={importing || saving} onClick={importFromUrl} type="button" variant="outline">
+                {importing ? "Importando…" : "Importar do TikTok Shop"}
+              </Button>
+              <p>Se a consulta falhar, você pode continuar preenchendo os dados manualmente.</p>
+            </div>
+          )}
+          {isEdit && (
+            <TextField
+              error={combinedErrors.constraints}
+              id={fieldId("constraints")}
+              help="Você pode informar preferências, restrições ou detalhes que devem orientar os conteúdos."
+              label={
+                <>
+                  Observações ou restrições{" "}
+                  <span className={styles.optionalMark}>Opcional</span>
+                </>
+              }
+              maxLength={300}
+              multiline
+              onChange={setNotes}
+              showCounter
+              value={notes}
+            />
+          )}
         </section>
       )}
 
@@ -1422,14 +1485,29 @@ export function ProductCreateForm({
         />
       )}
 
-      <div className={styles.submitBar}>
+      <div
+        className={[
+          styles.submitBar,
+          !isEdit && formStep === "facts" ? styles.firstStepActions : "",
+          formStep === "preparation" ? styles.preparationActions : "",
+          formStep === "summary" ? styles.summaryActions : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
         {!isEdit && formStep === "facts" && (
-          <Button onClick={continueToPreparation} type="button">
+          <Button className={styles.continueButton} onClick={continueToPreparation} type="button">
+            Continuar
+          </Button>
+        )}
+        {!isEdit && formStep === "preparation" && (
+          <Button className={styles.continueButton} disabled={saving} onClick={continueToSummary} type="button">
             Continuar
           </Button>
         )}
         {!isEdit && (formStep === "preparation" || formStep === "summary") && (
           <Button
+            className={styles.backButton}
             disabled={saving}
             onClick={() =>
               setFormStep(formStep === "preparation" ? "facts" : "preparation")
@@ -1440,40 +1518,32 @@ export function ProductCreateForm({
             Voltar
           </Button>
         )}
-        {!isEdit && (
-          <>
-            {formStep === "preparation" && (
-              <Button disabled={saving} onClick={continueToSummary} type="button">
-                Continuar
-              </Button>
-            )}
-            {formStep === "summary" && (
-              <>
-                <Button
-                  className={styles.analysisButton}
-                  disabled={saving}
-                  onClick={() => {
-                    submitIntent.current = "analyze";
-                  }}
-                  type="submit"
-                >
-                  {saving ? "Iniciando análise…" : "Analisar produto"}
-                </Button>
-                <Button disabled={saving} type="submit">
-                  {saving ? "Salvar produto — salvando" : "Salvar produto"}
-                </Button>
-              </>
-            )}
-            {saving ? (
-              <Button disabled type="button" variant="outline">
-                Cancelar
-              </Button>
-            ) : (
-              <Link className={styles.cancelLink} href="/products">
-                Cancelar
-              </Link>
-            )}
-          </>
+        {!isEdit &&
+          (saving ? (
+          <Button className={styles.cancelLink} disabled type="button" variant="outline">
+            Cancelar
+          </Button>
+        ) : (
+          <Link className={styles.cancelLink} href="/products">
+            Cancelar
+          </Link>
+          ))}
+        {!isEdit && formStep === "summary" && (
+          <Button className={styles.saveButton} disabled={saving} type="submit">
+            {saving ? "Salvar produto — salvando" : "Salvar produto"}
+          </Button>
+        )}
+        {!isEdit && formStep === "summary" && (
+          <Button
+            className={styles.analysisButton}
+            disabled={saving}
+            onClick={() => {
+              submitIntent.current = "analyze";
+            }}
+            type="submit"
+          >
+            {saving ? "Iniciando análise…" : "Analisar produto"}
+          </Button>
         )}
       </div>
     </form>

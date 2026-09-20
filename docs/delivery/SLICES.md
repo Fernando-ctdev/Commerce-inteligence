@@ -441,8 +441,10 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 - Busca por hooks, scripts e conteúdos do contexto do Produto; filtros por status e data.
 - Exibir proveniência dos contents.
 - Alimentar a memória usada pelas gerações subsequentes (os eventos já são persistidos; este slice expõe a visão).
+- Exibir, por job e por Content quando houver atribuição direta, somente custo estimado agregado, moeda e completude (`COMPLETE`, `PARTIAL` ou `UNAVAILABLE`), derivados de `IntelligenceRun.metadata`.
+- Leitura dedicada do Histórico por Product, autenticada e tenant-scoped; jobs legados sem usage/preço aparecem como `UNAVAILABLE`, sem backfill estimado.
 
-**Out of Scope:** `Content Vault` como destino global de navegação, biblioteca de mídia, busca semântica, embeddings, analytics externo, campanhas obrigatórias.
+**Out of Scope:** `Content Vault` como destino global de navegação, biblioteca de mídia, busca semântica, embeddings, analytics externo, campanhas obrigatórias, dashboard/KPI global e exposição creator-facing de provider, modelo, tier, tokens, prompts, logs, latência, hashes, IDs técnicos ou metadata bruto.
 ---
 
 ### Slice 011 — Meu estilo e CreatorContext

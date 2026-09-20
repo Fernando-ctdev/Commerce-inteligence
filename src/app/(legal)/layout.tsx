@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import logo from "@/assets/logo/logo.png";
+import logoMascot from "@/assets/logo/logo_mascot.png";
 
 import styles from "./legal.module.css";
 
@@ -11,7 +11,7 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
     <div className={styles.page}>
       <header className={styles.header}>
         <Link aria-label="Viewefy" className={styles.brand} href="/access">
-          <Image alt="" className={styles.logo} height={36} priority src={logo} width={36} />
+          <Image alt="" className={styles.logo} height={36} priority src={logoMascot} width={36} />
           <span>Viewefy</span>
         </Link>
 

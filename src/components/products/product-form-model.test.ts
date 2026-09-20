@@ -364,7 +364,7 @@ test("comissão: calcula % sobre o preço e valor fixo; sem preço % fica só pe
   assert.equal(formatCommission("", "10", "89,90", "R$"), null);
 });
 
-test("comissão: validação exige par, formato e faixa percentual", () => {
+test("comissão: opcional sem valor; exige tipo, formato e faixa percentual quando há valor", () => {
   const base = {
     ...emptyProductDraft(),
     name: "Produto",
@@ -382,7 +382,7 @@ test("comissão: validação exige par, formato e faixa percentual", () => {
   );
   assert.deepEqual(
     validateProductManualDraft({ ...base, commissionType: "PERCENT" }, ""),
-    { commission: "Informe o valor da comissão." },
+    {},
   );
   assert.deepEqual(
     validateProductManualDraft({ ...base, commissionType: "PERCENT", commission: "100,01" }, ""),

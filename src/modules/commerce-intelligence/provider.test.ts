@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_PART_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION, JUDGE_EDITORIAL_GUIDANCE, PART_REPAIR_EDITORIAL_GUIDANCE, createHttpProvider, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
+import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_BRIEF_REPAIR_INSTRUCTION, CONTENT_PART_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION, JUDGE_EDITORIAL_GUIDANCE, PART_REPAIR_EDITORIAL_GUIDANCE, createHttpProvider, dollarsLexemeToMinor, extractReportedCostLexeme, normalizeProviderUsage, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
 import { CARDINALITY_POLICY } from "./contract";
 import { GenerationError } from "./errors";
 import { ROUTER_MAP } from "./model-router";
@@ -615,6 +615,26 @@ test("provider without schema support (HTTP 400) stays fail-closed: explicit err
   assert.equal(format400?.type, "json_schema", "sem downgrade silencioso de formato");
 });
 
+// ---- Contrato estruturado de development (design 2026-09-18) ----
+
+test("instruções de brief exigem bullets estruturados text/action/factRef/rationale e proíbem locators", () => {
+  for (const field of ["text", "action", "factRef", "rationale"]) {
+    assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes(field), `geração inicial exige campo estruturado ${field}`);
+    assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes(field), `repair exige campo estruturado ${field}`);
+  }
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("apenas como campo estruturado"), "factRef apenas como campo estruturado");
+  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("apenas como campo estruturado"), "factRef apenas como campo estruturado no repair");
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("development como lista de textos"), "geração não aceita mais development em texto plano");
+});
+
+test("instrução do judge recebe development estruturado e proíbe avaliação factual/grounding/gate", () => {
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("development estruturado"), "judge recebe bullets estruturados");
+  for (const proibido of ["factRef", "ancoragem", "conector", "cardinalidade", "gate"]) {
+    assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes(proibido), `judge proíbe avaliar ${proibido}`);
+  }
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("não valida"), "judge não valida factualidade");
+});
+
 test("escopo editorial: judge/repair guidance cobre weak_commercial_value, coerência intra-brief e cena visual-only", () => {
   assert.ok(JUDGE_EDITORIAL_GUIDANCE.includes("weak_commercial_value"), "ângulo banal de categoria é REVIEW do judge");
   assert.ok(JUDGE_EDITORIAL_GUIDANCE.includes("incoherent"), "coerência intra-brief é REVIEW do judge");
@@ -622,4 +642,140 @@ test("escopo editorial: judge/repair guidance cobre weak_commercial_value, coer�
   assert.ok(JUDGE_EDITORIAL_GUIDANCE.includes("bolso de calça"), "exemplo de ângulo banal explícito");
   assert.ok(PART_REPAIR_EDITORIAL_GUIDANCE.includes("coerência intra-brief"));
   assert.ok(PART_REPAIR_EDITORIAL_GUIDANCE.includes("perguntas como formato de hook permanecem válidas"));
+});
+
+// ---- Usage real do provider (design 2026-09-18): allowlist; null quando desconhecido ----
+
+test("normalizeProviderUsage lê envelope OpenAI-compatível completo (cached/reasoning em details)", () => {
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { prompt_tokens: 1200, completion_tokens: 400, prompt_tokens_details: { cached_tokens: 250 }, completion_tokens_details: { reasoning_tokens: 100 } } }),
+    { inputTokens: 1200, outputTokens: 400, reasoningTokens: 100, cachedTokens: 250 },
+  );
+});
+
+test("normalizeProviderUsage aceita naming alternativo input_tokens/output_tokens e paths planos", () => {
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { input_tokens: 500, output_tokens: 200, cached_tokens: 50, reasoning_tokens: 30 } }),
+    { inputTokens: 500, outputTokens: 200, reasoningTokens: 30, cachedTokens: 50 },
+  );
+});
+
+test("normalizeProviderUsage sem usage/envelope malformado devolve nulos (nunca 0 inferido)", () => {
+  assert.deepEqual(normalizeProviderUsage({}), { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null });
+  assert.deepEqual(normalizeProviderUsage({ usage: "1200 tokens" }), { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null });
+  assert.deepEqual(normalizeProviderUsage(null), { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null });
+});
+
+test("normalizeProviderUsage: valor presente porém inválido (negativo/fracionário) vira null nessa dimensão", () => {
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { prompt_tokens: -5, completion_tokens: 1.5 } }),
+    { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null },
+  );
+  // details malformado cai para caminho plano; chave primária presente decide antes do alternate
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { prompt_tokens: 10, prompt_tokens_details: "x", cached_tokens: 7 } }),
+    { inputTokens: 10, outputTokens: null, reasoningTokens: null, cachedTokens: 7 },
+  );
+});
+
+test("normalizeProviderUsage preserva zero reportado como zero", () => {
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { prompt_tokens: 0, completion_tokens: 0, prompt_tokens_details: { cached_tokens: 0 }, completion_tokens_details: { reasoning_tokens: 0 } } }),
+    { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+  );
+});
+
+test("normalizeProviderUsage: nested sem a chave cai para o campo plano; chave nested inválida não cai", () => {
+  // nested objeto presente SEM cached_tokens → fallback plano
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { prompt_tokens: 10, prompt_tokens_details: {}, cached_tokens: 7 } }),
+    { inputTokens: 10, outputTokens: null, reasoningTokens: null, cachedTokens: 7 },
+  );
+  // chave nested PRESENTE porém inválida decide (null), sem fallback ao plano
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { prompt_tokens: 10, prompt_tokens_details: { cached_tokens: "x" }, cached_tokens: 7 } }),
+    { inputTokens: 10, outputTokens: null, reasoningTokens: null, cachedTokens: null },
+  );
+  // mesmo contrato para reasoning em completion_tokens_details
+  assert.deepEqual(
+    normalizeProviderUsage({ usage: { completion_tokens: 5, completion_tokens_details: {}, reasoning_tokens: 3 } }),
+    { inputTokens: null, outputTokens: 5, reasoningTokens: 3, cachedTokens: null },
+  );
+});
+
+test("onMetrics carrega provider + usage no sucesso e provider identity é sempre openai-compatible", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ id: "gen-usage-1", usage: { prompt_tokens: 120, completion_tokens: 40, prompt_tokens_details: { cached_tokens: 20 }, completion_tokens_details: { reasoning_tokens: 10 } }, choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200 })) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
+  let captured: Record<string, unknown> | undefined;
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (metrics) => { captured = metrics as unknown as Record<string, unknown>; });
+  } finally { globalThis.fetch = originalFetch; }
+  assert.equal(captured?.provider, "openai-compatible");
+  assert.deepEqual(captured?.usage, { inputTokens: 120, outputTokens: 40, reasoningTokens: 10, cachedTokens: 20 });
+});
+
+test("usage do envelope sobrevive a GEN-SCHEMA e chega no report de falha; sem usage, campo ausente", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ usage: { prompt_tokens: 90, completion_tokens: 10 }, choices: [{ message: { content: "not-json" } }] }), { status: 200 })) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
+  const captured: Array<Record<string, unknown>> = [];
+  try {
+    await assert.rejects(provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (metrics) => { captured.push(metrics as unknown as Record<string, unknown>); }), (error: GenerationError) => error.code === "GEN-SCHEMA");
+  } finally { globalThis.fetch = originalFetch; }
+  assert.equal(captured.length, 1, "report único no finally");
+  assert.deepEqual(captured[0]?.usage, { inputTokens: 90, outputTokens: 10, reasoningTokens: null, cachedTokens: null });
+  assert.ok(!JSON.stringify(captured[0]).includes("not-json"), "usage não vira log de payload");
+});
+
+// ---- Custo relatado pelo provider (Blueprint 456f525): usage.cost exato, sem float ----
+
+test("extractReportedCostLexeme casa apenas a chave exata cost, nunca cost_details", () => {
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost":0.009,"cost_details":{"upstream_inference_cost":19}}}'), "0.009");
+  assert.equal(extractReportedCostLexeme('{"usage":{"prompt_tokens":5}}'), null);
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost_details":{"upstream_inference_cost":19}}}'), null);
+  // notação científica é rejeitada por inteiro — sem captura de prefixo numérico
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost":1e-3}}'), null, "1e-3 não pode virar 1");
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost":0.5e1}}'), null, "0.5e1 não pode virar 0.5");
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost":1.5e1}}'), null, "1.5e1 não pode virar 1 (backtrack sobre '.' bloqueado)");
+});
+
+test("extractReportedCostLexeme ignora cost dentro do conteúdo gerado (string escapada) e só lê usage de topo", () => {
+  // conteúdo gerado contendo {"cost":123} — sem usage no envelope → null
+  const contentOnly = '{"choices":[{"message":{"content":"{\\"cost\\":123,\\"items\\":[]}"}}]}';
+  assert.equal(extractReportedCostLexeme(contentOnly), null, "cost do conteúdo nunca é custo do provider");
+  // conteúdo com cost + usage.cost presente → captura o do usage
+  const both = '{"usage":{"cost":0.009},"choices":[{"message":{"content":"{\\"cost\\":123}"}}]}';
+  assert.equal(extractReportedCostLexeme(both), "0.009");
+  // "usage" citado dentro do conteúdo não confunde o scanner string-aware
+  const usageInContent = '{"choices":[{"message":{"content":"{\\"usage\\":{\\"cost\\":99}}"}},{"usage":{"cost":0.5}}]}';
+  assert.equal(extractReportedCostLexeme(usageInContent), null, "usage fora do nível-raiz é ignorado pelo contrato");
+});
+
+test("extractReportedCostLexeme aceita apenas usage no nível 0 do envelope (choices[].usage não conta)", () => {
+  // usage aninhado em choices sem usage de topo → null
+  assert.equal(extractReportedCostLexeme('{"choices":[{"usage":{"cost":99}}]}'), null);
+  // usage de topo prevalece sobre usage aninhado em choices
+  assert.equal(extractReportedCostLexeme('{"choices":[{"usage":{"cost":99}}],"usage":{"cost":0.5}}'), "0.5");
+});
+
+test("dollarsLexemeToMinor converte decimal exato para cents com HALF_UP documentado", () => {
+  assert.equal(dollarsLexemeToMinor("0.009"), "1", "contrato: 0.009 → 1 centavo (HALF_UP)");
+  assert.equal(dollarsLexemeToMinor("0.95"), "95");
+  assert.equal(dollarsLexemeToMinor("1.005"), "101");
+  assert.equal(dollarsLexemeToMinor("2"), "200");
+  assert.equal(dollarsLexemeToMinor("0.004"), "0", "abaixo de meio centavo → 0 válido");
+  assert.equal(dollarsLexemeToMinor("-1"), null, "negativo não é lexeme válido");
+  assert.equal(dollarsLexemeToMinor("1.5e3"), null, "notação científica não é lexeme válido");
+});
+
+test("onMetrics carrega reportedCost (USD) no sucesso; falha com cost também reporta", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ usage: { prompt_tokens: 100, completion_tokens: 10, cost: 0.009 }, choices: [{ message: { content: JSON.stringify({ ok: true }) } }] }), { status: 200 })) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m", HIGH: "m" }, timeoutMs: 5000 });
+  let captured: Record<string, unknown> | undefined;
+  try {
+    await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} }, undefined, (metrics) => { captured = metrics as unknown as Record<string, unknown>; });
+  } finally { globalThis.fetch = originalFetch; }
+  assert.deepEqual(captured?.reportedCost, { amountMinor: "1", currency: "USD", completeness: "COMPLETE" });
 });

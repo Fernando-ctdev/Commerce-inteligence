@@ -34,7 +34,7 @@ export function normalizeGeneration(value: unknown): GenerationRecord {
     if (partial && (expectedCount === null || expectedCount !== count || deliveredCount === null || failedCount === null || deliveredCount < 1 || failedCount < 1 || deliveredCount + failedCount !== expectedCount)) invalid("O resultado parcial da análise está incompleto.");
     if (!degraded && (!object(record.strategy) || !object(record.plan) || expectedPublished === null || contents.length !== expectedPublished)) invalid("O resultado da análise está incompleto.", "GEN-SCHEMA");
     if (!degraded) for (const content of contents) {
-      if (![ "angle", "hook", "script", "cta" ].every((field) => typeof content[field] === "string" && String(content[field]).trim()) || !Array.isArray(content.development) || content.development.length < 1 || content.development.length > 4 || content.development.some((point) => typeof point !== "string" || !point.trim())) invalid("O resultado da análise está incompleto.", "GEN-SCHEMA");
+      if (![ "angle", "hook", "script", "cta" ].every((field) => typeof content[field] === "string" && String(content[field]).trim()) || !Array.isArray(content.development) || content.development.length < 2 || content.development.length > 6 || content.development.some((point) => typeof point !== "string" || !point.trim())) invalid("O resultado da análise está incompleto.", "GEN-SCHEMA");
     }
   }
   const missing = Array.isArray(record.missing)
