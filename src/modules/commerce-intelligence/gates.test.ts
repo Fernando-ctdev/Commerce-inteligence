@@ -3,6 +3,23 @@ import assert from "node:assert/strict";
 import type { EvidenceSnapshot } from "./contract";
 import { validateBriefSet, parseStructuredDevelopment, developmentRequirements, validDevelopmentPoint, isActionableCta } from "./gates";
 import { ContractError } from "./contract";
+
+test("structured development derives action and rationale from provider text", () => {
+  const parsed = parseStructuredDevelopment([
+    { text: "Destaque o tecido respiravel para explicar o conforto no uso", factRefs: ["fact:features"], cta: "Confira o produto na página." },
+  ], { facts: ["Tecido respiravel"], refs: ["fact:features"] });
+  assert.equal(parsed.bullets[0]!.action, "Destaque");
+  assert.equal(parsed.bullets[0]!.rationale, "para explicar o conforto no uso");
+});
+
+test("structured development rejects malformed factRefs without filtering", () => {
+  const evidence = { facts: ["Tecido respiravel"], refs: ["fact:features"] };
+  for (const factRefs of [["fact:features", ""], ["fact:features", 1], ["fact:missing"]]) {
+    assert.throws(() => parseStructuredDevelopment([
+      { text: "Destaque o tecido respiravel para explicar o conforto no uso", factRefs, cta: "Confira o produto na página." },
+    ], evidence), ContractError);
+  }
+});
 const brief = (id: string, angle = "angle", hook = "hook", cta = "cta") => ({ contentId: id, briefVersionId: `${id}-v1`, version: 1 as const, angle, hook, development: ["Destaque o uso para orientar a conversa sobre o uso", "Destaque o uso para orientar a conversa sobre o uso"], script: `Fale sobre ${id}`, cta });
 test("desconto só é factual quando presente no catálogo: suportado com fato, contradito sem correspondência e não suportado sem fato", () => {
   const evidence = { facts: ["20% de desconto"], refs: ["fact:discountPercentage"] };
@@ -152,24 +169,25 @@ test("parseStructuredDevelopment aceita bullet válido e projeta o texto canôni
 });
 
 test("parseStructuredDevelopment: shape/factRef/action/rationale estruturalmente inválidos viram GEN-SCHEMA", () => {
-  assert.throws(() => parseStructuredDevelopment([{ text: "x", action: "Destaque", factRefs: ["product:name"], cta: "Confira o produto na página.", rationale: "para algo" }], evidenceStruct), /factRef/);
-  assert.throws(() => parseStructuredDevelopment([{ text: "x", action: "Destaque", factRefs: ["fact:inexistente"], cta: "Confira o produto na página.", rationale: "para algo" }], evidenceStruct), /factRef/);
-  assert.throws(() => parseStructuredDevelopment([{ text: "x", factRefs: ["fact:features:1"], cta: "Confira o produto na página.", rationale: "para algo" }], evidenceStruct), /action/);
-  assert.throws(() => parseStructuredDevelopment([{ text: "x", action: "Destaque", factRefs: ["fact:features:1"], cta: "Confira o produto na página." }], evidenceStruct), /rationale/);
-  assert.throws(() => parseStructuredDevelopment([{ action: "Destaque", factRefs: ["fact:features:1"], cta: "Confira o produto na página.", rationale: "para algo" }], evidenceStruct), /text/);
+  const validText = "Destaque a presilha tartaruga para explicar o cuidado com o cabelo";
+  assert.throws(() => parseStructuredDevelopment([{ text: validText, factRefs: ["product:name"], cta: "Confira o produto na página." }], evidenceStruct), /factRef/);
+  assert.throws(() => parseStructuredDevelopment([{ text: validText, factRefs: ["fact:inexistente"], cta: "Confira o produto na página." }], evidenceStruct), /factRef/);
+  assert.throws(() => parseStructuredDevelopment([{ text: validText, factRefs: ["fact:features:1"] }], evidenceStruct), /cta/);
+  assert.throws(() => parseStructuredDevelopment([{ text: validText, cta: "Confira o produto na página." }], evidenceStruct), /factRefs/);
+  assert.throws(() => parseStructuredDevelopment([{ factRefs: ["fact:features:1"], cta: "Confira o produto na página." }], evidenceStruct), /text/);
   assert.throws(() => parseStructuredDevelopment("não é lista", evidenceStruct));
 });
 
 test("parseStructuredDevelopment: bullet de qualidade inválida retorna texto + diagnóstico sanitizado (fluxo de repair)", () => {
   // sem conector no texto
-  const semConector = parseStructuredDevelopment([{ ...validBullet, text: "A presilha tartaruga cuida do cabelo" }], evidenceStruct);
-  assert.equal(semConector.diagnostics[0]?.connectorPresent, false);
+  const semConector = parseStructuredDevelopment([{ text: "Destaque a presilha tartaruga para o", factRefs: validBullet.factRefs, cta: validBullet.cta }], evidenceStruct);
+  assert.equal(semConector.diagnostics[0]?.connectorPresent, true);
   assert.equal(semConector.texts.length, 1, "texto segue para o gate/repair, sem publicação antecipada");
   // feature list / shot list
-  const shotList = parseStructuredDevelopment([{ ...validBullet, text: "Destaque o close da presilha tartaruga para explicar o cuidado" }], evidenceStruct);
+  const shotList = parseStructuredDevelopment([{ text: "Destaque o close da presilha tartaruga para explicar o cuidado", factRefs: validBullet.factRefs, cta: validBullet.cta }], evidenceStruct);
   assert.equal(shotList.diagnostics[0]?.shotList, true);
   // grounding curto: rationale com menos de 2 termos
-  const groundingCurto = parseStructuredDevelopment([{ ...validBullet, text: "Destaque a presilha para o", rationale: "para o" }], evidenceStruct);
+  const groundingCurto = parseStructuredDevelopment([{ text: "Destaque a presilha para o", factRefs: validBullet.factRefs, cta: validBullet.cta }], evidenceStruct);
   assert.equal(groundingCurto.diagnostics[0]?.rationaleGroundingMatched, 0, "terms after connector: none");
 });
 
@@ -192,13 +210,10 @@ test("developmentRequirements é exportado do gate com requisitos derivados da e
 
 test("regressão feature_list/connector: bullet sem ação+conector é diagnosticado, gate reprova e corrigido converge", () => {
   const evidence: EvidenceSnapshot = { facts: ["Tecido respiravel"], refs: ["product:description"] };
-  const featureList = { text: "Camisa leve, tecido respiravel, bolso frontal", action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para o cabedal" };
-  const parsed = parseStructuredDevelopment([featureList], evidence);
-  assert.equal(parsed.diagnostics[0]!.connectorPresent, false);
-  assert.equal(parsed.diagnostics[0]!.actionPresent, false, "texto sem verbo de comunicação");
-  assert.equal(parsed.diagnostics[0]!.rationaleGroundingMatched, 0);
+  const featureList = { text: "Camisa leve, tecido respiravel, bolso frontal", factRefs: ["product:description"], cta: "Confira o produto na página." };
+  assert.throws(() => parseStructuredDevelopment([featureList], evidence), /action/);
   // texto projetado segue para o gate, que reprova (fail-closed preservado)
-  const report = validateBriefSet([{ contentId: "c1", briefVersionId: "c1-v", version: 1 as const, angle: "a", hook: "h", development: [parsed.texts[0]!, parsed.texts[0]!], script: "Fale sobre o produto", cta: "c" }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined)[0];
+  const report = validateBriefSet([{ contentId: "c1", briefVersionId: "c1-v", version: 1 as const, angle: "a", hook: "h", development: [featureList.text, featureList.text], script: "Fale sobre o produto", cta: "c" }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined)[0];
   assert.ok(["REPAIR", "REJECT"].includes(report.decision), `gate reprova fail-closed: ${report.decision} ${JSON.stringify(report.issues)}`);
   assert.ok(report.issues.some((issue) => /orientar comunicação|lista de features/.test(issue)));
   // convergência: ação + conector + grounding ≥2
@@ -239,7 +254,7 @@ test("gate v4: trecho após o conector deve conter 2 termos do fato apontado por
 
 test("primeira pessoa/experiencial é permitida; claim objetivo não ancorado e cta inválida por bullet são diagnosticadas sem curto-circuito (v2)", () => {
   const evidence: EvidenceSnapshot = { facts: ["Tecido respiravel"], refs: ["product:description"] };
-  const good = { text: "Eu adorei o tecido respiravel porque comentei como o tecido respiravel mudou meu dia", action: "Comente", factRefs: ["product:description"], rationale: "porque comentei como o tecido respiravel mudou meu dia", cta: "Confira o produto na página." };
+  const good = { text: "Comente que eu adorei o tecido respiravel porque comentei como o tecido respiravel mudou meu dia", action: "Comente", rationale: "porque comentei como o tecido respiravel mudou meu dia", factRefs: ["product:description"], cta: "Confira o produto na página." };
   const briefFor = (development: string[]) => ({ contentId: "c-fp", briefVersionId: "c-fp-v", version: 1 as const, angle: "a", hook: "Veja o tecido", development, script: "Fale sobre o produto", cta: "c" });
   // (1) primeira pessoa/experiencial passa o hard gate — sem gate ético/testemunho.
   const ok = validateBriefSet([briefFor([good.text, good.text])], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined, new Map([["c-fp", [good, good]]]))[0]!;

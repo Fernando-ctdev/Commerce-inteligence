@@ -42,6 +42,7 @@ function syntheticOutput(strategyId = `strat-${randomUUID()}`, opts: { includeBr
     productUnderstanding: { fonte: "teste-fence" },
     strategy: { id: strategyId, platformId: "tiktok", platformSkillVersion: "test" },
     plan: { id: `plan-${randomUUID()}`, platformId: "tiktok", platformSkillVersion: "test" },
+    planPolicyVersion: 1,
     opportunities: [],
     briefs: [],
     reports: [],
@@ -219,7 +220,7 @@ test("finalizeGeneration persiste Content objetivo-válido como DRAFT, sem statu
     assert.equal(content.approvedBriefVersionId, null, "aprovação pertence a slice posterior");
     // O payload persistido é o brief canônico — nenhuma chave de status/aviso
     // semântico atravessa para a persistência.
-    assert.deepEqual(Object.keys(content.payload as Record<string, unknown>).sort(), ["angle", "briefVersionId", "contentId", "cta", "development", "hook", "script", "version"]);
+    assert.deepEqual(Object.keys(content.payload as Record<string, unknown>).sort(), ["angle", "briefVersionId", "contentId", "cta", "development", "developmentSchemaVersion", "hook", "script", "version"]);
     const report = await prisma.briefValidationReport.findUniqueOrThrow({ where: { id: `${contentId}:${briefVersionId}` } });
     assert.equal(report.decision, "PASS", "report objetivo registrado separado do judge semântico");
     const run = await prisma.intelligenceRun.findUniqueOrThrow({ where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } } });

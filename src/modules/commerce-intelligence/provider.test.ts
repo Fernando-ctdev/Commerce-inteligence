@@ -619,11 +619,13 @@ test("provider without schema support (HTTP 400) stays fail-closed: explicit err
 
 // ---- Contrato estruturado de development (design 2026-09-18) ----
 
-test("instruções de brief exigem bullets estruturados text/action/factRef/rationale e proíbem locators", () => {
-  for (const field of ["text", "action", "factRef", "rationale"]) {
+test("instruções de brief exigem bullets estruturados text/factRefs/cta e proíbem locators", () => {
+  for (const field of ["text", "factRefs", "cta"]) {
     assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes(field), `geração inicial exige campo estruturado ${field}`);
     assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes(field), `repair exige campo estruturado ${field}`);
   }
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("\"action\""), "geração não exige campo action");
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("\"rationale\""), "geração não exige campo rationale");
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("apenas como campos estruturados"), "factRef apenas como campos estruturados");
   assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("apenas como campos estruturados"), "factRef apenas como campos estruturados no repair");
   assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("development como lista de textos"), "geração não aceita mais development em texto plano");

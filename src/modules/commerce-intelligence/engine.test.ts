@@ -178,7 +178,7 @@ test("GEN-REPAIR-EXHAUSTED carries sanitized gate summary without brief payload"
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: [{ text: "SEGREDO_DO_BRIEFING em uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "SEGREDO_DO_BRIEFING em uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "SEGREDO_DO_BRIEFING suporta 7 kg comprovados", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: [{ text: "Destaque o uso do produto para explicar o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o uso do produto para explicar o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "SEGREDO_DO_BRIEFING suporta 7 kg comprovados", cta: "c" }] };
     return {};
   } };
   await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }), (error: unknown) => {
@@ -222,7 +222,7 @@ test("repair of many rejected briefs is per-item on CONTENT_BRIEF_REPAIR/HIGH pr
     if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["b"], emotionalBenefits: ["e"], desiredOutcomes: ["d"], purchaseTriggers: ["t"], purchaseBarriers: ["b"], evidenceRefs: ["product:name"] };
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 3 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
     if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
-    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: Array.from({ length: 10 }, (_, i) => ({ commercialObjective: `c${i}`, angle: `a${i}`, coreMessage: `m${i}`, hookMechanism: "demonstration", noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: Array.from({ length: 10 }, (_, i) => ({ commercialObjective: `c${i}`, angle: `a${i}`, coreMessage: `m${i}`, hookMechanism: ["demonstration", "discovery", "problem", "price-value", "other"][i % 5], noveltyTargets: ["n"] })) };
     if (task === "CONTENT_BRIEF_GENERATION") {
       genCalls++;
       const batch = input as { trustedContext?: { opportunities?: unknown[] } } | undefined;
@@ -344,18 +344,18 @@ test("brief repair context carries per-item repairChecklist (Duna c1/c3 distinct
     if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }, { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }, { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
-    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 2, opportunities: [{ commercialObjective: "vender", angle: "demonstração", coreMessage: "benefício", hookMechanism: "demonstration", noveltyTargets: ["angle"] }, { commercialObjective: "vender", angle: "objeção", coreMessage: "ajuste", hookMechanism: "demonstration", noveltyTargets: ["angle"] }] };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 2, opportunities: [{ commercialObjective: "vender", angle: "demonstração", coreMessage: "benefício", hookMechanism: "demonstration", noveltyTargets: ["angle"] }, { commercialObjective: "vender", angle: "objeção", coreMessage: "ajuste", hookMechanism: "discovery", noveltyTargets: ["angle"] }] };
     if (task === "CONTENT_BRIEF_GENERATION") {
       briefCalls += 1;
       return { items: [
-        { angle: "a", hook: "h1", development: [{ text: "Cós elástico com cordão para ajuste", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Cós elástico com cordão para ajuste", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "s1", cta: "c1" },
-        { angle: "b", hook: "h2", development: [{ text: "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "s2", cta: "Aproveita o frete grátis que apareceu na sua conta." },
+        { angle: "a", hook: "h1", development: [{ text: "Destaque o cós elástico com cordão na câmera para explicar o ajuste na cintura", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o cós elástico com cordão na câmera para explicar o ajuste na cintura", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "s1", cta: "c1" },
+        { angle: "b", hook: "h2", development: [{ text: "Mostre o cós elástico com cordão, ajuste a cintura para explicar o uso", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Mostre o cós elástico com cordão, ajuste a cintura para explicar o uso", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "s2", cta: "Aproveita o frete grátis que apareceu na sua conta." },
       ] };
     }
     if (task === "CONTENT_BRIEF_REPAIR") {
       repairCalls += 1;
       captured.push(recordOf(input?.trustedContext)?.repairChecklist);
-      const structuredDuna = [{ "text": "Mostre o cós elástico com cordão da calça para conectar o cordão do cós ao ajuste na cintura", "action": "Mostre", "factRefs": ["fact:features"], "cta": "Confira o produto na página.", "rationale": "para conectar o cordão do cós ao ajuste na cintura", "context": "na cintura" }, { "text": "Mostre o cós elástico com cordão da calça para conectar o cordão do cós ao ajuste na cintura", "action": "Mostre", "factRefs": ["fact:features"], "cta": "Confira o produto na página.", "rationale": "para conectar o cordão do cós ao ajuste na cintura", "context": "na cintura" }];
+      const structuredDuna = [{ "text": "Mostre o cós elástico com cordão da calça para conectar o cordão do cós ao ajuste na cintura", "factRefs": ["fact:features"], "cta": "Confira o produto na página." }, { "text": "Mostre o cós elástico com cordão da calça para conectar o cordão do cós ao ajuste na cintura", "factRefs": ["fact:features"], "cta": "Confira o produto na página." }];
       return repairCalls === 1
         ? { angle: "a", hook: "h1b", development: structuredDuna, script: "s1b", cta: "Confira as condições atuais na página do produto." }
         : { angle: "b", hook: "h2b", development: structuredDuna, script: "s2b", cta: "Vale dar uma olhada na página do produto para comparar." };
@@ -365,7 +365,7 @@ test("brief repair context carries per-item repairChecklist (Duna c1/c3 distinct
   await runFirstGeneration({ productId: "p", jobId: "j-rc", name: "Calça Duna", description: "Calça Duna, cós elástico com cordão", facts: { features: ["cós elástico com cordão"] }, targetContentCount: 2, router: withInternalCuration(router) });
   assert.ok(repairCalls >= 2, "repair round happened via CONTENT_BRIEF_REPAIR");
   assert.deepEqual(recordOf(captured[0]), { developmentAction: true }, "c1: checklist por item (development declarativo)");
-  assert.deepEqual(recordOf(captured[1]), { removeUnsupportedClaim: true }, "c3: checklist por item (frete grátis sem evidência)");
+  assert.deepEqual(recordOf(captured[1]), { developmentAction: true, removeUnsupportedClaim: true }, "c3: checklist por item (frete grátis sem evidência)");
 });
 test("ADR-020: pre-selection never delivers CTA patterns the evidence does not support", async () => {
   let genContext: Record<string, unknown> | undefined;
@@ -373,7 +373,7 @@ test("ADR-020: pre-selection never delivers CTA patterns the evidence does not s
     if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 3 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
-    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 3, opportunities: Array.from({ length: 3 }, (_, i) => ({ commercialObjective: `c${i}`, angle: `a${i}`, coreMessage: `m${i}`, hookMechanism: "demonstration", noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 3, opportunities: Array.from({ length: 3 }, (_, i) => ({ commercialObjective: `c${i}`, angle: `a${i}`, coreMessage: `m${i}`, hookMechanism: ["demonstration", "discovery", "problem"][i], noveltyTargets: ["n"] })) };
     if (task === "CONTENT_BRIEF_GENERATION") {
       genContext = recordOf(input?.trustedContext);
       return { items: Array.from({ length: 3 }, (_, i) => ({ angle: `a${i}`, hook: `h${i}`, development: [{ text: "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: `s${i}`, cta: `cta seguro ${i}` })) };
@@ -422,7 +422,7 @@ test("ADR-020/blocker: replacement de CTA registra id+reason no EngineResult sem
     if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 3 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
-    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 3, opportunities: Array.from({ length: 3 }, (_, i) => ({ commercialObjective: `c${i}`, angle: `a${i}`, coreMessage: `m${i}`, hookMechanism: "demonstration", noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 3, opportunities: Array.from({ length: 3 }, (_, i) => ({ commercialObjective: `c${i}`, angle: `a${i}`, coreMessage: `m${i}`, hookMechanism: ["demonstration", "discovery", "problem"][i], noveltyTargets: ["n"] })) };
     if (task === "CONTENT_BRIEF_GENERATION") {
       genContext = recordOf(input?.trustedContext);
       return { items: Array.from({ length: 3 }, (_, i) => ({ angle: `a${i}`, hook: `h${i}`, development: [{ text: "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Mostre o cós elástico com cordão para explicar como o cós elástico com cordão ajuda no ajuste", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: `s${i}`, cta: `cta seguro ${i}` })) };
@@ -535,8 +535,8 @@ test("ADR-020 adendo 2 + ADR-021: factRef fora do snapshot → GEN-SCHEMA por it
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 3, opportunities: [
       { commercialObjective: "c", angle: "a1", coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] },
-      { commercialObjective: "c", angle: "a2", coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] },
-      { commercialObjective: "c", angle: "a3", coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] },
+      { commercialObjective: "c", angle: "a2", coreMessage: "m", hookMechanism: "discovery", noveltyTargets: ["n"] },
+      { commercialObjective: "c", angle: "a3", coreMessage: "m", hookMechanism: "problem", noveltyTargets: ["n"] },
     ] };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [
       { angle: "a1", hook: "h1", development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "Suporta 999 kg", cta: "c1" },
@@ -558,7 +558,7 @@ test("ADR-020 adendo 2 + ADR-021: factRef fora do snapshot → GEN-SCHEMA por it
   assert.equal(result.partial?.failedItems[0].position, 1);
   assert.ok(result.partial?.failedItems[0].checkCodes.includes("unverified_claim"), "claim sem evidência gera unverified_claim");
   assert.deepEqual(result.briefOpportunityPositions, [1, 2], "entregues mantêm as oportunidades originais");
-  assert.deepEqual(result.memorySignals.deliveredHookMechanisms, ["demonstration", "demonstration"], "mecanismos dos D entregues para o planner evitar repetição");
+  assert.deepEqual(result.memorySignals.deliveredHookMechanisms, ["discovery", "problem"], "mecanismos canônicos dos D entregues para o planner evitar repetição");
   assert.equal((result.memorySignals.deliveredCtaFunctions as string[]).length, 2);
   assert.deepEqual(result.memorySignals.deliveredAngles, ["a2", "a3"]);
   const repairedEvents = collectJobEvents().map((line) => JSON.parse(line) as Record<string, unknown>).filter((event) => event.event === "capability.failed" && event.task === "CONTENT_BRIEF_REPAIR");
@@ -617,10 +617,10 @@ test("semantic REVIEW sem repair preserva o item e mantém DRAFT completo", asyn
   const checkoutCtas = ["Entra no carrinho e confere as condições atuais.", "Toque no carrinho para ver o pedido completo."];
   const briefFor = (position: number) => ({
     angle: `a${position}`,
-    hook: `Gancho ${position}`,
+    hook: ["O problema do tecido respiravel no uso diario", "Descubra o conforto do tecido respiravel", "Demonstre como o tecido respiravel funciona", "Veja o valor pratico do tecido respiravel", "Um novo angulo para usar o tecido respiravel"][position - 1],
     development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }],
     script: "Tecido respiravel",
-    cta: position === 1 ? checkoutCtas[0] : position === 5 ? checkoutCtas[1] : `cta ${position}`,
+    cta: position === 1 ? checkoutCtas[0] : position === 5 ? "Confira os detalhes do produto antes de decidir." : `cta ${position}`,
   });
   const judgeReview = {
     parts: qualityPass.parts.map((part) => part.part === "script" ? { ...part, status: "REVIEW", reason: "unclear" } : part),
@@ -631,10 +631,10 @@ test("semantic REVIEW sem repair preserva o item e mantém DRAFT completo", asyn
     if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 6 }, () => ({ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] })) };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
-    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 6, opportunities: Array.from({ length: 6 }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstration", "problem", "discovery", "price-value", "other"][i % 5], noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 5, opportunities: Array.from({ length: 5 }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstration", "problem", "discovery", "price-value", "other"][i], noveltyTargets: ["n"] })) };
     if (task === "CONTENT_BRIEF_GENERATION") {
       briefCalls += 1;
-      const size = [4, 2][briefCalls - 1];
+      const size = [4, 1][briefCalls - 1];
       return { items: Array.from({ length: size }, (_, offset) => briefFor((briefCalls - 1) * 4 + offset + 1)) };
     }
     if (task === "CONTENT_SCENE_IDEAS") {
@@ -648,19 +648,19 @@ test("semantic REVIEW sem repair preserva o item e mantém DRAFT completo", asyn
     if (task === "CONTENT_QUALITY_JUDGE") {
       return {
         audits: judgeItems(input).map(({ contentId }) => {
-          if (contentId === "j-content-6") judgedReview.push(contentId);
-          return { contentId, parts: contentId === "j-content-6" ? judgeReview.parts : qualityPass.parts };
+          if (contentId === "j-content-1") judgedReview.push(contentId);
+          return { contentId, parts: contentId === "j-content-1" ? judgeReview.parts : qualityPass.parts };
         }),
       };
     }
     return {};
   } };
-  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 6, router });
-  assert.equal(briefCalls, 2, "batches 4+2");
+  const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 5, router });
+  assert.equal(briefCalls, 2, "batches 4+1");
   assert.equal(judgedReview.length, 1, "judge marca exatamente o item alvo como REVIEW");
-  assert.equal(result.briefs.length, 6, "REVIEW sem repair não remove o item");
+  assert.equal(result.briefs.length, 5, "REVIEW sem repair não remove o item");
   assert.equal(result.partial, null, "fallback semântico não cria partial");
-  assert.equal(result.qualityAudits.length, 6);
+  assert.equal(result.qualityAudits.length, 5);
 });
 
 test("dois REVIEW: repair inválido deixa somente o candidato objetivo inválido no partial", async () => {
@@ -673,7 +673,7 @@ test("dois REVIEW: repair inválido deixa somente o candidato objetivo inválido
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 2, opportunities: [
       { commercialObjective: "c", angle: "a1", coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] },
-      { commercialObjective: "c", angle: "a2", coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] },
+      { commercialObjective: "c", angle: "a2", coreMessage: "m", hookMechanism: "discovery", noveltyTargets: ["n"] },
     ] };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [1, 2].map((i) => ({ angle: `a${i}`, hook: `Gancho ${i}`, development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "Tecido respiravel", cta: `cta ${i}` })) };
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };

@@ -152,6 +152,7 @@ export type EngineResult = {
   productUnderstanding: Record<string, unknown>;
   strategy: Record<string, unknown>;
   plan: Record<string, unknown>;
+  planPolicyVersion: number;
   opportunities: Record<string, unknown>[];
   briefs: ContentBriefVersion[];
   reports: GateReport[];
@@ -1393,10 +1394,7 @@ export async function runFirstGeneration(
         onMetrics,
       );
     const allowedSourceIds = new Set(commercialOpportunities.map((opportunity) => String(opportunity.id)));
-    const validatePlan = (
-      value: Record<string, unknown>,
-      enforceHookVariety = true,
-    ): ContentPlan => {
+    const validatePlan = (value: Record<string, unknown>): ContentPlan => {
       if (!Array.isArray(value.opportunities)) throw new ContractError("GEN-SCHEMA", "Plano sem opportunities", "opportunities");
       if (value.opportunities.length !== count)
         throw new ContractError("GEN-COUNT-RANGE", "Plano deve conter a quantidade exata de oportunidades", "opportunities");
@@ -1444,16 +1442,9 @@ export async function runFirstGeneration(
           platformSkillVersion: skill.version,
           opportunities,
         },
-        // ADR-019/P5: hookMechanism no plano respeita teto ceil(N/M) por bucket
-        // determinístico — monocultura de mecanismo é GEN-VARIETY com retry único
-        // causal. No retry (última chance do contrato) o teto não é reimpingido:
-        // a violação fica registrada no tracker e é entregue como causa ao
-        // provider; encerrar a geração por concentração após o retry único
-        // bloquearia o job inteiro — a variedade estrutural dos briefs é
-        // garantida pela seleção estratificada por bucket.
-        enforceHookVariety
-          ? { classify: classifyHookMechanism, buckets: HOOK_BUCKET_COUNT }
-          : undefined,
+        // ADR-019/P5: a última tentativa também revalida o hard gate de
+        // variedade; o retry é único e causal, sem uma terceira chamada.
+        { classify: classifyHookMechanism, buckets: new Set(planSkeleton.slots.flatMap((slot) => slot.eligibleHookMechanisms)).size },
       );
     };
     let planVarietyCauses: string[] | null = null;
@@ -1481,12 +1472,14 @@ export async function runFirstGeneration(
         "CONTENT_PLAN_GENERATION",
         retryPlanContext,
         planCall(retryPlanContext),
-        (output: Record<string, unknown>) => validatePlan(output, false),
+        validatePlan,
       );
     }
     opportunityOutput = planProducer;
   }
 
+  if (!opportunityOutput && !input.allowDeterministicTestFallback)
+    throw new ContractError("GEN-SCHEMA", "Plano criativo indisponível", "opportunities");
   const opportunities = opportunityOutput?.opportunities
     ? opportunityOutput.opportunities
     : Array.from({ length: count }, (_, index) => ({
@@ -2109,6 +2102,10 @@ export async function runFirstGeneration(
         for (const { contentId, content } of replacements) {
           const index = chunk.find((item) => hard[item.index].brief.contentId === contentId)!.index;
           const candidate = hard[index];
+          const originalCandidate = candidate;
+          const originalSceneSet = sceneSets[index];
+          const hadOriginalBullets = bulletsByContentId.has(candidate.brief.contentId);
+          const originalBullets = bulletsByContentId.get(candidate.brief.contentId);
           // ADR-025 §1: validação individual da parte retornada — falha isola o
           // item (a parte original é preservada), nunca os irmãos do lote.
           // Cutover v2: development chega como DevelopmentBullet[] e é validado
@@ -2149,6 +2146,10 @@ export async function runFirstGeneration(
           const compositionReports = hardGateComposition(index);
           if (compositionReports.length) {
             // ADR-021: composição reprovada falha o item, não o job.
+            hard[index] = originalCandidate;
+            sceneSets[index] = originalSceneSet;
+            if (hadOriginalBullets) bulletsByContentId.set(candidate.brief.contentId, originalBullets!);
+            else bulletsByContentId.delete(candidate.brief.contentId);
             compositionFailed.add(index);
             objectiveFailureIdx.add(index);
             compositionDiagnostics.push(...compositionReports);
@@ -2294,6 +2295,7 @@ export async function runFirstGeneration(
     productUnderstanding: understanding ?? {},
     strategy,
     plan,
+    planPolicyVersion: PLAN_POLICY_VERSION,
     opportunities,
     briefs: delivered.map((i) => hard[i].brief),
     reports: deliveredReports,

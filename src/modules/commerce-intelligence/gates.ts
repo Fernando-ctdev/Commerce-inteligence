@@ -678,12 +678,15 @@ export function parseStructuredDevelopment(
       throw new ContractError("GEN-SCHEMA", "bullet estruturado inválido", "development");
     const bullet = item as Record<string, unknown>;
     const text = typeof bullet.text === "string" ? bullet.text.trim() : "";
-    const action = typeof bullet.action === "string" ? bullet.action.trim() : "";
-    let rationale = typeof bullet.rationale === "string" ? bullet.rationale.trim() : "";
+    const rationaleAt = text.search(DEVELOPMENT_RATIONALE);
+    const action = (rationaleAt >= 0 ? text.slice(0, rationaleAt) : text).match(new RegExp(`\\b(${DEVELOPMENT_ACTION_STEMS.join("|")})\\w*`, "i"))?.[0] ?? "";
+    const rationale = rationaleAt >= 0 ? text.slice(rationaleAt) : "";
     // Contrato "rationale apenas espelha text": sem conector no campo, o espelho
     // determinístico é o PRÓPRIO trecho de text após o conector (nada inventado).
     // Sem conector em AMBOS → violação estrutural real (GEN-SCHEMA abaixo).
-    const factRefs = Array.isArray(bullet.factRefs) ? bullet.factRefs.filter((ref): ref is string => typeof ref === "string" && ref.trim().length > 0) : [];
+    if (!Array.isArray(bullet.factRefs) || bullet.factRefs.some((ref) => typeof ref !== "string" || !ref.trim()))
+      throw new ContractError("GEN-SCHEMA", "factRefs inválidos", "development");
+    const factRefs = bullet.factRefs.map((ref) => ref.trim());
     const cta = typeof bullet.cta === "string" ? bullet.cta.trim() : "";
     // Estrutural: shape e campos fora do repertório do gate são GEN-SCHEMA (retry do lote).
     if (!text) throw new ContractError("GEN-SCHEMA", "bullet sem text", "development");
@@ -691,10 +694,6 @@ export function parseStructuredDevelopment(
       throw new ContractError("GEN-SCHEMA", `factRefs fora do snapshot autorizado (${factRefs.join(",") || "ausentes"})`, "development");
     if (!action || !DEVELOPMENT_ACTION_STEMS.some((stem) => action.toLowerCase().startsWith(stem)))
       throw new ContractError("GEN-SCHEMA", "action fora do repertório do gate", "development");
-    if (!rationale || !DEVELOPMENT_RATIONALE.test(rationale)) {
-      const at = text.search(DEVELOPMENT_RATIONALE);
-      if (at >= 0) rationale = text.slice(at);
-    }
     if (!rationale || !DEVELOPMENT_RATIONALE.test(rationale))
       throw new ContractError("GEN-SCHEMA", "rationale sem conector do gate", "development");
     if (!cta) throw new ContractError("GEN-SCHEMA", "bullet sem cta", "development");

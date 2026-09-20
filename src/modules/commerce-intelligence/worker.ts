@@ -124,7 +124,7 @@ export function briefPayloadForPersistence(brief: ContentBriefVersion, bullets?:
       !Array.isArray(bullet.factRefs) || bullet.factRefs.length === 0 ||
       typeof bullet.cta !== "string" || !bullet.cta.trim()))
     throw new GenerationError("GEN-SCHEMA", "Brief sem bullets estruturados alinhados não pode ser persistido (v2)", false);
-  return JSON.parse(JSON.stringify({ ...payload, version: 2, development: canonical })) as Prisma.InputJsonObject;
+  return JSON.parse(JSON.stringify({ ...payload, version: 2, developmentSchemaVersion: 2, development: canonical })) as Prisma.InputJsonObject;
 }
 
 export function fenceMatches(
@@ -513,6 +513,7 @@ export function runMetadata(
   qualityAudits: QualityAudit[] = [],
   qualityRepairs: Array<{ contentId: string; part: QualityPart; round: number; criterion: string; outcome: "REPAIRED" }> = [],
   understandingReductions: UnderstandingCardinalityReduction[] = [],
+  planPolicyVersion?: number,
 ): Record<string, unknown> {
   const scenes = {
     sets: sceneSets.length,
@@ -533,6 +534,7 @@ export function runMetadata(
       // engine — evidência do que governou a validação neste momento.
       engineVersion: ENGINE_VERSION,
       gateVersion: GATE_POLICY_VERSION,
+      ...(planPolicyVersion === undefined ? {} : { planPolicyVersion }),
       capabilities,
       repairs,
       repairCauses: repairCauses.map(({ briefId }) => ({ briefId, causes: ["deterministic_gate_repair"] })),
@@ -544,7 +546,7 @@ export function runMetadata(
       qualityRepairs,
     };
   } catch {
-    return { attempt, engineVersion: ENGINE_VERSION, gateVersion: GATE_POLICY_VERSION, capabilities, repairs, repairCauses: repairCauses.map(({ briefId }) => ({ briefId, causes: ["deterministic_gate_repair"] })), validated, scenes, patternReplacements, understandingReductions, qualityAudits: qualityAudits.map(({ contentId, round, parts }) => ({ contentId, round, parts: parts.map(({ part, status, criterion, reason }) => ({ part, status, criterion, reason: reasonText(reason) })) })), qualityRepairs };
+    return { attempt, engineVersion: ENGINE_VERSION, gateVersion: GATE_POLICY_VERSION, ...(planPolicyVersion === undefined ? {} : { planPolicyVersion }), capabilities, repairs, repairCauses: repairCauses.map(({ briefId }) => ({ briefId, causes: ["deterministic_gate_repair"] })), validated, scenes, patternReplacements, understandingReductions, qualityAudits: qualityAudits.map(({ contentId, round, parts }) => ({ contentId, round, parts: parts.map(({ part, status, criterion, reason }) => ({ part, status, criterion, reason: reasonText(reason) })) })), qualityRepairs };
   }
 }
 
@@ -1103,6 +1105,7 @@ export async function processGeneration(jobId: string, ownerId: string) {
       output.qualityAudits,
       output.qualityRepairs,
       output.understandingReductions,
+      output.planPolicyVersion,
     );
     emitJobEvent("job.finalizing", {
       jobId: job.id,

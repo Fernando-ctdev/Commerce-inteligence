@@ -39,10 +39,11 @@ test("engineFacts projeta o desconto do tipado, sem fallback de discountPercenta
 });
 
 // Review: IntelligenceRun.metadata registra gateVersion junto do engineVersion.
-test("run metadata carries engineVersion and gateVersion snapshots", () => {
-  const metadata = runMetadata(1, () => ({ provider: "p", model: "m", instructionVersion: "i" }), [], 0, 1, [], [], [{ field: "cta", replacedWithId: "cta-x", reason: "função promo sem pattern deliverable" }], [], [], [{ field: "purchaseBarriers", received: 9, kept: 8 }]);
+test("run metadata carries engineVersion, gateVersion and plan policy snapshots", () => {
+  const metadata = runMetadata(1, () => ({ provider: "p", model: "m", instructionVersion: "i" }), [], 0, 1, [], [], [{ field: "cta", replacedWithId: "cta-x", reason: "função promo sem pattern deliverable" }], [], [], [{ field: "purchaseBarriers", received: 9, kept: 8 }], 1);
   assert.equal(metadata.engineVersion, ENGINE_VERSION);
   assert.equal(metadata.gateVersion, GATE_POLICY_VERSION);
+  assert.equal(metadata.planPolicyVersion, 1);
   assert.deepEqual(metadata.patternReplacements, [{ field: "cta", replacedWithId: "cta-x", reason: "função promo sem pattern deliverable" }]);
   assert.deepEqual(metadata.understandingReductions, [{ field: "purchaseBarriers", received: 9, kept: 8 }]);
 });
@@ -50,6 +51,7 @@ const v2Bullet = { text: "Ponto de desenvolvimento", action: "Mostre", rationale
 test("brief persistence keeps development bullets and strips legacy scenes (v2)", () => {
   const payload = briefPayloadForPersistence({ contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: ["Ponto de desenvolvimento", "Ponto de desenvolvimento"], script: "Roteiro oral", cta: "CTA", scenes: ["cena antiga"] } as never, [v2Bullet, v2Bullet]);
   assert.equal(payload.version, 2, "payload v2 carrega marcador de versão");
+  assert.equal(payload.developmentSchemaVersion, 2, "payload v2 carrega marcador do schema de development");
   assert.deepEqual(payload.development, [v2Bullet, v2Bullet], "persistência é DevelopmentBullet[] canônico");
   assert.equal("scenes" in payload, false);
 });
@@ -211,7 +213,7 @@ test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlist
     if (task === "PRODUCT_UNDERSTANDING") return understanding;
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
     if (task === "STRATEGY_SYNTHESIS") return strategy;
-    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: envelope.opportunities.map((_opportunity, index) => ({ commercialObjective: `c${index + 1}`, angle: `a${index + 1}`, coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: envelope.opportunities.map((_opportunity, index) => ({ commercialObjective: `c${index + 1}`, angle: `a${index + 1}`, coreMessage: "m", hookMechanism: ["problem", "discovery", "demonstration"][index], noveltyTargets: ["n"] })) };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [
       { angle: "a1", hook: "h1", development: [badBullet, badBullet], script: "Fale sobre o produto", cta: "c1" },
       { angle: "a2", hook: "h2", development: [goodBullet, goodBullet], script: "Fale sobre o produto", cta: "c2" },
