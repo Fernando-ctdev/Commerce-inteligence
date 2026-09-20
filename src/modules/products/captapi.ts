@@ -1,7 +1,21 @@
 const CAPTAPI_URL = "https://api.captapi.com/v1/tiktok-shop/product-details";
 const ALLOWED_HOSTS = new Set(["shop.tiktok.com", "www.tiktok.com"]);
 
-export type CaptApiProduct = {
+export type CandidateGap =
+  | "name"
+  | "description"
+  | "category"
+  | "price"
+  | "priceCurrency"
+  | "features";
+
+export type ProductSignals = {
+  salesCount?: number;
+  ratingValue?: number;
+  reviewCount?: number;
+};
+
+export type ProductCandidate = {
   name?: string;
   description?: string;
   category?: string;
@@ -9,13 +23,11 @@ export type CaptApiProduct = {
   price?: string;
   priceCurrency?: "R$" | "USD" | "EUR";
   imageRefs: string[];
-  url: string;
+  sourceUrl: string;
   discountType?: "PERCENTAGE";
   discountValue?: string;
-};
-
-export type CaptApiCandidate = CaptApiProduct & {
-  gaps: string[];
+  gaps: CandidateGap[];
+  signals?: ProductSignals;
 };
 
 export class CaptApiImportError extends Error {
@@ -54,12 +66,29 @@ function nonEmpty(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function currency(value: unknown): CaptApiProduct["priceCurrency"] | null {
+function currency(value: unknown): ProductCandidate["priceCurrency"] | null {
   if (value === "BRL") return "R$";
   return value === "R$" || value === "USD" || value === "EUR" ? value : null;
 }
 
-function mapProduct(payload: unknown, submittedUrl: string): CaptApiCandidate {
+function validSignal(value: unknown, minimum: number, maximum: number, integer = false): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < minimum || value > maximum) return null;
+  return integer && !Number.isInteger(value) ? null : value;
+}
+
+function firstHttpImage(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const image = nonEmpty(value[0]);
+  if (!image) return null;
+  try {
+    const parsed = new URL(image);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? image : null;
+  } catch {
+    return null;
+  }
+}
+
+function mapProduct(payload: unknown, submittedUrl: string): ProductCandidate {
   const root = asRecord(payload);
   const data = asRecord(root?.data);
   if (asRecord(root)?.success !== true || !data) {
@@ -88,34 +117,43 @@ function mapProduct(payload: unknown, submittedUrl: string): CaptApiCandidate {
   if (discount && Number(discount[1]) > 100) {
     throw new CaptApiImportError("IMPORT-SHAPE-INCOMPLETE", "A resposta da CaptAPI contém um desconto inválido.");
   }
-  const firstImage = Array.isArray(data?.images) ? nonEmpty(data.images[0]) : null;
+  const firstImage = firstHttpImage(data?.images);
   const images = firstImage ? [firstImage] : [];
+  const salesCount = validSignal(data?.salesCount, 0, Number.MAX_SAFE_INTEGER, true);
+  const ratingValue = validSignal(data?.ratingValue, 0, 5);
+  const reviewCount = validSignal(data?.reviewCount, 0, Number.MAX_SAFE_INTEGER, true);
+  const signals = {
+    ...(salesCount === null ? {} : { salesCount }),
+    ...(ratingValue === null ? {} : { ratingValue }),
+    ...(reviewCount === null ? {} : { reviewCount }),
+  } satisfies ProductSignals;
   const gaps = [
     !name ? "name" : null,
     !description ? "description" : null,
     !category ? "category" : null,
-    !price ? "price" : null,
+    price === null ? "price" : null,
     !priceCurrency ? "priceCurrency" : null,
     features.length === 0 ? "features" : null,
-  ].filter((item): item is string => Boolean(item));
+  ].filter((item): item is CandidateGap => Boolean(item));
   return {
     ...(name ? { name } : {}),
     ...(description ? { description } : {}),
     ...(category ? { category } : {}),
     features,
-    ...(price ? { price } : {}),
+    ...(price === null ? {} : { price }),
     ...(priceCurrency ? { priceCurrency } : {}),
     imageRefs: images,
-    url: submittedUrl,
+    sourceUrl: submittedUrl,
     gaps,
     ...(discount ? { discountType: "PERCENTAGE", discountValue: discount[1] } : {}),
+    ...(Object.keys(signals).length > 0 ? { signals } : {}),
   };
 }
 
 export async function fetchCaptApiProduct(
   submittedUrl: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<CaptApiCandidate> {
+): Promise<ProductCandidate> {
   const url = validateTikTokShopUrl(submittedUrl);
   const apiKey = process.env.CAPTAPI_API_KEY?.trim();
   if (!apiKey) throw new CaptApiImportError("IMPORT-CONFIG-MISSING", "A importação automática está indisponível; preencha os dados manualmente.");

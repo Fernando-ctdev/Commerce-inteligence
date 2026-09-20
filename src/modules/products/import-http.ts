@@ -1,23 +1,13 @@
-import { createManualProduct, findTenantProductByIdempotencyKey, isValidIdempotencyKey } from "./service";
-import { CaptApiImportError, fetchCaptApiProduct, validateTikTokShopUrl, type CaptApiProduct } from "./captapi";
+import { isValidIdempotencyKey } from "./service";
+import { CaptApiImportError, fetchCaptApiProduct, validateTikTokShopUrl } from "./captapi";
 import { SESSION_COOKIE, json, readCookie, readJsonBody, sameOriginRequest } from "../identity/http";
 import { resolveSession } from "../identity/service";
 
-function hasCompleteProductFacts(product: CaptApiProduct): product is CaptApiProduct & {
-  name: string;
-  description: string;
-  category: string;
-  price: string;
-  priceCurrency: "R$" | "USD" | "EUR";
-} {
-  return Boolean(
-    product.name &&
-      product.description &&
-      product.category &&
-      product.price &&
-      product.priceCurrency &&
-      product.features.length > 0,
-  );
+function candidateResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
 }
 
 export async function handleImportProduct(req: Request): Promise<Response> {
@@ -31,35 +21,15 @@ export async function handleImportProduct(req: Request): Promise<Response> {
   if (!body) return json(400, { error: "Informe uma URL válida.", code: "IMPORT-URL-INVALID", fieldErrors: { url: "Informe uma URL válida." } });
   try {
     const submittedUrl = validateTikTokShopUrl(body.url).toString();
-    const existing = await findTenantProductByIdempotencyKey(session.tenantId, key);
-    if (existing) {
-      if (existing.submittedUrl !== submittedUrl) return json(409, { error: "Esta chave já foi usada para outra URL.", code: "IMPORT-IDEMPOTENCY-CONFLICT" });
-      return new Response(JSON.stringify({ id: existing.id, version: existing.version, replay: true }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
-    }
     const imported = await fetchCaptApiProduct(submittedUrl);
-    if (!hasCompleteProductFacts(imported) || imported.gaps.length > 0) {
-      return new Response(JSON.stringify({
-        candidate: imported,
-        partial: true,
-        gaps: imported.gaps,
-        message: "Confira os dados importados e complete os campos obrigatórios antes de salvar.",
-      }), {
-        status: 200,
-        headers: { "content-type": "application/json", "cache-control": "no-store" },
-      });
-    }
-    const result = await createManualProduct(session.tenantId, {
-      name: imported.name,
-      description: imported.description,
-      category: imported.category,
-      price: imported.price,
-      priceCurrency: imported.priceCurrency,
-      features: imported.features,
-      imageRefs: imported.imageRefs,
-      url: imported.url,
-      ...(imported.discountType ? { discountType: imported.discountType, discountValue: imported.discountValue } : {}),
-    }, key, "captapi");
-    return new Response(JSON.stringify({ id: result.product.id, version: result.product.version, replay: result.replay }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+    return candidateResponse({
+      candidate: imported,
+      partial: imported.gaps.length > 0,
+      gaps: imported.gaps,
+      message: imported.gaps.length > 0
+        ? "Confira os dados importados e complete os campos obrigatórios antes de salvar."
+        : "Confira os dados importados antes de salvar.",
+    });
   } catch (error) {
     if (error instanceof CaptApiImportError) return json(422, { error: error.message, code: error.code, fieldErrors: error.code === "IMPORT-URL-INVALID" ? { url: error.message } : undefined });
     console.error("[products] import failed:", error instanceof Error ? error.constructor.name : "unknown");

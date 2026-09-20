@@ -424,7 +424,7 @@ const get = (token: string) =>
     headers: { cookie: `${SESSION_COOKIE}=${token}` },
   });
 
-test("importação CaptAPI BR mapeia e persiste pelo service existente", async (t) => {
+test("importação CaptAPI BR retorna candidato completo sem persistir antes da confirmação", async (t) => {
   if (!dbUp) return t.skip();
   const { token, tenantId } = await tenantOf();
   const previousKey = process.env.CAPTAPI_API_KEY;
@@ -456,13 +456,33 @@ test("importação CaptAPI BR mapeia e persiste pelo service existente", async (
       body: JSON.stringify({ url: "https://shop.tiktok.com/br/pdp/tripe/1735872517465343013" }),
     }));
     assert.equal(res.status, 200);
-    const body = await res.json() as { id: string };
-    const product = await prisma.product.findFirst({ where: { id: body.id, tenantId } });
+    const body = await res.json() as { candidate: { name: string; description: string; category: string; price: string; priceCurrency: string; features: string[]; imageRefs: string[]; sourceUrl: string; gaps: string[] }; partial: boolean };
+    assert.equal(res.status, 200);
+    assert.equal(body.partial, false);
+    assert.equal(body.candidate.name, "Tripé retrátil para celular");
+    assert.equal(body.candidate.priceCurrency, "R$");
+    assert.deepEqual(body.candidate.features, ["Preto", "Eletrônicos"]);
+    assert.deepEqual(body.candidate.imageRefs, ["https://cdn.example/tripe.jpg"]);
+    assert.equal(body.candidate.sourceUrl, "https://shop.tiktok.com/br/pdp/tripe/1735872517465343013");
+    assert.deepEqual(body.candidate.gaps, []);
+    assert.equal(await prisma.product.count({ where: { tenantId } }), 0);
+
+    const saved = await handleCreateProduct(post(token, {
+      name: body.candidate.name,
+      description: body.candidate.description,
+      category: body.candidate.category,
+      price: body.candidate.price,
+      priceCurrency: body.candidate.priceCurrency,
+      features: body.candidate.features,
+      imageRefs: body.candidate.imageRefs,
+      url: body.candidate.sourceUrl,
+      provenanceOrigin: "captapi",
+    }, "captapi-confirmed-product-key"));
+    assert.equal(saved.status, 200);
+    const product = await prisma.product.findFirst({ where: { tenantId } });
     assert.equal(product?.name, "Tripé retrátil para celular");
-    assert.equal(product?.priceCurrency, "R$");
-    assert.deepEqual(product?.features, ["Preto", "Eletrônicos"]);
-    assert.equal(product?.submittedUrl, "https://shop.tiktok.com/br/pdp/tripe/1735872517465343013");
     assert.deepEqual(product?.provenance, { origin: "captapi" });
+    assert.equal(JSON.stringify(product?.provenance).includes("Tripé"), false);
   } finally {
     globalThis.fetch = previousFetch;
     if (previousKey === undefined) delete process.env.CAPTAPI_API_KEY; else process.env.CAPTAPI_API_KEY = previousKey;
@@ -521,11 +541,14 @@ test("importação parcial devolve candidato editável e só persiste após comp
       features: body.candidate.features,
       imageRefs: body.candidate.imageRefs,
       url: importedUrl,
+      provenanceOrigin: "captapi",
     }, "manual-completion-after-partial"));
     assert.equal(saved.status, 200);
     const row = await prisma.product.findFirst({ where: { tenantId } });
     assert.equal(row?.priceAmount?.toString(), "89.9");
     assert.deepEqual(row?.images, ["https://cdn.example/image-0.jpg"]);
+    assert.deepEqual(row?.provenance, { origin: "captapi" });
+    assert.equal(JSON.stringify(row?.provenance).includes("image-1"), false);
   } finally {
     globalThis.fetch = previousFetch;
     if (previousKey === undefined) delete process.env.CAPTAPI_API_KEY; else process.env.CAPTAPI_API_KEY = previousKey;
