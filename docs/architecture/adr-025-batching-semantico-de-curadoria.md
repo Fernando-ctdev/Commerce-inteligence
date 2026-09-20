@@ -44,7 +44,7 @@ Não se agrupam partes diferentes, Products diferentes, jobs diferentes ou conte
 
 ### 4. Ordem invariável da pipeline
 
-A geração inicial de `CONTENT_BRIEF_GENERATION` continua no lote do Job. Hard gates objetivos continuam locais/determinísticos por Content e Variety Gate continua sobre o conjunto completo. Só após hard gate os candidatos entram nos lotes de Judge. Após o repair seletivo, a engine recompõe por `contentId` e revalida somente os hard gates objetivos antes de publicar; não executa Judge novamente. Quando os gates objetivos passam, o resultado permanece `DRAFT`, inclusive se uma parte em `REVIEW` tiver usado o fallback original.
+A geração inicial de `CONTENT_BRIEF_GENERATION` continua no lote do Job. Hard gates objetivos continuam locais/determinísticos por Content e Variety Gate continua sobre o conjunto completo; `Hard Gate Repair` objetivo, quando necessário, termina dentro de `GENERATION_MAX_REPAIRS` antes de o candidato entrar no Judge. Só então os candidatos hard-valid entram nos lotes de Judge. Após o `Semantic Part Repair` seletivo, a engine recompõe por `contentId` e revalida somente os hard gates objetivos antes de publicar; não executa Judge novamente. Quando os gates objetivos passam, o resultado permanece `DRAFT`, inclusive se uma parte em `REVIEW` tiver usado o fallback original.
 
 ### 5. Fronteira editorial de script e cenas
 

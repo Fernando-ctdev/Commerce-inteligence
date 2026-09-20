@@ -130,7 +130,7 @@ Worker ────────┼──> Application Use Cases ───> Domai
 - Todo Product `ACTIVE` retornado por leitura autenticada inclui `generationAction`: `AVAILABLE` com `reason`/`nextAction` nulos, ou `BLOCKED` com o par `GEN-ACTIVE`/`VIEW_ACTIVE_ANALYSIS` ou `GEN-CAPACITY`/`WAIT_FOR_CAPACITY`. Product `ARCHIVED` não serializa o campo; archive/reactivate retornam mutação mínima e a UI recarrega o Product. Não há novo código de bloqueio. O `POST` revalida e reserva transacionalmente. Ver ADR-016.
 - Capacities seguem `Input Schema → Capability → Output Schema`. LLM nunca decide regra de sistema (estado de job, quota, persistência, versões).
 - Fato ≠ inferência: a engine pode inferir por que alguém compraria; não pode inventar o que o Produto é. Fact Validator classifica claims (`SUPPORTED`, `INFERRED_BUT_SAFE`, `UNSUPPORTED`, `CONTRADICTED`).
-- Gates: hard gate determinístico por briefing/conjunto (schema, estrutural, factual, cenas e variedade) é obrigatório antes e depois da composição. `CONTENT_QUALITY_JUDGE` avalia em batch homogêneo até três Contents, somente por hook, development, script, CTA e cenas, e retorna `PASS|REVIEW`. Cada parte `REVIEW` recebe um único `CONTENT_PART_REPAIR`; partes `PASS` permanecem intactas e repair inválido preserva o original. Não há `REJECT` semântico, re-Judge, `QUALITY_PENDING` ou bloqueio de item objetivamente válido. O resultado final hard-válido persiste em `DRAFT`; falha objetiva segue o parcial declarado do ADR-021. `ContentSceneSet` permanece separado e é condição de sucesso.
+- Gates e repairs: hard gate determinístico por briefing/conjunto (schema, estrutural, factual, cenas e variedade) é obrigatório antes e depois da composição. `Hard Gate Repair` é objetivo, anterior ao Judge, usa `CONTENT_BRIEF_REPAIR` por item e pode executar até `GENERATION_MAX_REPAIRS` rounds server-side; o hard gate decide se sua exaustão vira parcial/falha pelo ADR-021. Só depois de hard gate `PASS`, `CONTENT_QUALITY_JUDGE` avalia em batch homogêneo até três Contents e retorna `PASS|REVIEW`. `Semantic Part Repair` chama um único `CONTENT_PART_REPAIR` por parte `REVIEW`; partes `PASS` e reparos inválidos preservam o original, sem re-Judge. Semântica não bloqueia conteúdo objetivamente válido: hard gates finais decidem `DRAFT` ou o parcial declarado. Não há `REJECT` semântico nem `QUALITY_PENDING`.
 
 ### Model Router
 
@@ -141,8 +141,7 @@ Engine Capability → Logical Intelligence Task → Model Router
   → Capability Contract Validation
 ```
 
-- Capabilities determinísticas não passam pelo router. Tarefas lógicas (ex.: `PRODUCT_UNDERSTANDING`, `STRATEGY_SYNTHESIS`, `CONTENT_BRIEF_GENERATION`, `VARIETY_AUDIT`) têm tier padrão evoluível por evals.
-- Padrão de custo: HIGH decide o conjunto, MID executa, HIGH audita. Curadoria usa `CONTENT_QUALITY_JUDGE`/HIGH e repair pontual `CONTENT_PART_REPAIR`/HIGH, sem fallback oculto. Regenerações locais reutilizam contexto (CTA → LOW; hook → LOW/MID; script → MID; replanejar conjunto → HIGH).
+- Capabilities determinísticas não passam pelo router. O mapa de tier runtime, retries/fallback e autoridade é a tabela canônica do ADR-029; `ROUTER_MAP` atual é configuração operacional evolutiva por evals, não a heurística histórica “HIGH decide, MID executa, HIGH audita”.
 - Um provider por vez no MVP, atrás do adapter. Provider nunca entra na regra de negócio. Tiers nunca variam por plano comercial.
 - Conteúdo extraído de páginas é dado não confiável, nunca instrução: separação explícita entre system instructions, contexto confiável da engine e conteúdo do Produto.
 
