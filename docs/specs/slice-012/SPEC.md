@@ -1,9 +1,22 @@
 # SPEC — Slice 012: Entrada de Product por URL via CaptAPI HTTP
 
-**Status:** Implementado
+**Status:** Implementado — **importação URL DESATIVADA** (`URL_IMPORT_ENABLED = false`) até decisão futura; o contrato abaixo permanece a referência para reabilitação e não foi removido.
 **Dependência:** Slice 002; o Product confirmado segue a fronteira do Slice 003
 **ADR:** ADR-027 (integração CaptAPI) e ADR-028 (contrato do Slice 012; ADR-022 deixa de governar este fluxo)
 **Domain Areas:** Product, Product Import, Identity/Tenant
+
+## Desativação do fluxo (estado vigente)
+
+Com `URL_IMPORT_ENABLED = false` (`src/modules/products/import-config.ts`):
+
+- O endpoint `POST /api/products/import` responde `503 IMPORT-DISABLED` com
+  mensagem sanitizada antes de sessão, idempotência, validação ou CaptAPI.
+- A UI mantém o campo URL na posição atual como campo manual opcional e não
+  oferece botão de importação, status, gaps, sinais nem chamada ao provider.
+- O client `importProduct` recusa a chamada localmente sem rede.
+- Cadastro manual é inalterado. A resolução de short links, o contrato do
+  Candidate e os testes de importação permanecem no código, preservados
+  (testes pulados com o motivo da desativação) para reabilitação futura.
 
 ## User Outcome
 

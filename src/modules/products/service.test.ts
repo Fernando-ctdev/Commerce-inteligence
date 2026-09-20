@@ -26,6 +26,7 @@ import {
   validateManualProductInput,
 } from "./service.js";
 import { handleImportProduct } from "./import-http.js";
+import { URL_IMPORT_ENABLED } from "./import-config.js";
 import { startCommerceIntelligence } from "../commerce-intelligence/service.js";
 import { handleGet, handleRetry } from "../commerce-intelligence/http-status.js";
 import { GenerationError } from "../commerce-intelligence/errors.js";
@@ -424,7 +425,27 @@ const get = (token: string) =>
     headers: { cookie: `${SESSION_COOKIE}=${token}` },
   });
 
-test("importação CaptAPI BR retorna candidato completo sem persistir antes da confirmação", async (t) => {
+test("importação por URL desativada responde indisponível sem chamar o provedor", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = () => {
+    throw new Error("provedor não deve ser chamado com importação desativada");
+  };
+  try {
+    const res = await handleImportProduct(new Request(`${ORIGIN}/api/products/import`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", "content-type": "application/json" },
+      body: JSON.stringify({ url: "https://shop.tiktok.com/br/pdp/tripe/1735872517465343013" }),
+    }));
+    assert.equal(res.status, 503);
+    const body = await res.json() as { code: string; error: string };
+    assert.equal(body.code, "IMPORT-DISABLED");
+    assert.match(body.error, /indisponível/);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("importação CaptAPI BR retorna candidato completo sem persistir antes da confirmação", { skip: !URL_IMPORT_ENABLED && "importação por URL desativada (URL_IMPORT_ENABLED=false)" }, async (t) => {
   if (!dbUp) return t.skip();
   const { token, tenantId } = await tenantOf();
   const previousKey = process.env.CAPTAPI_API_KEY;
@@ -489,7 +510,7 @@ test("importação CaptAPI BR retorna candidato completo sem persistir antes da 
   }
 });
 
-test("importação parcial devolve candidato editável e só persiste após completar o preço", async (t) => {
+test("importação parcial devolve candidato editável e só persiste após completar o preço", { skip: !URL_IMPORT_ENABLED && "importação por URL desativada (URL_IMPORT_ENABLED=false)" }, async (t) => {
   if (!dbUp) return t.skip();
   const { token, tenantId } = await tenantOf();
   const previousKey = process.env.CAPTAPI_API_KEY;
