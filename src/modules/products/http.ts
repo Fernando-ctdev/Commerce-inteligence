@@ -322,12 +322,10 @@ export async function handleCreateProduct(req: Request): Promise<Response> {
     });
 
   try {
-    const provenanceOrigin = body.provenanceOrigin === "captapi" ? "captapi" : "manual";
     const { product, replay } = await createManualProduct(
       session.tenantId,
       body,
       idempotencyKey,
-      provenanceOrigin,
     );
     // Salvar não cria CommerceIntelligenceJob nem inicia geração (SPEC B-005/AC-002-08).
     return jsonBody(200, { id: product.id, version: product.version, replay });

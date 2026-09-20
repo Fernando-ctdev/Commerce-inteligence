@@ -481,7 +481,7 @@ test("importação CaptAPI BR retorna candidato completo sem persistir antes da 
     assert.equal(saved.status, 200);
     const product = await prisma.product.findFirst({ where: { tenantId } });
     assert.equal(product?.name, "Tripé retrátil para celular");
-    assert.deepEqual(product?.provenance, { origin: "captapi" });
+    assert.deepEqual(product?.provenance, { origin: "manual" });
     assert.equal(JSON.stringify(product?.provenance).includes("Tripé"), false);
   } finally {
     globalThis.fetch = previousFetch;
@@ -547,7 +547,7 @@ test("importação parcial devolve candidato editável e só persiste após comp
     const row = await prisma.product.findFirst({ where: { tenantId } });
     assert.equal(row?.priceAmount?.toString(), "89.9");
     assert.deepEqual(row?.images, ["https://cdn.example/image-0.jpg"]);
-    assert.deepEqual(row?.provenance, { origin: "captapi" });
+    assert.deepEqual(row?.provenance, { origin: "manual" });
     assert.equal(JSON.stringify(row?.provenance).includes("image-1"), false);
   } finally {
     globalThis.fetch = previousFetch;

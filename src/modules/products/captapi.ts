@@ -1,5 +1,6 @@
 const CAPTAPI_URL = "https://api.captapi.com/v1/tiktok-shop/product-details";
 const ALLOWED_HOSTS = new Set(["shop.tiktok.com", "www.tiktok.com"]);
+const MAX_RESPONSE_BYTES = 1_000_000;
 
 export type CandidateGap =
   | "name"
@@ -51,8 +52,13 @@ export function validateTikTokShopUrl(value: unknown): URL {
     throw new CaptApiImportError("IMPORT-URL-INVALID", "Cole uma URL pública do TikTok Shop válida.");
   }
   const host = url.hostname.toLowerCase();
-  const validProductPath = host === "shop.tiktok.com" || /^\/shop\/pdp\//i.test(url.pathname);
-  if (url.protocol !== "https:" || !ALLOWED_HOSTS.has(host) || !validProductPath) {
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+  const pdpIndex = pathSegments.findIndex((segment) => segment.toLowerCase() === "pdp");
+  const validProductPath = pdpIndex >= 0 &&
+    Boolean(pathSegments[pdpIndex + 1]) &&
+    /^\d+$/.test(pathSegments[pathSegments.length - 1] ?? "") &&
+    pdpIndex + 2 === pathSegments.length - 1;
+  if (url.protocol !== "https:" || !ALLOWED_HOSTS.has(host) || url.username || url.password || !validProductPath) {
     throw new CaptApiImportError("IMPORT-URL-INVALID", "Use uma URL https pública do TikTok Shop.");
   }
   return url;
@@ -86,6 +92,41 @@ function firstHttpImage(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+async function readResponseBody(response: Response, controller: AbortController): Promise<string> {
+  if (!response.body) {
+    throw new CaptApiImportError("IMPORT-JSON-INVALID", "A resposta do provedor não pôde ser lida; preencha os dados manualmente.");
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > MAX_RESPONSE_BYTES) {
+        controller.abort();
+        await reader.cancel();
+        throw new CaptApiImportError("IMPORT-RESPONSE-TOO-LARGE", "A resposta do provedor é grande demais; preencha os dados manualmente.");
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof CaptApiImportError) throw error;
+    throw new CaptApiImportError("IMPORT-JSON-INVALID", "A resposta do provedor não pôde ser lida; preencha os dados manualmente.");
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 function mapProduct(payload: unknown, submittedUrl: string): ProductCandidate {
@@ -172,15 +213,7 @@ export async function fetchCaptApiProduct(
       throw new CaptApiImportError("IMPORT-PROVIDER-ERROR", "Não foi possível consultar o produto agora; você pode preencher os dados manualmente.");
     }
     let body: unknown;
-    let raw: string;
-    try {
-      raw = await response.text();
-    } catch {
-      throw new CaptApiImportError("IMPORT-JSON-INVALID", "A resposta do provedor não pôde ser lida; preencha os dados manualmente.");
-    }
-    if (raw.length > 1_000_000) {
-      throw new CaptApiImportError("IMPORT-RESPONSE-TOO-LARGE", "A resposta do provedor é grande demais; preencha os dados manualmente.");
-    }
+    const raw = await readResponseBody(response, controller);
     try {
       body = JSON.parse(raw);
     } catch {

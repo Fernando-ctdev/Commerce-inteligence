@@ -1,9 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CaptApiImportError, fetchCaptApiProduct } from "./captapi";
+import { CaptApiImportError, fetchCaptApiProduct, validateTikTokShopUrl } from "./captapi";
 
 const productUrl = "https://shop.tiktok.com/br/pdp/produto/1735872517465343013?source=feed";
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+test("valida somente URLs públicas de produto sem credenciais embutidas", () => {
+  assert.equal(validateTikTokShopUrl(productUrl).hostname, "shop.tiktok.com");
+  assert.equal(validateTikTokShopUrl("https://www.tiktok.com/br/pdp/produto/1735872517465343013").hostname, "www.tiktok.com");
+  for (const invalid of [
+    "https://shop.tiktok.com/",
+    "https://shop.tiktok.com/br/category/1735872517465343013",
+    "https://www.tiktok.com/video/1735872517465343013",
+    "https://user:pass@shop.tiktok.com/br/pdp/produto/1735872517465343013",
+    "https://attacker.example/br/pdp/produto/1735872517465343013",
+  ]) {
+    assert.throws(() => validateTikTokShopUrl(invalid), { code: "IMPORT-URL-INVALID" });
+  }
+});
 
 test("mapeia produto BR da CaptAPI sem expor segredo e envia região", async () => {
   const previous = process.env.CAPTAPI_API_KEY;
@@ -40,7 +54,7 @@ test("falhas da CaptAPI são recuperáveis e não fazem nova tentativa escondida
     assert.equal("variants" in partial, false);
     await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => response({ success: true })), { code: "IMPORT-SHAPE-INCOMPLETE" });
     await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => response({ success: true, data: { title: "Produto", description: "Descrição", price: 10, currency: "BRL", categories: [{ name: "Categoria" }], discount: "101%" } })), { code: "IMPORT-SHAPE-INCOMPLETE" });
-    await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => ({ ok: true, text: async () => { throw new Error("invalid json"); } } as unknown as Response)), { code: "IMPORT-JSON-INVALID" });
+    await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => ({ ok: true, body: null, text: async () => { throw new Error("text() must not be called"); } } as unknown as Response)), { code: "IMPORT-JSON-INVALID" });
     await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => response({}, 503)), { code: "IMPORT-PROVIDER-ERROR" });
     await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => { throw new Error("offline"); }), { code: "IMPORT-NETWORK" });
     await assert.rejects(() => fetchCaptApiProduct("https://www.tiktok.com/video/1", async () => response({})), { code: "IMPORT-URL-INVALID" });

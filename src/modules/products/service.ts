@@ -543,7 +543,6 @@ export async function createManualProduct(
   tenantId: string,
   input: ManualProductInput,
   idempotencyKey: string,
-  provenanceOrigin: "manual" | "captapi" = "manual",
 ): Promise<ManualProductResult> {
   const data = validateManualProductInput(input);
 
@@ -573,7 +572,7 @@ export async function createManualProduct(
         features: data.features,
         images: data.imageRefs,
         submittedUrl: data.submittedUrl,
-        provenance: { origin: provenanceOrigin },
+        provenance: { origin: "manual" },
         targetContentCount: data.targetContentCount,
         generationConstraints: data.generationConstraints,
         createIdempotencyKey: idempotencyKey,
