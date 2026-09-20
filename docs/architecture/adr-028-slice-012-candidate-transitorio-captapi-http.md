@@ -53,9 +53,11 @@ sanitizado, sem expor a cadeia de redirects.
 
 ## Consequências
 
-- O app não faz resolução de redirect nem fetch ao TikTok: a CaptAPI recebe
-  somente URLs finais de produto, restringindo o egress e a superfície de
-  redirecionamento a um allowlist fechado.
+- O cliente (browser) não faz resolução de redirect nem fetch ao TikTok: a
+  resolução do short link é server-side, feita pelo backend via `fetch` com
+  `redirect: "manual"` restrito ao allowlist TikTok antes da CaptAPI, que
+  recebe somente URLs finais de produto — o egress ao TikTok fica limitado a
+  essa resolução fechada e o browser continua sem falar com TikTok.
 - O fluxo URL-first pode ser revisado e completado sem uma etapa paralela.
 - A confirmação humana continua sendo a fronteira de persistência e mantém o
   fallback manual já existente.
