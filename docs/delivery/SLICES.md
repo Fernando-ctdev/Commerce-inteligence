@@ -44,11 +44,11 @@ Este documento é um mapa de construção. Não é PRD, ADR, SPEC ou PLAN e não
 
 * **Comportamento antes de camada:** nenhum slice existe apenas para criar Database, Frontend, API, Auth, Worker, Product Importer ou Model Router.
 * **Verticalidade suficiente:** cada slice atravessa somente os domínios necessários para entregar um comportamento real e verificável.
-* **Infraestrutura just-in-time:** a infraestrutura da importação (Product Importer, Chromium headless, Browser Harness, Agent Runner) só entra quando a importação URL-first for retomada como slice (direção futura, ADR-022); job assíncrono durável, Model Router e validação de limites entram quando a primeira geração realmente precisa deles.
-* **Fonte factual separada de inteligência:** o cadastro factual (vigente: manual em `/products/new`; futura: importação URL-first) produz os fatos confirmados do Product. A Commerce Intelligence interpreta o Produto confirmado e produz Strategy, Plan, Opportunities e Briefings. Nenhuma assume o papel da outra.
+* **Infraestrutura just-in-time:** a entrada URL-first do Slice 012 usa somente HTTP normal contra a CaptAPI; Browser Harness, Chromium, Browser Agent, portal e MCP não entram no runtime. Job assíncrono durável, Model Router e validação de limites entram quando a primeira geração realmente precisa deles.
+* **Fonte factual separada de inteligência:** o cadastro factual (manual em `/products/new` ou candidato transitório vindo da CaptAPI no Slice 012) produz os fatos confirmados do Product somente após confirmação explícita. A Commerce Intelligence interpreta o Produto confirmado e produz Strategy, Plan, Opportunities e Briefings. Nenhuma assume o papel da outra.
 * **Primeira geração sem wizard estratégico:** depois do salvamento e com a quantidade inicial já resolvida, a ação explícita `Analisar produto` inicia o `CommerceIntelligenceJob` automaticamente. Não existe aprovação obrigatória de Strategy nem botão intermediário.
 * **Processamento assíncrono é parte da experiência:** um job ativo por usuário no MVP; o creator continua usando a aplicação e o App Shell comunica o estado pelo indicador global.
-* **Extração agentic limitada (direção futura):** quando a importação URL-first for retomada, o Agent Runner compreende a página com Browser Harness; ferramentas, duração, tokens, rede e navegação permanecem limitados e configuráveis. Não há extração agentic no fluxo vigente.
+* **Extração externa limitada:** o Slice 012 aceita somente a resposta factual normalizada da CaptAPI HTTP, com allowlist, timeout, limites de resposta e fallback manual. Não há extração agentic, Browser Harness, portal ou MCP no runtime.
 * **Content possui identidade e Briefing possui versão:** editar, regenerar e aprovar preservam `Content` como identidade estável e criam versões rastreáveis de `ContentBriefVersion`; a versão aprovada é fixada.
 * **Aprovação e execução são etapas diferentes:** aprovar não coloca em gravação; contents aprovados são selecionados para formar um `RecordingBatch`.
 * **Lote significa gravação:** `RecordingBatch` é a unidade operacional do Estúdio; seus estados (`Aguardando`, `Gravando`, `Concluído`) são derivados do progresso. `lote` nunca significa nova geração de conteúdos.
@@ -60,7 +60,7 @@ Este documento é um mapa de construção. Não é PRD, ADR, SPEC ou PLAN e não
 
 ## Jornadas principais
 
-> Fluxo de entrada vigente: **cadastro manual** (`/products/new`) com início de análise apenas pela ação explícita `Analisar produto` (ADR-022). A importação URL-first com `ProductCandidate` descrita no PRD principal é **direção futura** e não constitui jornada oficial enquanto não houver slice e ADR que a retomem.
+> Fluxo de entrada vigente: **cadastro manual** (`/products/new`) ou URL pública analisada pela CaptAPI no Slice 012. Ambos convergem no mesmo formulário, exigem confirmação explícita antes de persistir e iniciam análise somente pela ação `Analisar produto`. O candidato URL-first é transitório e mantém fallback manual por faltas ou falhas.
 
 ### Ativação
 
@@ -96,9 +96,11 @@ salvar Product
 iniciar geração
 ```
 
-### Direção futura — importação URL-first (não vigente)
+### Slice 012 — Entrada de Product por URL via CaptAPI HTTP
 
-As jornadas a seguir pertencem à visão do PRD principal (`colar URL → Product Importer → ProductCandidate → confirmação humana`, com fallback manual quando a extração falhar) e permanecem sem implementação e sem slice agendado. A retomada exige novo slice com SPEC/PLAN e novo ADR (ADR-022); nenhum comportamento desta direção pode ser assumido como existente.
+O Slice 012 está pendente e documentado em `docs/specs/slice-012/SPEC.md`; o PLAN ainda não foi criado. O creator cola uma URL pública, solicita análise explícita e recebe um candidato transitório no mesmo formulário manual. Campos ausentes permanecem editáveis sem valores inventados; falhas de URL, rede, HTTP, JSON, shape ou timeout devolvem o fluxo ao cadastro manual. A confirmação explícita usa o service/repository manual existente e somente então persiste o Product no Tenant.
+
+O contrato aceita somente dados suportados pelo formulário: fatos disponíveis, no máximo a primeira imagem, e sinais opcionais `salesCount`, `ratingValue` e `reviewCount` apenas para leitura. Não há persistência de candidato, galeria completa, seller/brand/variants, Browser/portal/MCP em runtime, alteração de schema ou execução de código neste slice.
 
 ### Primeira geração
 
@@ -472,6 +474,23 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 
 ---
 
+### Slice 012 — Entrada de Product por URL via CaptAPI HTTP
+**Status:** `Pendente — SPEC para revisão; PLAN ainda não criado`
+
+**User Outcome:** O creator cola uma URL pública de produto, analisa explicitamente e revisa o candidato no mesmo formulário de cadastro manual antes de confirmar e salvar o Product.
+
+**Depends On:** Slice 002; o Product confirmado alimenta o fluxo de geração do Slice 003.
+
+**Domain Areas:** Product, Product Import, Identity/Tenant, segurança de integração externa
+
+**Scope:** CaptAPI HTTP normal com `GET /v1/tiktok-shop/product-details`, `region=BR` e Bearer somente do ambiente; candidato transitório com campos suportados pelo formulário; primeira imagem apenas; sinais opcionais somente leitura; estados de importação e fallback manual; confirmação explícita e persistência pelos serviços existentes; tenant, segurança, idempotência e testes determinísticos.
+
+**Out of Scope:** Browser, Chromium, Browser Harness, portal, MCP em runtime, scraping, OAuth, nova tabela/schema, persistência de candidato, galeria completa, seller/brand/variants, valores inventados, PLAN e implementação.
+
+**Documentação:** `docs/specs/slice-012/SPEC.md`, `docs/architecture/adr-027-importacao-tiktok-shop-captapi.md`, `docs/architecture/adr-028-slice-012-candidate-transitorio-captapi-http.md`.
+
+---
+
 ### Atualização deliberada de navegação
 
 O `DESIGN.md` mantém sua lista fixa como baseline visual, mas a decisão explícita do usuário prevalece para este slice: `Meu estilo` é um botão adicional da sidebar. Ele aponta somente para a área de preferências e não cria destinos paralelos para Hoje, Produção, Conteúdos ou Vault.
@@ -484,6 +503,7 @@ O `DESIGN.md` mantém sua lista fixa como baseline visual, mas a decisão explí
 ```text
 001 Workspace
  └─ 002 Entrada de Product: cadastro manual + ação explícita `Analisar produto`
+     ├─ 012 Entrada URL via CaptAPI: candidato transitório + confirmação no formulário manual
      └─ 003 Primeira geração (job + engine + briefings)
          ├─ 004 Revisão e controle de Content
          │   ├─ 005 Regeneração contextual
@@ -502,8 +522,8 @@ Nenhuma alteração deste mapa antecipa código, SPEC ou PLAN de um slice futuro
 | Requisito/capacidade (PRD) | Slice |
 |---|---|
 | §31 Onboarding: conta, workspace, primeira ação clara | 001 |
-| §31–32, §58 (1–2): URL → Candidate → confirmação | Direção futura do PRD principal (ADR-022) — sem slice vigente; a entrada entregue no Slice 002 é o cadastro manual |
-| §10, §58 (2): entrada/fallback manual | 002 |
+| §31–32, §58 (1–2): URL → Candidate → confirmação | 012 (CaptAPI HTTP; candidato transitório e confirmação no formulário manual) |
+| §10, §58 (2): entrada/fallback manual | 002 / 012 |
 | §8, §58 (3): quantidade inicial resolvida no cadastro | 002 |
 | §58 (4): Product persistido + job automático | 003 |
 | §29 (analysis): job assíncrono, 1 ativo/usuário, indicador global, recuperação | 003 |
