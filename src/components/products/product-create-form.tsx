@@ -50,7 +50,17 @@ import {
   type ProductManualDraft,
   type ProductManualFieldErrors,
 } from "./product-form-model";
-import type { ContentPreparationPreferences } from "./product-import-model";
+import {
+  candidateSignalsForDisplay,
+  gapLabels,
+  importDisabled,
+  importStatusAnnouncement,
+  mergeImportedCandidate,
+  type CandidateGap,
+  type ContentPreparationPreferences,
+  type ImportStatusState,
+  type ProductSignals,
+} from "./product-import-model";
 import styles from "./product-form.module.css";
 
 const emptyDraft: ProductManualDraft = {
@@ -670,7 +680,15 @@ export function ProductCreateForm({
   const submitIntent = useRef<"save" | "analyze">("save");
   const [notes, setNotes] = useState(product?.observations ?? "");
   const [saving, setSaving] = useState(false);
-  const [importing, setImporting] = useState(false);
+  /* Estados visíveis da importação por URL (SPEC Slice 012): idle,
+     importing, ready, partial e fallback. Mensagem/gaps/sinais ficam locais;
+     proveniência só existe depois de um candidato aplicado. */
+  const [importState, setImportState] = useState<ImportStatusState>("idle");
+  const importing = importState === "importing";
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [importGaps, setImportGaps] = useState<CandidateGap[]>([]);
+  const [importSignals, setImportSignals] = useState<ProductSignals | null>(null);
+  const [importedFromCaptApi, setImportedFromCaptApi] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ProductManualFieldErrors>({});
   const [validationVisible, setValidationVisible] = useState(false);
@@ -698,6 +716,14 @@ export function ProductCreateForm({
     setDraft((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
     setError(null);
+    if (field === "url" && !value.trim()) {
+      /* URL limpa = formulário manual do zero: sem proveniência nem status. */
+      setImportedFromCaptApi(false);
+      setImportState("idle");
+      setImportMessage(null);
+      setImportGaps([]);
+      setImportSignals(null);
+    }
   }
 
   function updateImageLinks(value: string) {
@@ -830,7 +856,7 @@ export function ProductCreateForm({
   }
 
   async function importFromUrl() {
-    if (isEdit || importing || saving) return;
+    if (isEdit || importDisabled(importing, saving)) return;
     const url = draft.url?.trim() ?? "";
     if (!url) {
       const message = "Cole uma URL pública do TikTok Shop para importar.";
@@ -838,49 +864,48 @@ export function ProductCreateForm({
       setError(message);
       return;
     }
-    setImporting(true);
     setError(null);
     setFieldErrors((current) => ({ ...current, url: undefined }));
+    setImportState("importing");
+    setImportMessage(null);
+    setImportGaps([]);
+    setImportSignals(null);
     try {
+      /* Uma chave por tentativa lógica: reutilizada em retry, renovada
+         quando a consulta anterior respondeu. */
       const key = importIdempotencyKey.current ?? createIdempotencyKey();
       importIdempotencyKey.current = key;
       const result = await importProduct(url, key);
-      if ("candidate" in result) {
-        const candidate = result.candidate;
-        const imageReferences = candidate.imageRefs.join("\n");
-        setDraft((current) => ({
-          ...current,
-          name: candidate.name ?? "",
-          description: candidate.description ?? "",
-          category: candidate.category ?? "",
-          price: candidate.price ?? "",
-          currency: candidate.priceCurrency ?? "",
-          characteristics: candidate.features.join("\n"),
-          imageReferences,
-          url: candidate.url,
-        }));
-        setImageLinksInput(imageReferences);
+      /* Merge não destrutivo: fatos ausentes não apagam o que o creator
+         já digitou. A confirmação continua sendo o botão de salvar. */
+      setDraft((current) => mergeImportedCandidate(current, result.candidate));
+      const firstImage = result.candidate.imageRefs[0];
+      if (firstImage) {
+        /* Primeira imagem apenas: substitui links e arquivos escolhidos. */
+        setImageLinksInput(firstImage);
         setUploadedImages([]);
         setSelectedImage(null);
-        setValidationVisible(false);
-        setFormStep("facts");
-        importIdempotencyKey.current = undefined;
-        toast.success("Dados importados. Complete os campos obrigatórios antes de salvar.");
-        return;
       }
-      toast.success("Produto importado.");
+      setImportState(result.partial ? "partial" : "ready");
+      setImportMessage(result.message);
+      setImportGaps(result.gaps);
+      setImportSignals(result.candidate.signals ?? null);
+      setImportedFromCaptApi(true);
       importIdempotencyKey.current = undefined;
-      router.push(`/products/${result.id}`);
     } catch (caught) {
+      /* Fallback manual: valores preservados; erro no campo de URL e no
+         status ao lado, sem toast e sem anúncio duplicado. */
       const message = caught instanceof ProductApiError
         ? caught.message
-        : "Não foi possível importar agora. Os dados manuais continuam disponíveis.";
-      const urlError = caught instanceof ProductApiError ? caught.fieldErrors.url : undefined;
-      setFieldErrors((current) => ({ ...current, url: urlError ?? message }));
-      setError(message);
-      toast.error(message);
-    } finally {
-      setImporting(false);
+        : "Não foi possível importar agora. Continue com o preenchimento manual; seus dados continuam aqui.";
+      setFieldErrors((current) => ({
+        ...current,
+        url: caught instanceof ProductApiError
+          ? caught.fieldErrors.url ?? message
+          : message,
+      }));
+      setImportState("fallback");
+      setImportMessage(message);
     }
   }
 
@@ -965,6 +990,7 @@ export function ProductCreateForm({
         draft,
         contentPreferences,
         isEdit ? undefined : key,
+        isEdit ? undefined : importedFromCaptApi ? "captapi" : undefined,
       );
       if (isEdit && product) {
         delete payload.targetContentCount;
@@ -1328,6 +1354,7 @@ export function ProductCreateForm({
           </div>
           <TextField
             error={combinedErrors.url}
+            help="Cole o link público (https) de um produto do TikTok Shop."
             id={fieldId("url")}
             label={
               <>
@@ -1341,12 +1368,46 @@ export function ProductCreateForm({
             value={draft.url ?? ""}
           />
           {!isEdit && (
-            <div className={styles.importAction}>
-              <Button disabled={importing || saving} onClick={importFromUrl} type="button" variant="outline">
-                {importing ? "Importando…" : "Importar do TikTok Shop"}
-              </Button>
-              <p>Se a consulta falhar, você pode continuar preenchendo os dados manualmente.</p>
-            </div>
+            <>
+              <div className={styles.importAction}>
+                <Button
+                  disabled={importDisabled(importing, saving)}
+                  onClick={importFromUrl}
+                  type="button"
+                  variant="outline"
+                >
+                  {importing ? "Importando…" : "Importar do TikTok Shop"}
+                </Button>
+                <p>Se a consulta falhar, você pode continuar preenchendo os dados manualmente.</p>
+              </div>
+              {/* Status único da importação: anunciado sem roubar foco;
+                  gaps e sinais são texto, nunca só cor. */}
+              <div aria-live="polite" className={styles.importStatus} role="status">
+                {importState !== "idle" && (
+                  <p>{importStatusAnnouncement(importState, importMessage ?? undefined)}</p>
+                )}
+                {importGaps.length > 0 && (
+                  <p className={styles.importGaps}>
+                    <strong>Campos que faltaram: </strong>
+                    {gapLabels(importGaps).join(", ")}.
+                  </p>
+                )}
+                {importSignals && (
+                  <div className={styles.importSignals}>
+                    <p className={styles.importSignalsTitle}>
+                      Sinais do TikTok Shop (somente leitura)
+                    </p>
+                    <ul>
+                      {candidateSignalsForDisplay(importSignals).map((signal) => (
+                        <li key={signal.label}>
+                          <strong>{signal.label}:</strong> {signal.value}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </>
           )}
           {isEdit && (
             <TextField

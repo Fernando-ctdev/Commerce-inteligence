@@ -3,6 +3,12 @@ import {
   normalizeGenerationAction,
   type GenerationActionProjection,
 } from "./generation-ui-model";
+import {
+  type CandidateGap,
+  type ProductImportCandidate,
+  type ProductImportResult,
+  type ProductSignals,
+} from "./product-import-model";
 
 export type ProductReadiness = "PENDING" | "ANALYZING" | "READY" | "FAILED";
 
@@ -38,20 +44,9 @@ export type ProductMutation = {
   version: number;
   replay?: boolean;
 };
-export type ProductImportCandidate = {
-  name?: string;
-  description?: string;
-  category?: string;
-  price?: string;
-  priceCurrency?: string;
-  features: string[];
-  imageRefs: string[];
-  url: string;
-  gaps: string[];
-};
-export type ProductImportResult =
-  | ProductMutation
-  | { candidate: ProductImportCandidate; partial: true; gaps: string[]; message: string };
+export type { CandidateGap, ProductImportCandidate, ProductImportResult, ProductSignals };
+/* Resposta da consulta por URL: { candidate, partial, gaps, message }.
+   Nunca Product, id, version ou replay — a persistência é o POST manual. */
 export type ServerFieldErrors = ProductFieldErrors &
   Partial<
     Record<
@@ -338,43 +333,91 @@ export async function createProduct(payload: ProductPayload) {
   );
 }
 
-export async function importProduct(url: string, idempotencyKey: string) {
+/* Consulta por URL: reduz a resposta do endpoint ao contrato público do
+   candidato. Fatos vazios/nulos ficam ausentes; sinais só passam com número
+   finito não negativo; seller/brand/variants/payload bruto nunca cruzam aqui. */
+function candidateGaps(value: unknown): CandidateGap[] {
+  const known: string[] = ["name", "description", "category", "price", "priceCurrency", "features"];
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is CandidateGap => typeof item === "string" && known.includes(item),
+      )
+    : [];
+}
+
+function optionalString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function optionalSignals(value: unknown): ProductSignals | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  const signal = (key: string) => {
+    const raw = record[key];
+    return typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? raw : undefined;
+  };
+  const salesCount = signal("salesCount");
+  const ratingValue = signal("ratingValue");
+  const reviewCount = signal("reviewCount");
+  const signals: ProductSignals = {
+    ...(salesCount !== undefined ? { salesCount } : {}),
+    ...(ratingValue !== undefined ? { ratingValue } : {}),
+    ...(reviewCount !== undefined ? { reviewCount } : {}),
+  };
+  return Object.keys(signals).length > 0 ? signals : undefined;
+}
+
+export async function importProduct(
+  url: string,
+  idempotencyKey: string,
+): Promise<ProductImportResult> {
   const data = await request<unknown>("/api/products/import", {
     method: "POST",
     headers: { "Idempotency-Key": idempotencyKey },
     body: JSON.stringify({ url }),
   });
-  if (
-    typeof data === "object" &&
-    data !== null &&
-    "candidate" in data &&
-    typeof (data as { candidate?: unknown }).candidate === "object" &&
-    (data as { candidate?: unknown }).candidate !== null
-  ) {
-    const responseRecord = data as Record<string, unknown>;
-    const record = responseRecord.candidate as Record<string, unknown>;
-    return {
-      candidate: {
-        ...(typeof record.name === "string" ? { name: record.name } : {}),
-        ...(typeof record.description === "string" ? { description: record.description } : {}),
-        ...(typeof record.category === "string" ? { category: record.category } : {}),
-        ...(typeof record.price === "string" ? { price: record.price } : {}),
-        ...(typeof record.priceCurrency === "string" ? { priceCurrency: record.priceCurrency } : {}),
-        features: Array.isArray(record.features) ? record.features.filter((item): item is string => typeof item === "string") : [],
-        imageRefs: Array.isArray(record.imageRefs) ? record.imageRefs.filter((item): item is string => typeof item === "string") : [],
-        url: typeof record.url === "string" ? record.url : url,
-        gaps: Array.isArray(record.gaps) ? record.gaps.filter((item): item is string => typeof item === "string") : [],
-      },
-      partial: true as const,
-      gaps: Array.isArray(responseRecord.gaps)
-        ? (responseRecord.gaps as unknown[]).filter((item): item is string => typeof item === "string")
-        : [],
-      message: typeof responseRecord.message === "string"
-        ? responseRecord.message
-        : "Confira os dados importados antes de salvar.",
-    };
-  }
-  return mutationFromResponse(data);
+  if (typeof data !== "object" || data === null)
+    throw new Error("Resposta de importação inválida.");
+  const response = data as Record<string, unknown>;
+  const raw =
+    typeof response.candidate === "object" && response.candidate !== null
+      ? (response.candidate as Record<string, unknown>)
+      : null;
+  if (!raw) throw new Error("Resposta de importação inválida.");
+
+  const fact = (key: string) => {
+    const value = optionalString(raw[key]);
+    return value ? { [key]: value } : {};
+  };
+  const discountValue = optionalString(raw.discountValue);
+  const discount =
+    raw.discountType === "PERCENTAGE" && discountValue
+      ? { discountType: "PERCENTAGE" as const, discountValue }
+      : {};
+  const gaps = candidateGaps(raw.gaps);
+  const signals = optionalSignals(raw.signals);
+  const candidate: ProductImportCandidate = {
+    ...fact("name"),
+    ...fact("description"),
+    ...fact("category"),
+    ...fact("price"),
+    ...fact("priceCurrency"),
+    features: listValue(raw.features),
+    // Primeira imagem apenas; a galeria restante não entra no contrato.
+    imageRefs: listValue(raw.imageRefs).slice(0, 1),
+    sourceUrl: optionalString(raw.sourceUrl) ?? url,
+    ...discount,
+    gaps,
+    ...(signals ? { signals } : {}),
+  };
+  return {
+    candidate,
+    partial: gaps.length > 0,
+    gaps,
+    message:
+      optionalString(response.message) ??
+      "Confira os dados importados antes de salvar.",
+  };
 }
 
 export async function updateProduct(id: string, payload: ProductPayload) {
