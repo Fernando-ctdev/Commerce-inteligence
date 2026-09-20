@@ -17,7 +17,7 @@
 - Server owns count, IDs, ordering, eligible buckets, evidence authorization, schema, cardinality, CTA actionability, connectors, variety ceilings, persistence, quota, and retry orchestration.
 - `factRefs` are model proposals validated against the authorized evidence catalog; code MUST NOT infer a reference from lexical overlap and attach it silently.
 - Do not introduce a deterministic scene catalog or scene fallback; scene ideation remains `CONTENT_SCENE_IDEAS`.
-- Do not change the existing repair-round cap in this plan; narrow repair scope to failed bullets/parts and preserve passing parts.
+- Repair é seletivo e único por parte `REVIEW`; falha preserva a parte original, sem re-Judge.
 - Do not merge `STRATEGY_SYNTHESIS` into opportunity mapping in this plan.
 - Do not expose provider, model, tier, prompt, raw payload, or internal metadata to creators.
 - No new provider, dependency, UI workflow, embedding, semantic-memory, or product-import behavior.
@@ -161,14 +161,14 @@ git commit -m "feat(ci): canonicalize structured development fields"
 - Test: `src/modules/commerce-intelligence/worker.test.ts`
 
 **Interfaces:**
-- Existing repair round count remains unchanged.
-- Repair context contains only the failed `contentId`, failed part/bullet indexes, sanitized gate causes, authorized evidence, selected safe pattern, and deterministic sibling summary.
-- Passing bullets/parts never enter `CONTENT_BRIEF_REPAIR` or `CONTENT_PART_REPAIR`.
-- Semantic judge remains a single bounded evaluation pass before selective repair; no new semantic re-judge loop is introduced.
+- Repair ocorre no máximo uma vez para cada parte marcada `REVIEW`.
+- Repair context contém somente o `contentId` falho, índices de bullet/part, causas sanitizadas de gate, evidência autorizada, pattern seguro selecionado e resumo determinístico dos irmãos.
+- Partes/bullets `PASS` nunca entram em `CONTENT_BRIEF_REPAIR` ou `CONTENT_PART_REPAIR`; falha de repair preserva a parte original.
+- Judge semântico permanece uma avaliação inicial em batch antes do repair seletivo; não há re-Judge.
 
 - [ ] **Step 1: Add regression assertions for narrow repair context**
 
-Extend existing engine tests to assert that a mixed batch sends only rejected positions/parts to repair, includes no raw rejected payload or provider metadata, preserves passing content byte-for-byte, and retains the existing repair-round cap.
+Extend existing engine tests to assert that a mixed batch sends only posições/partes `REVIEW` to repair, includes no raw rejected payload or provider metadata, preserves passing content byte-for-byte, and retains the original part when repair is invalid.
 
 - [ ] **Step 2: Run repair tests and verify the new assertions fail where broad context remains**
 
@@ -178,7 +178,7 @@ Expected: any remaining broad repair context or passing-part mutation is reporte
 
 - [ ] **Step 3: Narrow repair orchestration**
 
-Construct repair requests from deterministic failed indexes and allowlisted evidence only. Keep scene ideas and creative wording provider-generated. Do not add a new one-attempt cap, new fallback content, or new semantic rejection state. Revalidate repaired output with existing hard gates and retain the original part when repair is invalid.
+Construct repair requests from deterministic failed indexes and allowlisted evidence only. Keep scene ideas and creative wording provider-generated. Repair each `REVIEW` part once, preserve the original when repair is invalid, revalidate only hard gates, and do not add fallback content, re-Judge, semantic rejection state, or retry round.
 
 - [ ] **Step 4: Preserve sanitized failure diagnostics**
 
@@ -202,7 +202,7 @@ git add src/modules/commerce-intelligence/engine.ts src/modules/commerce-intelli
 ### Task 4: Persist policy provenance and update canonical architecture documents
 
 **Files:**
-- Create: `docs/architecture/adr-027-pipeline-deterministica-e-criatividade-delimitada.md`
+- Create: `docs/architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md`
 - Modify: `docs/architecture/SYSTEM-DESIGN.md:122-143,200-210`
 - Modify: `docs/specs/slice-003/SPEC.md:72-76,116-123,149-173`
 - Modify: `src/modules/commerce-intelligence/engine.ts:150-173`
@@ -213,7 +213,7 @@ git add src/modules/commerce-intelligence/engine.ts src/modules/commerce-intelli
 **Interfaces:**
 - `IntelligenceRun.metadata` records `planPolicyVersion`, `gatePolicyVersion`, and the existing engine/skill versions internally.
 - Creator-facing generation/history responses remain unchanged except for already-approved sanitized job, usage, cost, and diagnostic fields.
-- ADR-027 records the boundary, rejected deterministic-scene fallback, unchanged repair-round cap, and measurement criteria.
+- ADR-029 records the hybrid boundary, rejected deterministic-scene fallback, `PASS|REVIEW` semantic batching, single selective repair, no re-Judge, and measurement criteria.
 
 - [ ] **Step 1: Add failing provenance tests**
 
@@ -229,9 +229,9 @@ Expected: the new policy-version assertions fail before persistence wiring exist
 
 Add the server-derived plan policy version to `EngineResult` and the existing internal `IntelligenceRun` metadata path. Do not add provider/model/tier/raw prompt data to creator responses.
 
-- [ ] **Step 4: Write ADR-027 and align canonical slice/system documents**
+- [ ] **Step 4: Write ADR-029 and align canonical slice/system documents**
 
-Record the approved boundary: deterministic plan skeleton and gates; LLM-owned creative plan fields, briefs, scenes, and semantic judge; canonicalized redundant bullet fields; narrow repair targeting; no deterministic scene generator; no Strategy/mapping merge. Update only the affected clauses in `SYSTEM-DESIGN.md` and slice-003 `SPEC.md`; do not rewrite unrelated product or architecture sources.
+Record the approved boundary: deterministic plan skeleton and gates; LLM-owned creative plan fields, briefs, scenes, and semantic judge; canonicalized redundant bullet fields; single selective repair; no deterministic scene generator, `QUALITY_PENDING`, semantic `REJECT`, re-Judge, or Strategy/mapping merge. Update only the affected clauses in `SYSTEM-DESIGN.md` and slice-003 `SPEC.md`; do not rewrite unrelated product or architecture sources.
 
 - [ ] **Step 5: Run provenance and contract tests**
 
@@ -242,7 +242,7 @@ Expected: PASS with internal provenance retained and creator projection sanitize
 - [ ] **Step 6: Commit documentation and provenance together**
 
 ```bash
-git add docs/architecture/adr-027-pipeline-deterministica-e-criatividade-delimitada.md docs/architecture/SYSTEM-DESIGN.md docs/specs/slice-003/SPEC.md src/modules/commerce-intelligence/engine.ts src/modules/commerce-intelligence/worker.ts src/modules/commerce-intelligence/provenance.test.ts src/modules/commerce-intelligence/history-cost.test.ts
+git add docs/architecture/adr-027-publicacao-quality-pending.md docs/architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md docs/architecture/SYSTEM-DESIGN.md docs/specs/slice-003/SPEC.md src/modules/commerce-intelligence/engine.ts src/modules/commerce-intelligence/worker.ts src/modules/commerce-intelligence/provenance.test.ts src/modules/commerce-intelligence/history-cost.test.ts
 git commit -m "feat(ci): record deterministic pipeline boundary"
 ```
 
