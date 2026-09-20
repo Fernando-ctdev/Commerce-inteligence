@@ -1,7 +1,22 @@
 const CAPTAPI_URL = "https://api.captapi.com/v1/tiktok-shop/product-details";
 const ALLOWED_HOSTS = new Set(["shop.tiktok.com", "www.tiktok.com"]);
+const MAX_RESPONSE_BYTES = 1_000_000;
 
-export type CaptApiProduct = {
+export type CandidateGap =
+  | "name"
+  | "description"
+  | "category"
+  | "price"
+  | "priceCurrency"
+  | "features";
+
+export type ProductSignals = {
+  salesCount?: number;
+  ratingValue?: number;
+  reviewCount?: number;
+};
+
+export type ProductCandidate = {
   name?: string;
   description?: string;
   category?: string;
@@ -9,13 +24,11 @@ export type CaptApiProduct = {
   price?: string;
   priceCurrency?: "R$" | "USD" | "EUR";
   imageRefs: string[];
-  url: string;
+  sourceUrl: string;
   discountType?: "PERCENTAGE";
   discountValue?: string;
-};
-
-export type CaptApiCandidate = CaptApiProduct & {
-  gaps: string[];
+  gaps: CandidateGap[];
+  signals?: ProductSignals;
 };
 
 export class CaptApiImportError extends Error {
@@ -39,8 +52,20 @@ export function validateTikTokShopUrl(value: unknown): URL {
     throw new CaptApiImportError("IMPORT-URL-INVALID", "Cole uma URL pública do TikTok Shop válida.");
   }
   const host = url.hostname.toLowerCase();
-  const validProductPath = host === "shop.tiktok.com" || /^\/shop\/pdp\//i.test(url.pathname);
-  if (url.protocol !== "https:" || !ALLOWED_HOSTS.has(host) || !validProductPath) {
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+  const numericId = /^\d+$/.test(pathSegments[pathSegments.length - 1] ?? "");
+  const validViewPath = host === "shop.tiktok.com" &&
+    pathSegments.length === 3 &&
+    pathSegments[0] === "view" &&
+    pathSegments[1] === "product" &&
+    numericId;
+  const validLocalePdpPath = pathSegments.length === 4 &&
+    /^[a-z]{2}$/i.test(pathSegments[0] ?? "") &&
+    pathSegments[1]?.toLowerCase() === "pdp" &&
+    Boolean(pathSegments[2]) &&
+    numericId;
+  const validProductPath = validViewPath || validLocalePdpPath;
+  if (url.protocol !== "https:" || !ALLOWED_HOSTS.has(host) || url.username || url.password || !validProductPath) {
     throw new CaptApiImportError("IMPORT-URL-INVALID", "Use uma URL https pública do TikTok Shop.");
   }
   return url;
@@ -54,12 +79,64 @@ function nonEmpty(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function currency(value: unknown): CaptApiProduct["priceCurrency"] | null {
+function currency(value: unknown): ProductCandidate["priceCurrency"] | null {
   if (value === "BRL") return "R$";
   return value === "R$" || value === "USD" || value === "EUR" ? value : null;
 }
 
-function mapProduct(payload: unknown, submittedUrl: string): CaptApiCandidate {
+function validSignal(value: unknown, minimum: number, maximum: number, integer = false): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < minimum || value > maximum) return null;
+  return integer && !Number.isInteger(value) ? null : value;
+}
+
+function firstHttpImage(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const image = nonEmpty(value[0]);
+  if (!image) return null;
+  try {
+    const parsed = new URL(image);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? image : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readResponseBody(response: Response, controller: AbortController): Promise<string> {
+  if (!response.body) {
+    throw new CaptApiImportError("IMPORT-JSON-INVALID", "A resposta do provedor não pôde ser lida; preencha os dados manualmente.");
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > MAX_RESPONSE_BYTES) {
+        controller.abort();
+        await reader.cancel();
+        throw new CaptApiImportError("IMPORT-RESPONSE-TOO-LARGE", "A resposta do provedor é grande demais; preencha os dados manualmente.");
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof CaptApiImportError) throw error;
+    throw new CaptApiImportError("IMPORT-JSON-INVALID", "A resposta do provedor não pôde ser lida; preencha os dados manualmente.");
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+function mapProduct(payload: unknown, submittedUrl: string): ProductCandidate {
   const root = asRecord(payload);
   const data = asRecord(root?.data);
   if (asRecord(root)?.success !== true || !data) {
@@ -88,34 +165,43 @@ function mapProduct(payload: unknown, submittedUrl: string): CaptApiCandidate {
   if (discount && Number(discount[1]) > 100) {
     throw new CaptApiImportError("IMPORT-SHAPE-INCOMPLETE", "A resposta da CaptAPI contém um desconto inválido.");
   }
-  const firstImage = Array.isArray(data?.images) ? nonEmpty(data.images[0]) : null;
+  const firstImage = firstHttpImage(data?.images);
   const images = firstImage ? [firstImage] : [];
+  const salesCount = validSignal(data?.salesCount, 0, Number.MAX_SAFE_INTEGER, true);
+  const ratingValue = validSignal(data?.ratingValue, 0, 5);
+  const reviewCount = validSignal(data?.reviewCount, 0, Number.MAX_SAFE_INTEGER, true);
+  const signals = {
+    ...(salesCount === null ? {} : { salesCount }),
+    ...(ratingValue === null ? {} : { ratingValue }),
+    ...(reviewCount === null ? {} : { reviewCount }),
+  } satisfies ProductSignals;
   const gaps = [
     !name ? "name" : null,
     !description ? "description" : null,
     !category ? "category" : null,
-    !price ? "price" : null,
+    price === null ? "price" : null,
     !priceCurrency ? "priceCurrency" : null,
     features.length === 0 ? "features" : null,
-  ].filter((item): item is string => Boolean(item));
+  ].filter((item): item is CandidateGap => Boolean(item));
   return {
     ...(name ? { name } : {}),
     ...(description ? { description } : {}),
     ...(category ? { category } : {}),
     features,
-    ...(price ? { price } : {}),
+    ...(price === null ? {} : { price }),
     ...(priceCurrency ? { priceCurrency } : {}),
     imageRefs: images,
-    url: submittedUrl,
+    sourceUrl: submittedUrl,
     gaps,
     ...(discount ? { discountType: "PERCENTAGE", discountValue: discount[1] } : {}),
+    ...(Object.keys(signals).length > 0 ? { signals } : {}),
   };
 }
 
 export async function fetchCaptApiProduct(
   submittedUrl: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<CaptApiCandidate> {
+): Promise<ProductCandidate> {
   const url = validateTikTokShopUrl(submittedUrl);
   const apiKey = process.env.CAPTAPI_API_KEY?.trim();
   if (!apiKey) throw new CaptApiImportError("IMPORT-CONFIG-MISSING", "A importação automática está indisponível; preencha os dados manualmente.");
@@ -134,15 +220,7 @@ export async function fetchCaptApiProduct(
       throw new CaptApiImportError("IMPORT-PROVIDER-ERROR", "Não foi possível consultar o produto agora; você pode preencher os dados manualmente.");
     }
     let body: unknown;
-    let raw: string;
-    try {
-      raw = await response.text();
-    } catch {
-      throw new CaptApiImportError("IMPORT-JSON-INVALID", "A resposta do provedor não pôde ser lida; preencha os dados manualmente.");
-    }
-    if (raw.length > 1_000_000) {
-      throw new CaptApiImportError("IMPORT-RESPONSE-TOO-LARGE", "A resposta do provedor é grande demais; preencha os dados manualmente.");
-    }
+    const raw = await readResponseBody(response, controller);
     try {
       body = JSON.parse(raw);
     } catch {
