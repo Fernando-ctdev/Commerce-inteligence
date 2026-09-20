@@ -429,7 +429,7 @@ test("importação CaptAPI BR mapeia e persiste pelo service existente", async (
   const { token, tenantId } = await tenantOf();
   const previousKey = process.env.CAPTAPI_API_KEY;
   const previousFetch = globalThis.fetch;
-  process.env.CAPTAPI_API_KEY = "test-only-key";
+  process.env.CAPTAPI_API_KEY = "configured";
   globalThis.fetch = async () => new Response(JSON.stringify({
     success: true,
     data: {
@@ -463,6 +463,69 @@ test("importação CaptAPI BR mapeia e persiste pelo service existente", async (
     assert.deepEqual(product?.features, ["Preto", "Eletrônicos"]);
     assert.equal(product?.submittedUrl, "https://shop.tiktok.com/br/pdp/tripe/1735872517465343013");
     assert.deepEqual(product?.provenance, { origin: "captapi" });
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.CAPTAPI_API_KEY; else process.env.CAPTAPI_API_KEY = previousKey;
+  }
+});
+
+test("importação parcial devolve candidato editável e só persiste após completar o preço", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+  const previousKey = process.env.CAPTAPI_API_KEY;
+  const previousFetch = globalThis.fetch;
+  process.env.CAPTAPI_API_KEY = "configured";
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    success: true,
+    data: {
+      title: "Tripé retrátil para celular",
+      description: "Tripé com luz LED e Bluetooth.",
+      price: null,
+      currency: "BRL",
+      categories: [{ name: "Eletrônicos" }],
+      saleProperties: [{ values: [{ name: "Preto" }] }],
+      images: Array.from({ length: 8 }, (_, index) => `https://cdn.example/image-${index}.jpg`),
+    },
+  }), { status: 200, headers: { "content-type": "application/json" } });
+  const importedUrl = "https://shop.tiktok.com/br/pdp/tripe/1735872517465343013";
+  try {
+    const res = await handleImportProduct(new Request(`${ORIGIN}/api/products/import`, {
+      method: "POST",
+      headers: {
+        origin: ORIGIN,
+        "sec-fetch-site": "same-origin",
+        cookie: `${SESSION_COOKIE}=${token}`,
+        "idempotency-key": "captapi-partial-test-key",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ url: importedUrl }),
+    }));
+    assert.equal(res.status, 200);
+    const body = await res.json() as {
+      candidate: { name?: string; price?: string; imageRefs: string[]; features: string[] };
+      partial: boolean;
+    };
+    assert.equal(body.partial, true);
+    assert.equal(body.candidate.name, "Tripé retrátil para celular");
+    assert.equal(body.candidate.price, undefined);
+    assert.deepEqual(body.candidate.imageRefs, ["https://cdn.example/image-0.jpg"]);
+    assert.deepEqual(body.candidate.features, ["Preto", "Eletrônicos"]);
+    assert.equal(await prisma.product.count({ where: { tenantId } }), 0);
+
+    const saved = await handleCreateProduct(post(token, {
+      name: body.candidate.name,
+      description: "Tripé com luz LED e Bluetooth.",
+      category: "Eletrônicos",
+      price: "89,90",
+      priceCurrency: "R$",
+      features: body.candidate.features,
+      imageRefs: body.candidate.imageRefs,
+      url: importedUrl,
+    }, "manual-completion-after-partial"));
+    assert.equal(saved.status, 200);
+    const row = await prisma.product.findFirst({ where: { tenantId } });
+    assert.equal(row?.priceAmount?.toString(), "89.9");
+    assert.deepEqual(row?.images, ["https://cdn.example/image-0.jpg"]);
   } finally {
     globalThis.fetch = previousFetch;
     if (previousKey === undefined) delete process.env.CAPTAPI_API_KEY; else process.env.CAPTAPI_API_KEY = previousKey;

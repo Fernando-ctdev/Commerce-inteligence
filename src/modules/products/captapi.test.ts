@@ -7,7 +7,7 @@ const response = (body: unknown, status = 200) => new Response(JSON.stringify(bo
 
 test("mapeia produto BR da CaptAPI sem expor segredo e envia região", async () => {
   const previous = process.env.CAPTAPI_API_KEY;
-  process.env.CAPTAPI_API_KEY = "test-only-key";
+  process.env.CAPTAPI_API_KEY = "configured";
   let requested: URL | undefined;
   let authorization = "";
   try {
@@ -18,8 +18,8 @@ test("mapeia produto BR da CaptAPI sem expor segredo e envia região", async () 
     });
     assert.equal(requested?.searchParams.get("region"), "BR");
     assert.equal(requested?.searchParams.get("url"), productUrl);
-    assert.equal(authorization, "Bearer test-only-key");
-    assert.deepEqual(product, { name: "Tripé", description: "Tripé retrátil", category: "Eletrônicos", features: ["Preto", "Eletrônicos"], price: "39.9", priceCurrency: "R$", imageRefs: ["https://cdn.example/image.jpg"], url: productUrl, discountType: "PERCENTAGE", discountValue: "10" });
+    assert.equal(authorization, "Bearer configured");
+    assert.deepEqual(product, { name: "Tripé", description: "Tripé retrátil", category: "Eletrônicos", features: ["Preto", "Eletrônicos"], price: "39.9", priceCurrency: "R$", imageRefs: ["https://cdn.example/image.jpg"], url: productUrl, gaps: [], discountType: "PERCENTAGE", discountValue: "10" });
   } finally {
     if (previous === undefined) delete process.env.CAPTAPI_API_KEY; else process.env.CAPTAPI_API_KEY = previous;
   }
@@ -27,10 +27,15 @@ test("mapeia produto BR da CaptAPI sem expor segredo e envia região", async () 
 
 test("falhas da CaptAPI são recuperáveis e não fazem nova tentativa escondida", async () => {
   const previous = process.env.CAPTAPI_API_KEY;
-  process.env.CAPTAPI_API_KEY = "test-only-key";
+  process.env.CAPTAPI_API_KEY = "configured";
   try {
     await assert.rejects(() => fetchCaptApiProduct("https://example.com/pdp/1", async () => response({})), { code: "IMPORT-URL-INVALID" });
-    await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => response({ success: true, data: { title: "Sem preço" } })), { code: "IMPORT-SHAPE-INCOMPLETE" });
+    const partial = await fetchCaptApiProduct(productUrl, async () => response({ success: true, data: { title: "Sem preço", images: Array.from({ length: 8 }, (_, index) => `https://cdn.example/image-${index}.jpg`) } }));
+    assert.equal(partial.name, "Sem preço");
+    assert.equal(partial.price, undefined);
+    assert.deepEqual(partial.imageRefs, ["https://cdn.example/image-0.jpg"]);
+    assert.ok(partial.gaps.includes("price"));
+    await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => response({ success: true })), { code: "IMPORT-SHAPE-INCOMPLETE" });
     await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => response({ success: true, data: { title: "Produto", description: "Descrição", price: 10, currency: "BRL", categories: [{ name: "Categoria" }], discount: "101%" } })), { code: "IMPORT-SHAPE-INCOMPLETE" });
     await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => ({ ok: true, text: async () => { throw new Error("invalid json"); } } as unknown as Response)), { code: "IMPORT-JSON-INVALID" });
     await assert.rejects(() => fetchCaptApiProduct(productUrl, async () => response({}, 503)), { code: "IMPORT-PROVIDER-ERROR" });

@@ -845,6 +845,29 @@ export function ProductCreateForm({
       const key = importIdempotencyKey.current ?? createIdempotencyKey();
       importIdempotencyKey.current = key;
       const result = await importProduct(url, key);
+      if ("candidate" in result) {
+        const candidate = result.candidate;
+        const imageReferences = candidate.imageRefs.join("\n");
+        setDraft((current) => ({
+          ...current,
+          name: candidate.name ?? "",
+          description: candidate.description ?? "",
+          category: candidate.category ?? "",
+          price: candidate.price ?? "",
+          currency: candidate.priceCurrency ?? "",
+          characteristics: candidate.features.join("\n"),
+          imageReferences,
+          url: candidate.url,
+        }));
+        setImageLinksInput(imageReferences);
+        setUploadedImages([]);
+        setSelectedImage(null);
+        setValidationVisible(false);
+        setFormStep("facts");
+        importIdempotencyKey.current = undefined;
+        toast.success("Dados importados. Complete os campos obrigatórios antes de salvar.");
+        return;
+      }
       toast.success("Produto importado.");
       importIdempotencyKey.current = undefined;
       router.push(`/products/${result.id}`);

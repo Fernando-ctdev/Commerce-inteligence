@@ -2,16 +2,20 @@ const CAPTAPI_URL = "https://api.captapi.com/v1/tiktok-shop/product-details";
 const ALLOWED_HOSTS = new Set(["shop.tiktok.com", "www.tiktok.com"]);
 
 export type CaptApiProduct = {
-  name: string;
-  description: string;
-  category: string;
+  name?: string;
+  description?: string;
+  category?: string;
   features: string[];
-  price: string;
-  priceCurrency: "R$" | "USD" | "EUR";
+  price?: string;
+  priceCurrency?: "R$" | "USD" | "EUR";
   imageRefs: string[];
   url: string;
   discountType?: "PERCENTAGE";
   discountValue?: string;
+};
+
+export type CaptApiCandidate = CaptApiProduct & {
+  gaps: string[];
 };
 
 export class CaptApiImportError extends Error {
@@ -55,9 +59,12 @@ function currency(value: unknown): CaptApiProduct["priceCurrency"] | null {
   return value === "R$" || value === "USD" || value === "EUR" ? value : null;
 }
 
-function mapProduct(payload: unknown, submittedUrl: string): CaptApiProduct {
+function mapProduct(payload: unknown, submittedUrl: string): CaptApiCandidate {
   const root = asRecord(payload);
   const data = asRecord(root?.data);
+  if (asRecord(root)?.success !== true || !data) {
+    throw new CaptApiImportError("IMPORT-SHAPE-INCOMPLETE", "A resposta da CaptAPI não contém dados utilizáveis do produto.");
+  }
   const name = nonEmpty(data?.title);
   const description = nonEmpty(data?.description);
   const price = typeof data?.price === "number" && Number.isFinite(data.price) && data.price >= 0
@@ -77,25 +84,30 @@ function mapProduct(payload: unknown, submittedUrl: string): CaptApiProduct {
     : [];
   const category = categories[0] ?? null;
   const features = [...new Set([...saleProperties, ...categories])].slice(0, 30);
-  if (!name || !description || !price || !priceCurrency || !category || features.length === 0) {
-    throw new CaptApiImportError("IMPORT-SHAPE-INCOMPLETE", "A resposta da CaptAPI não contém os fatos mínimos do produto.");
-  }
   const discount = /^\s*(\d+(?:\.\d+)?)\s*%\s*$/.exec(nonEmpty(data?.discount) ?? "");
   if (discount && Number(discount[1]) > 100) {
     throw new CaptApiImportError("IMPORT-SHAPE-INCOMPLETE", "A resposta da CaptAPI contém um desconto inválido.");
   }
-  const images = Array.isArray(data?.images)
-    ? data.images.map(nonEmpty).filter((item): item is string => Boolean(item)).slice(0, 6)
-    : [];
+  const firstImage = Array.isArray(data?.images) ? nonEmpty(data.images[0]) : null;
+  const images = firstImage ? [firstImage] : [];
+  const gaps = [
+    !name ? "name" : null,
+    !description ? "description" : null,
+    !category ? "category" : null,
+    !price ? "price" : null,
+    !priceCurrency ? "priceCurrency" : null,
+    features.length === 0 ? "features" : null,
+  ].filter((item): item is string => Boolean(item));
   return {
-    name,
-    description,
-    category,
+    ...(name ? { name } : {}),
+    ...(description ? { description } : {}),
+    ...(category ? { category } : {}),
     features,
-    price,
-    priceCurrency,
+    ...(price ? { price } : {}),
+    ...(priceCurrency ? { priceCurrency } : {}),
     imageRefs: images,
     url: submittedUrl,
+    gaps,
     ...(discount ? { discountType: "PERCENTAGE", discountValue: discount[1] } : {}),
   };
 }
@@ -103,7 +115,7 @@ function mapProduct(payload: unknown, submittedUrl: string): CaptApiProduct {
 export async function fetchCaptApiProduct(
   submittedUrl: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<CaptApiProduct> {
+): Promise<CaptApiCandidate> {
   const url = validateTikTokShopUrl(submittedUrl);
   const apiKey = process.env.CAPTAPI_API_KEY?.trim();
   if (!apiKey) throw new CaptApiImportError("IMPORT-CONFIG-MISSING", "A importação automática está indisponível; preencha os dados manualmente.");
