@@ -462,3 +462,17 @@ test("desconto fixo usa moeda do produto e vai tipado no payload", () => {
     { discountType: "FIXED", discountValue: "5,00" },
   );
 });
+
+test("payload manual nunca carrega metadados de importação, provenância forjada nem atributos legados", () => {
+  const payload = buildManualProductPayload(
+    { ...emptyProductDraft(), name: "P", description: "D", category: "C", price: "89.90", currency: "R$", characteristics: "x", imageReferences: "https://img/1.jpg\nhttps://img/2.jpg" },
+    { targetContentCount: 1, creatorPresence: "either" },
+    "chave",
+  );
+  for (const forbidden of ["candidate", "gaps", "signals", "seller", "variants", "rawPayload", "sourceUrl", "provenanceOrigin"] as const) {
+    assert.equal(forbidden in payload, false, `payload não deve conter ${forbidden}`);
+  }
+  // O payload carrega exatamente as linhas do draft; a regra de primeira
+  // imagem vive no merge do candidato (product-import-model.test).
+  assert.deepEqual(payload.imageRefs, ["https://img/1.jpg", "https://img/2.jpg"]);
+});
