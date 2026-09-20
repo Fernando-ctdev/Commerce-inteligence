@@ -394,6 +394,22 @@ test("abort externo (fencing) nunca cai em fallback", async () => {
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test("sinal já abortado não inicia chamada nem fallback", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return okResponse();
+  }) as typeof fetch;
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "balanced-model", HIGH: "quality-model" }, timeoutMs: 5000 });
+  const controller = new AbortController();
+  controller.abort();
+  try {
+    await assert.rejects(provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} }, controller.signal), (error: GenerationError) => error.code === "GEN-PROVIDER");
+    assert.equal(calls, 0);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("GEN-SCHEMA e tarefa HIGH nunca caem em fallback; modelo repetido não re-solicita", async () => {
   // GEN-SCHEMA: conteúdo sem contrato JSON não re-solicita.
   const schemaModels: string[] = [];

@@ -415,6 +415,7 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
     endpoint: string,
     failure?: Partial<FallbackFailure>,
   ): Promise<unknown> => {
+    if (signal?.aborted) throw new DOMException("aborted", "AbortError");
     const endpointOrigin = new URL(endpoint).origin;
     const startedAt = Date.now();
     const controller = new AbortController();
@@ -723,6 +724,7 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
       signal?: AbortSignal,
       onMetrics?: (metrics: ProviderCallMetrics) => void,
     ): Promise<unknown> {
+      if (signal?.aborted) throw new GenerationError("GEN-PROVIDER", "Operação abortada");
       const base = config.baseUrl;
       if (
         !base ||

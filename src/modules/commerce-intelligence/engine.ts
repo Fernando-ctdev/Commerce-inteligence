@@ -485,14 +485,18 @@ export async function generateSceneSetsForBriefs(params: {
   track: TrackFn;
   backfilled: boolean;
 }): Promise<SceneSetOutcome[]> {
-  const outcomes: SceneSetOutcome[] = [];
+  const outcomes: SceneSetOutcome[] = new Array(params.briefs.length);
+  let nextIndex = 0;
   // Feedback determinístico do gateSceneSet para o retry guiado (ADR-020):
   // requisitos são os MESMOS predicados do gate — nunca critério novo.
   const sceneGateFeedback = (causes: string[]): string => {
     const summary = causes.length ? causes.join(", ") : "set descartado";
     return `O conjunto anterior de cenas foi integralmente descartado pelo gate estrutural (motivos: ${summary}). Cada cena deve: começar com verbo de ação observável (mostre, pegue, vire, abra, calce, teste, compare); citar nominalmente o produto ou parte/objeto citado no briefing (ancora lexical); usar somente fatos de relevantFacts, sem claim objetivo sem suporte; ser gravavel por creator sozinho com celular.`;
   };
-  for (const brief of params.briefs) {
+  const generateForBrief = async (
+    brief: (typeof params.briefs)[number],
+    index: number,
+  ): Promise<void> => {
     const empty: SceneSetOutcome = {
       contentId: brief.contentId,
       briefVersionId: brief.briefVersionId,
@@ -503,8 +507,8 @@ export async function generateSceneSetsForBriefs(params: {
       backfilled: params.backfilled,
     };
     if (!params.router) {
-      outcomes.push(empty);
-      continue;
+      outcomes[index] = empty;
+      return;
     }
     const sceneContext = {
       productId: params.productId,
@@ -590,11 +594,21 @@ export async function generateSceneSetsForBriefs(params: {
           errorCode: String(error instanceof GenerationError || error instanceof ContractError ? error.code : "GEN-PROVIDER").slice(0, 100),
           durationMs: Date.now() - attemptStartedAt,
         });
+        if (params.signal?.aborted) throw error;
         if (sceneAttempt === 1) outcome = { ...empty, attempts };
       }
     }
-    outcomes.push(outcome ?? empty);
-  }
+    outcomes[index] = outcome ?? empty;
+  };
+  const worker = async (): Promise<void> => {
+    while (nextIndex < params.briefs.length) {
+      const index = nextIndex++;
+      await generateForBrief(params.briefs[index]!, index);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(2, params.briefs.length) }, () => worker()),
+  );
   return outcomes;
 }
 // Catálogo autorizado de evidências com ids estáveis fornecidos ao provider (não IDs inventados).
