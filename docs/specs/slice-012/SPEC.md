@@ -1,6 +1,6 @@
 # SPEC — Slice 012: Entrada de Product por URL via CaptAPI HTTP
 
-**Status:** Pendente — documentação para revisão; sem PLAN e sem implementação
+**Status:** Implementado
 **Dependência:** Slice 002; o Product confirmado segue a fronteira do Slice 003
 **ADR:** ADR-027 (integração CaptAPI) e ADR-028 (contrato do Slice 012; ADR-022 deixa de governar este fluxo)
 **Domain Areas:** Product, Product Import, Identity/Tenant
@@ -126,8 +126,10 @@ demais campos seguem suas regras atuais.
 
 O POST manual recebe somente os campos do contrato manual. `signals`, gaps,
 payload bruto da CaptAPI e atributos não suportados não são enviados nem
-persistidos. A proveniência pode registrar `captapi` no mecanismo já existente,
-sem criar uma tabela de Candidate ou alterar o schema neste slice.
+persistidos. O cliente não envia `provenanceOrigin` e não pode forjar a origem:
+`sourceUrl`/`submittedUrl` podem ser mantidos como URLs do fluxo, enquanto o
+service manual permanece gravando `origin: manual`, sem criar uma tabela de
+Candidate ou alterar o schema neste slice.
 
 ## Fallback manual e erros
 
