@@ -1,7 +1,24 @@
 import { createManualProduct, findTenantProductByIdempotencyKey, isValidIdempotencyKey } from "./service";
-import { CaptApiImportError, fetchCaptApiProduct, validateTikTokShopUrl } from "./captapi";
+import { CaptApiImportError, fetchCaptApiProduct, validateTikTokShopUrl, type CaptApiProduct } from "./captapi";
 import { SESSION_COOKIE, json, readCookie, readJsonBody, sameOriginRequest } from "../identity/http";
 import { resolveSession } from "../identity/service";
+
+function hasCompleteProductFacts(product: CaptApiProduct): product is CaptApiProduct & {
+  name: string;
+  description: string;
+  category: string;
+  price: string;
+  priceCurrency: "R$" | "USD" | "EUR";
+} {
+  return Boolean(
+    product.name &&
+      product.description &&
+      product.category &&
+      product.price &&
+      product.priceCurrency &&
+      product.features.length > 0,
+  );
+}
 
 export async function handleImportProduct(req: Request): Promise<Response> {
   if (!sameOriginRequest(req)) return json(403, { error: "Origem não permitida." });
@@ -20,6 +37,17 @@ export async function handleImportProduct(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ id: existing.id, version: existing.version, replay: true }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
     }
     const imported = await fetchCaptApiProduct(submittedUrl);
+    if (!hasCompleteProductFacts(imported) || imported.gaps.length > 0) {
+      return new Response(JSON.stringify({
+        candidate: imported,
+        partial: true,
+        gaps: imported.gaps,
+        message: "Confira os dados importados e complete os campos obrigatórios antes de salvar.",
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      });
+    }
     const result = await createManualProduct(session.tenantId, {
       name: imported.name,
       description: imported.description,

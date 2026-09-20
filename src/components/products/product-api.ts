@@ -38,6 +38,20 @@ export type ProductMutation = {
   version: number;
   replay?: boolean;
 };
+export type ProductImportCandidate = {
+  name?: string;
+  description?: string;
+  category?: string;
+  price?: string;
+  priceCurrency?: string;
+  features: string[];
+  imageRefs: string[];
+  url: string;
+  gaps: string[];
+};
+export type ProductImportResult =
+  | ProductMutation
+  | { candidate: ProductImportCandidate; partial: true; gaps: string[]; message: string };
 export type ServerFieldErrors = ProductFieldErrors &
   Partial<
     Record<
@@ -325,13 +339,42 @@ export async function createProduct(payload: ProductPayload) {
 }
 
 export async function importProduct(url: string, idempotencyKey: string) {
-  return mutationFromResponse(
-    await request<unknown>("/api/products/import", {
-      method: "POST",
-      headers: { "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify({ url }),
-    }),
-  );
+  const data = await request<unknown>("/api/products/import", {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify({ url }),
+  });
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "candidate" in data &&
+    typeof (data as { candidate?: unknown }).candidate === "object" &&
+    (data as { candidate?: unknown }).candidate !== null
+  ) {
+    const responseRecord = data as Record<string, unknown>;
+    const record = responseRecord.candidate as Record<string, unknown>;
+    return {
+      candidate: {
+        ...(typeof record.name === "string" ? { name: record.name } : {}),
+        ...(typeof record.description === "string" ? { description: record.description } : {}),
+        ...(typeof record.category === "string" ? { category: record.category } : {}),
+        ...(typeof record.price === "string" ? { price: record.price } : {}),
+        ...(typeof record.priceCurrency === "string" ? { priceCurrency: record.priceCurrency } : {}),
+        features: Array.isArray(record.features) ? record.features.filter((item): item is string => typeof item === "string") : [],
+        imageRefs: Array.isArray(record.imageRefs) ? record.imageRefs.filter((item): item is string => typeof item === "string") : [],
+        url: typeof record.url === "string" ? record.url : url,
+        gaps: Array.isArray(record.gaps) ? record.gaps.filter((item): item is string => typeof item === "string") : [],
+      },
+      partial: true as const,
+      gaps: Array.isArray(responseRecord.gaps)
+        ? (responseRecord.gaps as unknown[]).filter((item): item is string => typeof item === "string")
+        : [],
+      message: typeof responseRecord.message === "string"
+        ? responseRecord.message
+        : "Confira os dados importados antes de salvar.",
+    };
+  }
+  return mutationFromResponse(data);
 }
 
 export async function updateProduct(id: string, payload: ProductPayload) {
