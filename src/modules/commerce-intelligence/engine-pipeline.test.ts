@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseStructuredBriefDraft, runFirstGeneration } from "./engine";
+import { buildEvidenceCatalog, generateSceneSetsForBriefs, parseStructuredBriefDraft, runFirstGeneration } from "./engine";
 import { validateBriefSet } from "./gates";
 import { ContractError } from "./contract";
 import { loadPlatformSkill } from "./platform-skill";
@@ -423,6 +423,103 @@ test("scenes observabilidade: capability.completed de CONTENT_SCENE_IDEAS carreg
   assert.equal(completed.length, 1);
   assert.equal(completed[0].kept, 2, "ambas as cenas do fixture passam no gateSceneSet");
   assert.equal(completed[0].dropped, 0);
+});
+
+test("scenes usam no máximo duas chamadas simultâneas, preservam ordem e isolam falha", async () => {
+  let active = 0;
+  let maxActive = 0;
+  const calls: string[] = [];
+  const briefs = ["h1", "h2", "h3"].map((hook, index) => ({
+    contentId: `c${index + 1}`,
+    briefVersionId: `b${index + 1}`,
+    angle: "demonstração",
+    hook,
+    development: ["Destaque o produto para explicar o produto no uso", "Destaque o produto para explicar o produto no uso"],
+    script: "Mostre o Produto",
+    cta: "Confira o produto.",
+  }));
+  const router = {
+    describe,
+    complete: async (task: string, input?: { trustedContext?: unknown }) => {
+      assert.equal(task, "CONTENT_SCENE_IDEAS");
+      const hook = String(recordOf(recordOf(input?.trustedContext)?.brief)?.hook);
+      calls.push(hook);
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, hook === "h1" ? 25 : 5));
+      active -= 1;
+      if (hook === "h2") throw new Error("scene provider failure");
+      return { scenes: [{ description: `Mostre o Produto em ${hook}` }, { description: `Pegue o Produto em ${hook}` }] };
+    },
+  };
+  const track = async <T, R = T>(
+    _task: string,
+    _context: unknown,
+    run: () => Promise<T>,
+    validate?: (output: T) => R,
+  ): Promise<R> => validate ? validate(await run()) : await run() as unknown as R;
+  const outcomes = await generateSceneSetsForBriefs({
+    jobId: "job",
+    productId: "product",
+    briefs,
+    evidence: buildEvidenceCatalog({ name: "Produto", description: "Produto para uso" }),
+    creatorContext: {},
+    router,
+    skill: loadPlatformSkill(),
+    attempt: 1,
+    track,
+    backfilled: false,
+  });
+
+  assert.equal(maxActive, 2);
+  assert.deepEqual(calls, ["h1", "h2", "h2", "h3"]);
+  assert.deepEqual(outcomes.map(({ contentId, status }) => ({ contentId, status })), [
+    { contentId: "c1", status: "AVAILABLE" },
+    { contentId: "c2", status: "ERROR" },
+    { contentId: "c3", status: "AVAILABLE" },
+  ]);
+});
+
+test("scenes não repetem a tentativa após abort durante a primeira chamada", async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  const router = {
+    describe,
+    complete: async () => {
+      calls += 1;
+      controller.abort();
+      throw new DOMException("aborted", "AbortError");
+    },
+  };
+  const track = async <T, R = T>(
+    _task: string,
+    _context: unknown,
+    run: () => Promise<T>,
+    validate?: (output: T) => R,
+  ): Promise<R> => validate ? validate(await run()) : await run() as unknown as R;
+
+  await assert.rejects(() => generateSceneSetsForBriefs({
+    jobId: "job-abort",
+    productId: "product",
+    briefs: [{
+      contentId: "c1",
+      briefVersionId: "b1",
+      angle: "demonstração",
+      hook: "h1",
+      development: ["Destaque o produto para explicar o produto no uso", "Destaque o produto para explicar o produto no uso"],
+      script: "Mostre o Produto",
+      cta: "Confira o produto.",
+    }],
+    evidence: buildEvidenceCatalog({ name: "Produto", description: "Produto para uso" }),
+    creatorContext: {},
+    router,
+    skill: loadPlatformSkill(),
+    signal: controller.signal,
+    attempt: 1,
+    track,
+    backfilled: false,
+  }));
+  assert.equal(calls, 1, "abort não inicia a segunda tentativa");
 });
 
 // Gate 7 — retry guiado por gate: set inteiramente descartado re-solicita UMA vez

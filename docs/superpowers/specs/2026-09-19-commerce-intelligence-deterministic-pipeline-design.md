@@ -1,8 +1,8 @@
 # Commerce Intelligence Deterministic Pipeline Design
 
-**Status:** Draft for user review  
+**Status:** Approved
 **Date:** 2026-09-19  
-**Decision source:** current product discussion; this draft takes precedence over earlier alternatives discussed in this thread.
+**Decision source:** ADR-029.
 
 ## Goal
 
@@ -18,7 +18,7 @@ The current pipeline asks the provider to decide deterministic concerns such as 
 2. **Creative by intent:** product interpretation, commercial opportunities, strategy, angles, core messages, hooks, DevelopmentBullet text, CTA wording, scripts, scene ideas, and semantic variation remain LLM responsibilities.
 3. **No fabricated content:** deterministic code may select, validate, normalize, or reject known facts and approved patterns; it may not invent product claims, evidence links, or creative scenes.
 4. **Quality is layered:** hard gates remain authoritative for factual, structural, and variety constraints; the semantic judge remains responsible for naturalness, coherence, creator fit, and editorial quality.
-5. **Narrow repair:** only the failed bullet or part is repaired; passing parts remain untouched. The existing bounded retry policy remains until measured evidence justifies changing its cap.
+5. **Narrow repair:** only a `REVIEW` bullet or part is repaired once; passing parts remain untouched and an invalid repair preserves the original part. There is no re-judge.
 6. **Traceability:** every plan slot, pattern selection, gate result, repair, and published item is reproducible from versioned inputs and server-derived IDs.
 
 ## Target flow
@@ -32,7 +32,7 @@ Product facts + creator context + memory
   -> Scene Ideas per content (LLM)
   -> Hard gates: facts, structure, CTA, connectors, cardinality, variety, scenes
   -> Semantic Quality Judge in bounded batches (LLM)
-  -> Selective repair of failed bullet/part only (LLM, existing bounded policy)
+  -> Single selective repair of `REVIEW` bullet/part only (LLM)
   -> Hard-gate revalidation
   -> Persist DRAFT contents, diagnostics, usage, and cost
 ```
@@ -54,7 +54,7 @@ Product facts + creator context + memory
 - Reject or normalize server-owned fields; derive redundant structural metadata such as action/rationale from approved text when the contract permits it.
 - Enforce evidence authorization, CTA actionability, connectors, cardinality, schema, ordering, duplicate prevention, and batch identity.
 - Validate scene feasibility, uniqueness, creator constraints, and unsupported claims without generating creative staging.
-- Preserve passing parts unchanged; select repair targets; keep the existing bounded retry policy; decide `SUCCEEDED`, `SUCCEEDED_PARTIAL`, or `FAILED`.
+- Preserve passing parts unchanged; select repair targets; perform one repair per `REVIEW` part; decide `SUCCEEDED`, `SUCCEEDED_PARTIAL`, or `FAILED` from final hard gates.
 - Persist versioned provenance, diagnostics, usage, and cost without exposing provider metadata to creators.
 
 ## Creative preservation
@@ -66,9 +66,9 @@ Scene ideas remain LLM-generated because visual staging is creative and a determ
 - Hard gates run before semantic judging.
 - The judge evaluates all eligible contents in bounded homogeneous batches and returns per-content/per-part decisions.
 - Only failed bullets/parts enter repair; passing parts are not regenerated.
-- Repair remains bounded by the existing policy; this design narrows the repair unit but does not introduce a new one-attempt cap without evidence.
-- Repair output is revalidated by deterministic gates; no broad repair request is sent for a narrow failure.
-- If a repair remains invalid, the existing declared partial/failure contract applies. Invalid content is never silently fabricated or published.
+- Each `REVIEW` bullet/part receives one repair attempt; passing parts are not regenerated.
+- Repair output is revalidated by deterministic gates; invalid or unappliable repair preserves the original part. No re-judge loop is introduced.
+- If final hard gates fail, the existing declared partial/failure contract applies. Invalid or unsupported content is never silently fabricated or published.
 
 ## Expected impact
 
@@ -84,8 +84,8 @@ Scene ideas remain LLM-generated because visual staging is creative and a determ
 - Deterministic plan skeleton and variety assignment over eligible buckets.
 - LLM-owned creative plan fields and scene ideation with deterministic validation.
 - Deterministic gates, server-derived fields, evidence authorization, and repair targeting.
-- Existing bounded repair policy applied only to failed bullets/parts.
-- Batched semantic judging where the current contract supports it.
+- Single selective repair per `REVIEW` bullet/part, preserving the original on invalid repair.
+- Batched semantic judging with one initial `PASS|REVIEW` evaluation and no re-judge.
 - Versioned provenance, diagnostics, cost, and latency for comparison.
 
 ### Excluded from this decision
@@ -93,7 +93,7 @@ Scene ideas remain LLM-generated because visual staging is creative and a determ
 - Removing `PRODUCT_UNDERSTANDING` before typed product import exists.
 - Removing `CONTENT_BRIEF_GENERATION`, `CONTENT_SCENE_IDEAS`, or semantic quality judging.
 - A deterministic scene-pattern catalog or deterministic scene fallback.
-- Changing the existing repair-round cap without measured evidence.
+- Changing the one-repair semantic contract, adding a re-judge, or adding a semantic `REJECT`.
 - Merging `STRATEGY_SYNTHESIS` into opportunity mapping; that is a later contract change.
 - New providers, commercial-tier quality differences, embeddings, or a new UI workflow.
 
@@ -104,7 +104,7 @@ Scene ideas remain LLM-generated because visual staging is creative and a determ
 3. Keep structured `DevelopmentBullet[]`, with server validation/derivation of redundant fields.
 4. Move evidence authorization, objective validation, and repair-target selection into server gates.
 5. Keep scene ideation creative and add only deterministic validation/uniqueness checks.
-6. Preserve the current bounded repair policy, narrowing requests to failed bullets/parts.
+6. Repair only `REVIEW` bullets/parts once, preserve originals on invalid repair, and revalidate hard gates without re-judging.
 7. Compare baseline and new runs by success rate, delivered count, fact grounding, CTA validity, hook variety, scene quality, semantic quality, cost, latency, and repair count before changing defaults.
 
 ## Acceptance criteria for the implementation plan
@@ -115,7 +115,7 @@ Scene ideas remain LLM-generated because visual staging is creative and a determ
 - Every `factRef` is proposed by the model and authorized by deterministic validation before publication.
 - Redundant structural fields are derived or canonicalized where the contract permits; duplicate model-authored fields do not create avoidable schema failures.
 - No passing bullet/part is sent to repair.
-- The existing bounded repair policy remains explicit and narrow; no new cap is introduced without evidence.
+- Every `REVIEW` part is repaired at most once; invalid repair preserves the original and no re-judge occurs.
 - Invalid or unsupported content is rejected or declared partial; it is never silently fabricated.
 - The system records enough per-capability usage/cost/latency data to compare the old and new paths.
 - The creator-facing surface exposes only sanitized job state, diagnostics, usage, and cost.
@@ -124,5 +124,5 @@ Scene ideas remain LLM-generated because visual staging is creative and a determ
 
 1. Exact deterministic plan-skeleton interface and versioning location.
 2. Which redundant `DevelopmentBullet` fields are canonicalized from `text` in the first cut.
-3. The existing repair-round cap to preserve during migration.
+3. No semantic retry cap is open: the contract is one repair per `REVIEW` part, without re-judge.
 4. Whether `STRATEGY_SYNTHESIS` remains separate after the first measured release.
