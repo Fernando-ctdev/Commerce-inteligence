@@ -14,8 +14,8 @@ O smoke QA3 do Duna provou dois defeitos com o desenho então vigente: (1) dois 
 2. **Hook não troca mecanismo silenciosamente (blocker do Arquiteto):** o pool deliverable do bucket do `hookMechanism` planejado vazio → **`GEN-PATTERN` antes da LLM** (zero chamadas de briefing) — sem hook de outro bucket.
 3. **CTA pode rotacionar entre funções deliverable:** quando o pattern que a rotação ADR-019 escolheria não é deliverable, substitui pelo primeiro deliverable do MESMO bucket (bucket inteiro não-deliverable → bucket deliverable seguinte em ordem estável) e registra `patternReplacements` no `EngineResult`/`IntelligenceRun` — somente `{field: 'cta'|'hook', replacedWithId, reason}`, **nunca texto original ou conteúdo bruto**. Cap de variedade funcional do gate permanece sobre o catálogo; a seleção recalcula a rotação sobre o pool deliverable.
 4. Sem NENHUM pattern deliverable no catálogo → **`GEN-PATTERN`** (novo code do union `ContractError`) antes de chamar o provider — fail-closed, sem fabricar fallback.
-5. **`CONTENT_BRIEF_REPAIR`** — nova logical task, tier **HIGH**, fora da cadeia de fallback de disponibilidade. Repair **per-item**: uma oportunidade por chamada, saída de exatamente 1 BriefDraft (root JSON com angle/hook/development/script/cta), contexto allowlisted (oportunidade, relevantFacts, selectedPattern seguro, issues, `repairChecklist` booleano, `siblingSummary` determinístico), `repairChecklist` vinculante, instruction própria (reasoning high). Substituição por índice, **exact-N** preservado, máximo **2 rounds globais**, revalidação do **conjunto inteiro** (incl. variedade) ao fim de cada round. Item cujo repair falha não substitui naquele round (telemetria `capability.failed` do próprio item); persistindo a reprovação, `GEN-REPAIR-EXHAUSTED` com resumo sanitizado — nunca sucesso parcial.
-6. **Budget:** deadline da tentativa inclui o pior caso de repair (2 rounds × N × provider timeout) em `attemptDeadlineMsFor`.
+5. **`CONTENT_BRIEF_REPAIR`** — nova logical task, tier **HIGH**, fora da cadeia de fallback de disponibilidade. É o `Hard Gate Repair`: per-item, uma oportunidade por chamada, saída de exatamente 1 BriefDraft (root JSON com angle/hook/development/script/cta), contexto allowlisted (oportunidade, relevantFacts, selectedPattern seguro, issues, `repairChecklist` booleano, `siblingSummary` determinístico), `repairChecklist` vinculante e substituição por índice com exact-N preservado. O máximo é `GENERATION_MAX_REPAIRS` rounds globais (default atual `2`), com revalidação do conjunto inteiro, inclusive variedade, ao fim de cada round. Item cujo repair falha não substitui naquele round; persistindo a reprovação, a falha objetiva segue ADR-021.
+6. **Budget:** deadline da tentativa inclui o pior caso de `GENERATION_MAX_REPAIRS × N × provider timeout`; o valor default atual é `2`.
 7. Sem feature flag: rollback = revert do commit, sem migration.
 
 ## Alternativas consideradas
@@ -32,7 +32,7 @@ O smoke QA3 do Duna provou dois defeitos com o desenho então vigente: (1) dois 
 ## Consequências
 
 - Positivas: elimina a reprodução determinística da violação (prompt sem contradição); repair com modelo adequado à disciplina de contrato; isolamento de erro por item; exact-N e gates inalterados; custo por tier observável no `IntelligenceRun`; proveniência de pattern audível sem vazar texto.
-- Negativas/riscos: pior caso 2N chamadas HIGH por job (N≤10) — custo/latência observáveis e orçados no deadline; repair per-item é cego ao conjunto (mitigado por sibling summary + revalidação do conjunto por round; colisão vira causa no round seguinte; não-convergência em 2 rounds fecha fail-closed); `GEN-PATTERN` para buckets de mecanismo sem hooks deliverable no catálogo é fail-closed honesto — o planejador não deve planejar mecanismos sem repertório; Qwen pode continuar ignorando constraints mesmo em HIGH — decisão subsequente seria de modelo/provider, nunca de relaxamento de gate.
+- Negativas/riscos: pior caso `GENERATION_MAX_REPAIRS × N` chamadas HIGH por job (default atual `2`, N≤10) — custo/latência observáveis e orçados no deadline; repair per-item é cego ao conjunto (mitigado por sibling summary + revalidação do conjunto por round; colisão vira causa no round seguinte); `GEN-PATTERN` para buckets de mecanismo sem hooks deliverable no catálogo é fail-closed honesto — o planejador não deve planejar mecanismos sem repertório; Qwen pode continuar ignorando constraints mesmo em HIGH — decisão subsequente seria de modelo/provider, nunca de relaxamento de gate.
 
 ## Adendo — mecanismo deliverable no plano (consenso pós-re-review)
 
@@ -44,11 +44,11 @@ Disponibilidade de mecanismo é **factual e por catálogo**. `deliverableHookBuc
 
 QA4 provou que HIGH/OpenAI falhou 5/6 repairs pelo mesmo gate de development mesmo com checklist e pré-seleção segura: a obrigação não era verificável para o modelo. Correção estrutural, **sem relaxar gate e sem chamadas novas**:
 
-- **`CONTENT_BRIEF_GENERATION`** continua **MID**, `development: string[]` inalterado, e recebe `developmentRequirements` como orientação.
-- **`CONTENT_BRIEF_REPAIR`/HIGH** retorna **bullet objects** `{text, action, factRef, rationale[, context]}`; a engine converte **somente `text`** para o `ContentBriefVersion` canônico (string[], exact-N, IDs estáveis).
+- **Registro histórico de runtime (superseded pelo ADR-029):** `CONTENT_BRIEF_GENERATION` era `MID`; o tier runtime atual está na tabela canônica do ADR-029.
+- **`CONTENT_BRIEF_REPAIR`/HIGH** é `Hard Gate Repair`: retorna um BriefDraft completo por item para corrigir causas objetivas; o hard gate revalida o conjunto e a variedade.
 - **Validação em cascata:** `factRef ∈ EvidenceSnapshot` (nunca `product:name`) → `action ∈ DEVELOPMENT_ACTION_STEMS` → `rationale` com conector (`DEVELOPMENT_CONNECTORS`) → `validateContentBriefDraft` no texto → **`validateBriefSet`** no conjunto. **Partes não autorizam texto falho.**
 - Contexto do repair ganha `developmentRequirements` server-derived (stems, connectors, `factRefs [{ref, value, terms}]`, `noShotList`, `minGrounding {point 2, rationale 2, context 1}`) + **`repairContrast` per-item** reconstruído dos mesmos facts e **provado por `validDevelopmentPoint`** (contexto efêmero; sem geração/persistência determinística de texto). **`previousBrief` NÃO vai ao contexto** (ancora a paráfrase inválida).
-- Aumento de contexto telemetrado (`trustedContextBytes`); budget/exact-N/rounds/cenas/metadata intactos.
+- Aumento de contexto telemetrado (`trustedContextBytes`); budget/exact-N/cenas/metadata intactos. O limite objetivo é `GENERATION_MAX_REPAIRS`; `Semantic Part Repair` é contrato distinto do ADR-029.
 - **Escalada de provider/model para esta capability: somente após DUAS QA consecutivas com a MESMA assinatura residual** (benchmark pequeno, decisão registrada) — nunca fallback oculto, nunca relaxamento de gate.
 
 ## Adendo 3 — PRODUCT_UNDERSTANDING roteado a HIGH/QUALITY (consenso pós-QA5 538fee44)
@@ -67,12 +67,8 @@ Mesmo com schema strict + retry `contractRepair`, providers podem devolver 200 c
 
 ## Relações
 
-ADR-013 (Model Router/tiers), ADR-019 (gate versionada, variedade funcional, cenas), ADR-012 (repair causal e limite de tentativas, fail-closed), PRD-commerce-intelligence-engine §7: o hard gate factual/estrutural permanece fora do LLM; o judge semântico interno limita-se a hook, development, script, CTA e cenas, com repair seletivo e falha terminal. Não representa aprovação do usuário nem avalia variedade ou memória semântica.
+ADR-013 (Model Router/tiers), ADR-019 (gate versionada, variedade funcional, cenas), ADR-012 (repair causal e limite de tentativas, fail-closed), ADR-029 (limites atuais de repairs e tiers) e PRD-commerce-intelligence-engine §7.
 
-## Adendo 4 — judge semântico interno e repair por parte
+## Adendo 4 — registro histórico superseded
 
-O gate determinístico continua sendo a autoridade factual e estrutural; esta mudança não transfere regra crítica ao LLM. Após o hard gate, `CONTENT_QUALITY_JUDGE`/HIGH avalia exatamente hook, development, script, CTA e cenas por conteúdo contra Meu estilo e os padrões de creator commerce/TikTok Shop. Cada parte retorna decisão `PASS|REPAIR|REJECT`, criterion allowlisted e motivo de vocabulário fixo. `PASS` preserva a parte; somente `REPAIR` chama `CONTENT_PART_REPAIR` e consome rounds; `REJECT` é terminal, não chama repair e mantém diagnóstico. Após até 2 rounds de repair, qualquer parte diferente de `PASS` bloqueia sucesso. Saída incompleta, enums/keys extras, timeout ou erro falham fechado e não têm fallback.
-
-`CONTENT_PART_REPAIR`/HIGH recebe e retorna somente a parte marcada `REPAIR`. Partes `PASS` permanecem intocadas; `REJECT` nunca é reparado e é terminal. Após cada composição, o conjunto completo volta ao hard gate factual/estrutural e ao judge. São no máximo 2 rounds globais de repair; exaustão ou qualquer `REJECT` bloqueia `SUCCEEDED`, mantém exact-N e não persiste resultado parcial. `ContentSceneSet` permanece separado de `ContentBriefVersion`, mas todas as cenas precisam estar disponíveis e passar para o job concluir. Audit/repair no `IntelligenceRun.metadata` contém IDs server-derived, parte, round, status, criterion allowlisted e motivo fixo; nenhum payload/rationale bruto. Não há UI, API, score ou escolha de modelo.
-
-Esta decisão substitui explicitamente a decisão anterior de ADR-019 que tratava falha de cena como não-bloqueante e a definição de gate semântico apenas “quando necessário”: a semântica agora é obrigatória para o conjunto de partes acima, antes da persistência de sucesso.
+O contrato semântico `PASS|REPAIR|REJECT`, dois rounds globais e bloqueio por exaustão desta seção foram superseded pelo ADR-029. O contrato vigente separa `Hard Gate Repair` objetivo, limitado por `GENERATION_MAX_REPAIRS`, de `Semantic Part Repair` único por parte `REVIEW`, sem re-Judge; somente hard gates finais decidem `DRAFT`, parcial declarado ou falha.

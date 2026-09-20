@@ -99,7 +99,7 @@ test("repairs only rejected briefs via per-item CONTENT_BRIEF_REPAIR/HIGH, prese
   // Design 2026-09-18: o repair recebe o diagnóstico redigido por bullet do PRÓPRIO item.
   assert.ok(Array.isArray(context.developmentDiagnostics) && context.developmentDiagnostics.length === 2, "developmentDiagnostics do item presente");
   const diag = (context.developmentDiagnostics as Array<Record<string, unknown>>)[0]!;
-  assert.deepEqual(Object.keys(diag).sort(), ["actionPresent", "connectorPresent", "ctaValid", "factGroundingApplicable", "factRefAllowed", "factTermsInRationale", "index", "rationaleGroundingMatched", "shotList", "textGroundingMatched", "unverifiedClaim", "unverifiedClaimParts"]);
+  assert.deepEqual(Object.keys(diag).sort(), ["actionPresent", "connectorPresent", "connectorValid", "ctaValid", "factGroundingApplicable", "factRefAllowed", "factTermsInRationale", "grounded", "index", "issues", "rationaleGroundingMatched", "shotList", "textGroundingMatched", "unverifiedClaim", "unverifiedClaimParts"]);
   assert.equal(diag.rationaleGroundingMatched, 2, "claim unsupported ainda contém dois termos do rationale após o conector");
   assert.deepEqual(context.failedBulletIndexes, [0, 1], "repair mira os índices falhos (design 2026-09-19)");
   assert.deepEqual(context.repairChecklist, { developmentAction: true, removeUnsupportedClaim: true });
@@ -586,6 +586,26 @@ test("geração inicial aceita development estruturado e projeta bullets para st
   assert.equal(result.briefs.length, 1);
   assert.ok(result.briefs[0]!.development.every((point) => typeof point === "string"), "development canônico permanece string[]");
   assert.deepEqual(result.briefs[0]!.development, [structuredBullet.text, structuredBullet.text]);
+});
+
+test("judge recebe development somente com campos propostos pelo provider", async () => {
+  let judgeContext: Record<string, unknown> | undefined;
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+    if (task === "PRODUCT_UNDERSTANDING") return understanding;
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
+    if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
+    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: [structuredBullet, structuredBullet], script: "Produto na prática", cta: "c" }] };
+    if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
+    if (task === "CONTENT_QUALITY_JUDGE") { judgeContext = recordOf(input?.trustedContext); return judgeBatchPass(input); }
+    return {};
+  } };
+  await runFirstGeneration({ productId: "p", jobId: "j-judge-fields", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router });
+  const items = judgeContext?.items as Array<Record<string, unknown>>;
+  const development = items[0]?.development as Array<Record<string, unknown>>;
+  assert.deepEqual(Object.keys(development[0]!).sort(), ["cta", "factRefs", "text"]);
+  assert.equal("action" in development[0]!, false);
+  assert.equal("rationale" in development[0]!, false);
 });
 
 test("bullet estruturado com factRef desconhecido falha GEN-SCHEMA após retry único do lote", async () => {

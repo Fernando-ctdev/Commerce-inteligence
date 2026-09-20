@@ -137,7 +137,12 @@ test("brief provider instruction makes development strategic, evidence-grounded,
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("angle e mecanismo da oportunidade orientam o recorte, mas não são fonte de fatos"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("todo fato técnico no script deve estar em relevantFacts e representado em development"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não retorne scenes nem qualquer campo de cena"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use selectedPatterns[index].cta.text literalmente como cta"));
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use selectedPatterns[index].cta.text literalmente como cta"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("adapte o wording"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("mesma função"));
+  assert.ok(!CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("selectedPatterns[index].cta.text literalmente"));
+  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("adapte o wording"));
+  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("mesma função"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Mantenha cta separado de hook, development e script"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Bom:"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Ruim:"));
@@ -567,7 +572,7 @@ test("non-PU tasks keep generic json_object response_format", async () => {
 // Task 2 (simplify-semantic-judge): o Judge semântico emite somente PASS|REVIEW,
 // sem status terminal, sem motivo factual e sem segunda passada de avaliação.
 test("CONTENT_QUALITY_JUDGE instruction contracts PASS|REVIEW only, without REJECT or unsupported_persuasion", () => {
-  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("bullets {text, action, factRefs, rationale, cta}"), "contexto do judge carrega contrato v2");
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("bullets {text, factRefs, cta}"), "contexto do judge carrega contrato derivado");
   assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("status ∈ PASS|REVIEW"));
   assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("reason ∈ meets_criteria|unclear|style_mismatch|not_tiktok_native|weak_product_link|incoherent|weak_commercial_value|not_actionable|misaligned_scenes"));
   assert.ok(!CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("REJECT"), "sem opção de saída REJECT");
@@ -600,7 +605,9 @@ test("CONTENT_PART_REPAIR instruction stays single-attempt, marked-part-only, wi
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("MESMA parte e do MESMO round"));
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("EXATAMENTE um item para cada contentId recebido"));
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("string para hook/script/cta"));
-  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("array de 2 a 6 OBJETOS estruturados {text, action, rationale, factRefs, cta} para development"));
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("array de 2 a 6 OBJETOS estruturados {text, factRefs, cta} para development"));
+  assert.ok(!CONTENT_PART_REPAIR_INSTRUCTION.includes("{text, action, rationale, factRefs, cta}"));
+  assert.ok(!CONTENT_PART_REPAIR_INSTRUCTION.includes("Sem rationale"));
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("strings não são aceitas"));
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("array de 2 a 6 objetos {description} para scenes"));
 });
