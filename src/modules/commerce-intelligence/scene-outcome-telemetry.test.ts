@@ -18,7 +18,7 @@ const qualityPassParts = [
   { part: "cta", status: "PASS", criterion: "cta_clarity", reason: "meets_criteria" },
   { part: "scenes", status: "PASS", criterion: "scenes_actionable", reason: "meets_criteria" },
 ];
-const developmentOk = ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"];
+const developmentOk = [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para explicar como o tecido respiravel afeta o uso", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Mostre o tecido respiravel porque o tecido respiravel ajuda no uso", action: "Mostre", rationale: "porque o tecido respiravel ajuda no uso", factRefs: ["product:description"], cta: "Confira o produto na página." }];
 function recordOf(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
@@ -39,8 +39,8 @@ function twoContentRouter(sceneResponse: () => unknown) {
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:description"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:description"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 2, opportunities: [
-      { commercialObjective: "c", angle: "a1", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] },
-      { commercialObjective: "c", angle: "a2", coreMessage: "m", hookMechanism: "achei o produto por acaso", noveltyTargets: ["n"] },
+      { commercialObjective: "c", angle: "a1", coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] },
+      { commercialObjective: "c", angle: "a2", coreMessage: "m", hookMechanism: "discovery", noveltyTargets: ["n"] },
     ] };
     if (task === "CONTENT_BRIEF_GENERATION") return { items: [
       { angle: "a1", hook: "Gancho 1", development: developmentOk, script: "Tecido respiravel", cta: "cta 1" },

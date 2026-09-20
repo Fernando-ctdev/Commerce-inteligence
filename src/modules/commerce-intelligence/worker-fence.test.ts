@@ -443,7 +443,7 @@ test("reclaim emite job.reclaimed na rotação e job.terminal no esgotamento; se
 // MESMA transação do CAS de FAILED; fence perdido NÃO persiste. O engine roda
 // com provider fake (cenas gate-reprovadas), o terminal usa failJob real.
 function sceneFailRouter() {
-  const developmentOk = ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"];
+  const developmentOk = [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para explicar como o tecido respiravel afeta o uso", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Mostre o tecido respiravel porque o tecido respiravel ajuda no uso", action: "Mostre", rationale: "porque o tecido respiravel ajuda no uso", factRefs: ["product:description"], cta: "Confira o produto na página." }];
   const qualityPass = { parts: [
     { part: "hook", status: "PASS", criterion: "hook_clarity", reason: "meets_criteria" },
     { part: "development", status: "PASS", criterion: "development_coherence", reason: "meets_criteria" },
@@ -458,7 +458,7 @@ function sceneFailRouter() {
       if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["barreira"], evidenceRefs: ["product:name"] };
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:description"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:description"] }] };
       if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
-      if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstração direta", noveltyTargets: ["n"] }] };
+      if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] }] };
       if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "Gancho", development: developmentOk, script: "Tecido respiravel", cta: "cta" }] };
       if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Ambiente iluminado e bonito" }, { description: "Espaço decorado e organizado" }] };
       if (task === "CONTENT_QUALITY_JUDGE") {
