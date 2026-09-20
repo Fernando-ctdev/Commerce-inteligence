@@ -67,6 +67,41 @@
   line-height: 22px;
 }
 
+/* Contrato de observabilidade: metadados de execução em dl compacto;
+   identificadores técnicos em Geist Mono (DESIGN.md, type.code). */
+.historyMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0;
+}
+
+.metaItem {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.metaItem dt {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.metaItem dd {
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0;
+}
+
+.monoId {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  word-break: break-all;
+}
+
 .historyContentList {
   display: grid;
   gap: 8px;
@@ -734,6 +769,72 @@
   color: var(--color-danger);
 }
 
+/* Aba Conteúdos em andamento (Método 3S): mensagem de estado na coluna de
+   leitura (560–640px), hierarquia eyebrow → título → etapa real → continuidade.
+   Assinatura discreta derivada só de intelligence + tokens: tinte de superfície,
+   hairline e halo do ponto; decorativo é aria-hidden e o reduced-motion do
+   .panel desliga o pulso. Etapa vem de status/stage reais — sem percentual/ETA. */
+.runningState {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-intelligence) 7%, var(--color-surface)), var(--color-surface) 72%);
+  border: 1px solid color-mix(in srgb, var(--color-intelligence) 22%, var(--color-border));
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  margin-inline: auto;
+  max-width: 600px;
+  padding: 40px 24px 36px;
+  text-align: center;
+  width: 100%;
+}
+
+.runningEyebrow {
+  justify-content: center;
+}
+
+.runningDot {
+  animation: intelligencePulse 2s ease-in-out infinite;
+  background: var(--color-intelligence);
+  border-radius: 9999px;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-intelligence) 14%, transparent);
+  flex: 0 0 auto;
+  height: 8px;
+  width: 8px;
+}
+
+@keyframes intelligencePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.runningTitle {
+  color: var(--color-text);
+  font-size: 20px;
+  line-height: 26px;
+  margin: 0;
+}
+
+.runningStep {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  margin: 0;
+}
+
+.runningNote {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+  max-width: 46ch;
+}
+
 .dimensions {
   border-block: 1px solid var(--color-border);
   display: grid;
@@ -1214,6 +1315,10 @@
   .strategyPanel,
   .asideCard {
     padding: 20px;
+  }
+
+  .runningState {
+    padding: 28px 16px;
   }
 
   .contentsActions .stateAction {

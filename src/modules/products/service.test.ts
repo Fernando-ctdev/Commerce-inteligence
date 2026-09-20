@@ -389,7 +389,7 @@ test("validação: imageRefs aceita http(s) e data URL de imagem, rejeita outros
 
 // —— Integração (banco) ——
 
-const email = () => `slice002-${randomBytes(8).toString("hex")}@teste.local`;
+const email = () => `qa-ci-${randomBytes(8).toString("hex")}@teste.local`;
 
 async function tenantOf() {
   const token = await registerUser(email(), "senha-segura-123");

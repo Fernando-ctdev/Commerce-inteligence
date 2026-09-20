@@ -7,7 +7,7 @@ import {
   isActiveGeneration,
   type GenerationRecord,
 } from "./generation-api";
-import { isToastDismissed, stageMessage, statusMessage } from "./generation-ui-model";
+import { isToastDismissed, stageMessage, statusMessage, formatTimestamp } from "./generation-ui-model";
 import styles from "./generation-toast.module.css";
 
 /**
@@ -62,12 +62,19 @@ export function GenerationToast() {
   const failed = job.status === "FAILED";
   const succeeded = job.status === "SUCCEEDED";
   const cancelled = job.status === "CANCELLED";
+  /* Contrato de observabilidade: jobId + timestamp mais recente conhecido; os demais
+     dados (uso/custo/timestamps completos) ficam nos "Dados da execução" do produto. */
+  const timeValue = job.finishedAt ?? job.startedAt ?? job.createdAt;
+  const timePrefix = job.finishedAt ? "Concluída em" : job.startedAt ? "Iniciada em" : "Solicitada em";
   const href = `/products/${encodeURIComponent(job.productId)}`;
   return (
     <aside aria-atomic="true" aria-busy={active} aria-live={failed ? "assertive" : "polite"} className={styles.toast} role={failed ? "alert" : "status"}>
       <div className={styles.copy}>
         <strong>{cancelled ? "A análise foi cancelada." : active ? "Análise em andamento" : succeeded ? "Produto pronto para revisão" : "A análise falhou"}</strong>
         {!cancelled && <span>{active ? stageMessage(job.stage) : statusMessage(job.status)}</span>}
+        <span className={styles.meta}>
+          Job <span className={styles.monoId}>{job.id}</span> · {timePrefix} {formatTimestamp(timeValue) ?? "Indisponível"}
+        </span>
       </div>
       <div className={styles.actions}>
         {failed ? (

@@ -310,3 +310,83 @@ export function phaseStates(
     };
   });
 }
+
+/** Valor de estado indisponível exibido quando o DTO não traz o dado do contrato de observabilidade. */
+export const OBSERVABILITY_UNAVAILABLE = "Indisponível";
+
+const timestampFormat = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
+
+/** Timestamp pt-BR curto; ausente ou inválido → null (a UI exibe o estado indisponível, nunca data inventada). */
+export function formatTimestamp(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : timestampFormat.format(date);
+}
+
+/** Formata amountMinor (unidades minor / 10^digits da moeda) em pt-BR; preserva o valor agregado. */
+export function formatAmount(amountMinor: string, currency: string): string {
+  try {
+    const formatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency });
+    const digits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
+    const units = 10n ** BigInt(digits);
+    const minor = BigInt(amountMinor);
+    const major = minor / units;
+    const fraction = digits === 0 ? "" : String(minor % units).padStart(digits, "0");
+    if (!fraction) return formatter.format(major);
+    const decimal = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1 }).formatToParts(1.1).find((part) => part.type === "decimal")?.value ?? ",";
+    const majorText = formatter.formatToParts(major)
+      .filter((part) => part.type !== "fraction" && part.type !== "decimal")
+      .map((part) => part.value)
+      .join("");
+    return `${majorText}${decimal}${fraction}`.replaceAll("\u00a0", " ");
+  } catch {
+    return `${currency} ${amountMinor}`;
+  }
+}
+
+/** Uso agregado entrada/saída; sem nenhum valor conhecível → null (a UI exibe "Uso indisponível"). */
+export function formatUsageLabel(usage: { inputTokens: number | null; outputTokens: number | null } | null | undefined): string | null {
+  const parts: string[] = [];
+  if (usage?.inputTokens != null) parts.push(`${usage.inputTokens.toLocaleString("pt-BR")} entrada`);
+  if (usage?.outputTokens != null) parts.push(`${usage.outputTokens.toLocaleString("pt-BR")} saída`);
+  return parts.length > 0 ? `${parts.join(" · ")} (tokens)` : null;
+}
+
+/** Custo agregado; sem amountMinor/moeda → null (a UI exibe "Custo indisponível"). */
+export function formatCostLabel(cost: { currency: string | null; amountMinor: string | null } | null | undefined): string | null {
+  return cost?.amountMinor != null && cost.currency ? formatAmount(cost.amountMinor, cost.currency) : null;
+}
+
+/**
+ * Contrato de observabilidade (UI): linhas jobId/status/timestamps/uso/custo com
+ * estado indisponível explícito. Fonte são os DTOs tenant-scoped existentes
+ * (/api/generations); provider, modelo, prompt e metadata bruta nunca entram —
+ * o tipo não os carrega e a projeção não os lê.
+ */
+export type ExecutionObservabilityRow = { label: string; value: string; mono?: boolean };
+
+type ObservabilityJob = {
+  id: string;
+  status: CommerceJobStatus | string;
+  createdAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  usage?: { inputTokens: number | null; outputTokens: number | null };
+  cost?: { currency: string | null; amountMinor: string | null };
+};
+
+export function executionObservability(job: ObservabilityJob | null): ExecutionObservabilityRow[] {
+  if (!job) return [];
+  const row = (label: string, value: string | null, mono = false): ExecutionObservabilityRow =>
+    ({ label, value: value ?? OBSERVABILITY_UNAVAILABLE, ...(mono ? { mono: true } : {}) });
+
+  return [
+    { label: "Job", value: job.id, mono: true },
+    row("Status", generationStatusLabel(job.status)),
+    row("Solicitada em", formatTimestamp(job.createdAt)),
+    row("Iniciada em", formatTimestamp(job.startedAt)),
+    row("Concluída em", formatTimestamp(job.finishedAt)),
+    row("Uso", formatUsageLabel(job.usage) ?? "Uso indisponível"),
+    row("Custo", formatCostLabel(job.cost) ?? "Custo indisponível"),
+  ];
+}

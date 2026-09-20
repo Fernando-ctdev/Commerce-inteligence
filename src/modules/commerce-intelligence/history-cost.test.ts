@@ -39,15 +39,18 @@ test("projeta job COMPLETE somando capabilities; datas ISO e contagem pedida", (
       record({}),
       record({ contentId: "c1" }),
       record({ contentId: "c2", cost: { amountMinor: "250", completeness: "COMPLETE" } }),
+      record({ usage: { inputTokens: 100, cachedTokens: 40, outputTokens: 30, reasoningTokens: 10 } }),
     ] } }],
   );
   assert.equal(result.jobs.length, 1);
   const projected = result.jobs[0]!;
+  assert.equal(projected.jobId, "job-1", "jobId allowlisted no DTO (SPEC slice-010)");
   assert.equal(projected.status, "SUCCEEDED");
   assert.equal(projected.createdAt, "2026-09-18T10:00:00.000Z");
   assert.equal(projected.finishedAt, "2026-09-18T10:05:00.000Z");
   assert.equal(projected.requestedContents, 2);
-  assert.deepEqual(projected.cost, { currency: "BRL", amountMinor: "450", completeness: "COMPLETE" });
+  assert.deepEqual(projected.cost, { currency: "BRL", amountMinor: "550", completeness: "COMPLETE" });
+  assert.deepEqual(projected.usage, { inputTokens: 100, outputTokens: 30, reasoningTokens: 10, cachedTokens: 40 }, "usage somado por capability+attempt; null permanece null");
   assert.deepEqual(projected.contents, [
     { position: 1, cost: { currency: "BRL", amountMinor: "100", completeness: "COMPLETE" } },
     { position: 2, cost: { currency: "BRL", amountMinor: "250", completeness: "COMPLETE" } },
@@ -71,6 +74,7 @@ test("job FAILED sem run e run sem metadata projetam UNAVAILABLE (compatibilidad
   assert.equal(failed.jobs[0]?.finishedAt, null);
   assert.deepEqual(failed.jobs[0]?.contents, []);
   const legacy = projectProductHistory([job({})], [{ id: "c1", jobId: "job-1", position: 1 }], [{ jobId: "job-1", metadata: { capabilities: [{ task: "PRODUCT_UNDERSTANDING", durationMs: 10 }] } }]);
+  assert.deepEqual(legacy.jobs[0]?.usage, { inputTokens: null, outputTokens: null, reasoningTokens: null, cachedTokens: null }, "sem usage reportado: null, nunca 0");
   assert.equal(legacy.jobs[0]?.cost.completeness, "UNAVAILABLE");
   assert.equal(legacy.jobs[0]?.contents[0]?.cost.completeness, "UNAVAILABLE");
 });
@@ -93,9 +97,13 @@ test("resposta não contém IDs técnicos nem campos internos", () => {
     [{ jobId: "job-1", metadata: { capabilities: [record({ contentId: "c1", usage: { inputTokens: 10, outputTokens: 5, reasoningTokens: null, cachedTokens: null } })] } }],
   );
   const serialized = JSON.stringify(result);
-  assert.ok(!serialized.includes("job-1"), "jobId nunca cruza a fronteira");
+  assert.ok(serialized.includes("\"jobId\":\"job-1\""), "jobId é allowlisted no DTO (SPEC slice-010)");
+  assert.ok(serialized.includes("\"usage\""), "usage agregado é allowlisted");
+  for (const proibido of ["provider", "model", "prompt", "tier", "metadata", "c1"]) {
+    assert.ok(!serialized.includes(proibido), `${proibido} nunca cruza a fronteira`);
+  }
   assert.ok(!serialized.includes('"c1"'), "contentId nunca cruza a fronteira");
-  for (const forbidden of ["metadata", "provider", "model", "usage", "task", "attempt", "retry", "versionId", "pricing", "id", "jobId", "contentId"]) {
+  for (const forbidden of ["metadata", "provider", "model", "task", "attempt", "retry", "versionId", "pricing", "contentId"]) {
     assert.ok(!serialized.includes(`"${forbidden}"`), `campo técnico "${forbidden}" ausente`);
   }
   assert.ok(serialized.includes("amountMinor"));

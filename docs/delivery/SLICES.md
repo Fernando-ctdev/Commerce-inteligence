@@ -441,10 +441,10 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 - Busca por hooks, scripts e conteúdos do contexto do Produto; filtros por status e data.
 - Exibir proveniência dos contents.
 - Alimentar a memória usada pelas gerações subsequentes (os eventos já são persistidos; este slice expõe a visão).
-- Exibir, por job e por Content quando houver atribuição direta, somente custo estimado agregado, moeda e completude (`COMPLETE`, `PARTIAL` ou `UNAVAILABLE`), derivados de `IntelligenceRun.metadata`.
-- Leitura dedicada do Histórico por Product, autenticada e tenant-scoped; jobs legados sem usage/preço aparecem como `UNAVAILABLE`, sem backfill estimado.
+- Exibir, por job, `jobId`, status, timestamps, usage agregado e custo estimado agregado; por Content, somente custo quando houver atribuição direta. Custo usa `COMPLETE`, `PARTIAL` ou `UNAVAILABLE`; usage ausente permanece `null`, e ausência de custo reportado não vira `USD 0`.
+- Leitura dedicada do Histórico por Product, autenticada e tenant-scoped; jobs legados sem usage/preço mostram usage nulo e custo `UNAVAILABLE`, sem backfill estimado.
 
-**Out of Scope:** `Content Vault` como destino global de navegação, biblioteca de mídia, busca semântica, embeddings, analytics externo, campanhas obrigatórias, dashboard/KPI global e exposição creator-facing de provider, modelo, tier, tokens, prompts, logs, latência, hashes, IDs técnicos ou metadata bruto.
+**Out of Scope:** `Content Vault` como destino global de navegação, biblioteca de mídia, busca semântica, embeddings, analytics externo, campanhas obrigatórias, dashboard/KPI global e exposição creator-facing de provider, modelo, tier, prompts, logs, latência, hashes, pricing source/rates, capability rows ou metadata bruto.
 ---
 
 ### Slice 011 — Meu estilo e CreatorContext

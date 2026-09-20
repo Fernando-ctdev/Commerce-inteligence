@@ -2,7 +2,9 @@ export type CommerceJobStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "SUCCEEDED_
 export type CommerceJobStage = "UNDERSTANDING_PRODUCT" | "MAPPING_COMMERCIAL_OPPORTUNITIES" | "BUILDING_STRATEGY" | "BUILDING_CONTENT_PLAN" | "GENERATING_BRIEFS" | "FINALIZING";
 /** Motivo sanitizado por item faltante (ADR-021): reason code server-side, sem detalhes internos. */
 export type MissingItemReason = { position: number | null; reasonCode: string };
-export type GenerationRecord = { id: string; productId: string; status: CommerceJobStatus; stage: CommerceJobStage | null; targetContentCount: number; error: string | null; code: string | null; strategy: Record<string, unknown> | null; plan: Record<string, unknown> | null; contents: Array<Record<string, unknown>>; readiness: "PENDING" | "ANALYZING" | "READY" | "FAILED"; previousRunId?: string | null; createdAt: string | null; startedAt: string | null; finishedAt: string | null; expectedCount: number | null; deliveredCount: number | null; failedCount: number | null; missing: MissingItemReason[]; };
+export type GenerationUsage = { inputTokens: number | null; outputTokens: number | null };
+export type GenerationCost = { currency: string | null; amountMinor: string | null };
+export type GenerationRecord = { id: string; productId: string; status: CommerceJobStatus; stage: CommerceJobStage | null; targetContentCount: number; error: string | null; code: string | null; strategy: Record<string, unknown> | null; plan: Record<string, unknown> | null; contents: Array<Record<string, unknown>>; readiness: "PENDING" | "ANALYZING" | "READY" | "FAILED"; previousRunId?: string | null; createdAt: string | null; startedAt: string | null; finishedAt: string | null; expectedCount: number | null; deliveredCount: number | null; failedCount: number | null; missing: MissingItemReason[]; /** Contrato de observabilidade: preenchidos quando o backend os expuser; ausentes → UI exibe estado indisponível. */ usage?: GenerationUsage; cost?: GenerationCost; };
 export class GenerationApiError extends Error { constructor(readonly status: number, message: string, readonly code?: string) { super(message); this.name = "GenerationApiError"; } }
 const validStages: Record<CommerceJobStage, true> = { UNDERSTANDING_PRODUCT: true, MAPPING_COMMERCIAL_OPPORTUNITIES: true, BUILDING_STRATEGY: true, BUILDING_CONTENT_PLAN: true, GENERATING_BRIEFS: true, FINALIZING: true };
 function object(value: unknown) { return typeof value === "object" && value !== null ? value as Record<string, unknown> : null; }
@@ -65,6 +67,31 @@ export function normalizeGeneration(value: unknown): GenerationRecord {
     deliveredCount,
     failedCount,
     missing,
+    // Contrato de observabilidade (allowlist): repassa apenas usage/cost agregados
+    // quando presentes; null preservado distinto de 0. Provider/modelo/tier/prompt/
+    // metadata bruta nunca são lidos nem projetados.
+    usage: usageOf(record.usage),
+    cost: costOf(record.cost),
+  };
+}
+
+/** Uso agregado allowlist: objeto presente → entrada/saída como number ou null; ausente/malformado → undefined. */
+function usageOf(value: unknown): GenerationUsage | undefined {
+  const record = object(value);
+  if (!record) return undefined;
+  return {
+    inputTokens: typeof record.inputTokens === "number" && Number.isFinite(record.inputTokens) ? record.inputTokens : null,
+    outputTokens: typeof record.outputTokens === "number" && Number.isFinite(record.outputTokens) ? record.outputTokens : null,
+  };
+}
+
+/** Custo agregado allowlist: objeto presente → currency/amountMinor sanitizados; ausente → undefined. */
+function costOf(value: unknown): GenerationCost | undefined {
+  const record = object(value);
+  if (!record) return undefined;
+  return {
+    currency: typeof record.currency === "string" ? record.currency : null,
+    amountMinor: typeof record.amountMinor === "string" && /^\d+$/.test(record.amountMinor) ? record.amountMinor : null,
   };
 }
 async function request<T>(url: string, init?: RequestInit): Promise<T> { const response = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json", "Content-Type": "application/json", ...init?.headers }, ...init }).catch(() => null); const data: unknown = response ? await response.json().catch(() => null) : null; if (!response) throw new GenerationApiError(0, "Não foi possível conectar agora. Tente novamente."); if (!response.ok) { const body = object(data); throw new GenerationApiError(response.status, typeof body?.error === "string" ? body.error : "Não foi possível concluir a análise.", typeof body?.code === "string" ? body.code : undefined); } return data as T; }

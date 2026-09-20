@@ -10,6 +10,7 @@ import {
   Flame,
   MirrorRound,
   Fingerprint,
+  Rocket,
 } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
@@ -28,6 +29,7 @@ type DestinationKey =
   | "products"
   | "studio"
   | "agenda"
+  | "tendencias"
   | "virais"
   | "meu-estilo"
   | "ia-influencer"
@@ -43,9 +45,10 @@ const destinations: {
   { key: "products", label: "Produtos", href: "/products", icon: Tag },
   { key: "studio", label: "Estúdio", icon: Clapperboard },
   { key: "agenda", label: "Agenda", icon: CalendarDays },
-  { key: "virais", label: "Virais", icon: Flame },
   { key: "meu-estilo", label: "Meu estilo", href: "/my-style", icon: Fingerprint },
-  { key: "ia-influencer", label: "IA Influencer", icon: MirrorRound },
+  //{ key: "tendencias", label: "Tendências", icon: Rocket },
+  //{ key: "virais", label: "Virais", icon: Flame },
+  //{ key: "ia-influencer", label: "IA Influencer", icon: MirrorRound },
   {
     key: "settings",
     label: "Configurações",

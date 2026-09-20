@@ -42,6 +42,7 @@ function syntheticOutput(strategyId = `strat-${randomUUID()}`, opts: { includeBr
     productUnderstanding: { fonte: "teste-fence" },
     strategy: { id: strategyId, platformId: "tiktok", platformSkillVersion: "test" },
     plan: { id: `plan-${randomUUID()}`, platformId: "tiktok", platformSkillVersion: "test" },
+    planPolicyVersion: 1,
     opportunities: [],
     briefs: [],
     reports: [],
@@ -60,7 +61,9 @@ function syntheticOutput(strategyId = `strat-${randomUUID()}`, opts: { includeBr
     partial: null,
   };
   if (opts.includeBrief) {
-    output.briefs = [{ contentId, briefVersionId, version: 1, angle: "demonstração", hook: "Gancho do teste de fence", development: ["Destaque o uso do produto para orientar a conversa sobre o uso", "Destaque o uso do produto para orientar a conversa sobre o uso"], script: "Fale sobre o uso do produto", cta: "cta do teste" }];
+    // Cutover v2: persistência exige DevelopmentBullet[] canônico alinhado à projeção.
+    const bulletsV2 = ["Destaque o uso do produto para orientar a conversa sobre o uso", "Destaque o uso do produto para orientar a conversa sobre o uso"].map((text) => ({ text, action: "Destaque", rationale: "para orientar a conversa sobre o uso", factRefs: ["product:description"], cta: "Confira o produto." }));
+    output.briefs = [{ contentId, briefVersionId, version: 1, angle: "demonstração", hook: "Gancho do teste de fence", development: bulletsV2.map(({ text }) => text), bullets: bulletsV2, script: "Fale sobre o uso do produto", cta: "cta do teste" } as never];
     output.reports = [{ briefId: `${contentId}:${briefVersionId}`, gateVersion: 1, factualStatus: "SUPPORTED", claimType: "objetivo", evidenceRefs: [], structuralStatus: "PASS", platformStatus: "PASS", varietyStatus: "PASS", issues: [], decision: "PASS" }];
   }
   return output;
@@ -87,6 +90,7 @@ async function criarJobQueued() {
       generatedContentsMonth: monthUtc(),
       status: "QUEUED",
       stage: "UNDERSTANDING_PRODUCT",
+      nextAttemptAt: new Date(Date.now() - 60_000),
     },
   });
   await prisma.generationUsageReservation.create({
@@ -216,7 +220,7 @@ test("finalizeGeneration persiste Content objetivo-válido como DRAFT, sem statu
     assert.equal(content.approvedBriefVersionId, null, "aprovação pertence a slice posterior");
     // O payload persistido é o brief canônico — nenhuma chave de status/aviso
     // semântico atravessa para a persistência.
-    assert.deepEqual(Object.keys(content.payload as Record<string, unknown>).sort(), ["angle", "briefVersionId", "contentId", "cta", "development", "hook", "script", "version"]);
+    assert.deepEqual(Object.keys(content.payload as Record<string, unknown>).sort(), ["angle", "briefVersionId", "contentId", "cta", "development", "developmentSchemaVersion", "hook", "script", "version"]);
     const report = await prisma.briefValidationReport.findUniqueOrThrow({ where: { id: `${contentId}:${briefVersionId}` } });
     assert.equal(report.decision, "PASS", "report objetivo registrado separado do judge semântico");
     const run = await prisma.intelligenceRun.findUniqueOrThrow({ where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } } });

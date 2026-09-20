@@ -140,6 +140,7 @@ const HOOK_BUCKET_RULES: ReadonlyArray<readonly [HookMechanismBucket, RegExp]> =
 ];
 
 export function classifyHookMechanism(text: string): HookMechanismBucket {
+  if (text === "problem" || text === "discovery" || text === "demonstration" || text === "price-value" || text === "other") return text;
   const folded = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   for (const [bucket, pattern] of HOOK_BUCKET_RULES) if (pattern.test(folded)) return bucket;
   return "other";

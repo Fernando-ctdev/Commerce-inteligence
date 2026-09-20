@@ -49,7 +49,7 @@ const understanding = { productId: "p", category: undefined, coreUseCases: ["uso
 const commercial = { relevantCapabilities: ["cap"], benefits: ["benefício"], proofOptions: ["fact-1"], sellingArgument: "argumento", confidence: 0.9, evidenceRefs: ["fact-1"] };
 const envelope = { audiences: ["público"], situations: ["situação"], pains: ["dor"], desires: ["desejo"], objections: ["objeção"], opportunities: [commercial, commercial, commercial] };
 const strategyPayload = { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.0", primaryPositioning: "posicionamento", audiences: ["público"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["arg"], priorityAngles: ["ângulo"], communicationPrinciples: ["cp"] };
-const contentOpportunity = { commercialObjective: "vender", angle: "demonstração", coreMessage: "benefício", hookMechanism: "prova", noveltyTargets: ["angle"] };
+const contentOpportunity = { commercialObjective: "vender", angle: "demonstração", coreMessage: "benefício", hookMechanism: "demonstration", noveltyTargets: ["angle"] };
 const qualityAudit = { parts: [
   { part: "hook", status: "PASS", criterion: "hook_clarity", reason: "meets_criteria" },
   { part: "development", status: "PASS", criterion: "development_coherence", reason: "meets_criteria" },
@@ -75,7 +75,7 @@ test("pipeline entrega a projeção exata por capability, sem creatorContext no 
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
       if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
       if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [contentOpportunity] };
-      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: ["Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso", "Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso"], script: "O tecido duna leve e macio", cta: "c" }] };
+      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: [{ text: "Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "O tecido duna leve e macio", cta: "c" }] };
       if (task === "CONTENT_SCENE_IDEAS") return sceneIdeas;
       if (task === "CONTENT_QUALITY_JUDGE") {
         // ADR-025: judge em lote — o fake ecoa o conjunto exato de contentIds recebidos.

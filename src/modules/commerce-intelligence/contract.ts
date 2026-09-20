@@ -12,9 +12,37 @@ export type PartialFailureCheckCode =
   | "connector_missing"
   | "grounding_below_min"
   | "factref_grounding_below_min"
+  | "cta_invalid"
   | "script_claim_missing"
   | "feature_list"
   | "unverified_claim";
+// Contrato canônico de development para jobs novos (cutover v2): entrada do
+// provider e persistência são SEMPRE bullets estruturados — string[] é apenas
+// projeção derivada para renderização/gate textual, nunca contrato de entrada.
+// Primeira pessoa e persuasão são permitidas como técnica de creator copy
+// (inclusive experienciais: "Eu comecei...", "Eu adorei..."); o limite é
+// factualidade objetiva: claim objetivo sobre o produto exige fato autorizado.
+export type DevelopmentBullet = {
+  text: string;
+  action: string;
+  rationale: string;
+  factRefs: string[];
+  cta: string;
+};
+export type DevelopmentBulletDiagnostic = {
+  index: number;
+  actionPresent: boolean;
+  factRefAllowed: boolean;
+  connectorPresent: boolean;
+  textGroundingMatched: number;
+  rationaleGroundingMatched: number;
+  factGroundingApplicable: boolean;
+  factTermsInRationale: number;
+  ctaValid: boolean;
+  shotList: boolean;
+  unverifiedClaim: boolean;
+  unverifiedClaimParts: string[];
+};
 export type FailedItemDiagnostic = {
   contentId: string;
   position: number;
@@ -178,8 +206,22 @@ export function validateCommercialOpportunityMappingEnvelope(value: unknown, evi
   return { audiences: strings(v.audiences, "audiences"), situations: strings(v.situations, "situations"), pains: strings(v.pains, "pains"), desires: strings(v.desires, "desires"), objections: strings(v.objections, "objections"), opportunities };
 }
 export type ContentPlan = { id: string; productId: string; strategyVersion: 1; targetContentCount: number; platformId: string; platformSkillVersion: string; opportunities: ContentOpportunity[] };
+// Task 1 (deterministic plan skeleton): o provider retorna SOMENTE os campos
+// criativos da opportunity; server-owned (id/productId/strategyVersion/
+// targetContentCount/platformId/platformSkillVersion) são injetados pelo engine
+// após validação e o conjunto inteiro passa por validateContentPlan.
+export type PlanCreativeOpportunity = { commercialObjective: string; angle: string; coreMessage: string; hookMechanism: string; noveltyTargets: string[] };
+export function validatePlanCreativeOpportunity(value: unknown): PlanCreativeOpportunity {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new ContractError("GEN-SCHEMA", "Opportunity do plano inválida");
+  const v = value as Record<string, unknown>;
+  const noveltyTargets = strings(v.noveltyTargets, "noveltyTargets");
+  const rule = CARDINALITY_POLICY.noveltyTargets;
+  if (noveltyTargets.length < rule.min || noveltyTargets.length > rule.max)
+    throw new ContractError("GEN-SCHEMA", `cardinalidade de noveltyTargets fora da política (min ${rule.min}, max ${rule.max})`, "noveltyTargets");
+  return { commercialObjective: text(v.commercialObjective, "commercialObjective"), angle: text(v.angle, "angle"), coreMessage: text(v.coreMessage, "coreMessage"), hookMechanism: text(v.hookMechanism, "hookMechanism"), noveltyTargets };
+}
 export function validateContentPlan(value: unknown, hookVariety?: { classify: (mechanism: string) => string; buckets: number }): ContentPlan { if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Plano inválido"); const v = value as Record<string, unknown>; const n = validateTargetContentCount(v.targetContentCount); const opportunities = Array.isArray(v.opportunities) ? v.opportunities.map((item) => validateContentOpportunity(item)) : []; if (opportunities.length !== n) throw new ContractError("GEN-COUNT-RANGE", "Plano deve conter a quantidade exata de oportunidades"); if (hookVariety && hookVariety.buckets > 0) { const cap = Math.ceil(n / hookVariety.buckets); const usage = new Map<string, number>(); for (const opportunity of opportunities) { const bucket = hookVariety.classify(opportunity.hookMechanism); usage.set(bucket, (usage.get(bucket) ?? 0) + 1); if (usage.get(bucket)! > cap) throw new ContractError("GEN-VARIETY", `hookMechanism concentrado no bucket "${bucket}" além do teto ceil(${n}/${hookVariety.buckets})=${cap} do plano`, "hookMechanism"); } } return { id: id(v.id, "id"), productId: id(v.productId, "productId"), strategyVersion: 1, targetContentCount: n, platformId: text(v.platformId, "platformId", 100), platformSkillVersion: text(v.platformSkillVersion, "platformSkillVersion", 100), opportunities }; }
-export type ContentBriefVersion = { contentId: string; briefVersionId: string; version: 1; angle: string; hook: string; development: string[]; script: string; cta: string; structure?: string; objective?: string; targetAudience?: string; pain?: string; desire?: string; objection?: string; benefit?: string; notes?: string };
+export type ContentBriefVersion = { contentId: string; briefVersionId: string; version: 1; angle: string; hook: string; development: string[]; script: string; cta: string; bullets?: DevelopmentBullet[]; structure?: string; objective?: string; targetAudience?: string; pain?: string; desire?: string; objection?: string; benefit?: string; notes?: string };
 export type ContentBriefDraft = Omit<ContentBriefVersion, "contentId" | "briefVersionId" | "version">;
 // Only declared brief fields cross into persistence; unknown provider fields are omitted.
 // Cardinalidade de development (v4, min 2/max 6) é enforceada no contrato —

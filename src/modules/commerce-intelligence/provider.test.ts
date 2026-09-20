@@ -525,7 +525,7 @@ test("CONTENT_PLAN_GENERATION request carries strict json_schema with noveltyTar
   assert.equal(schema?.additionalProperties, false);
   const properties = recordOf(schema?.properties);
   assert.ok(properties);
-  assert.deepEqual(Object.keys(properties).sort(), ["opportunities", "platformId"]);
+  assert.deepEqual(Object.keys(properties).sort(), ["opportunities"]);
   const opportunities = recordOf(properties?.opportunities);
   const opportunityItems = recordOf(opportunities?.items);
   const opportunitySchema = recordOf(opportunityItems);
@@ -551,6 +551,7 @@ test("non-PU tasks keep generic json_object response_format", async () => {
 // Task 2 (simplify-semantic-judge): o Judge semântico emite somente PASS|REVIEW,
 // sem status terminal, sem motivo factual e sem segunda passada de avaliação.
 test("CONTENT_QUALITY_JUDGE instruction contracts PASS|REVIEW only, without REJECT or unsupported_persuasion", () => {
+  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("bullets {text, action, factRefs, rationale, cta}"), "contexto do judge carrega contrato v2");
   assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("status ∈ PASS|REVIEW"));
   assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("reason ∈ meets_criteria|unclear|style_mismatch|not_tiktok_native|weak_product_link|incoherent|weak_commercial_value|not_actionable|misaligned_scenes"));
   assert.ok(!CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("REJECT"), "sem opção de saída REJECT");
@@ -583,7 +584,8 @@ test("CONTENT_PART_REPAIR instruction stays single-attempt, marked-part-only, wi
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("MESMA parte e do MESMO round"));
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("EXATAMENTE um item para cada contentId recebido"));
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("string para hook/script/cta"));
-  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("array de 2 a 6 strings para development"));
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("array de 2 a 6 OBJETOS estruturados {text, action, rationale, factRefs, cta} para development"));
+  assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("strings não são aceitas"));
   assert.ok(CONTENT_PART_REPAIR_INSTRUCTION.includes("array de 2 a 6 objetos {description} para scenes"));
 });
 
@@ -617,13 +619,15 @@ test("provider without schema support (HTTP 400) stays fail-closed: explicit err
 
 // ---- Contrato estruturado de development (design 2026-09-18) ----
 
-test("instruções de brief exigem bullets estruturados text/action/factRef/rationale e proíbem locators", () => {
-  for (const field of ["text", "action", "factRef", "rationale"]) {
+test("instruções de brief exigem bullets estruturados text/factRefs/cta e proíbem locators", () => {
+  for (const field of ["text", "factRefs", "cta"]) {
     assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes(field), `geração inicial exige campo estruturado ${field}`);
     assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes(field), `repair exige campo estruturado ${field}`);
   }
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("apenas como campo estruturado"), "factRef apenas como campo estruturado");
-  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("apenas como campo estruturado"), "factRef apenas como campo estruturado no repair");
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("\"action\""), "geração não exige campo action");
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("\"rationale\""), "geração não exige campo rationale");
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("apenas como campos estruturados"), "factRef apenas como campos estruturados");
+  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("apenas como campos estruturados"), "factRef apenas como campos estruturados no repair");
   assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("development como lista de textos"), "geração não aceita mais development em texto plano");
 });
 
@@ -730,14 +734,19 @@ test("usage do envelope sobrevive a GEN-SCHEMA e chega no report de falha; sem u
 
 // ---- Custo relatado pelo provider (Blueprint 456f525): usage.cost exato, sem float ----
 
-test("extractReportedCostLexeme casa apenas a chave exata cost, nunca cost_details", () => {
+test("extractReportedCostLexeme casa a chave exata cost e, na ausência dela, cost_details.upstream_inference_cost (Blueprint)", () => {
   assert.equal(extractReportedCostLexeme('{"usage":{"cost":0.009,"cost_details":{"upstream_inference_cost":19}}}'), "0.009");
   assert.equal(extractReportedCostLexeme('{"usage":{"prompt_tokens":5}}'), null);
-  assert.equal(extractReportedCostLexeme('{"usage":{"cost_details":{"upstream_inference_cost":19}}}'), null);
+  // Blueprint: cost_details.upstream_inference_cost é fallback quando cost direto ausente.
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost_details":{"upstream_inference_cost":19}}}'), "19");
+  // Ausência total de custo → null (nunca USD 0 inventado).
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost_details":{"prompt_tokens":5}}}'), null);
+  assert.equal(extractReportedCostLexeme('{"usage":{"input_tokens":10,"tokens":0}}'), null);
   // notação científica é rejeitada por inteiro — sem captura de prefixo numérico
   assert.equal(extractReportedCostLexeme('{"usage":{"cost":1e-3}}'), null, "1e-3 não pode virar 1");
   assert.equal(extractReportedCostLexeme('{"usage":{"cost":0.5e1}}'), null, "0.5e1 não pode virar 0.5");
   assert.equal(extractReportedCostLexeme('{"usage":{"cost":1.5e1}}'), null, "1.5e1 não pode virar 1 (backtrack sobre '.' bloqueado)");
+  assert.equal(extractReportedCostLexeme('{"usage":{"cost_details":{"upstream_inference_cost":2e1}}}'), null, "científica em cost_details também é rejeitada");
 });
 
 test("extractReportedCostLexeme ignora cost dentro do conteúdo gerado (string escapada) e só lê usage de topo", () => {

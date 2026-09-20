@@ -5,13 +5,30 @@ import { resolveSession } from "../identity/service";
 import { isValidIdempotencyKey } from "../products/service";
 import { GenerationError, generationErrorStatus, publicGenerationError } from "./errors";
 import { CARDINALITY_POLICY } from "./contract";
+import { aggregateRunCosts, aggregateRunUsage } from "./cost-observability";
 import { startCommerceIntelligence, findBlockingGeneration, activeJobWhere } from "./service";
-type GenerationEnvelopeJob = { id: string; productId: string; status: string; stage: string | null; targetContentCount: number; publicErrorMessage: string | null; metadata?: unknown; createdAt: Date; startedAt: Date | null; finishedAt: Date | null; attempt: number; strategies?: Array<{ payload: unknown }>; plan?: { payload: unknown } | null; contents?: Array<{ id: string; productId: string; planId: string; opportunityId: string | null; position: number; status: string; currentBriefVersionId: string | null; briefs?: Array<{ payload: unknown }>; sceneSets?: Array<{ briefVersionId: string; status: string; payload: unknown }> }> };
+type GenerationEnvelopeJob = { id: string; productId: string; status: string; stage: string | null; targetContentCount: number; publicErrorMessage: string | null; metadata?: unknown; createdAt: Date; startedAt: Date | null; finishedAt: Date | null; attempt: number; strategies?: Array<{ payload: unknown }>; plan?: { payload: unknown } | null; run?: { metadata: unknown } | null; contents?: Array<{ id: string; productId: string; planId: string; opportunityId: string | null; position: number; status: string; currentBriefVersionId: string | null; briefs?: Array<{ payload: unknown }>; sceneSets?: Array<{ briefVersionId: string; status: string; payload: unknown }> }> };
 function payloadObject(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
-export function projectBriefPayload(value: unknown): Record<string, unknown> { const payload = payloadObject(value); if (!Array.isArray(payload.development) || payload.development.length < CARDINALITY_POLICY.development.min || payload.development.length > CARDINALITY_POLICY.development.max || payload.development.some((point) => typeof point !== "string" || !point.trim())) throw new GenerationError("GEN-SCHEMA", "Brief persistido contém development inválido", false); const result = Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "scenes")); return { ...result, development: payload.development }; }
+// Leitor histórico VERSIONADO read-only (cutover v2 — Blueprint): v2 persiste
+// DevelopmentBullet[] canônico e projeta SOMENTE texto (development: string[]) +
+// campos de briefing; v1 (strings) é ludo como está. Refs/rationale/action/cta de
+// bullet NUNCA vazam e refs jamais são inventadas. UI não é alterada.
+export function projectBriefPayload(value: unknown): Record<string, unknown> {
+  const payload = payloadObject(value);
+  if (payload.version === 2) {
+    const bullets = payload.development;
+    const badBullet = !Array.isArray(bullets) || bullets.length < CARDINALITY_POLICY.development.min || bullets.length > CARDINALITY_POLICY.development.max ||
+      bullets.some((bullet) => { const b = bullet as Record<string, unknown> | null; return !b || typeof b.text !== "string" || !b.text.trim(); });
+    if (badBullet)
+      throw new GenerationError("GEN-SCHEMA", "Brief persistido contém development v2 inválido", false);
+    const { development: _bullets, ...rest } = payload;
+    return { ...rest, development: bullets.map((bullet) => String((bullet as Record<string, unknown>).text)) };
+  }
+  if (!Array.isArray(payload.development) || payload.development.length < CARDINALITY_POLICY.development.min || payload.development.length > CARDINALITY_POLICY.development.max || payload.development.some((point) => typeof point !== "string" || !point.trim())) throw new GenerationError("GEN-SCHEMA", "Brief persistido contém development inválido", false); const result = Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "scenes")); return { ...result, development: payload.development };
+}
 async function session(req: Request) { const token = readCookie(req, SESSION_COOKIE); return token ? resolveSession(token) : null; }
 /* metadata é escalar (Json?) — vem por padrão no include; include só aceita relações. */
-const include = { strategies: true, plan: true, contents: { include: { briefs: { orderBy: { version: "asc" as const }, take: 1 }, sceneSets: true } } };
+const include = { strategies: true, plan: true, run: true, contents: { include: { briefs: { orderBy: { version: "asc" as const }, take: 1 }, sceneSets: true } } };
 function noStore(response: Response) { response.headers.set("cache-control", "no-store, max-age=0"); return response; }
 // ADR-019: projeção de cenas do envelope — sempre escopada ao tenant (a query já
 // é) e à briefVersion corrente. Estados distintos sem vazar detalhes internos:
@@ -75,7 +92,10 @@ export async function envelope(job: GenerationEnvelopeJob) {
   // Terminal positivo sem conteúdos persistidos viola exact-N / D>0 (ADR-021) —
   // degrada fail-closed via GEN-PROJECTION (projectJobEnvelope) sem mascarar o status.
   if (publish && contents.length < 1) throw new GenerationError("GEN-PROJECTION", "Terminal positivo sem conteúdos persistidos", false);
-  return { id: job.id, productId: job.productId, status: job.status, stage: job.stage, targetContentCount: job.targetContentCount, error: job.publicErrorMessage, createdAt: job.createdAt.toISOString(), startedAt: job.startedAt?.toISOString() ?? null, finishedAt: job.finishedAt?.toISOString() ?? null, attempt: job.attempt, readiness: publish ? "READY" : job.status === "FAILED" || job.status === "CANCELLED" ? "FAILED" : "ANALYZING", strategy: publish ? payloadObject(job.strategies?.[0]?.payload) : {}, plan: publish ? payloadObject(job.plan?.payload) : {}, contents, ...(partial ? { expectedCount: partial.expectedCount, deliveredCount: partial.deliveredCount, failedCount: partial.failedCount, missing: projectMissing(meta.failedItems) } : {}) };
+  return { id: job.id, productId: job.productId, status: job.status, stage: job.stage, targetContentCount: job.targetContentCount, error: job.publicErrorMessage, createdAt: job.createdAt.toISOString(), startedAt: job.startedAt?.toISOString() ?? null, finishedAt: job.finishedAt?.toISOString() ?? null, attempt: job.attempt, readiness: publish ? "READY" : job.status === "FAILED" || job.status === "CANCELLED" ? "FAILED" : "ANALYZING", strategy: publish ? payloadObject(job.strategies?.[0]?.payload) : {}, plan: publish ? payloadObject(job.plan?.payload) : {}, contents,
+    // Blueprint: uso/custo AGREGADOS do run — só totais sanitizados (nunca
+    // provider/model/prompt/metadata bruto); ausência permanece null/UNAVAILABLE.
+    usage: aggregateRunUsage(job.run?.metadata), cost: aggregateRunCosts(job.run?.metadata).job, ...(partial ? { expectedCount: partial.expectedCount, deliveredCount: partial.deliveredCount, failedCount: partial.failedCount, missing: projectMissing(meta.failedItems) } : {}) };
 }
 export async function handleCurrent(req: Request) { const s = await session(req); if (!s) return json(401, { error: "Sessão inválida", code: "UNAUTHENTICATED" }); const productId = new URL(req.url).searchParams.get("productId"); if (productId !== null && !/^[A-Za-z0-9_-]{1,100}$/.test(productId)) return json(400, { error: "Product inválido", code: "GEN-PRODUCT" }); const active = await findBlockingGeneration(s.tenantId, s.userId, productId ?? undefined); console.info("[generation-current]", { tenantId: s.tenantId, userId: s.userId, productId: productId ?? null, activeJobId: active?.id ?? null, activeStatus: active?.status ?? null }); if (active) return noStore(Response.json(await projectJobEnvelope(active))); const where = currentGenerationFilter(s.tenantId, s.userId, productId ?? undefined); const job = await prisma.commerceIntelligenceJob.findFirst({ where: { ...where, status: { in: [CommerceIntelligenceJobStatus.SUCCEEDED, CommerceIntelligenceJobStatus.SUCCEEDED_PARTIAL, CommerceIntelligenceJobStatus.FAILED, CommerceIntelligenceJobStatus.CANCELLED] } }, include, orderBy: { createdAt: "desc" } }); return noStore(Response.json(job ? await projectJobEnvelope(job) : null)); }
 // Estado sem job segue 404 (idle tratado pela UI). Payload persistido inválido

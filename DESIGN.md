@@ -1,7 +1,7 @@
 # Design System — Commerce Intelligence
 
 **Status:** fonte de verdade visual do produto  
-**Versão:** 1.6
+**Versão:** 1.7
 **Locale do MVP:** `pt-BR`  
 **Escopo:** decisões de produto visual, tokens, comportamento responsivo, estados e contratos de componentes. Este documento **não implementa telas, componentes ou dependências**.
 
@@ -62,6 +62,16 @@ macOS/iPadOS, Things e Linear são referências de sensação, clareza e discipl
 11. **Light é o padrão.** Dark usa os mesmos nomes de tokens semânticos e muda somente seus valores de tema definidos aqui.
 12. **Acessibilidade é parte do visual.** Foco, erro, contraste, teclado, toque e redução de movimento não são estados posteriores.
 13. **Componentes servem à jornada; não limitam o design.** Os componentes já existentes, incluindo shadcn/ui, são primitives reutilizáveis e não fronteiras da solução. A cada jornada, escolher o padrão que melhor resolve hierarquia, densidade, compreensão, responsividade, acessibilidade e qualidade percebida; criar componentes novos quando os existentes não atenderem a esses critérios. Não forçar `Tabs`, cards, accordions ou qualquer outro padrão somente porque já existe no projeto. Componentes novos devem reutilizar os tokens, contratos de acessibilidade e comportamento responsivo deste documento, sem duplicar uma capacidade que o componente existente já resolve adequadamente.
+
+### Método 3S: Simples, Sexy, Surpreendente
+
+Avalie estados e superfícies na ordem Simples → Sexy → Surpreendente; uma camada só entra quando a anterior já cumpre sua função. O método legitimiza expressividade com intenção — vale para qualquer superfície que precise comunicar foco, estado, marca ou progresso real, não apenas carregamento.
+
+- **Simples:** a menor solução correta, com dados reais do domínio. Nada inventado: nunca progresso ou ETA falso.
+- **Sexy:** assinatura visual construída com os tokens existentes — cor semântica, tipo e ritmo; gradiente e movimento, quando justificados, seguem suas regras condicionais (cor e motion).
+- **Surpreendente:** no máximo um detalhe memorável por região, sempre honesto (derivado de estado real); o que for decorativo é silencioso para tecnologia assistiva, que continua recebendo o significado por texto.
+
+Acessibilidade, tokens, `prefers-reduced-motion` e ausência de dados falsos não são negociáveis em nenhuma das camadas.
 
 ### Riscos deliberados e por que valem a pena
 
@@ -401,7 +411,7 @@ Regras de aplicação:
 - `color.feedback.warning`, `color.feedback.success`, `color.intelligence` e qualquer par abaixo de `4.5:1` não podem ser texto normal isolado;
 - cor sem texto, ícone, contorno estrutural ou estado não comunica nada sozinha;
 - foco usa `color.focus.ring` com offset visível e deve ser validado contra a superfície real;
-- não há gradientes nem cores intermediárias fora desses tokens.
+- gradientes são condicionais, não proibidos: permitidos quando comunicam algo real — foco, profundidade, marca ou estado — sempre derivados dos tokens semânticos existentes (interpolação entre cores de token, inclusive com transparência, sem cor nova ou intermediária arbitrária), com contraste validado contra a superfície real, em área contida (sem lavar a página inteira) e sem ruído; uso decorativo sem significado permanece proibido.
 
 ### Glass e superfícies
 
@@ -529,7 +539,8 @@ Não arredondar todas as superfícies. Cards sem objeto real não existem; logo,
 - entrada: `ease-out`;
 - saída: `ease-in`;
 - deslocamento/reordenação: `ease-in-out`;
-- não usar bounce, spring chamativo, parallax, auto-scroll decorativo ou contagem animada;
+- movimento existe quando explica algo — estado, causa e efeito, entrada, feedback ou delight intencional — sempre curto (tokens de duração; indicadores contínuos de atividade real podem ter ciclo próprio), performático (transform/opacity) e desligável com `prefers-reduced-motion`;
+- continuam proibidos: progresso ou ETA falsos, loops decorativos sem informação, bounce, spring chamativo, parallax, auto-scroll decorativo e contagem animada;
 - geração assíncrona pode indicar atividade, mas nunca deve inventar percentual de progresso;
 - progresso de lote pode animar discretamente quando um Conteúdo é concluído, porque representa um valor real;
 - concluir um Conteúdo deve dar feedback imediato e manter o próximo passo visível;
@@ -898,3 +909,4 @@ A **Agenda interna de gravação** faz parte do MVP e não deve ser confundida c
 | 2026-08-27 | Realinhamento aos PRDs vigentes (engine, job assíncrono, briefing/lotes, model router)                  | O design v1.3 já refletia o core loop e o indicador global; a revisão atualizou as fontes canônicas, incluiu a resolução da quantidade inicial na confirmação e manteu tokens, estética e navegação vigentes. |
 | 2026-08-28 | Navegação mobile substitui a bottom nav pela Sidebar shadcn/ui (drawer off-canvas)                      | Com cinco destinos, a barra inferior empilha botões e prejudica a navegação; a Sidebar uniformiza o shell nas três superfícies e aproveita componente de biblioteca em vez de navegação custom.               |
 | 2026-08-28 | Componentes de UI nascem de shadcn/ui: buscar componente pronto e adaptá-lo antes de criar algo próprio | Reuso de biblioteca reduz código custom, mantém acessibilidade e consistência; componente custom é exceção com motivo registrado.                                                                             |
+| 2026-09-19 | Adoção do Método 3S (Simples, Sexy, Surpreendente) e regras condicionais para gradientes e movimento | Expressividade com intenção substitui proibições absolutas: gradiente e movimento valem quando comunicam algo real — foco, profundidade, marca ou estado — sempre derivados de tokens, com acessibilidade e reduced-motion; dados falsos (progresso/ETA) continuam proibidos. |

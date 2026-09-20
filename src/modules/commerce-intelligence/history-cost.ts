@@ -5,16 +5,18 @@ import { CommerceIntelligenceJobStatus, type CommerceIntelligenceJob, type Conte
 import { prisma } from "../db";
 import { readCookie, SESSION_COOKIE, json } from "../identity/http";
 import { resolveSession } from "../identity/service";
-import { aggregateRunCosts, type CostTotal } from "./cost-observability";
+import { aggregateRunCosts, aggregateRunUsage, type CostTotal } from "./cost-observability";
 
 export type ProductHistoryCost = CostTotal;
 
 export type ProductHistoryResponse = {
   jobs: Array<{
+    jobId: string;
     status: CommerceIntelligenceJobStatus;
     createdAt: string;
     finishedAt: string | null;
     requestedContents: number;
+    usage: { inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null; cachedTokens: number | null };
     cost: ProductHistoryCost;
     contents: Array<{ position: number; cost: ProductHistoryCost }>;
   }>;
@@ -46,13 +48,19 @@ export function projectProductHistory(jobs: HistoryJob[], contents: HistoryConte
   }
   return {
     jobs: jobs.map((job) => {
-      const aggregates = aggregateRunCosts(runByJob.get(job.id)?.metadata ?? null);
+      const run = runByJob.get(job.id);
+      const metadata = run?.metadata ?? null;
+      const aggregates = aggregateRunCosts(metadata);
       const costByContent = new Map(aggregates.contents.map((entry) => [entry.contentId, entry.total] as const));
       return {
+        jobId: job.id,
         status: job.status,
         createdAt: job.createdAt.toISOString(),
         finishedAt: job.finishedAt?.toISOString() ?? null,
         requestedContents: job.targetContentCount,
+        // Blueprint: uso agregado do run — só totais; dimensão ausente permanece
+        // null (nunca 0 inferido). Sem provider/model/tier/prompt/metadata.
+        usage: aggregateRunUsage(metadata),
         cost: aggregates.job,
         contents: (contentsByJob.get(job.id) ?? []).map((content) => ({
           position: content.position,

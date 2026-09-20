@@ -16,20 +16,27 @@
 }
 
 .empty h2 {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
   font-size: 32px;
-  gap: 10px;
+  gap: 12px;
   letter-spacing: -0.035em;
   line-height: 36px;
   margin: 0;
 }
 
-.titleIcon {
-  color: var(--color-brand);
-  flex: 0 0 auto;
-  height: 24px;
-  width: 24px;
+/* Logo em coluna fixa, no mesmo eixo do topo da primeira linha do título;
+   nudge óptico de 4px casa o topo da ilustração com a altura-x do texto. */
+.titleLogo {
+  flex: 0 0 32px;
+  height: 32px;
+  margin-top: 4px;
+  object-fit: contain;
+  width: 32px;
+}
+
+.titleText {
+  min-width: 0;
 }
 
 .empty > p {

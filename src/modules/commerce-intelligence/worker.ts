@@ -17,7 +17,7 @@ import {
 } from "./engine";
 import { loadPlatformSkill } from "./platform-skill";
 import { GATE_POLICY_VERSION } from "./gates";
-import type { ContentBriefVersion } from "./contract";
+import type { ContentBriefVersion, DevelopmentBullet } from "./contract";
 import { createHttpProvider } from "./provider";
 import { attachCapabilityCosts, type PriceSnapshot } from "./cost-observability";
 import { resolveProviderModelPrice, type PriceReader } from "./pricing";
@@ -108,12 +108,23 @@ export function projectFailureDiagnostics(value: unknown): { gateReports: Saniti
   };
 }
 
-export function briefPayloadForPersistence(brief: ContentBriefVersion): Prisma.InputJsonObject {
-  const { scenes: _legacyScenes, ...payload } = brief as ContentBriefVersion & { scenes?: unknown };
-  if (!Array.isArray(payload.development) || payload.development.length < CARDINALITY_POLICY.development.min || payload.development.length > CARDINALITY_POLICY.development.max || payload.development.some((point) => typeof point !== "string" || !point.trim())) {
+export function briefPayloadForPersistence(brief: ContentBriefVersion, bullets?: DevelopmentBullet[]): Prisma.InputJsonObject {
+  const { scenes: _legacyScenes, bullets: carried, ...payload } = brief as ContentBriefVersion & { scenes?: unknown; bullets?: unknown };
+  if (!Array.isArray(payload.development) || payload.development.length < CARDINALITY_POLICY.development.min || payload.development.length > CARDINALITY_POLICY.development.max) {
     throw new GenerationError("GEN-SCHEMA", "Brief sem development válido não pode ser persistido", false);
   }
-  return JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonObject;
+  // v2 (cutover Blueprint): persistência é SEMPRE DevelopmentBullet[] canônico e
+  // alinhado à projeção (bullet.text === development[i]); string[] não é
+  // persistido em jobs novos. Histórico v1 (strings) continua legível pelo
+  // leitor versionado read-only (projectBriefPayload), sem inventar refs.
+  const canonical = Array.isArray(bullets) ? bullets : Array.isArray(carried) ? carried : undefined;
+  if (!Array.isArray(canonical) || canonical.length !== payload.development.length ||
+    canonical.some((bullet, i) => !bullet || typeof bullet !== "object" ||
+      typeof bullet.text !== "string" || !bullet.text.trim() || bullet.text !== payload.development[i] ||
+      !Array.isArray(bullet.factRefs) || bullet.factRefs.length === 0 ||
+      typeof bullet.cta !== "string" || !bullet.cta.trim()))
+    throw new GenerationError("GEN-SCHEMA", "Brief sem bullets estruturados alinhados não pode ser persistido (v2)", false);
+  return JSON.parse(JSON.stringify({ ...payload, version: 2, developmentSchemaVersion: 2, development: canonical })) as Prisma.InputJsonObject;
 }
 
 export function fenceMatches(
@@ -502,6 +513,7 @@ export function runMetadata(
   qualityAudits: QualityAudit[] = [],
   qualityRepairs: Array<{ contentId: string; part: QualityPart; round: number; criterion: string; outcome: "REPAIRED" }> = [],
   understandingReductions: UnderstandingCardinalityReduction[] = [],
+  planPolicyVersion?: number,
 ): Record<string, unknown> {
   const scenes = {
     sets: sceneSets.length,
@@ -522,6 +534,7 @@ export function runMetadata(
       // engine — evidência do que governou a validação neste momento.
       engineVersion: ENGINE_VERSION,
       gateVersion: GATE_POLICY_VERSION,
+      ...(planPolicyVersion === undefined ? {} : { planPolicyVersion }),
       capabilities,
       repairs,
       repairCauses: repairCauses.map(({ briefId }) => ({ briefId, causes: ["deterministic_gate_repair"] })),
@@ -533,7 +546,7 @@ export function runMetadata(
       qualityRepairs,
     };
   } catch {
-    return { attempt, engineVersion: ENGINE_VERSION, gateVersion: GATE_POLICY_VERSION, capabilities, repairs, repairCauses: repairCauses.map(({ briefId }) => ({ briefId, causes: ["deterministic_gate_repair"] })), validated, scenes, patternReplacements, understandingReductions, qualityAudits: qualityAudits.map(({ contentId, round, parts }) => ({ contentId, round, parts: parts.map(({ part, status, criterion, reason }) => ({ part, status, criterion, reason: reasonText(reason) })) })), qualityRepairs };
+    return { attempt, engineVersion: ENGINE_VERSION, gateVersion: GATE_POLICY_VERSION, ...(planPolicyVersion === undefined ? {} : { planPolicyVersion }), capabilities, repairs, repairCauses: repairCauses.map(({ briefId }) => ({ briefId, causes: ["deterministic_gate_repair"] })), validated, scenes, patternReplacements, understandingReductions, qualityAudits: qualityAudits.map(({ contentId, round, parts }) => ({ contentId, round, parts: parts.map(({ part, status, criterion, reason }) => ({ part, status, criterion, reason: reasonText(reason) })) })), qualityRepairs };
   }
 }
 
@@ -690,6 +703,7 @@ export async function finalizeGeneration(
     for (const [index, brief] of output.briefs.entries()) {
       // ADR-021: briefs entregues mantêm a oportunidade do plano original.
       const opportunity = output.opportunities[output.briefOpportunityPositions?.[index] ?? index];
+      const bullets = output.developmentBullets?.find((entry) => entry.contentId === brief.contentId)?.bullets;
       const content = await tx.content.create({
         data: {
           id: brief.contentId,
@@ -701,7 +715,7 @@ export async function finalizeGeneration(
           opportunityId: opportunity ? String(opportunity.id) : null,
           // ADR-021: posição original no plano (N), não renumerada no subconjunto.
           position: (output.briefOpportunityPositions?.[index] ?? index) + 1,
-          payload: briefPayloadForPersistence(brief),
+          payload: briefPayloadForPersistence(brief, bullets),
         },
       });
       const version = await tx.contentBriefVersion.create({
@@ -711,7 +725,7 @@ export async function finalizeGeneration(
           productId: job.productId,
           jobId: job.id,
           contentId: content.id,
-          payload: briefPayloadForPersistence(brief),
+          payload: briefPayloadForPersistence(brief, bullets),
         },
       });
       const report = output.reports[index];
@@ -1091,6 +1105,7 @@ export async function processGeneration(jobId: string, ownerId: string) {
       output.qualityAudits,
       output.qualityRepairs,
       output.understandingReductions,
+      output.planPolicyVersion,
     );
     emitJobEvent("job.finalizing", {
       jobId: job.id,

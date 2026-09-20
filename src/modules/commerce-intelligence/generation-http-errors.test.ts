@@ -147,3 +147,42 @@ test("/retry e /complete com capacidade esgotada respondem 429 GEN-CAPACITY", as
     await limpar();
   }
 });
+
+test("POST /api/generations para identity slice002-*@teste.local é bloqueada (403 GEN-IDENTITY-BLOCKED) sem enqueue", async (t) => {
+  if (!dbUp) return t.skip();
+  const email = `slice002-${randomUUID()}@teste.local`;
+  const user = await prisma.user.create({ data: { email, passwordHash: "teste" } });
+  const tenant = await prisma.tenant.create({ data: { userId: user.id } });
+  await prisma.session.create({
+    data: { userId: user.id, tenantId: tenant.id, tokenHash, expiresAt: new Date(Date.now() + 3_600_000) },
+  });
+  const product = await prisma.product.create({
+    data: {
+      tenantId: tenant.id, name: "Produto bloqueado", description: "Descrição suficiente",
+      features: [], images: [], provenance: {}, targetContentCount: 1,
+      generationConstraints: { tom: "oral" },
+    },
+  });
+  const blockedHeaders = {
+    "content-type": "application/json",
+    "sec-fetch-site": "same-origin",
+    cookie: `ci_session=${token}`,
+    "idempotency-key": "blocked-key-0123456789abcdefghij",
+  };
+  try {
+    const response = await handleStartGeneration(
+      new Request("http://localhost/api/generations", { method: "POST", headers: blockedHeaders, body: JSON.stringify({ productId: product.id }) }),
+    );
+    assert.equal(response.status, 403);
+    const body = (await response.json()) as { code?: string; error?: string };
+    assert.equal(body.code, "GEN-IDENTITY-BLOCKED");
+    assert.equal(body.error, publicGenerationError("GEN-IDENTITY-BLOCKED"), "erro sanitizado, sem detalhe interno");
+    assert.equal(await prisma.commerceIntelligenceJob.count({ where: { tenantId: tenant.id } }), 0, "nenhum job enfileirado");
+    assert.equal(await prisma.generationUsageReservation.count({ where: { tenantId: tenant.id } }), 0, "nenhuma reserva criada");
+  } finally {
+    await prisma.product.delete({ where: { id: product.id } });
+    await prisma.session.deleteMany({ where: { userId: user.id } });
+    await prisma.tenant.delete({ where: { id: tenant.id } });
+    await prisma.user.delete({ where: { id: user.id } });
+  }
+});
