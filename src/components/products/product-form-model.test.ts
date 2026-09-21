@@ -5,8 +5,6 @@ import {
   buildManualProductPayload,
   buildProductPayload,
   digitsToPrice,
-  commissionAmountCents,
-  formatCommission,
   formatPriceWithCurrency,
   emptyProductDraft,
   preparationIsWithinLimits,
@@ -53,7 +51,6 @@ test("monta payload manual com fatos normalizados", () => {
         seller: " Loja oficial ",
         variants: " Preto \n\n Branco ",
         price: " 39,90 ",
-        characteristics: "cerdas macias\n\n cabo leve",
         imageReferences: "https://example.com/image.jpg",
         observations: " Uso diário ",
         url: " https://example.com/product ",
@@ -67,7 +64,6 @@ test("monta payload manual com fatos normalizados", () => {
       seller: "Loja oficial",
       variants: ["Preto", "Branco"],
       price: "39,90",
-      features: ["cerdas macias", "cabo leve"],
       imageRefs: ["https://example.com/image.jpg"],
       notes: "Uso diário",
       url: "https://example.com/product",
@@ -110,7 +106,6 @@ test("valida cadastro manual: todos os campos obrigatórios e formatos", () => {
         category: "",
         price: "",
         currency: "",
-        characteristics: "",
       },
       "",
     ),
@@ -120,7 +115,6 @@ test("valida cadastro manual: todos os campos obrigatórios e formatos", () => {
       category: "Informe a categoria do produto.",
       price: "Informe o preço do produto.",
       currency: "Informe a moeda do produto.",
-      characteristics: "Informe ao menos uma característica.",
     },
   );
   assert.deepEqual(
@@ -131,7 +125,6 @@ test("valida cadastro manual: todos os campos obrigatórios e formatos", () => {
         category: "Beleza",
         price: "-1",
         currency: "R$",
-        characteristics: "cerdas",
       },
       "notas",
     ),
@@ -145,7 +138,6 @@ test("valida cadastro manual: todos os campos obrigatórios e formatos", () => {
         category: "Beleza",
         price: "39.90",
         currency: "R$X",
-        characteristics: "cerdas",
       },
       "notas",
     ),
@@ -159,7 +151,6 @@ test("valida cadastro manual: todos os campos obrigatórios e formatos", () => {
         category: "Beleza",
         price: "39.90",
         currency: "R$",
-        characteristics: "cerdas",
       },
       "sem gírias",
     ),
@@ -223,7 +214,6 @@ test("monta payload manual com fatos normalizados, preparação e chave", () => 
         category: " Beleza ",
         price: " 39.90 ",
         currency: " R$ ",
-        characteristics: "cerdas macias\n\n cabo leve",
         imageReferences: "https://example.com/image.jpg",
         url: " https://example.com/product ",
       },
@@ -240,7 +230,6 @@ test("monta payload manual com fatos normalizados, preparação e chave", () => 
       category: "Beleza",
       price: "39,90",
       priceCurrency: "R$",
-      features: ["cerdas macias", "cabo leve"],
       imageRefs: ["https://example.com/image.jpg"],
       url: "https://example.com/product",
       targetContentCount: 5,
@@ -259,7 +248,6 @@ test("par preço/moeda vazio fica nulo e constraints omitidas somem do payload",
       category: "",
       price: "",
       currency: "",
-      characteristics: "",
     },
     { targetContentCount: 10, creatorPresence: "on_camera" },
   );
@@ -269,7 +257,6 @@ test("par preço/moeda vazio fica nulo e constraints omitidas somem do payload",
     category: null,
     price: null,
     priceCurrency: null,
-    features: [],
     targetContentCount: 10,
     creatorPresence: "on_camera",
   });
@@ -282,7 +269,6 @@ test("preço manual 23,44 com moeda padrão R$ é válido", () => {
     category: "Beleza",
     price: "23,44",
     currency: "R$",
-    characteristics: "cerdas",
   };
 
   assert.deepEqual(validateProductManualDraft(draft, "notas"), {});
@@ -304,7 +290,6 @@ test("preço vazio com moeda padrão R$ é rejeitado como obrigatório", () => {
         category: "Beleza",
         price: "",
         currency: "R$",
-        characteristics: "cerdas",
       },
       "notas",
     ),
@@ -318,7 +303,6 @@ test("preço vazio com moeda padrão R$ é rejeitado como obrigatório", () => {
         category: "Beleza",
         price: "23,44",
         currency: "",
-        characteristics: "cerdas",
       },
       "notas",
     ),
@@ -332,7 +316,6 @@ test("preço vazio com moeda padrão R$ é rejeitado como obrigatório", () => {
         category: "Beleza",
         price: "23,44",
         currency: "R$",
-        characteristics: "cerdas",
       },
       " ",
     ),
@@ -350,75 +333,20 @@ test("exibe preço com símbolo da moeda, não o código", () => {
   assert.equal(formatPriceWithCurrency(null, "USD"), null);
 });
 
-test("comissão: calcula % sobre o preço e valor fixo; sem preço % fica só percentual", () => {
-  assert.equal(commissionAmountCents("PERCENT", "10", "89,90"), 899);
-  assert.equal(commissionAmountCents("AMOUNT", "4,50", "89,90"), 450);
-  assert.equal(commissionAmountCents("PERCENT", "7,5", "200"), 1500);
-  assert.equal(commissionAmountCents("PERCENT", "10", ""), null);
-  assert.equal(commissionAmountCents("PERCENT", "", "89,90"), null);
-  assert.equal(commissionAmountCents("", "10", "89,90"), null);
-  assert.equal(commissionAmountCents("PERCENT", "0", "89,90"), null);
-  assert.equal(formatCommission("PERCENT", "10", "89,90", "R$"), "R$ 8,99");
-  assert.equal(formatCommission("AMOUNT", "4,50", "89,90", "USD"), "$ 4,50");
-  assert.equal(formatCommission("PERCENT", "10", "", "R$"), "10%");
-  assert.equal(formatCommission("", "10", "89,90", "R$"), null);
-});
-
-test("comissão: opcional sem valor; exige tipo, formato e faixa percentual quando há valor", () => {
-  const base = {
-    ...emptyProductDraft(),
-    name: "Produto",
-    description: "Descrição",
-    category: "Categoria",
-    price: "89.90",
-    currency: "USD",
-    characteristics: "característica",
-    commissionType: "",
-    commission: "",
-  };
-  assert.deepEqual(
-    validateProductManualDraft({ ...base, commission: "10" }, ""),
-    { commissionType: "Escolha se a comissão é % ou valor." },
-  );
-  assert.deepEqual(
-    validateProductManualDraft({ ...base, commissionType: "PERCENT" }, ""),
-    {},
-  );
-  assert.deepEqual(
-    validateProductManualDraft({ ...base, commissionType: "PERCENT", commission: "100,01" }, ""),
-    { commission: "A comissão percentual deve estar entre 0 e 100." },
-  );
-  assert.deepEqual(
-    validateProductManualDraft({ ...base, commissionType: "FIXA", commission: "1" }, ""),
-    { commissionType: "Informe um tipo de comissão válido." },
-  );
-  const valido = validateProductManualDraft({ ...base, commissionType: "AMOUNT", commission: "4,50" }, "");
-  assert.equal(valido.commission, undefined);
-  assert.equal(valido.commissionType, undefined);
-});
-
-test("comissão: payload envia tipo e valor normalizado apenas quando o par está completo", () => {
+test("comissão/features (ADR-030): payload nunca as envia, mesmo com draft legado", () => {
   const preparation = { targetContentCount: 1, creatorPresence: "either" } as const;
-  const comComissao = buildManualProductPayload(
-    { ...emptyProductDraft(), name: "P", description: "D", category: "C", price: "89.90", currency: "R$", characteristics: "x", commissionType: "PERCENT", commission: "10,5" },
+  const payload = buildManualProductPayload(
+    { ...emptyProductDraft(), name: "P", description: "D", category: "C", price: "89.90", currency: "R$" },
     preparation,
   );
-  assert.equal(comComissao.commissionType, "PERCENT");
-  assert.equal(comComissao.commissionValue, "10,50");
+  assert.equal("commissionType" in payload, false);
+  assert.equal("commissionValue" in payload, false);
+  assert.equal("features" in payload, false);
 
-  const semComissao = buildManualProductPayload(
-    { ...emptyProductDraft(), name: "P", description: "D", category: "C", price: "89.90", currency: "R$", characteristics: "x" },
-    preparation,
-  );
-  assert.equal(semComissao.commissionType, undefined);
-  assert.equal(semComissao.commissionValue, undefined);
-
-  const edicao = buildProductPayload({
-    ...emptyProductDraft(),
-    commissionType: "AMOUNT",
-    commission: "5",
-  });
-  assert.equal(edicao.commissionValue, "5,00");
+  const edicao = buildProductPayload({ ...emptyProductDraft() });
+  assert.equal("commissionType" in edicao, false);
+  assert.equal("commissionValue" in edicao, false);
+  assert.equal("features" in edicao, false);
 });
 
 test("desconto tipado: draft sem discountValue não emite campos; percentual validado 0–100", () => {
@@ -429,7 +357,6 @@ test("desconto tipado: draft sem discountValue não emite campos; percentual val
     category: "C",
     price: "89.90",
     currency: "R$",
-    characteristics: "x",
   };
   const emptyPayload = buildManualProductPayload(
     base,
@@ -454,7 +381,7 @@ test("desconto tipado: draft sem discountValue não emite campos; percentual val
 
 test("desconto fixo usa moeda do produto e vai tipado no payload", () => {
   const payload = buildManualProductPayload(
-    { ...emptyProductDraft(), name: "P", description: "D", category: "C", price: "89.90", currency: "R$", characteristics: "x", discountType: "FIXED", discountValue: "5,00" },
+    { ...emptyProductDraft(), name: "P", description: "D", category: "C", price: "89.90", currency: "R$", discountType: "FIXED", discountValue: "5,00" },
     { targetContentCount: 1, creatorPresence: "either" },
   );
   assert.deepEqual(
@@ -465,11 +392,11 @@ test("desconto fixo usa moeda do produto e vai tipado no payload", () => {
 
 test("payload manual nunca carrega metadados de importação, provenância forjada nem atributos legados", () => {
   const payload = buildManualProductPayload(
-    { ...emptyProductDraft(), name: "P", description: "D", category: "C", price: "89.90", currency: "R$", characteristics: "x", imageReferences: "https://img/1.jpg\nhttps://img/2.jpg" },
+    { ...emptyProductDraft(), name: "P", description: "D", category: "C", price: "89.90", currency: "R$", imageReferences: "https://img/1.jpg\nhttps://img/2.jpg" },
     { targetContentCount: 1, creatorPresence: "either" },
     "chave",
   );
-  for (const forbidden of ["candidate", "gaps", "signals", "seller", "variants", "rawPayload", "sourceUrl", "provenanceOrigin"] as const) {
+  for (const forbidden of ["candidate", "gaps", "signals", "seller", "variants", "rawPayload", "sourceUrl", "provenanceOrigin", "commissionType", "commissionValue", "features"] as const) {
     assert.equal(forbidden in payload, false, `payload não deve conter ${forbidden}`);
   }
   // O payload carrega exatamente as linhas do draft; a regra de primeira

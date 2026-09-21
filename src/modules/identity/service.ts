@@ -37,12 +37,17 @@ function isUniqueViolation(e: unknown): boolean {
 }
 
 /** Cria conta + workspace pessoal + sessão em uma transação. Email já existente → AccountExistsError. */
-export async function registerUser(email: string, password: string, previousToken?: string | null): Promise<string> {
+export async function registerUser(
+  name: string,
+  email: string,
+  password: string,
+  previousToken?: string | null,
+): Promise<string> {
   const passwordHash = await hashPassword(password);
   const token = newOpaqueToken();
   try {
     await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: { email, passwordHash } });
+      const user = await tx.user.create({ data: { name, email, passwordHash } });
       const tenant = await tx.tenant.create({ data: { userId: user.id } });
       // ADR-006: entitlement inicial default, idempotente, no provisionamento do Tenant.
       await provisionDefaultEntitlement(tenant.id, tx);

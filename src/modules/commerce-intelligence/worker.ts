@@ -30,7 +30,9 @@ const SAFE_REPAIR_CAUSE_LABELS = ["claim sem suporte", "development invalido"] a
 /** Fatos essenciais do Product enviados à engine ( Gate 5, item 3). Desconto
  * entra como fato SOMENTE quando existe no Product, exclusivamente do tipado
  * (discountType + discountValue): sem fallback de discountPercentage, valor
- * nunca inventado. Função pura para cobertura factual determinística. */
+ * nunca inventado. Função pura para cobertura factual determinística.
+ * Retirada (ADR-030): comissão e features são legado isolado — colunas
+ * históricas existem, mas NUNCA são projetadas para a engine. */
 export function projectEngineFacts(product: {
   id: string;
   name: string;
@@ -42,7 +44,6 @@ export function projectEngineFacts(product: {
   discountType: string | null;
   discountValue: string | null;
   discountPercentage: Prisma.Decimal | null;
-  features: unknown;
   variants: unknown;
   images: unknown;
   seller: string | null;
@@ -63,7 +64,6 @@ export function projectEngineFacts(product: {
       : product.discountType === "FIXED" && product.discountValue
         ? `${product.priceCurrency ?? ""} ${product.discountValue.toString()} de desconto`.trim()
         : undefined,
-    features: product.features,
     variants: product.variants,
     images: product.images,
     seller: product.seller,

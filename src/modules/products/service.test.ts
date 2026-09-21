@@ -57,7 +57,6 @@ const validInput = {
   category: "Educação",
   price: "29,90",
   priceCurrency: "R$",
-  features: ["50 aulas", "certificado"],
   constraints: "sem gírias",
 };
 
@@ -95,12 +94,6 @@ test("validação: campos obrigatórios retornam códigos VAL-*-REQUIRED", () =>
       { ...validInput, priceCurrency: "" },
       "priceCurrency",
       "VAL-CURRENCY-REQUIRED",
-    ],
-    [{ ...validInput, features: [] }, "features", "VAL-FEATURES-REQUIRED"],
-    [
-      { ...validInput, features: ["", "   "] },
-      "features",
-      "VAL-FEATURES-REQUIRED",
     ],
   ];
   for (const [input, field, code] of casos) {
@@ -213,43 +206,16 @@ test("validação: preço não negativo, moeda válida e normalização preserva
   assert.equal(simples.priceAmount, "29.90");
   assert.equal(simples.priceCurrency, "USD");
 });
-test("validação: comissão opcional aceita percentual ou valor financeiro", () => {
-  const percent = validateManualProductInput({
+test("validação: comissão/features não são contrato — enviados, são ignorados sem erro e sem saída", () => {
+  const legado = validateManualProductInput({
     ...validInput,
     commissionType: "PERCENT",
     commissionValue: "10,50",
+    features: ["  50 aulas ", "", "certificado"],
   });
-  assert.equal(percent.commissionType, "PERCENT");
-  assert.equal(percent.commissionValue, "10.50");
-
-  const amount = validateManualProductInput({
-    ...validInput,
-    commissionType: "AMOUNT",
-    commissionValue: "4,50",
-  });
-  assert.equal(amount.commissionType, "AMOUNT");
-  assert.equal(amount.commissionValue, "4.50");
-  assert.equal(validateManualProductInput(validInput).commissionType, null);
-  assert.equal(validateManualProductInput(validInput).commissionValue, null);
-});
-
-test("validação: comissão rejeita valor negativo, percentual fora de 0–100 e tipo inválido", () => {
-  for (const input of [
-    { commissionType: "PERCENT", commissionValue: "-1" },
-    { commissionType: "PERCENT", commissionValue: "100,01" },
-    { commissionType: "AMOUNT", commissionValue: "-0,01" },
-    { commissionType: "OTHER", commissionValue: "1" },
-    { commissionType: "PERCENT", commissionValue: "" },
-  ]) {
-    assert.throws(
-      () => validateManualProductInput({ ...validInput, ...input }),
-      (error: unknown) => {
-        assert.ok(error instanceof ProductValidationError);
-        assert.ok(error.fieldErrors.commissionType || error.fieldErrors.commissionValue);
-        return true;
-      },
-    );
-  }
+  assert.equal("commissionType" in legado, false);
+  assert.equal("commissionValue" in legado, false);
+  assert.equal("features" in legado, false);
 });
 
 test("validação: aceita preço decimal com ponto", () => {
@@ -323,14 +289,12 @@ test("validação: preparação com defaults 5/Tanto faz e limites 1–10/300", 
     constraints: "sem gírias",
     imageRefs: ["https://cdn.exemplo.com/produto.png"],
     url: "https://exemplo.com/produto",
-    features: ["  50 aulas ", "", "certificado"],
   });
   assert.equal(preparado.targetContentCount, 10);
   assert.deepEqual(preparado.generationConstraints, {
     creatorPresence: "on_camera",
     constraints: "sem gírias",
   });
-  assert.deepEqual(preparado.features, ["50 aulas", "certificado"]);
 });
 
 test("validação: imageRefs aceita http(s) e data URL de imagem, rejeita outros esquemas e excessos", () => {
@@ -393,7 +357,7 @@ test("validação: imageRefs aceita http(s) e data URL de imagem, rejeita outros
 const email = () => `qa-ci-${randomBytes(8).toString("hex")}@teste.local`;
 
 async function tenantOf() {
-  const token = await registerUser(email(), "senha-segura-123");
+  const token = await registerUser("Creator", email(), "Senha123");
   const session = await resolveSession(token);
   assert.ok(session);
   // O provisioning do entitlement default é produção (registerUser/ADR-006); o teste só
@@ -594,7 +558,6 @@ test("POST válido persiste Product no tenant da sessão e POST repetido com a m
     category: "Educação",
     price: "29,90",
     priceCurrency: "R$",
-    features: ["50 aulas", "certificado"],
     targetContentCount: 7,
     creatorPresence: "on_camera",
     constraints: "sem gírias",
@@ -631,6 +594,11 @@ test("POST válido persiste Product no tenant da sessão e POST repetido com a m
   assert.equal(row.priceCurrency, "R$");
   assert.deepEqual(row.images, ["https://cdn.exemplo.com/produto.png"]);
   assert.equal(row.submittedUrl, "https://exemplo.com/produto");
+  // ADR-030: sem features no POST, a coluna histórica recebe o default [] e a
+  // comissão permanece não escrita.
+  assert.equal(row.commissionType, null);
+  assert.equal(row.commissionValue, null);
+  assert.deepEqual(row.features, []);
 
   const replayRes = await handleCreateProduct(post(token, body, key));
   assert.equal(replayRes.status, 200);
@@ -779,7 +747,6 @@ const updateFacts = {
   category: "Educação",
   price: "199,90",
   priceCurrency: "USD",
-  features: ["120 aulas"],
   imageRefs: ["https://cdn.exemplo.com/nova.png", PNG],
   url: "https://exemplo.com/produto-atualizado",
   targetContentCount: 5,
@@ -807,7 +774,10 @@ test("GET por id retorna o Product do tenant com moeda; inexistente responde 404
   assert.equal(view.version, 1);
   assert.equal(view.price, "29.9");
   assert.equal(view.priceCurrency, "R$");
-  assert.deepEqual(view.features, ["50 aulas", "certificado"]);
+  // ADR-030: comissão/features fora do contrato ativo — nunca expostas na view.
+  assert.equal("features" in view, false);
+  assert.equal("commissionType" in view, false);
+  assert.equal("commissionValue" in view, false);
 
   const missing = await handleGetProduct(
     getById(token, randomUUID()),
@@ -895,6 +865,45 @@ test("desconto tipado: POST/GET expõem discountType+discountValue e FIXED acima
   assert.equal(view.discountValue, "10.00");
   assert.equal(view.discountPercentage, null);
   assert.equal(await prisma.product.count({ where: { tenantId } }), 1);
+});
+
+test("ADR-030: PATCH sem comissão/features preserva histórico legado e view não expõe", async (t) => {
+  if (!dbUp) return t.skip();
+  const { token, tenantId } = await tenantOf();
+  // Linha histórica com campos legados populados (criados fora do service).
+  const legacy = await prisma.product.create({
+    data: {
+      tenantId,
+      name: "Produto legado",
+      provenance: { origin: "manual" },
+      targetContentCount: 5,
+      images: [],
+      features: ["50 aulas", "certificado"],
+      commissionType: "PERCENT",
+      commissionValue: "10.50",
+    },
+  });
+
+  const res = await handleUpdateProduct(
+    patch(token, legacy.id, {
+      ...updateFacts,
+      expectedVersion: legacy.version,
+    }),
+    legacy.id,
+  );
+  assert.equal(res.status, 200);
+
+  // Histórico preservado: PATCH não sobrescreve colunas fora do contrato.
+  const row = await prisma.product.findUniqueOrThrow({ where: { id: legacy.id } });
+  assert.equal(row.commissionType, "PERCENT");
+  assert.equal(row.commissionValue?.toString(), "10.5");
+  assert.deepEqual(row.features, ["50 aulas", "certificado"]);
+
+  // View não expõe os campos legados.
+  const view = (await handleGetProduct(getById(token, legacy.id), legacy.id).then((r) => r.json())) as Record<string, unknown>;
+  assert.equal("features" in view, false);
+  assert.equal("commissionType" in view, false);
+  assert.equal("commissionValue" in view, false);
 });
 
 test("GET/PATCH/DELETE de outro tenant responde 404 sem vazar o Product", async (t) => {

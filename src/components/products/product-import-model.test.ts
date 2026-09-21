@@ -18,13 +18,14 @@ const manualDraft: ProductManualDraft = {
   category: "Pet shop",
   price: "50.00",
   currency: "USD",
-  characteristics: "feito à mão",
   imageReferences: "https://exemplo.com/minha.jpg",
   url: "",
   discountType: "PERCENTAGE",
   discountValue: "10",
 };
 
+/* features segue no candidato só como contrato externo transitório do
+   importer (ADR-030): nunca é mapeado para o draft nem vira gap acionável. */
 function candidate(overrides: Partial<ProductImportCandidate>): ProductImportCandidate {
   return { features: [], imageRefs: [], sourceUrl: "https://shop.tiktok.com/x", gaps: [], ...overrides };
 }
@@ -54,7 +55,8 @@ test("merge substitui nome, descrição, categoria e preço presentes no candida
   assert.equal(merged.category, "Beleza e cuidados pessoais");
   assert.equal(merged.price, "89.90");
   assert.equal(merged.currency, "R$");
-  assert.equal(merged.characteristics, "Cerdas macias");
+  /* features do candidato não cruza para o draft: sem campo no formulário. */
+  assert.equal("characteristics" in merged, false);
 });
 
 test("merge preserva imagens manuais e aplica a importada só em formulário sem imagem", () => {
@@ -76,9 +78,6 @@ test("merge preserva imagens manuais e aplica a importada só em formulário sem
 
   const untouched = mergeImportedCandidate(emptyImageDraft, candidate({}));
   assert.equal(untouched.imageReferences, "");
-
-  const withoutFeatures = mergeImportedCandidate(manualDraft, candidate({}));
-  assert.equal(withoutFeatures.characteristics, manualDraft.characteristics);
 });
 
 test("merge aceita somente moedas suportadas e desconto PERCENTAGE com valor", () => {

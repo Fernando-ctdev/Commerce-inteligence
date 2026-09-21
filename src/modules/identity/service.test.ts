@@ -12,6 +12,7 @@ import {
   loginUser,
   registerUser,
 } from "./service.js";
+import { hashPassword } from "./password.js";
 
 // handleRegister/Login/Logout fazem originOk (allowlist APP_ORIGIN, fail-closed
 // vazia) e o tsx --test não carrega .env: a origem precisa existir ANTES do
@@ -51,34 +52,38 @@ const tokenOf = (res: Response): string => {
   return m![1];
 };
 
-test("register cria conta+workspace+sessão e responde 200 {redirectTo:'/today'}", async (t) => {
+test("register cria conta+workspace+sessão e persiste nome", async (t) => {
   if (!dbUp) return t.skip();
+  const e = email();
   const res = await handleRegister(
     req("/api/access/register", {
-      email: email(),
-      password: "senha-segura-123",
+      name: "  Creator  ",
+      email: e,
+      password: "Senha123",
+      passwordConfirmation: "Senha123",
     }),
   );
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { redirectTo: "/today" });
   assert.ok(res.headers.get("set-cookie")?.includes("HttpOnly"));
   assert.ok(res.headers.get("set-cookie")?.includes("SameSite=Lax"));
+  assert.equal((await prisma.user.findUnique({ where: { email: e } }))?.name, "Creator");
 });
 
 test("register duplicado (sequencial e concorrente) produz 409 e um único workspace", async (t) => {
   if (!dbUp) return t.skip();
   const e = email();
   const first = await handleRegister(
-    req("/api/access/register", { email: e, password: "senha-segura-123" }),
+    req("/api/access/register", { name: "Creator", email: e, password: "Senha123", passwordConfirmation: "Senha123" }),
   );
   assert.equal(first.status, 200);
   const dup = await handleRegister(
-    req("/api/access/register", { email: e, password: "senha-segura-123" }),
+    req("/api/access/register", { name: "Creator", email: e, password: "Senha123", passwordConfirmation: "Senha123" }),
   );
   assert.equal(dup.status, 409);
   await Promise.all(
     Array.from({ length: 3 }, () =>
-      registerUser(e, "senha-segura-123").catch((err) => {
+      registerUser("Creator", e, "Senha123").catch((err) => {
         if (!(err instanceof AccountExistsError)) throw err;
       }),
     ),
@@ -95,26 +100,40 @@ test("register duplicado (sequencial e concorrente) produz 409 e um único works
 test("validação: email/senha inválidos → 400 com fieldErrors, sem criar nada", async (t) => {
   if (!dbUp) return t.skip();
   const bad = await handleRegister(
-    req("/api/access/register", { email: "nope", password: "123" }),
+    req("/api/access/register", { name: "Creator", email: "nope", password: "123", passwordConfirmation: "123" }),
   );
   assert.equal(bad.status, 400);
   const body = (await bad.json()) as { fieldErrors?: Record<string, string> };
   assert.ok(body.fieldErrors?.email && body.fieldErrors?.password);
 });
 
+test("login mantém compatibilidade com conta legada sem a nova política", async (t) => {
+  if (!dbUp) return t.skip();
+  const e = email();
+  const user = await prisma.user.create({
+    data: { email: e, passwordHash: await hashPassword("12345678") },
+  });
+  await prisma.tenant.create({ data: { userId: user.id } });
+
+  const response = await handleLogin(
+    req("/api/access/login", { email: e, password: "12345678" }),
+  );
+  assert.equal(response.status, 200);
+});
+
 test("login resolve o mesmo workspace; erro é uniforme 401 sem enumerar", async (t) => {
   if (!dbUp) return t.skip();
   const e = email();
-  await registerUser(e, "senha-segura-123");
+  await registerUser("Creator", e, "Senha123");
   const first = await handleLogin(
-    req("/api/access/login", { email: e, password: "senha-segura-123" }),
+    req("/api/access/login", { email: e, password: "Senha123" }),
   );
   assert.equal(first.status, 200);
   assert.deepEqual(await first.json(), { redirectTo: "/today" });
   const ctx1 = await resolveSession(tokenOf(first));
   assert.ok(ctx1);
   const second = await handleLogin(
-    req("/api/access/login", { email: e, password: "senha-segura-123" }),
+    req("/api/access/login", { email: e, password: "Senha123" }),
   );
   const ctx2 = await resolveSession(tokenOf(second));
   assert.ok(ctx2);
@@ -126,7 +145,7 @@ test("login resolve o mesmo workspace; erro é uniforme 401 sem enumerar", async
   );
   assert.equal(wrong.status, 401);
   const missing = await handleLogin(
-    req("/api/access/login", { email: email(), password: "senha-segura-123" }),
+    req("/api/access/login", { email: email(), password: "Senha123" }),
   );
   assert.equal(missing.status, 401);
   assert.deepEqual(await wrong.json(), await missing.json());
@@ -135,16 +154,16 @@ test("login resolve o mesmo workspace; erro é uniforme 401 sem enumerar", async
 test("rotação no login revoga a referência anterior (cookie atual é passado)", async (t) => {
   if (!dbUp) return t.skip();
   const e = email();
-  await registerUser(e, "senha-segura-123");
+  await registerUser("Creator", e, "Senha123");
   const first = await handleLogin(
-    req("/api/access/login", { email: e, password: "senha-segura-123" }),
+    req("/api/access/login", { email: e, password: "Senha123" }),
   );
   const oldToken = tokenOf(first);
   assert.ok(await resolveSession(oldToken));
   const second = await handleLogin(
     req(
       "/api/access/login",
-      { email: e, password: "senha-segura-123" },
+      { email: e, password: "Senha123" },
       oldToken,
     ),
   );
@@ -155,8 +174,8 @@ test("rotação no login revoga a referência anterior (cookie atual é passado)
 
 test("registro com cookie atual revoga a referência anterior", async (t) => {
   if (!dbUp) return t.skip();
-  const oldToken = await registerUser(email(), "senha-segura-123");
-  const newToken = await registerUser(email(), "senha-segura-123", oldToken);
+  const oldToken = await registerUser("Creator", email(), "Senha123");
+  const newToken = await registerUser("Creator", email(), "Senha123", oldToken);
 
   assert.equal(await resolveSession(oldToken), null);
   assert.ok(await resolveSession(newToken));
@@ -165,9 +184,9 @@ test("registro com cookie atual revoga a referência anterior", async (t) => {
 test("logout revoga no servidor e limpa o cookie", async (t) => {
   if (!dbUp) return t.skip();
   const e = email();
-  await registerUser(e, "senha-segura-123");
+  await registerUser("Creator", e, "Senha123");
   const login = await handleLogin(
-    req("/api/access/login", { email: e, password: "senha-segura-123" }),
+    req("/api/access/login", { email: e, password: "Senha123" }),
   );
   const token = tokenOf(login);
   assert.ok(await resolveSession(token));
@@ -184,7 +203,7 @@ test("Origin ausente/divergente é rejeitada com 403 antes de mutar", async (t) 
   const noOrigin = new Request(`${ORIGIN}/api/access/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email: e, password: "senha-segura-123" }),
+    body: JSON.stringify({ name: "Creator", email: e, password: "Senha123", passwordConfirmation: "Senha123" }),
   });
   assert.equal((await handleRegister(noOrigin)).status, 403);
   assert.equal(
@@ -192,7 +211,7 @@ test("Origin ausente/divergente é rejeitada com 403 antes de mutar", async (t) 
       await handleRegister(
         req(
           "/api/access/register",
-          { email: e, password: "senha-segura-123" },
+          { name: "Creator", email: e, password: "Senha123", passwordConfirmation: "Senha123" },
           undefined,
           "https://evil.example",
         ),
@@ -207,7 +226,7 @@ test("respostas de erro não vazam cookie, token ou id de sessão", async (t) =>
   if (!dbUp) return t.skip();
   const texts: string[] = [];
   const bad = await handleRegister(
-    req("/api/access/register", { email: "nope", password: "1" }),
+    req("/api/access/register", { name: "Creator", email: "nope", password: "1", passwordConfirmation: "1" }),
   );
   texts.push(await bad.text());
   const wrong = await handleLogin(
@@ -232,8 +251,8 @@ test("sessão apontando para tenant de outro usuário é rejeitada (isolamento)"
   if (!dbUp) return t.skip();
   const emailA = email();
   const emailB = email();
-  const tokenA = await registerUser(emailA, "senha-segura-123");
-  const tokenB = await registerUser(emailB, "senha-segura-123");
+  const tokenA = await registerUser("Creator", emailA, "Senha123");
+  const tokenB = await registerUser("Creator", emailB, "Senha123");
   const userA = await prisma.user.findUnique({ where: { email: emailA }, include: { tenant: true } });
   const tenantB = await prisma.tenant.findFirst({ where: { user: { email: emailB } } });
   assert.ok(userA && tenantB);
@@ -251,12 +270,12 @@ test("sessão apontando para tenant de outro usuário é rejeitada (isolamento)"
 test("teardown: limpeza de sessões não remove sessões válidas", async (t) => {
   if (!dbUp) return t.skip();
   const e = email();
-  const token = await registerUser(e, "senha-segura-123");
+  const token = await registerUser("Creator", e, "Senha123");
   await revokeSession(token);
   const { purgeStaleSessions } = await import("./service.js");
   await purgeStaleSessions();
   assert.equal(await resolveSession(token), null);
-  const fresh = await loginUser(e, "senha-segura-123");
+  const fresh = await loginUser(e, "Senha123");
   assert.ok(fresh);
   assert.ok(await resolveSession(fresh!));
 });

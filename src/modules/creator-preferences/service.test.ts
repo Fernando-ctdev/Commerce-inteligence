@@ -277,7 +277,7 @@ test("setup: banco acessível (skip dos testes de integração caso contrário)"
 const email = () => `slice011-${randomBytes(8).toString("hex")}@teste.local`;
 
 async function sessionOf() {
-  const token = await registerUser(email(), "senha-segura-123");
+  const token = await registerUser("Creator", email(), "Senha123");
   const session = await resolveSession(token);
   assert.ok(session);
   return session;

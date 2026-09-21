@@ -23,7 +23,6 @@
 }
 
 .formSteps {
-  border-bottom: 1px solid var(--color-border);
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -32,38 +31,66 @@
   padding: 0;
 }
 
+/* Stepper com trilho: círculo acima do rótulo; concluído preenchido, atual
+   em anel, próximos esmaecidos — cor de marca como semântica de progresso. */
 .formSteps li {
   align-items: center;
   color: var(--color-text-secondary);
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   min-height: 44px;
   padding: 8px 4px;
   position: relative;
+  text-align: center;
 }
 
+/* Trilho do centro do círculo anterior ao centro deste. */
+.formSteps li + li::before {
+  background: var(--color-border);
+  content: "";
+  height: 2px;
+  left: -50%;
+  position: absolute;
+  right: 50%;
+  top: 19px;
+}
+
+.formSteps li[data-done]::before,
+.formSteps li[aria-current="step"]::before {
+  background: var(--color-brand);
+}
+
+.formSteps li[data-done],
 .formSteps li[aria-current="step"] {
   color: var(--color-brand);
 }
 
-.formSteps li[aria-current="step"]::after {
-  background: var(--color-brand);
-  bottom: -1px;
-  content: "";
-  height: 2px;
-  inset-inline: 0;
-  position: absolute;
-}
-
 .formSteps li > span {
   align-items: center;
+  background: var(--color-canvas);
   border: 1px solid currentColor;
   border-radius: 50%;
   display: inline-flex;
-  flex: 0 0 24px;
+  /* Em coluna, flex-basis age na altura: a largura do círculo é explícita. */
+  flex: 0 0 auto;
   font-size: 12px;
   height: 24px;
   justify-content: center;
+  position: relative;
+  width: 24px;
+  z-index: 1;
+}
+
+.formSteps li[data-done] > span {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-on-action);
+}
+
+.formSteps li[aria-current="step"] > span {
+  border-color: var(--color-brand);
+  color: var(--color-brand);
 }
 
 .formSteps strong {
@@ -136,13 +163,6 @@
   margin: 0;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-}
-
-.reviewList {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding-inline-start: 20px;
 }
 
 .eyebrow {
@@ -669,13 +689,6 @@
   justify-content: space-between;
 }
 
-.commissionPreview {
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  line-height: 18px;
-  margin: 4px 0 0;
-}
-
 .analysisButton {
   background: var(--color-intelligence);
   border-color: var(--color-intelligence);
@@ -890,50 +903,6 @@
 
   .creatorOptions [data-slot="tabs-trigger"]::after {
     display: none;
-  }
-
-  /* Stepper progressivo: números em linha 44px; só a etapa ativa exibe o
-     rótulo. Rótulos inativos permanecem no DOM via visually-hidden. */
-  .formSteps {
-    display: flex;
-    gap: 8px;
-    justify-content: space-between;
-    min-width: 0;
-    overflow: visible;
-    width: 100%;
-  }
-
-  .formSteps li {
-    flex: 0 0 44px;
-    justify-content: center;
-    min-width: 0;
-  }
-
-  .formSteps li[aria-current="step"] {
-    flex: 1 1 auto;
-    justify-content: flex-start;
-    min-width: 0;
-  }
-
-  .formSteps li strong {
-    border: 0;
-    clip-path: inset(50%);
-    height: 1px;
-    overflow: hidden;
-    padding: 0;
-    position: absolute;
-    white-space: nowrap;
-    width: 1px;
-  }
-
-  .formSteps li[aria-current="step"] strong {
-    clip-path: none;
-    height: auto;
-    min-width: 0;
-    overflow: visible;
-    position: static;
-    white-space: normal;
-    width: auto;
   }
 }
 

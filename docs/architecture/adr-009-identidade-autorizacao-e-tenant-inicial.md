@@ -19,6 +19,17 @@ Usar sessão server-side com cookie opaco `HttpOnly`, `Secure` e `SameSite` apro
 Cada request autenticado resolve a sessão para usuário e tenant; casos de uso e consultas exigem esse contexto e aplicam o escopo no servidor. Ausência de sessão ou acesso a outro tenant resulta em falha de autorização. Este ADR não escolhe método de login, provedor de identidade ou SSO.
 
 O caminho de evolução é adicionar associação usuário–tenant, membros, convites e papéis sem remover `tenant_id` dos dados existentes. Colaboração só entra quando houver requisito de produto.
+ 
+### Evolução aprovada — perfil e política de cadastro
+
+O cadastro aceita `name`, `email`, `password` e `passwordConfirmation` somente em `POST /api/access/register`. `POST /api/access/login` permanece com `email` e `password`.
+
+`User.name` é um atributo de perfil persistido e nullable para preservar contas existentes sem nome. Novos cadastros exigem nome não vazio após normalização. `passwordConfirmation` é transitório: é validado no boundary HTTP e nunca é persistido, hasheado ou registrado.
+
+O backend é a autoridade para a política de cadastro: senha entre 8 e 200 caracteres, com pelo menos uma letra e um número, além da confirmação exata. A política é aplicada somente no registro; login apenas verifica o hash existente para manter compatibilidade com contas legadas.
+
+Essa evolução não altera o modelo de tenant, a sessão server-side, a proteção de origem/CSRF ou o método de hashing.
+
 
 ## Rationale
 
