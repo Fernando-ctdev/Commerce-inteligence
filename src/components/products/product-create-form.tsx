@@ -34,6 +34,7 @@ import {
 } from "./product-api";
 import { createGenerationIdempotencyKey, startGeneration } from "./generation-api";
 import { createIdempotencyKey } from "./product-create-model";
+import { URL_IMPORT_ENABLED } from "../../modules/products/import-config";
 import {
   buildManualProductPayload,
   buildProductPayload,
@@ -64,6 +65,8 @@ const emptyDraft: ProductManualDraft = {
 type ProductCreateFormProps = {
   mode?: "create" | "edit";
   product?: ProductRecord;
+  /** Rascunho inicial do modo criação (ex.: item da vitrine). Ignorado na edição. */
+  initialDraft?: Partial<ProductManualDraft>;
   onSaved?: (product: ProductRecord) => void;
   /** Substitui a navegação pós-salvamento (edição: router.back(); criação: router.push para o produto criado). O overlay local passa onAfterSave para permanecer na superfície. */
   onAfterSave?: () => void;
@@ -215,6 +218,7 @@ function TextField({
   placeholder,
   financial = false,
   showCounter = false,
+  disabled = false,
 }: {
   id: string;
   label: ReactNode;
@@ -230,6 +234,7 @@ function TextField({
   placeholder?: string;
   financial?: boolean;
   showCounter?: boolean;
+  disabled?: boolean;
 }) {
   const errorId = `${id}-error`;
   const countId = `${id}-count`;
@@ -254,6 +259,7 @@ function TextField({
         <textarea
           aria-describedby={describedBy}
           aria-invalid={Boolean(error)}
+          disabled={disabled}
           id={id}
           maxLength={maxLength}
           name={id}
@@ -266,6 +272,7 @@ function TextField({
         <input
           aria-describedby={describedBy}
           aria-invalid={Boolean(error)}
+          disabled={disabled}
           id={id}
           inputMode={inputMode}
           maxLength={maxLength}
@@ -451,15 +458,17 @@ function ProductReviewSummary({
 export function ProductCreateForm({
   mode = "create",
   product,
+  initialDraft,
   onSaved,
   onAfterSave,
   onCancel,
 }: ProductCreateFormProps) {
   const router = useRouter();
   const isEdit = mode === "edit";
-  const [draft, setDraft] = useState<ProductManualDraft>(() =>
-    draftFromProduct(product),
-  );
+  const [draft, setDraft] = useState<ProductManualDraft>(() => {
+    if (product) return draftFromProduct(product);
+    return { ...emptyDraft, ...initialDraft };
+  });
   const [version, setVersion] = useState(product?.version ?? 0);
   const [quantity, setQuantity] = useState(product?.targetContentCount ?? 5);
   const [creatorPresence, setCreatorPresence] = useState<
@@ -473,11 +482,15 @@ export function ProductCreateForm({
   const [validationVisible, setValidationVisible] = useState(false);
   const [formStep, setFormStep] = useState<FormStep>("facts");
   const [imageSource, setImageSource] = useState<ImageSource>("links");
-  const [imageLinksInput, setImageLinksInput] = useState(() =>
-    (product?.imageReferences ?? [])
+  const [imageLinksInput, setImageLinksInput] = useState(() => {
+    const references = product?.imageReferences ??
+      (initialDraft?.imageReferences
+        ? imageReferenceLines(initialDraft.imageReferences)
+        : []);
+    return references
       .filter((reference) => /^https?:\/\//i.test(reference))
-      .join("\n"),
-  );
+      .join("\n");
+  });
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>(() =>
     uploadedImagesFromProduct(product),
   );
@@ -853,23 +866,26 @@ export function ProductCreateForm({
               melhor estratégia de conteúdo.
             </p>
           </div>
-          {/* Entrada URL-first (DESIGN.md): URL e ação primária de análise
-              abrem a seção, antes dos fatos manuais. */}
-          <TextField
-            error={combinedErrors.url}
-            help="Cole o link de um produto do TikTok Shop."
-            id={fieldId("url")}
-            label={
-              <>
-                URL do produto{" "}
-                <span className={styles.optionalMark}>Opcional</span>
-              </>
-            }
-            placeholder="https://exemplo.com/seu-produto"
-            onChange={(value) => update("url", value)}
-            type="url"
-            value={draft.url ?? ""}
-          />
+          {/* Importação por URL (Slice 012) desativada: o campo URL não é
+              montado — código, draft, payload e validação preservados para a
+              reabilitação da flag, que devolve o campo original. */}
+          {URL_IMPORT_ENABLED && (
+            <TextField
+              error={combinedErrors.url}
+              help="Cole o link de um produto do TikTok Shop."
+              id={fieldId("url")}
+              label={
+                <>
+                  URL do produto{" "}
+                  <span className={styles.optionalMark}>Opcional</span>
+                </>
+              }
+              placeholder="https://exemplo.com/seu-produto"
+              onChange={(value) => update("url", value)}
+              type="url"
+              value={draft.url ?? ""}
+            />
+          )}
           <TextField
             error={combinedErrors.name}
             id={fieldId("name")}

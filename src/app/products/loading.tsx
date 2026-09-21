@@ -3,17 +3,18 @@ import { ProductShell } from "@/components/products/product-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import listStyles from "@/components/products/product-list.module.css";
 
-/* Toolbar (título, busca, filtros, botão) é estática: render real.
-   Skeleton apenas nos cards, que são conteúdo dinâmico. */
+/* Toolbar e header são estáticos (render real); skeleton apenas no grid
+   combinado da Vitrine (showcase + produtos manuais), que é dinâmico. */
 export default function ProductsLoading() {
   return (
-    <ProductShell active="products" action={null} title="Seus produtos">
+    <ProductShell active="products" action={null} title="Vitrine">
       <div className={listStyles.list}>
         <div className={listStyles.listIntro}>
           <div>
-            <h2>Produtos</h2>
+            <h2 className={listStyles.pageTitle}>Produtos da sua vitrine</h2>
             <p className={listStyles.listHint}>
-              Encontre um produto e continue pelo próximo passo.
+              Produtos da vitrine TikTok Shop e produtos cadastrados
+              manualmente, no mesmo lugar.
             </p>
           </div>
           <span
@@ -38,19 +39,19 @@ export default function ProductsLoading() {
           />
           <div
             aria-label="Filtrar produtos"
-            className={listStyles.filters}
+            className={listStyles.filterNav}
             role="group"
           >
             {(
               [
-                ["all", "Todos"],
                 ["active", "Ativos"],
+                ["pending", "Pendentes"],
                 ["archived", "Arquivados"],
               ] as const
             ).map(([value, label]) => (
               <button
-                aria-pressed={value === "all"}
-                className={listStyles.filterButton}
+                aria-pressed={value === "active"}
+                className={listStyles.filterTab}
                 disabled
                 key={value}
                 type="button"

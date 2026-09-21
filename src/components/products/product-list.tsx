@@ -10,14 +10,21 @@ import {
   AlertTriangle,
   Ellipsis,
   FileText,
+  Plus,
   Search,
   Sparkles,
-  Tag,
+  Store,
   Video,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { stageMessage } from "./generation-ui-model";
-import { ProductCreateTrigger } from "./product-create-overlay";
+import { ProductCreateOverlay } from "./product-create-overlay";
+import {
+  listShowcaseItems,
+  type ShowcaseItem,
+} from "@/modules/products/showcase";
+import { ShowcaseCard, showcaseToDraft } from "./showcase";
+import showcaseStyles from "./showcase.module.css";
 
 import {
   DropdownMenu,
@@ -65,6 +72,10 @@ export function ProductList() {
     null,
   );
   const [actionPending, setActionPending] = useState(false);
+  /* Itens remotos de apresentação (DTO allowlist, fonte síncrona): nunca
+     persistem no Product; salvar segue o caso de uso manual existente. */
+  const [showcaseItems] = useState(() => listShowcaseItems());
+  const [prefill, setPrefill] = useState<ShowcaseItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,8 +112,11 @@ export function ProductList() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  const normalizedQuery = useMemo(
+    () => query.trim().toLocaleLowerCase("pt-BR"),
+    [query],
+  );
   const filteredProducts = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
     return products.filter((product) => {
       const matchesFilter =
         filter === "active"
@@ -117,17 +131,32 @@ export function ProductList() {
           .includes(normalizedQuery);
       return matchesFilter && matchesQuery;
     });
-  }, [filter, products, query]);
+  }, [filter, products, normalizedQuery]);
+  /* Showcase só aparece na visão padrão (Ativos): não é Product e não
+     participa das projeções Pendentes/Arquivados. */
+  const visibleShowcase = useMemo(() => {
+    if (filter !== "active") return [];
+    return showcaseItems.filter((item) => {
+      const hay = `${item.title} ${item.categoryName ?? ""} ${
+        item.sellerName ?? ""
+      }`.toLocaleLowerCase("pt-BR");
+      return !normalizedQuery || hay.includes(normalizedQuery);
+    });
+  }, [filter, showcaseItems, normalizedQuery]);
   const filterCounts = useMemo(
     () => ({
-      active: products.filter((product) => product.active).length,
+      /* Showcase aparece na aba Ativos: entra na contagem do que a aba exibe. */
+      active:
+        products.filter((product) => product.active).length +
+        showcaseItems.length,
       pending: products.filter(
         (product) => product.readiness !== "READY" && product.active,
       ).length,
       archived: products.filter((product) => !product.active).length,
     }),
-    [products],
+    [products, showcaseItems],
   );
+  const totalVisible = visibleShowcase.length + filteredProducts.length;
   async function confirmAction() {
     if (!actionProduct || !actionType || actionPending) return;
     setActionPending(true);
@@ -161,14 +190,18 @@ export function ProductList() {
       <div className={styles.listIntro}>
         <div>
           <h2 className={styles.pageTitle}>
-            <Tag aria-hidden="true" className={styles.pageTitleIcon} />
-            Produtos
+            <Store aria-hidden="true" className={styles.pageTitleIcon} />
+            Produtos da sua vitrine
           </h2>
           <p className={styles.listHint}>
-            Gerencie os produtos que você promove e continue de onde parou.
+            Produtos da vitrine TikTok Shop e produtos cadastrados
+            manualmente, no mesmo lugar.
           </p>
         </div>
-        <ProductCreateTrigger className={styles.primaryButton} />
+        <Link className={styles.primaryButton} href="/products/new">
+          <Plus aria-hidden="true" />
+          Adicionar produto
+        </Link>
       </div>
       <div className={styles.controls} role="search">
         <label className={styles.searchLabel} htmlFor="product-search">
@@ -205,8 +238,8 @@ export function ProductList() {
       <p aria-live="polite" className={styles.filterSummary}>
         {loading
           ? "Carregando produtos…"
-          : `${filteredProducts.length} ${
-              filteredProducts.length === 1 ? "produto" : "produtos"
+          : `${totalVisible} ${
+              totalVisible === 1 ? "item disponível" : "itens disponíveis"
             }`}
       </p>
       {loading ? (
@@ -243,13 +276,21 @@ export function ProductList() {
             Tentar novamente
           </button>
         </div>
-      ) : filteredProducts.length === 0 ? (
+      ) : totalVisible === 0 ? (
         <div className={styles.galleryEmpty} key={filter}>
-          {products.length === 0 ? (
-            <p>
-              Nenhum produto por aqui ainda. Use Adicionar produto para começar
-              seu catálogo.
-            </p>
+          {products.length === 0 && showcaseItems.length === 0 ? (
+            <>
+              <p>
+                Nada disponível na vitrine agora. Use Adicionar produto para
+                cadastrar manualmente.
+              </p>
+              <Link
+                className={`${styles.secondaryButton} ${showcaseStyles.link}`}
+                href="/products/new"
+              >
+                Adicionar produto
+              </Link>
+            </>
           ) : (
             <>
               <p>Nada encontrado para esta busca ou filtro.</p>
@@ -268,10 +309,17 @@ export function ProductList() {
         </div>
       ) : (
         <ul
-          aria-label="Produtos filtrados"
+          aria-label="Itens disponíveis na vitrine"
           className={styles.cards}
           key={filter}
         >
+          {visibleShowcase.map((item) => (
+            <ShowcaseCard
+              item={item}
+              key={item.id}
+              onUse={() => setPrefill(item)}
+            />
+          ))}
           {filteredProducts.map((product) => {
             const firstImage = product.imageReferences[0];
             const imageUrl =
@@ -324,6 +372,7 @@ export function ProductList() {
                 )}
                 <div className={styles.cardBody}>
                   <div className={styles.cardHeader}>
+                    <span className={showcaseStyles.badge}>Manual</span>
                     <h3>{product.name}</h3>
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -411,6 +460,16 @@ export function ProductList() {
           })}
         </ul>
       )}
+      {/* Usar produto (showcase): overlay com prefill seguro; salvar segue o
+          POST manual e navega ao produto, onde Analisar produto fica explícito. */}
+      <ProductCreateOverlay
+        initialDraft={prefill ? showcaseToDraft(prefill) : undefined}
+        navigateAfterSave
+        onOpenChange={(open) => {
+          if (!open) setPrefill(null);
+        }}
+        open={prefill !== null}
+      />
       {actionProduct && actionType && (
         <ConfirmationDialog
           confirmLabel={

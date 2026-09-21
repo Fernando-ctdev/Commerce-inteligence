@@ -23,10 +23,16 @@ import {
 } from "@/components/ui/sheet";
 
 import { ProductCreateForm } from "./product-create-form";
+import type { ProductManualDraft } from "./product-form-model";
 
 type ProductCreateOverlayProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Rascunho inicial (ex.: item da vitrine via "Usar produto"). */
+  initialDraft?: Partial<ProductManualDraft>;
+  /** Navega ao produto criado após salvar (Analisar produto fica explícito lá)
+      em vez de permanecer na superfície que abriu o overlay. */
+  navigateAfterSave?: boolean;
 };
 
 /**
@@ -37,6 +43,8 @@ type ProductCreateOverlayProps = {
 export function ProductCreateOverlay({
   open,
   onOpenChange,
+  initialDraft,
+  navigateAfterSave = false,
 }: ProductCreateOverlayProps) {
   const isMobile = useIsMobile();
   const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -74,12 +82,30 @@ export function ProductCreateOverlay({
       onInputCapture={markDirty}
       onChangeCapture={markDirty}
     >
+      {/* Pré-carga da vitrine: a descrição não existe no DTO por design —
+          aviso visível e acessível orienta o preenchimento obrigatório. */}
+      {initialDraft && (
+        <div
+          className="mb-3 rounded-md border bg-surface-secondary p-3 text-sm text-text-secondary"
+          role="status"
+        >
+          <p className="font-semibold text-text">
+            Falta uma descrição para analisar este produto.
+          </p>
+          <p className="mt-1">
+            Descreva o que o produto faz, para quem é e o principal benefício
+            que ele entrega.
+          </p>
+        </div>
+      )}
       <ProductCreateForm
         mode="create"
+        initialDraft={initialDraft}
         onSaved={handleSaved}
         onCancel={() => handleOpenChange(false)}
-        /* Sem no-op o formulário chamaria router.back() ao salvar dentro do overlay. */
-        onAfterSave={() => {}}
+        /* Sem no-op o formulário chamaria router.back() ao salvar dentro do
+           overlay; com navigateAfterSave o form navega ao produto criado. */
+        onAfterSave={navigateAfterSave ? undefined : () => {}}
       />
     </div>
   );
@@ -133,7 +159,10 @@ export function ProductCreateOverlay({
   return (
     <>
       <Sheet open={open} onOpenChange={handleOpenChange}>
-        <SheetContent className="w-full gap-0 overflow-y-auto p-0 data-[side=right]:sm:max-w-xl">
+        <SheetContent
+          className="w-full gap-0 overflow-y-auto p-0 data-[side=right]:sm:max-w-xl"
+          showCloseButton={false}
+        >
           <SheetHeader className="sr-only">
             <SheetTitle>Adicionar produto</SheetTitle>
             <SheetDescription>

@@ -21,7 +21,7 @@ export default async function NewProductPage() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink render={<Link href="/products" />}>
-              Produtos
+              Vitrine
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />

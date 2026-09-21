@@ -1,7 +1,7 @@
 # Design System — Commerce Intelligence
 
 **Status:** fonte de verdade visual do produto  
-**Versão:** 1.7
+**Versão:** 1.8
 **Locale do MVP:** `pt-BR`  
 **Escopo:** decisões de produto visual, tokens, comportamento responsivo, estados e contratos de componentes. Este documento **não implementa telas, componentes ou dependências**.
 
@@ -86,7 +86,7 @@ Acessibilidade, tokens, `prefers-reduced-motion` e ausência de dados falsos nã
 A ordem e a nomenclatura são fixas no MVP:
 
 1. **Home** — entrada operacional, novo Produto, gravações de hoje e próximas gravações;
-2. **Produtos** — catálogo operacional dos Produtos, estratégia, Conteúdos e histórico de cada Produto;
+2. **Vitrine** — catálogo operacional dos Produtos, estratégia, Conteúdos e histórico de cada Produto;
 3. **Estúdio** — esteira dos lotes de gravação e execução dos Conteúdos;
 4. **Agenda** — calendário interno das gravações planejadas;
 5. **Configurações** — conta, plano e preferências da plataforma.
@@ -104,7 +104,7 @@ Home
 ↓
 O que faço agora?
 
-Produtos
+Vitrine
 ↓
 O que estou promovendo e quais conteúdos existem para isso?
 
@@ -149,7 +149,7 @@ A mudança de breakpoint altera composição, densidade e prioridade, não o mod
 
 O limite de `1440px` do shell é o teto da região principal, não a largura que cada tela deve usar internamente. Para evitar páginas com proporções inconsistentes entre si, toda tela operacional segue uma de duas categorias, sem valores intermediários ad hoc:
 
-- **Full-width operacional:** telas cujo conteúdo principal é o objeto de trabalho — Home operacional, Produtos (grade/lista), Product detail, Estúdio e Agenda — ocupam toda a largura útil da coluna de conteúdo (até o teto de `1440px` do shell). Grades de cards usam colunas responsivas (`auto-fill`/`minmax`) para não formar cards artificialmente largos nem vazio estrutural quando a coluna crescer.
+- **Full-width operacional:** telas cujo conteúdo principal é o objeto de trabalho — Home operacional, Vitrine (grade/lista), Product detail, Estúdio e Agenda — ocupam toda a largura útil da coluna de conteúdo (até o teto de `1440px` do shell). Grades de cards usam colunas responsivas (`auto-fill`/`minmax`) para não formar cards artificialmente largos nem vazio estrutural quando a coluna crescer.
 - **Coluna de leitura:** reservada exclusivamente a mensagens de estado — vazio, erro, loading textual e confirmação — que não representam a grade/lista principal da tela. Usa `max-width` entre `560px` e `640px`, centralizada, para manter a leitura curta legível.
 
 Nenhuma tela usa uma coluna de leitura para sua composição operacional principal (header do objeto, grade de cards, tabs ou lista de itens); a coluna estreita é exclusiva de estados de mensagem.
@@ -182,7 +182,7 @@ Nenhuma tela usa uma coluna de leitura para sua composição operacional princip
 
 - desktop usa sidebar persistente como estrutura principal de orientação;
 - toolbar contextual é usada para busca, filtros, seleção, ordenação e ações do contexto atual, sem duplicar a sidebar;
-- Produtos pode usar grade/lista de cards e filtros por estado;
+- Vitrine pode usar grade/lista de cards e filtros por estado;
 - Estúdio pode usar esteira/colunas ou listas agrupadas por status de lote;
 - Agenda pode usar calendário de dia, semana ou mês;
 - nenhuma operação essencial fica bloqueada no mobile;
@@ -203,9 +203,9 @@ Para um usuário novo ou sem trabalho operacional ativo, `Adicionar produto` pod
 
 A Home não possui bloco `Ainda sem data`, lista de pendências genéricas, gráfico, KPI card ou overview analítico.
 
-### Produtos
+### Vitrine
 
-Produtos é o centro operacional de cada objeto vendido.
+Vitrine é a superfície operacional de listagem de cada objeto vendido. `Vitrine` é nomenclatura somente de UI; `Product` permanece a linguagem de domínio e as rotas e contratos continuam em `/products`.
 
 A listagem principal pode possuir:
 
@@ -745,7 +745,7 @@ Ao abrir um evento, oferecer `Abrir no Estúdio` e `Reagendar`. A Agenda do MVP 
 
 ### Busca e filtros
 
-- Produtos deve permitir busca e filtros por `Ativos`, `Pendentes` e `Arquivados`;
+- Vitrine deve permitir busca e filtros por `Ativos`, `Pendentes` e `Arquivados`;
 - Conteúdos dentro de Produto podem usar filtros por status, ângulo e data quando isso ajudar revisão e seleção;
 - Estúdio pode filtrar por Produto, status do lote e data;
 - Agenda já representa a dimensão temporal e não deve duplicar uma barra pesada de filtros sem necessidade;
@@ -766,8 +766,8 @@ Ao abrir um evento, oferecer `Abrir no Estúdio` e `Reagendar`. A Agenda do MVP 
 ### Empty, loading e error
 
 - **Empty Home:** prioriza `Adicionar produto` quando o usuário ainda não possui trabalho ativo;
-- **Empty Produtos:** explica que ainda não há Produto e oferece URL + `Analisar produto`;
-- **Empty Estúdio:** informa que não existem lotes de gravação e aponta para os Conteúdos aprovados dentro de Produtos;
+- **Empty Vitrine:** explica que ainda não há Produto e oferece URL + `Analisar produto`;
+- **Empty Estúdio:** informa que não existem lotes de gravação e aponta para os Conteúdos aprovados dentro da Vitrine;
 - **Empty Agenda:** informa que ainda não existem gravações planejadas; não cria bloco `Ainda sem data`;
 - **Loading:** preserva estrutura esperada e informa o estado; não simular conteúdo estratégico ainda inexistente;
 - **Access/limit:** explica por que a ação não está disponível e aponta o próximo caminho possível, sem ocultar o conteúdo já existente.
@@ -833,7 +833,8 @@ Estado desabilitado reduz ação sem apagar a razão. Estado de erro não limpa 
 
 - idioma do MVP: `pt-BR`;
 - usar verbos curtos, concretos e orientados a resultado;
-- `Home`, `Produtos`, `Estúdio`, `Agenda` e `Configurações` são os nomes oficiais da navegação principal;
+- `Home`, `Vitrine`, `Estúdio`, `Agenda` e `Configurações` são os nomes oficiais da navegação principal;
+- `Vitrine` é rótulo de UI para a navegação e listagem; `Product` permanece linguagem de domínio, com rotas e contratos em `/products`.
 - `Content` é o conceito de domínio; a interface usa `conteúdo` para leitura humana;
 - `Briefing do Conteúdo` significa o briefing de um Conteúdo individual, não a página inteira do Produto;
 - estados visíveis de lote no Estúdio são `Aguardando`, `Gravando` e `Concluído`;
@@ -866,10 +867,10 @@ A **Agenda interna de gravação** faz parte do MVP e não deve ser confundida c
 
 - [ ] A tela responde visualmente “o que faço agora?”
 - [ ] Existe uma ação primária clara e nomeada com verbo.
-- [ ] A navegação principal usa somente Home, Produtos, Estúdio, Agenda e Configurações.
+- [ ] A navegação principal usa somente Home, Vitrine, Estúdio, Agenda e Configurações.
 - [ ] Home prioriza ação, gravações de hoje, novo Produto e próximas gravações sem virar dashboard.
 - [ ] Home não possui bloco `Ainda sem data`.
-- [ ] Produtos usa cards de objetos reais e permite distinguir Ativos, Pendentes e Arquivados.
+- [ ] Vitrine usa cards de objetos reais e permite distinguir Ativos, Pendentes e Arquivados.
 - [ ] A página de Produto separa Visão geral, Estratégia, Conteúdos e Histórico.
 - [ ] `Briefing do Conteúdo` é usado somente para Conteúdo individual.
 - [ ] Estúdio trabalha com lote e deriva automaticamente Aguardando, Gravando e Concluído.
@@ -899,6 +900,7 @@ A **Agenda interna de gravação** faz parte do MVP e não deve ser confundida c
 | 2026-08-24 | Motion minimal-functional                                                                               | Movimento deve explicar seleção, disclosure, fila e feedback, respeitando redução de movimento.                                                                                                               |
 | 2026-08-26 | Home volta a ser a entrada principal                                                                    | O creator entende `Home` imediatamente; a tela permanece operacional e minimalista, sem virar dashboard analítico.                                                                                            |
 | 2026-08-26 | Navegação principal passa a ser Home, Produtos, Estúdio, Agenda e Configurações                         | Os destinos passam a representar tarefas naturais do creator em vez de conceitos internos de domínio.                                                                                                         |
+| 2026-09-21 | `Produtos` passa a se chamar `Vitrine` na navegação e listagem                                           | Decisão explícita de UI-only: preserva ordem dos destinos, `Product` como domínio e as rotas/contratos em `/products`; não requer ADR arquitetural.                                                           |
 | 2026-08-26 | Conteúdos e Vault deixam de ser destinos globais                                                        | Conteúdos pertencem ao Produto e aos lotes; histórico/memória aparece no contexto do Produto, reduzindo duplicação de navegação.                                                                              |
 | 2026-08-26 | Produção passa a ser apresentada como Estúdio                                                           | `Estúdio` comunica execução e gravação de forma mais natural para creators sem alterar o domínio interno de produção.                                                                                         |
 | 2026-08-26 | Estúdio usa lotes com estados Aguardando, Gravando e Concluído                                          | O status é consequência do número real de Conteúdos concluídos e não exige gerenciamento manual.                                                                                                              |

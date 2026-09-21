@@ -6,7 +6,7 @@ import {
   Clapperboard,
   Home,
   Settings2,
-  Tag,
+  Store,
   Flame,
   MirrorRound,
   Fingerprint,
@@ -42,7 +42,7 @@ const destinations: {
   icon: typeof Home;
 }[] = [
   { key: "home", label: "Home", href: "/today", icon: Home },
-  { key: "products", label: "Produtos", href: "/products", icon: Tag },
+  { key: "products", label: "Vitrine", href: "/products", icon: Store },
   { key: "studio", label: "Estúdio", icon: Clapperboard },
   { key: "agenda", label: "Agenda", icon: CalendarDays },
   { key: "meu-estilo", label: "Meu estilo", href: "/my-style", icon: Fingerprint },

@@ -37,7 +37,7 @@ export default async function ProductPage({
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink render={<Link href="/products" />}>
-              Produtos
+              Vitrine
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />

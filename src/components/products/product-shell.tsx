@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Fingerprint, Home, Menu, Settings2, Tag } from "lucide-react";
+import { Fingerprint, Home, Menu, Settings2, Store } from "lucide-react";
 import logoMascot from "@/assets/logo/logo_mascot.png";
 import logoTextDark from "@/assets/logo/logo_text_dark.webp";
 import logoTextLight from "@/assets/logo/logo_text_light.webp";
@@ -31,7 +31,7 @@ type ProductShellProps = {
 
 const pageIcons = {
   home: Home,
-  products: Tag,
+  products: Store,
   settings: Settings2,
   "meu-estilo": Fingerprint,
 } as const;

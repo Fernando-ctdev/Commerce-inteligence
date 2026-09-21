@@ -265,7 +265,7 @@ export function ProductDetail({
             Tentar novamente
           </button>
           <Link className={styles.secondaryLink} href="/products">
-            Voltar para Produtos
+            Voltar para Vitrine
           </Link>
         </div>
       </div>

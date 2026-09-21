@@ -20,7 +20,7 @@ export default function NewProductLoading() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink render={<Link href="/products" />}>
-              Produtos
+              Vitrine
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
