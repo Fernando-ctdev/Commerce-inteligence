@@ -393,7 +393,7 @@ test("validação: imageRefs aceita http(s) e data URL de imagem, rejeita outros
 const email = () => `qa-ci-${randomBytes(8).toString("hex")}@teste.local`;
 
 async function tenantOf() {
-  const token = await registerUser(email(), "senha-segura-123");
+  const token = await registerUser("Creator", email(), "Senha123");
   const session = await resolveSession(token);
   assert.ok(session);
   // O provisioning do entitlement default é produção (registerUser/ADR-006); o teste só

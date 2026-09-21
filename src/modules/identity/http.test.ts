@@ -8,7 +8,7 @@ const { handleLogout, handleRegister } = require("./http") as typeof import("./h
 test("register rejects a mutation from a missing or foreign origin before persistence", async () => {
   const response = await handleRegister(
     new Request("http://localhost:3000/api/access/register", {
-      body: JSON.stringify({ email: "creator@example.com", password: "senha-segura" }),
+      body: JSON.stringify({ email: "creator@example.com", password: "Senha123", passwordConfirmation: "Senha123", name: "Creator" }),
       headers: { "content-type": "application/json" },
       method: "POST",
     })
@@ -21,7 +21,7 @@ test("register rejects a mutation from a missing or foreign origin before persis
 test("register returns field errors without creating state for invalid input", async () => {
   const response = await handleRegister(
     new Request("http://localhost:3000/api/access/register", {
-      body: JSON.stringify({ email: "invalido", password: "curta" }),
+      body: JSON.stringify({ email: "invalido", password: "curta", passwordConfirmation: "curta", name: "" }),
       headers: { "content-type": "application/json", origin: "http://localhost:3000" },
       method: "POST",
     })
@@ -32,9 +32,45 @@ test("register returns field errors without creating state for invalid input", a
     error: "Dados inválidos.",
     fieldErrors: {
       email: "Informe um e-mail válido.",
-      password: "A senha deve ter entre 8 e 200 caracteres.",
+      name: "Informe seu nome.",
+      password: "A senha deve ter entre 8 e 200 caracteres, com pelo menos uma letra e um número.",
     },
   });
+});
+
+test("register rejects missing name, mismatched confirmation, and weak password", async () => {
+  const cases = [
+    {
+      body: { email: "creator@example.com", password: "Senha123", passwordConfirmation: "Senha123" },
+      field: "name",
+    },
+    {
+      body: { email: "creator@example.com", name: "Creator", password: "Senha123", passwordConfirmation: "Senha124" },
+      field: "passwordConfirmation",
+    },
+    {
+      body: { email: "creator@example.com", name: "Creator", password: "12345678", passwordConfirmation: "12345678" },
+      field: "password",
+    },
+    {
+      body: { email: "creator@example.com", name: "Creator", password: "abcdefgh", passwordConfirmation: "abcdefgh" },
+      field: "password",
+    },
+  ] as const;
+
+  for (const { body, field } of cases) {
+    const response = await handleRegister(
+      new Request("http://localhost:3000/api/access/register", {
+        body: JSON.stringify(body),
+        headers: { "content-type": "application/json", origin: "http://localhost:3000" },
+        method: "POST",
+      }),
+    );
+
+    assert.equal(response.status, 400);
+    const payload = (await response.json()) as { fieldErrors?: Record<string, string> };
+    assert.ok(payload.fieldErrors?.[field]);
+  }
 });
 
 test("register fails closed with 403 before reading or validating the body in production", async () => {
@@ -47,7 +83,7 @@ test("register fails closed with 403 before reading or validating the body in pr
     // antes de leitura/validação/persistência — chamada manual não cria conta.
     const response = await handleRegister(
       new Request("http://localhost:3000/api/access/register", {
-        body: JSON.stringify({ email: "invalido", password: "curta" }),
+        body: JSON.stringify({ email: "invalido", password: "curta", passwordConfirmation: "curta", name: "" }),
         headers: { "content-type": "application/json", origin: "http://localhost:3000" },
         method: "POST",
       })

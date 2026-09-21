@@ -89,6 +89,7 @@ export async function readJsonBody(
 function validate(
   email: unknown,
   password: unknown,
+  registration?: { name: unknown; passwordConfirmation: unknown },
 ): Record<string, string> | null {
   const fieldErrors: Record<string, string> = {};
   if (
@@ -98,12 +99,26 @@ function validate(
   ) {
     fieldErrors.email = "Informe um e-mail válido.";
   }
-  if (
+  if (registration && (typeof registration.name !== "string" || registration.name.length === 0)) {
+    fieldErrors.name = "Informe seu nome.";
+  } else if (registration && typeof registration.name === "string" && registration.name.length > 120) {
+    fieldErrors.name = "O nome deve ter no máximo 120 caracteres.";
+  }
+  const passwordIsInvalid =
     typeof password !== "string" ||
     password.length < 8 ||
-    password.length > 200
-  ) {
-    fieldErrors.password = "A senha deve ter entre 8 e 200 caracteres.";
+    password.length > 200;
+  const passwordPolicyIsInvalid =
+    registration &&
+    typeof password === "string" &&
+    (!/[A-Za-z]/.test(password) || !/\d/.test(password));
+  if (passwordIsInvalid || passwordPolicyIsInvalid) {
+    fieldErrors.password = registration
+      ? "A senha deve ter entre 8 e 200 caracteres, com pelo menos uma letra e um número."
+      : "A senha deve ter entre 8 e 200 caracteres.";
+  }
+  if (registration && registration.passwordConfirmation !== password) {
+    fieldErrors.passwordConfirmation = "As senhas não conferem.";
   }
   return Object.keys(fieldErrors).length > 0 ? fieldErrors : null;
 }
@@ -114,11 +129,16 @@ export async function handleRegister(req: Request): Promise<Response> {
   if (!originOk(req)) return json(403, { error: "Origem não permitida." });
   const body = await readJsonBody(req);
   if (!body) return json(400, { error: "Requisição inválida." });
-  const fieldErrors = validate(body.email, body.password);
+  const name = typeof body.name === "string" ? body.name.trim() : body.name;
+  const fieldErrors = validate(body.email, body.password, {
+    name,
+    passwordConfirmation: body.passwordConfirmation,
+  });
   if (fieldErrors) return json(400, { error: "Dados inválidos.", fieldErrors });
   try {
     const email = String(body.email).trim().toLowerCase();
     const token = await registerUser(
+      name as string,
       email,
       body.password as string,
       readCookie(req, SESSION_COOKIE),
