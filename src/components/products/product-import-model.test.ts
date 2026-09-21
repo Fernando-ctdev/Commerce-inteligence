@@ -20,8 +20,6 @@ const manualDraft: ProductManualDraft = {
   currency: "USD",
   imageReferences: "https://exemplo.com/minha.jpg",
   url: "",
-  discountType: "PERCENTAGE",
-  discountValue: "10",
 };
 
 /* features segue no candidato só como contrato externo transitório do
@@ -80,22 +78,21 @@ test("merge preserva imagens manuais e aplica a importada só em formulário sem
   assert.equal(untouched.imageReferences, "");
 });
 
-test("merge aceita somente moedas suportadas e desconto PERCENTAGE com valor", () => {
+test("merge aceita somente moedas suportadas e desconto do candidato não cruza para o draft", () => {
   const unsupportedCurrency = mergeImportedCandidate(
     manualDraft,
     candidate({ priceCurrency: "BRL", price: "89.90" }),
   );
   assert.equal(unsupportedCurrency.currency, "USD");
 
+  /* Desconto do Candidate é transitório (ADR-031): merge jamais
+     o mapeia — o draft não tem mais os campos. */
   const withDiscount = mergeImportedCandidate(
     manualDraft,
     candidate({ discountType: "PERCENTAGE", discountValue: "20" }),
   );
-  assert.equal(withDiscount.discountValue, "20");
-  assert.equal(withDiscount.discountType, "PERCENTAGE");
-
-  const withoutDiscount = mergeImportedCandidate(manualDraft, candidate({}));
-  assert.equal(withoutDiscount.discountValue, manualDraft.discountValue);
+  assert.equal("discountType" in withDiscount, false);
+  assert.equal("discountValue" in withDiscount, false);
 });
 
 test("estado do candidato: ready sem gaps e partial com qualquer gap, na ordem recebida", () => {

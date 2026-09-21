@@ -112,54 +112,26 @@ test("validação: campos obrigatórios retornam códigos VAL-*-REQUIRED", () =>
   );
 });
 
-test("validação: discountPercentage não faz parte do contrato — entrada ignorada, sem desconto", () => {
-  // Gate 5: o desconto é exclusivamente o tipado. discountPercentage presente
-  // no corpo não é lido nem validado — o produto sai sem desconto.
-  const ignorado = validateManualProductInput({ ...validInput, discountPercentage: "25,5" });
-  assert.equal(ignorado.discountType, null);
-  assert.equal(ignorado.discountValue, null);
+test("validação: desconto não é contrato — discountType/discountValue/discountPercentage enviados são ignorados sem erro e sem saída", () => {
+  // ADR-031: nenhum dos campos é lido nem validado; formato inválido
+  // no campo legado não rejeita a requisição.
+  const ignorado = validateManualProductInput({
+    ...validInput,
+    discountPercentage: "25,5",
+    discountType: "PERCENTAGE",
+    discountValue: "15,5",
+  });
   assert.equal("discountPercentage" in ignorado, false);
-  // Nem formato inválido no campo residual rejeita a requisição: campo não é contrato.
-  const residual = validateManualProductInput({ ...validInput, discountPercentage: "abc" });
-  assert.equal(residual.discountType, null);
-  assert.equal(residual.discountValue, null);
-});
+  assert.equal("discountType" in ignorado, false);
+  assert.equal("discountValue" in ignorado, false);
 
-test("validação: desconto tipado PERCENTAGE|FIXED — valor não negativo, moeda obrigatória no FIXED", () => {
-  // PERCENTAGE: 0–100, normalização de vírgula.
-  const percent = validateManualProductInput({ ...validInput, discountType: "PERCENTAGE", discountValue: "15,5" });
-  assert.equal(percent.discountType, "PERCENTAGE");
-  assert.equal(percent.discountValue, "15.5");
-  // FIXED: valor na moeda do produto.
-  const fixed = validateManualProductInput({ ...validInput, priceCurrency: "R$", discountType: "FIXED", discountValue: "20,00" });
-  assert.equal(fixed.discountType, "FIXED");
-  assert.equal(fixed.discountValue, "20.00");
-  // Sem os campos → sem desconto (nulls); o contrato é exclusivamente o tipado.
-  assert.equal(validateManualProductInput(validInput).discountType, null);
-  assert.equal(validateManualProductInput(validInput).discountValue, null);
-
-  const falhas: Array<[Record<string, unknown>, string, string]> = [
-    [{ discountType: "PERCENTAGE", discountValue: "150" }, "discountValue", "VAL-DISCOUNT-RANGE"],
-    [{ discountType: "FIXED", discountValue: "-1" }, "discountValue", "VAL-DISCOUNT-FORMAT"],
-    [{ discountType: "BOBA", discountValue: "10" }, "discountType", "VAL-DISCOUNT-TYPE"],
-    [{ discountType: "PERCENTAGE" }, "discountValue", "VAL-DISCOUNT-FORMAT"],
-    // RI-002 (Gate 5): FIXED não excede o preço do Product (29,90).
-    [{ discountType: "FIXED", discountValue: "29,91" }, "discountValue", "VAL-DISCOUNT-RANGE"],
-  ];
-  // Limite aceito: FIXED igual ao preço.
-  const limite = validateManualProductInput({ ...validInput, discountType: "FIXED", discountValue: "29,90" });
-  assert.equal(limite.discountValue, "29.90");
-  for (const [campo, field, code] of falhas) {
-    assert.throws(
-      () => validateManualProductInput({ ...validInput, ...campo }),
-      (error: unknown) => {
-        assert.ok(error instanceof ProductValidationError);
-        assert.equal(error.code, code);
-        assert.ok(error.fieldErrors[field]);
-        return true;
-      },
-    );
-  }
+  const residual = validateManualProductInput({
+    ...validInput,
+    discountPercentage: "abc",
+    discountType: "BOBA",
+    discountValue: "150",
+  });
+  assert.equal("discountValue" in residual, false);
 });
 
 test("validação: preço não negativo, moeda válida e normalização preservada", () => {
@@ -791,83 +763,50 @@ test("GET por id retorna o Product do tenant com moeda; inexistente responde 404
   assert.equal(await prisma.product.count({ where: { tenantId } }), 1);
 });
 
-test("discountPercentage não é contrato: POST/PATCH com o campo não persistem desconto", async (t) => {
+test("desconto não é contrato: POST/PATCH não persistem e a view não expõe (ADR-031)", async (t) => {
   if (!dbUp) return t.skip();
   const { token, tenantId } = await tenantOf();
 
-  // Produto criado sem desconto projeta null.
-  const semDesconto = await criarProduct(token);
-  const viewSem = (await handleGetProduct(getById(token, semDesconto.id), semDesconto.id).then((r) => r.json())) as { discountPercentage: string | null };
-  assert.equal(viewSem.discountPercentage, null);
-
-  // Gate 5: POST com discountPercentage (sem tipado) cria SEM desconto —
-  // o campo não é lido e a coluna não é escrita.
+  // POST com qualquer representação de desconto cria SEM desconto —
+  // os campos não são lidos e as colunas não são escritas.
   const resPost = await handleCreateProduct(
     post(
       token,
-      { ...validInput, discountPercentage: "25,5" },
+      { ...validInput, discountPercentage: "25,5", discountType: "FIXED", discountValue: "10,00" },
       randomBytes(16).toString("base64url"),
     ),
   );
   assert.equal(resPost.status, 200);
-  const criado = (await resPost.json()) as { id: string };
+  const criado = (await resPost.json()) as { id: string; version: number };
   const row = await prisma.product.findUniqueOrThrow({ where: { id: criado.id } });
   assert.equal(row.discountPercentage, null);
   assert.equal(row.discountType, null);
   assert.equal(row.discountValue, null);
 
-  // PATCH com discountPercentage também não persiste o campo residual.
+  // PATCH com desconto também não persiste; view não expõe nenhum dos campos.
   const resPatch = await handleUpdateProduct(
-    patch(token, semDesconto.id, {
+    patch(token, criado.id, {
       ...validInput,
       discountPercentage: "10",
-      expectedVersion: semDesconto.version,
+      discountType: "PERCENTAGE",
+      discountValue: "15",
+      expectedVersion: criado.version,
     }),
-    semDesconto.id,
+    criado.id,
   );
   assert.equal(resPatch.status, 200);
-  const rowPatch = await prisma.product.findUniqueOrThrow({ where: { id: semDesconto.id } });
+  const rowPatch = await prisma.product.findUniqueOrThrow({ where: { id: criado.id } });
   assert.equal(rowPatch.discountPercentage, null);
-  assert.equal(await prisma.product.count({ where: { tenantId } }), 2);
-});
-
-// Gate 5 (RI-002): contrato oficial do desconto tipado — POST persiste, GET expõe
-// discountType/discountValue e FIXED não excede o preço do Product.
-test("desconto tipado: POST/GET expõem discountType+discountValue e FIXED acima do preço é rejeitado", async (t) => {
-  if (!dbUp) return t.skip();
-  const { token, tenantId } = await tenantOf();
-
-  // FIXED acima do preço (29,90) é rejeitado na criação.
-  const resExcede = await handleCreateProduct(
-    post(
-      token,
-      { ...validInput, discountType: "FIXED", discountValue: "50,00" },
-      randomBytes(16).toString("base64url"),
-    ),
-  );
-  assert.equal(resExcede.status, 400);
-  const erro = (await resExcede.json()) as { code?: string; fieldErrors?: Record<string, unknown> };
-  assert.equal(erro.code, "VAL-DISCOUNT-RANGE");
-  assert.ok(erro.fieldErrors?.discountValue);
-
-  // FIXED dentro do preço: persiste e a leitura autenticada expõe os campos tipados.
-  const resOk = await handleCreateProduct(
-    post(
-      token,
-      { ...validInput, discountType: "FIXED", discountValue: "10,00" },
-      randomBytes(16).toString("base64url"),
-    ),
-  );
-  assert.equal(resOk.status, 200);
-  const criado = (await resOk.json()) as { id: string };
-  const view = (await handleGetProduct(getById(token, criado.id), criado.id).then((r) => r.json())) as { discountType: string | null; discountValue: string | null; discountPercentage: string | null };
-  assert.equal(view.discountType, "FIXED");
-  assert.equal(view.discountValue, "10.00");
-  assert.equal(view.discountPercentage, null);
+  assert.equal(rowPatch.discountType, null);
+  assert.equal(rowPatch.discountValue, null);
+  const view = (await handleGetProduct(getById(token, criado.id), criado.id).then((r) => r.json())) as Record<string, unknown>;
+  assert.equal("discountPercentage" in view, false);
+  assert.equal("discountType" in view, false);
+  assert.equal("discountValue" in view, false);
   assert.equal(await prisma.product.count({ where: { tenantId } }), 1);
 });
 
-test("ADR-030: PATCH sem comissão/features preserva histórico legado e view não expõe", async (t) => {
+test("ADR-030: PATCH sem comissão/features/desconto preserva histórico legado e view não expõe", async (t) => {
   if (!dbUp) return t.skip();
   const { token, tenantId } = await tenantOf();
   // Linha histórica com campos legados populados (criados fora do service).
@@ -881,6 +820,9 @@ test("ADR-030: PATCH sem comissão/features preserva histórico legado e view n�
       features: ["50 aulas", "certificado"],
       commissionType: "PERCENT",
       commissionValue: "10.50",
+      discountPercentage: "25.5",
+      discountType: "PERCENTAGE",
+      discountValue: "15.5",
     },
   });
 
@@ -898,12 +840,18 @@ test("ADR-030: PATCH sem comissão/features preserva histórico legado e view n�
   assert.equal(row.commissionType, "PERCENT");
   assert.equal(row.commissionValue?.toString(), "10.5");
   assert.deepEqual(row.features, ["50 aulas", "certificado"]);
+  assert.equal(row.discountPercentage?.toString(), "25.5");
+  assert.equal(row.discountType, "PERCENTAGE");
+  assert.equal(row.discountValue?.toString(), "15.5");
 
   // View não expõe os campos legados.
   const view = (await handleGetProduct(getById(token, legacy.id), legacy.id).then((r) => r.json())) as Record<string, unknown>;
   assert.equal("features" in view, false);
   assert.equal("commissionType" in view, false);
   assert.equal("commissionValue" in view, false);
+  assert.equal("discountPercentage" in view, false);
+  assert.equal("discountType" in view, false);
+  assert.equal("discountValue" in view, false);
 });
 
 test("GET/PATCH/DELETE de outro tenant responde 404 sem vazar o Product", async (t) => {

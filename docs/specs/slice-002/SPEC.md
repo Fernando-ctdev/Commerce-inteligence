@@ -28,13 +28,12 @@ Fontes de autoridade:
   - Categoria;
   - Preço;
   - Moeda;
-  - desconto opcional, com `discountType` `PERCENTAGE` ou `FIXED` e `discountValue`.
 - Seção `Preparação dos conteúdos` com:
   - quantidade inicial de conteúdos;
   - formato do creator;
   - observações ou restrições.
 - Todos os campos do formulário são obrigatórios: Nome, Descrição, Categoria, Preço, Moeda e Observações ou restrições.
-- Preço deve ser não negativo, válido e ter no máximo duas casas decimais; Moeda deve ser uma das opções permitidas. Desconto, quando preenchido, exige tipo e valor; `PERCENTAGE` respeita `0–100` e `FIXED` usa a moeda do Product e não excede o preço.
+- Preço deve ser não negativo, válido e ter no máximo duas casas decimais; Moeda deve ser uma das opções permitidas.
 - Quantidade e formato têm defaults válidos e aparecem com `*`; Observações ou restrições aparecem com `*` e são obrigatórias, até `300` caracteres.
 - O asterisco é apenas indicação visual; HTML/cliente e servidor validam a obrigatoriedade.
 - Persistência do Product e das restrições de preparação no Tenant resolvido server-side.
@@ -107,11 +106,9 @@ Se a mesma submissão for repetida por retry técnico, o sistema não cria Produ
 
 Nome, Descrição e Categoria devem conter valor não vazio após remoção de espaços. Preço e Moeda devem ser informados e válidos. Observações ou restrições devem conter valor não vazio após remoção de espaços e não exceder `300` caracteres. Nenhum Product é persistido sem esses campos obrigatórios.
 
-### RI-002 — Preço, moeda e desconto
+### RI-002 — Preço e moeda
 
-Preço e Moeda são obrigatórios e devem ser informados conjuntamente. Preço não pode ser negativo, deve respeitar formato monetário válido e ter no máximo duas casas decimais. As moedas disponíveis são `R$` (R$ Reais), `USD` ($ Dólar) e `EUR` (€ Euro). Desconto é opcional, mas `discountType` e `discountValue` são inseparáveis: `PERCENTAGE` fica entre `0–100`; `FIXED` usa a moeda do Product e não excede o preço.
-
-**Contrato oficial do desconto (Gate 5):** o desconto é exclusivamente o tipado — `discountType` (`PERCENTAGE`|`FIXED`) + `discountValue` (não negativo, até duas casas decimais); não existe contrato de compatibilidade legada. `FIXED` é validado contra o preço: não excede `priceAmount` e exige `priceCurrency`. A migration do contrato tipado (`20260914120000_discount_type_value`) é aditiva: colunas `discountType`/`discountValue` nullable, sem defaults e **sem backfill** — os dados anteriores permanecem intactos (ausência de backfill não significa ausência de migration). O `discountPercentage` do schema é resquício de dados de desenvolvimento, sem status de contrato: não é aceito na escrita (service ignora o campo e não persiste a coluna), não entra como fato de desconto na geração (worker projeta somente o tipado) e não é derivado no cliente — permanece apenas exposto na leitura como campo do schema. A leitura autenticada do Product expõe os campos do schema; ausência de desconto é `null` e nunca é inventada pela geração. A projeção compacta do `mappingContext` na engine lê o fato `discount` (chave enviada pelo worker — alinhamento do Gate 5, item 3).
+Preço e Moeda são obrigatórios e devem ser informados conjuntamente. Preço não pode ser negativo, deve respeitar formato monetário válido e ter no máximo duas casas decimais. As moedas disponíveis são `R$` (R$ Reais), `USD` ($ Dólar) e `EUR` (€ Euro). Desconto, tipo de desconto e valor de desconto não pertencem ao contrato ativo: não são coletados, validados, persistidos, expostos ou projetados para a engine. Colunas e dados existentes permanecem isolados, conforme ADR-031.
 
 ### RI-003 — Preparação válida
 
@@ -150,7 +147,6 @@ Este slice não inicia geração por efeito de salvar ou editar. A ação explí
 | `VAL-CATEGORY-REQUIRED`    | Categoria ausente ou vazia                                 | Exibir erro junto ao campo, manter valor e focar o primeiro erro.                              |
 | `VAL-PRICE-REQUIRED`       | Preço ausente                                              | Bloquear salvamento e explicar que o preço é obrigatório.                                      |
 | `VAL-CURRENCY-REQUIRED`    | Moeda ausente                                              | Bloquear salvamento e explicar que a moeda é obrigatória.                                      |
-| `VAL-DISCOUNT-INVALID`     | Tipo/valor de desconto ausente, incompatível ou fora da faixa | Bloquear salvamento e explicar a regra do percentual ou valor fixo.                         |
 | `VAL-NOTES-REQUIRED`       | Observações/restrições ausentes ou vazias                  | Bloquear salvamento e exibir erro associado ao campo.                                          |
 | `VAL-PRICE-FORMAT`         | Preço negativo, formato inválido ou com mais de duas casas | Bloquear salvamento e explicar o formato esperado.                                             |
 | `VAL-QUANTITY-RANGE`       | Quantidade não inteira ou fora de `1–10`                   | Bloquear salvamento e manter o valor editável.                                                 |
@@ -199,10 +195,9 @@ Requisitos visuais e de acessibilidade:
 | ID          | Critério verificável                                                                                                                                                                                                                                                     |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `AC-002-01` | **WHEN** um usuário autenticado acionar `Adicionar produto` em Produtos, **o sistema SHALL** abrir `/products/new` dentro do contexto de Produtos. |
-| `AC-002-02` | **WHEN** `/products/new` for exibida, **o sistema SHALL** apresentar Nome do produto, Descrição, Categoria, Preço, Moeda, desconto opcional e a seção Preparação dos conteúdos. |
+| `AC-002-02` | **WHEN** `/products/new` for exibida, **o sistema SHALL** apresentar Nome do produto, Descrição, Categoria, Preço, Moeda e a seção Preparação dos conteúdos. |
 | `AC-002-03` | **WHILE** Nome, Descrição, Categoria, Preço, Moeda ou Observações/restrições estiver ausente, vazio ou inválido, **o sistema SHALL** impedir o salvamento, exibir o erro associado e preservar os valores digitados. |
 | `AC-002-04` | **WHEN** Preço ou Moeda estiver ausente, ou o preço for negativo, inválido ou tiver mais de duas casas decimais, **o sistema SHALL** impedir o salvamento e informar a regra correspondente. |
-| `AC-002-05` | **WHEN** desconto for informado, **o sistema SHALL** exigir `discountType` `PERCENTAGE` ou `FIXED`, `discountValue` válido e moeda do Product. |
 | `AC-002-06` | **WHEN** o formulário for carregado, **o sistema SHALL** definir quantidade `20`, permitir somente inteiros de `1` a `30`, definir formato `Tanto faz`, exibir `*` em Quantidade, Formato e Observações/restrições e limitar estas últimas a `300` caracteres. |
 | `AC-002-07` | **WHEN** uma submissão válida for salva, **o sistema SHALL** persistir o Product com os fatos preenchidos e as preferências de preparação como restrições da primeira geração. |
 | `AC-002-08` | **WHEN** o Product for salvo, **o sistema SHALL NOT** criar `CommerceIntelligenceJob`, iniciar geração ou produzir Strategy, Plan, Content ou Briefing. |
@@ -215,9 +210,9 @@ Requisitos visuais e de acessibilidade:
 | `AC-002-15` | **WHEN** a mesma submissão for repetida com a mesma chave de idempotência, **o sistema SHALL** retornar o mesmo Product, com o mesmo `id` e a mesma versão, sem criar novo registro. |
 
 | Cadastro em `/products/new` dentro de Produtos | PRD específico § 4; SLICES Slice 002 | B-001, AC-002-01 |
-| Campos factuais, desconto e preparação | PRD específico §§ 5–6; SLICES Slice 002 Scope | B-002, B-003, AC-002-02, AC-002-05 |
+| Campos factuais e preparação | PRD específico §§ 5–6; SLICES Slice 002 Scope | B-002, B-003, AC-002-02 |
 | Todos os campos obrigatórios e validação HTML/cliente/servidor | PRD específico §§ 5 e 6; SLICES Slice 002 | RI-001, VAL-\*-REQUIRED, AC-002-03, AC-002-06 |
-| Preço, Moeda e desconto canônico | PRD específico § 5; SLICES Slice 002 | RI-002, VAL-PRICE-REQUIRED, VAL-CURRENCY-REQUIRED, VAL-DISCOUNT-INVALID, AC-002-04, AC-002-05 |
+| Preço e Moeda | PRD específico § 5; SLICES Slice 002 | RI-002, VAL-PRICE-REQUIRED, VAL-CURRENCY-REQUIRED, AC-002-04 |
 | Defaults, asteriscos e limites de preparação | PRD específico §§ 5 e 6; SLICES Slice 002 | RI-003, AC-002-06 |
 | Persistir restrições sem iniciar geração | PRD específico §§ 5 e 11; SLICES Slice 002 | B-004, B-006, RI-009, AC-002-07, AC-002-08 |
 | Resumo pré-análise e erro de job | PRD específico § 8; SLICES Slice 002 | B-004, B-005, RI-008, AC-002-09, AC-002-10 |
@@ -231,7 +226,7 @@ Requisitos visuais e de acessibilidade:
 - O formulário mantém os fatos e a preparação do modal manual, substituindo o modal pela subpágina e pelo resumo pós-cadastro.
 - Nome, Descrição, Categoria, Preço, Moeda e Observações ou restrições são obrigatórios.
 - Características e comissão foram retiradas do contrato ativo (ADR-030): não são coletadas, validadas, projetadas nem expostas; colunas históricas permanecem isoladas no banco.
-- Desconto opcional usa exclusivamente `discountType` `PERCENTAGE|FIXED` + `discountValue` + moeda do Product.
+- Desconto, tipo de desconto e valor de desconto foram retirados do contrato ativo (ADR-031): não são coletados, validados, projetados nem expostos; colunas históricas permanecem isoladas no banco.
 - Quantidade e Formato mantêm defaults `5`, `1–10` e `Tanto faz`, aparecem com `*`; Observações/restrições também aparece com `*`, é obrigatória e limitada a `300` caracteres.
 - O asterisco é apenas indicação visual; HTML/cliente e servidor validam.
 - Salvar e editar não criam job; após o salvamento o creator abre o resumo e escolhe explicitamente `Analisar produto`.

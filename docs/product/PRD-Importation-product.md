@@ -70,9 +70,8 @@ O formulário deve preservar os campos e o conteúdo do modal manual existente:
 | Preço                           | Obrigatório; deve ser válido, não negativo e ter no máximo duas casas decimais.     |
 | Moeda                           | Obrigatória; opções preservadas: `R$` (R$ Reais), `USD` ($ Dólar) e `EUR` (€ Euro). |
 | Características — uma por linha | Obrigatórias; deve haver ao menos uma linha não vazia.                              |
-| Desconto                        | Opcional; quando informado, exige `discountType` `PERCENTAGE` ou `FIXED`, `discountValue` e a moeda do Product. |
 
-Preço e moeda são fatos obrigatórios e devem ser informados conjuntamente; não há par opcional. Desconto `PERCENTAGE` fica entre `0` e `100`; `FIXED` usa a moeda do Product e não pode exceder seu preço.
+Preço e moeda são fatos obrigatórios e devem ser informados conjuntamente; não há par opcional.
 
 ### Preparação dos conteúdos
 
@@ -143,10 +142,10 @@ Esta frente não inclui:
 ## 10. Critérios de aceite
 
 1. Usuário autenticado consegue acessar `/products/new` a partir de Produtos.
-2. A tela apresenta os campos Nome, Descrição, Categoria, Preço, Moeda, Características, Desconto opcional e a seção Preparação dos conteúdos.
+2. A tela apresenta os campos Nome, Descrição, Categoria, Preço, Moeda, Características e a seção Preparação dos conteúdos.
 3. Nome, Descrição, Categoria, Preço, Moeda, Características (com ao menos uma linha não vazia) e Observações ou restrições impedem o salvamento quando ausentes, vazios ou inválidos.
 4. Preço e Moeda são obrigatórios; ambos devem ser informados e o preço deve ser válido, não negativo e ter no máximo duas casas decimais.
-5. Desconto informado exige tipo `PERCENTAGE` ou `FIXED`, valor válido e moeda do Product; percentual respeita `0–100` e valor fixo não excede o preço.
+5. O cadastro não coleta, valida ou persiste desconto, tipo de desconto ou valor de desconto.
 6. A preparação inicia com quantidade `5`, aceita somente valores inteiros de `1` a `10`, inicia com formato `Tanto faz` e limita notas a `300` caracteres; esses campos aparecem com `*`.
 7. O asterisco é apenas indicação visual; HTML/cliente e servidor validam todos os campos obrigatórios.
 8. O salvamento persiste os fatos preenchidos e as preferências de preparação como restrições da primeira geração.

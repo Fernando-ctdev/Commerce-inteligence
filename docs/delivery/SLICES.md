@@ -226,10 +226,9 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 **Scope:**
 
 - Disponibilizar a subpágina autenticada `/products/new` dentro de Produtos.
-- Preservar os campos e o conteúdo do modal manual existente: Nome do produto, Descrição, Categoria, Preço, Moeda, Características — uma por linha — Desconto opcional por percentual ou valor fixo, e a seção Preparação dos conteúdos.
+- Preservar os campos e o conteúdo do modal manual existente: Nome do produto, Descrição, Categoria, Preço, Moeda, Características — uma por linha — e a seção Preparação dos conteúdos.
 - Exigir Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições.
 - Validar Preço como valor não negativo, válido e com no máximo duas casas decimais; Preço e Moeda são ambos obrigatórios.
-- Modelar desconto opcional como `discountType` (`PERCENTAGE` ou `FIXED`), `discountValue` e a moeda do Product; tipo e valor são informados juntos.
 - Exibir `*` em Quantidade inicial de conteúdos, Formato do creator e Observações ou restrições; o asterisco é apenas indicação visual.
 - Iniciar Preparação dos conteúdos com quantidade default `5`, intervalo inteiro `1–10`, formato default `Tanto faz` e notas/restrições obrigatórias até `300` caracteres.
 - Validar todos os campos obrigatórios no HTML/cliente e no servidor.
@@ -243,9 +242,9 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 **Critérios necessários:**
 
 1. `/products/new` é acessível a partir de Produtos para usuário autenticado.
-2. O formulário apresenta os campos factuais, o desconto opcional por percentual ou valor fixo e a seção de preparação do modal manual existente.
+2. O formulário apresenta os campos factuais e a seção de preparação do modal manual existente.
 3. Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições obrigatoriamente preenchidos bloqueiam o salvamento quando ausentes, vazios ou inválidos.
-4. Preço deve ser não negativo, válido e ter no máximo duas casas decimais; Moeda deve ser informada; desconto exige tipo e valor consistentes.
+4. Preço deve ser não negativo, válido e ter no máximo duas casas decimais; Moeda deve ser informada.
 5. A preparação usa defaults `5`, `1–10` e `Tanto faz`; Quantidade e Formato aparecem com `*`, e Observações ou restrições são obrigatórias e limitadas a `300` caracteres.
 6. O asterisco é apenas indicação visual; HTML/cliente e servidor validam os campos obrigatórios.
 7. O salvamento persiste os fatos preenchidos e as restrições da primeira geração sem iniciar geração ou criar job.

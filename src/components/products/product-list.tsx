@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   Ellipsis,
   FileText,
-  Plus,
   Search,
   Sparkles,
   Tag,
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { stageMessage } from "./generation-ui-model";
+import { ProductCreateTrigger } from "./product-create-overlay";
 
 import {
   DropdownMenu,
@@ -168,10 +168,7 @@ export function ProductList() {
             Gerencie os produtos que você promove e continue de onde parou.
           </p>
         </div>
-        <Link className={styles.primaryButton} href="/products/new">
-          <Plus aria-hidden="true" />
-          Adicionar produto
-        </Link>
+        <ProductCreateTrigger className={styles.primaryButton} />
       </div>
       <div className={styles.controls} role="search">
         <label className={styles.searchLabel} htmlFor="product-search">

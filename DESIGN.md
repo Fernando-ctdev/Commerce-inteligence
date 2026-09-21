@@ -539,6 +539,8 @@ Não arredondar todas as superfícies. Cards sem objeto real não existem; logo,
 - entrada: `ease-out`;
 - saída: `ease-in`;
 - deslocamento/reordenação: `ease-in-out`;
+- side drawers e side sheets — incluindo o drawer de `Adicionar produto` — entram lateralmente com `motion.long` + `ease-out` e saem lateralmente com `motion.long` + `ease-in`; bottom sheets mantêm movimento vertical;
+- interações e skeletons reutilizam estes tokens e curvas, sem criar tokens de motion, exceto ciclos contínuos de indicadores reais já permitidos. Devem preservar acessibilidade e, com `prefers-reduced-motion`, mudar de estado sem deslocamento;
 - movimento existe quando explica algo — estado, causa e efeito, entrada, feedback ou delight intencional — sempre curto (tokens de duração; indicadores contínuos de atividade real podem ter ciclo próprio), performático (transform/opacity) e desligável com `prefers-reduced-motion`;
 - continuam proibidos: progresso ou ETA falsos, loops decorativos sem informação, bounce, spring chamativo, parallax, auto-scroll decorativo e contagem animada;
 - geração assíncrona pode indicar atividade, mas nunca deve inventar percentual de progresso;

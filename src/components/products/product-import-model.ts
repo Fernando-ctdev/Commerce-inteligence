@@ -83,9 +83,8 @@ export function mergeImportedCandidate(
       ? { imageReferences: candidate.imageRefs[0] }
       : {}),
     url: candidate.sourceUrl || draft.url || "",
-    ...(candidate.discountType === "PERCENTAGE" && candidate.discountValue
-      ? { discountType: "PERCENTAGE" as const, discountValue: candidate.discountValue }
-      : {}),
+    /* Desconto do Candidate fica transitório (ADR-031): não mapeia
+       para draft/Product/CI — a persistência manual nunca o recebe. */
   };
 }
 

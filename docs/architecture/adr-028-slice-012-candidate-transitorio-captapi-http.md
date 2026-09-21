@@ -71,4 +71,4 @@ sanitizado, sem expor a cadeia de redirects.
 Este ADR complementa o ADR-027; não o substitui nem altera seu escopo de
 integração CaptAPI. O ADR-022 continua sendo referência histórica para a
 confirmação manual, com o comportamento URL-first especificado agora pelo
-Slice 012. ADR-023 e ADR-024 permanecem inalterados.
+Slice 012. ADR-023 permanece inalterado; ADR-024 foi supersedido por ADR-031.

@@ -27,12 +27,10 @@ import { heartbeat } from "./runtime";
 
 const SAFE_REPAIR_CAUSE_LABELS = ["claim sem suporte", "development invalido"] as const;
 
-/** Fatos essenciais do Product enviados à engine ( Gate 5, item 3). Desconto
- * entra como fato SOMENTE quando existe no Product, exclusivamente do tipado
- * (discountType + discountValue): sem fallback de discountPercentage, valor
- * nunca inventado. Função pura para cobertura factual determinística.
- * Retirada (ADR-030): comissão e features são legado isolado — colunas
- * históricas existem, mas NUNCA são projetadas para a engine. */
+/** Fatos essenciais do Product enviados à engine ( Gate 5, item 3). Função pura
+ * para cobertura factual determinística. Retirada (ADR-030/ADR-031):
+ * comissão, features e desconto são legado isolado — colunas históricas
+ * existem, mas NUNCA são projetadas para a engine. */
 export function projectEngineFacts(product: {
   id: string;
   name: string;
@@ -41,9 +39,6 @@ export function projectEngineFacts(product: {
   brand: string | null;
   priceAmount: Prisma.Decimal | null;
   priceCurrency: string | null;
-  discountType: string | null;
-  discountValue: string | null;
-  discountPercentage: Prisma.Decimal | null;
   variants: unknown;
   images: unknown;
   seller: string | null;
@@ -57,13 +52,6 @@ export function projectEngineFacts(product: {
     brand: product.brand,
     priceAmount: product.priceAmount?.toString(),
     priceCurrency: product.priceCurrency,
-    // Desconto só entra como fato quando existe no Product (nunca inventado).
-    // Contrato exclusivamente tipado (Gate 5): sem fallback de discountPercentage.
-    discount: product.discountType === "PERCENTAGE" && product.discountValue
-      ? `${product.discountValue.toString()}% de desconto`
-      : product.discountType === "FIXED" && product.discountValue
-        ? `${product.priceCurrency ?? ""} ${product.discountValue.toString()} de desconto`.trim()
-        : undefined,
     variants: product.variants,
     images: product.images,
     seller: product.seller,

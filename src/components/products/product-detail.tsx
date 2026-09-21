@@ -27,7 +27,7 @@ import {
   StrategyView,
 } from "./generation-views";
 import { statusMessage } from "./generation-ui-model";
-import { formatDiscount, formatPriceWithCurrency } from "./product-form-model";
+import { formatPriceWithCurrency } from "./product-form-model";
 import { ProductCreateForm } from "./product-create-form";
 import { useGenerationJob } from "./use-generation-job";
 import styles from "./product-detail.module.css";
@@ -63,11 +63,6 @@ function cycleNeighbours(tab: ProductTab): { prev: CycleTab; next: CycleTab } {
 
 function ProductSummaryPanel({ product }: { product: ProductRecord }) {
   const imageUrl = product.imageReferences[0];
-  const discount = formatDiscount(
-    product.discountType,
-    product.discountValue,
-    product.priceCurrency,
-  );
   return (
     <section aria-labelledby="product-summary-title" className={styles.summaryPanel}>
       <div className={styles.sideCardHeading}>
@@ -102,12 +97,6 @@ function ProductSummaryPanel({ product }: { product: ProductRecord }) {
             <dt>Categoria</dt>
             <dd>{product.category}</dd>
           </div>
-          {discount && (
-            <div className={styles.summaryFact}>
-              <dt>Desconto</dt>
-              <dd>{discount}</dd>
-            </div>
-          )}
           <div className={styles.summaryFact}>
             <dt>Descrição</dt>
             <dd className={styles.summaryDescription} tabIndex={0}>{product.description}</dd>

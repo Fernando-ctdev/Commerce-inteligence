@@ -39,7 +39,6 @@ import {
   buildProductPayload,
   DEFAULT_PRODUCT_CURRENCY,
   digitsToPrice,
-  formatDiscount,
   formatPriceDisplay,
   formatPriceWithCurrency,
   preparationIsWithinLimits,
@@ -58,8 +57,6 @@ const emptyDraft: ProductManualDraft = {
   category: "",
   price: "",
   currency: DEFAULT_PRODUCT_CURRENCY,
-  discountType: "PERCENTAGE",
-  discountValue: "",
   imageReferences: "",
   url: "",
 };
@@ -68,8 +65,10 @@ type ProductCreateFormProps = {
   mode?: "create" | "edit";
   product?: ProductRecord;
   onSaved?: (product: ProductRecord) => void;
-  /** Substitui o router.back() pós-salvamento: a edição inline volta ao resumo. */
+  /** Substitui a navegação pós-salvamento (edição: router.back(); criação: router.push para o produto criado). O overlay local passa onAfterSave para permanecer na superfície. */
   onAfterSave?: () => void;
+  /** Permite que superfícies controladas fechem o formulário sem navegação. */
+  onCancel?: () => void;
 };
 
 const currencyOptions = [
@@ -134,9 +133,6 @@ function draftFromProduct(product?: ProductRecord): ProductManualDraft {
     category: product.category,
     price: product.price.replace(",", "."),
     currency: product.priceCurrency,
-    /* O ProductRecord já normaliza: registro legado chega como PERCENTAGE + valor. */
-    discountType: product.discountType ?? "PERCENTAGE",
-    discountValue: product.discountValue,
     imageReferences: product.imageReferences.join("\n"),
     url: product.url,
   };
@@ -157,8 +153,6 @@ const errorFieldOrder: Array<keyof ProductManualFieldErrors> = [
   "category",
   "price",
   "currency",
-  "discountType",
-  "discountValue",
   "imageReferences",
   "url",
   "targetContentCount",
@@ -327,86 +321,6 @@ function CurrencyField({
   );
 }
 
-const discountTypeOptions = [
-  { value: "PERCENTAGE", label: "% Porcentagem" },
-  { value: "FIXED", label: "R$ Valor fixo" },
-] as const;
-
-function DiscountField({
-  currency,
-  value,
-  type,
-  onChangeType,
-  onChangeValue,
-  typeError,
-  valueError,
-}: {
-  currency: string;
-  value: string;
-  type: string;
-  onChangeType: (value: string) => void;
-  onChangeValue: (value: string) => void;
-  typeError?: string;
-  valueError?: string;
-}) {
-  const typeErrorId = `${fieldId("discountType")}-error`;
-  const valueErrorId = `${fieldId("discountValue")}-error`;
-  const describedBy =
-    [typeError ? typeErrorId : undefined, valueError ? valueErrorId : undefined]
-      .filter(Boolean)
-      .join(" ") || undefined;
-  return (
-    <div className={styles.field}>
-      <label htmlFor={fieldId("discountValue")}>Desconto (opcional)</label>
-      <div className={styles.commissionRow}>
-        <Select
-          items={discountTypeOptions}
-          onValueChange={(next) => onChangeType(next ?? "PERCENTAGE")}
-          value={type || "PERCENTAGE"}
-        >
-          <SelectTrigger
-            aria-describedby={typeError ? typeErrorId : undefined}
-            aria-invalid={Boolean(typeError)}
-            aria-label="Tipo de desconto"
-            className={styles.commissionTypeTrigger}
-            id={fieldId("discountType")}
-          >
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent className={styles.currencyContent}>
-            {discountTypeOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <input
-          aria-describedby={valueError ? valueErrorId : undefined}
-          aria-invalid={Boolean(valueError)}
-          className={styles.commissionInput}
-          id={fieldId("discountValue")}
-          inputMode="decimal"
-          name={fieldId("discountValue")}
-          onChange={(event) => onChangeValue(event.target.value)}
-          placeholder={type === "FIXED" ? `Ex.: 5,00 (${currency})` : "Ex.: 15,5"}
-          value={value}
-        />
-      </div>
-      {typeError && (
-        <p className={styles.fieldError} id={typeErrorId} role="alert">
-          {typeError}
-        </p>
-      )}
-      {valueError && (
-        <p className={styles.fieldError} id={valueErrorId} role="alert">
-          {valueError}
-        </p>
-      )}
-    </div>
-  );
-}
-
 function CategoryField({
   value,
   onChange,
@@ -492,11 +406,6 @@ function ProductReviewSummary({
   creatorPresence: ContentPreparationPreferences["creatorPresence"];
   notes: string;
 }) {
-  const discount = formatDiscount(
-    draft.discountType,
-    draft.discountValue ?? "",
-    draft.currency,
-  );
   return (
     <section aria-labelledby="product-review-title" className={styles.section}>
       <div className={styles.sectionHeading}>
@@ -518,12 +427,6 @@ function ProductReviewSummary({
           <dt>Preço</dt>
           <dd>{formatPriceWithCurrency(draft.price, draft.currency)}</dd>
         </div>
-        {discount && (
-          <div>
-            <dt>Desconto</dt>
-            <dd>{discount}</dd>
-          </div>
-        )}
         <div>
           <dt>Descrição</dt>
           <dd>{draft.description}</dd>
@@ -550,6 +453,7 @@ export function ProductCreateForm({
   product,
   onSaved,
   onAfterSave,
+  onCancel,
 }: ProductCreateFormProps) {
   const router = useRouter();
   const isEdit = mode === "edit";
@@ -821,9 +725,16 @@ export function ProductCreateForm({
           router.back();
         }
       } else {
-        createdId = (await createProduct(payload)).id;
+        const mutation = await createProduct(payload);
+        createdId = mutation.id;
         if (shouldAnalyze && createdId) {
           await startGeneration(createdId, createGenerationIdempotencyKey());
+        }
+        if (onSaved) {
+          onSaved(await getProduct(mutation.id));
+        }
+        if (onAfterSave) {
+          onAfterSave();
         }
       }
       toast.success(
@@ -834,7 +745,7 @@ export function ProductCreateForm({
             : "Produto salvo.",
       );
       idempotencyKey.current = undefined;
-      if (!isEdit && createdId) router.push(`/products/${createdId}`);
+      if (!isEdit && createdId && !onAfterSave) router.push(`/products/${createdId}`);
     } catch (caught) {
       if (caught instanceof ProductApiError) {
         const apiErrors: ProductManualFieldErrors = {
@@ -847,8 +758,6 @@ export function ProductCreateForm({
           targetContentCount: caught.fieldErrors.targetContentCount,
           creatorPresence: caught.fieldErrors.creatorPresence,
           constraints: caught.fieldErrors.constraints,
-          discountType: caught.fieldErrors.discountType,
-          discountValue: caught.fieldErrors.discountValue,
         };
         setFieldErrors(apiErrors);
         setError(caught.message);
@@ -1001,15 +910,6 @@ export function ProductCreateForm({
               error={combinedErrors.currency}
               onChange={(value) => update("currency", value)}
               value={draft.currency}
-            />
-            <DiscountField
-              currency={draft.currency}
-              onChangeType={(value) => update("discountType", value)}
-              onChangeValue={(value) => update("discountValue", value)}
-              type={draft.discountType ?? "PERCENTAGE"}
-              typeError={combinedErrors.discountType}
-              value={draft.discountValue ?? ""}
-              valueError={combinedErrors.discountValue}
             />
           </div>
           <div className={styles.imageManager}>
@@ -1360,6 +1260,15 @@ export function ProductCreateForm({
         {!isEdit &&
           (saving ? (
           <Button className={styles.cancelLink} disabled type="button" variant="outline">
+            Cancelar
+          </Button>
+        ) : onCancel ? (
+          <Button
+            className={styles.cancelLink}
+            onClick={onCancel}
+            type="button"
+            variant="ghost"
+          >
             Cancelar
           </Button>
         ) : (

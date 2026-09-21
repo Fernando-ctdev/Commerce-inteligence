@@ -41,8 +41,6 @@ const FIELD_CODE_PRIORITY = [
   "category",
   "price",
   "priceCurrency",
-  "discountType",
-  "discountValue",
   "imageRefs",
   "url",
   "constraints",
@@ -173,45 +171,9 @@ function normalizePriceAmount(price: string): string {
   if (/^\d{1,3}(?:\.\d{3})+$/.test(price)) return price.replace(/\./g, "");
   return price;
 }
-// Desconto (contrato oficial, Gate 5): exclusivamente tipado — PERCENTAGE
-// (0–100) ou FIXED (valor na moeda do produto, não negativo). Ausentes = sem
-// desconto; discountPercentage não faz parte do contrato.
-type DiscountType = "PERCENTAGE" | "FIXED";
-const DISCOUNT_TYPES: readonly DiscountType[] = ["PERCENTAGE", "FIXED"];
-function validateDiscount(
-  input: ManualProductInput,
-  priceCurrency: string,
-  fail: Fail,
-): { discountType: DiscountType | null; discountValue: string | null } {
-  const rawType = asTrimmedString(input.discountType)?.toUpperCase() ?? "";
-  const rawValue = asTrimmedString(input.discountValue) ?? "";
-  if (!rawType && !rawValue) return { discountType: null, discountValue: null };
-  let discountType: DiscountType | null = null;
-  if ((DISCOUNT_TYPES as readonly string[]).includes(rawType)) {
-    discountType = rawType as DiscountType;
-  } else {
-    fail("discountType", "Informe um tipo de desconto válido.", "VAL-DISCOUNT-TYPE");
-  }
-  if (!rawValue || !PRICE_PATTERN.test(rawValue)) {
-    fail("discountValue", "Informe um desconto válido e não negativo, com até duas casas decimais.", "VAL-DISCOUNT-FORMAT");
-    return { discountType, discountValue: null };
-  }
-  const discountValue = normalizePriceAmount(rawValue);
-  if (discountType === "PERCENTAGE" && Number(discountValue) > 100) {
-    fail("discountValue", "O desconto percentual deve estar entre 0 e 100.", "VAL-DISCOUNT-RANGE");
-  }
-  if (discountType === "FIXED" && !priceCurrency) {
-    fail("discountValue", "Moeda do produto é obrigatória para desconto de valor fixo.", "VAL-DISCOUNT-CURRENCY");
-  }
-  // RI-002 (SPEC-002): FIXED não excede o preço do Product.
-  if (discountType === "FIXED" && discountValue) {
-    const price = Number(normalizePriceAmount(asTrimmedString(input.price) ?? ""));
-    if (Number.isFinite(price) && Number(discountValue) > price) {
-      fail("discountValue", "O desconto de valor fixo não pode exceder o preço do produto.", "VAL-DISCOUNT-RANGE");
-    }
-  }
-  return { discountType, discountValue };
-}
+// ADR-031: fora do contrato ativo — discountType/discountValue/
+// discountPercentage não são validados, escritos, lidos nem projetados; colunas
+// históricas permanecem isoladas no banco e nunca são sobrescritas.
 
 type ValidatedFacts = {
   name: string;
@@ -219,8 +181,6 @@ type ValidatedFacts = {
   category: string;
   priceAmount: string;
   priceCurrency: string;
-  discountType: DiscountType | null;
-  discountValue: string | null;
   imageRefs: string[];
 };
 
@@ -309,8 +269,10 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
   // Características/comissão (ADR-030): fora do contrato ativo — enviados, são
   // ignorados (sem erro, sem escrita); colunas históricas nunca são sobrescritas.
 
+  // ADR-031: fora do contrato ativo — enviado, é ignorado
+  // (sem erro, sem escrita); colunas históricas nunca são sobrescritas.
+
   const imageRefs = validateImageRefs(input.imageRefs, fail);
-  const discount = validateDiscount(input, priceCurrency, fail);
 
   return {
     name,
@@ -318,7 +280,6 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
     category,
     priceAmount: normalizePriceAmount(price),
     priceCurrency,
-    ...discount,
     imageRefs,
   };
 }
@@ -490,10 +451,9 @@ export async function createManualProduct(
         category: data.category,
         priceAmount: data.priceAmount,
         priceCurrency: data.priceCurrency,
-        discountType: data.discountType,
-        discountValue: data.discountValue,
-        // Comissão/features (ADR-030): fora do contrato ativo — nunca escritas;
-        // colunas históricas permanecem no banco, features usa default [].
+        // ADR-031: fora do contrato ativo — nunca escrito;
+        // colunas históricas (discountType/discountValue/discountPercentage)
+        // permanecem isoladas no banco.
         images: data.imageRefs,
         submittedUrl: data.submittedUrl,
         provenance: { origin: "manual" },
@@ -576,10 +536,8 @@ export async function updateTenantProduct(
         category: facts.category,
         priceAmount: facts.priceAmount,
         priceCurrency: facts.priceCurrency,
-        discountType: facts.discountType,
-        discountValue: facts.discountValue,
-        // Comissão/features (ADR-030): ausentes no data — legados não enviados
-        // NUNCA sobrescrevem o histórico em edições.
+        // ADR-031: ausente no data — legado nunca sobrescrito
+        // em edições; histórico preservado.
         images: facts.imageRefs,
         submittedUrl: facts.submittedUrl,
         ...(generationConstraints ? { generationConstraints } : {}),

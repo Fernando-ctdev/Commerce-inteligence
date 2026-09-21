@@ -104,12 +104,9 @@ model Product {
   // preservadas como histórico; o service nunca escreve nem lê estes campos.
   commissionType     String?
   commissionValue    Decimal?
-  // Resquício de dados de desenvolvimento (Gate 5): sem status de contrato.
-  // Não é escrito pelo service nem lido como desconto; null = sem desconto.
+  // Legado isolado (ADR-031): desconto saiu do contrato ativo.
+  // Colunas preservadas como histórico; o service nunca escreve nem lê estes campos.
   discountPercentage Decimal?
-  // Desconto tipado — contrato oficial (Gate 5): exclusivamente tipado.
-  // PERCENTAGE (0–100) ou FIXED (valor na moeda do produto, não negativo).
-  // Null = sem desconto: nunca inventado pela geração.
   discountType       String?
   discountValue      String?
   // Legado isolado (ADR-030): features saiu do contrato ativo. Coluna preservada

@@ -2,7 +2,7 @@
 
 ## Status
 
-Aceito — consolida a decisão aprovada no Gate 5 (itens 1–4), registrada na SPEC slice-002 como RI-002 (parágrafo "Contrato oficial do desconto"). Formaliza o contrato vigente verificado na implementação: schema, migrations, service, API de leitura, worker e engine já alinhados; nenhuma alteração de comportamento é introduzida por este ADR.
+Supersedido por ADR-031 — este registro preserva a decisão então vigente.
 
 ## Contexto
 

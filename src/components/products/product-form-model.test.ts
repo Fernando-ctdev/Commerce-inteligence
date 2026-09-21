@@ -349,7 +349,7 @@ test("comissão/features (ADR-030): payload nunca as envia, mesmo com draft lega
   assert.equal("features" in edicao, false);
 });
 
-test("desconto tipado: draft sem discountValue não emite campos; percentual validado 0–100", () => {
+test("desconto não é contrato: draft legado não emite campos no payload manual (ADR-031)", () => {
   const base = {
     ...emptyProductDraft(),
     name: "P",
@@ -362,32 +362,20 @@ test("desconto tipado: draft sem discountValue não emite campos; percentual val
     base,
     { targetContentCount: 1, creatorPresence: "either" },
   );
-  assert.equal(emptyPayload.discountType, undefined);
-  assert.equal(emptyPayload.discountValue, undefined);
-  assert.deepEqual(validateProductManualDraft({ ...base, discountValue: "100,01" }, ""), {
-    discountValue: "O desconto percentual deve estar entre 0 e 100.",
-  });
+  assert.equal("discountType" in emptyPayload, false);
+  assert.equal("discountValue" in emptyPayload, false);
+  // Campos legados presentes no draft (linha antiga/estado em memória) não
+  // vazam para o payload; validação não rejeita por causa deles.
+  const legacyDraft = { ...base, discountType: "PERCENTAGE", discountValue: "12,50" };
   const payload = buildManualProductPayload(
-    { ...base, discountType: "PERCENTAGE", discountValue: "12,50" },
+    legacyDraft,
     { targetContentCount: 1, creatorPresence: "either" },
     "idempotency-key",
   );
-  assert.deepEqual(
-    { discountType: payload.discountType, discountValue: payload.discountValue },
-    { discountType: "PERCENTAGE", discountValue: "12,50" },
-  );
+  assert.equal("discountType" in payload, false);
+  assert.equal("discountValue" in payload, false);
+  assert.deepEqual(validateProductManualDraft(legacyDraft, ""), {});
   assert.equal(payload.idempotency_key, "idempotency-key");
-});
-
-test("desconto fixo usa moeda do produto e vai tipado no payload", () => {
-  const payload = buildManualProductPayload(
-    { ...emptyProductDraft(), name: "P", description: "D", category: "C", price: "89.90", currency: "R$", discountType: "FIXED", discountValue: "5,00" },
-    { targetContentCount: 1, creatorPresence: "either" },
-  );
-  assert.deepEqual(
-    { discountType: payload.discountType, discountValue: payload.discountValue },
-    { discountType: "FIXED", discountValue: "5,00" },
-  );
 });
 
 test("payload manual nunca carrega metadados de importação, provenância forjada nem atributos legados", () => {

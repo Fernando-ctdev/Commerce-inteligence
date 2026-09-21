@@ -1,4 +1,4 @@
-import type { DiscountType, ProductFieldErrors, ProductPayload } from "./product-form-model";
+import type { ProductFieldErrors, ProductPayload } from "./product-form-model";
 import {
   normalizeGenerationAction,
   type GenerationActionProjection,
@@ -21,11 +21,6 @@ export type ProductRecord = {
   category: string;
   price: string;
   priceCurrency: string;
-  discountPercentage: string;
-  /** Desconto tipado — contrato oficial (Gate 5, exclusivamente tipado).
-      null/ausente = sem desconto; sem derivação a partir de discountPercentage. */
-  discountType: DiscountType | null;
-  discountValue: string;
   imageReferences: string[];
   observations: string;
   url: string;
@@ -48,7 +43,7 @@ export type { CandidateGap, ProductImportCandidate, ProductImportResult, Product
 export type ServerFieldErrors = ProductFieldErrors &
   Partial<
     Record<
-      "currency" | "targetContentCount" | "creatorPresence" | "constraints" | "discountType" | "discountValue",
+      "currency" | "targetContentCount" | "creatorPresence" | "constraints",
       string
     >
   >;
@@ -112,8 +107,6 @@ const serverFieldNames: Record<string, string> = {
   url: "url",
   currency: "currency",
   priceCurrency: "currency",
-  discountType: "discountType",
-  discountValue: "discountValue",
   targetContentCount: "targetContentCount",
   creatorPresence: "creatorPresence",
   constraints: "constraints",
@@ -150,10 +143,8 @@ export function normalizeProduct(value: unknown): ProductRecord {
     cents !== null
       ? (cents / 100).toFixed(2).replace(".", ",")
       : nullableString(rawPrice);
-  const discountType: DiscountType | null =
-    record.discountType === "PERCENTAGE" || record.discountType === "FIXED"
-      ? record.discountType
-      : null;
+  // Desconto (ADR-031): fora do contrato ativo — nunca normalizado
+  // nem exposto, mesmo em respostas históricas que ainda o carreguem.
   return {
     id: nullableString(record.id ?? record.product_id),
     version: typeof record.version === "number" ? record.version : 0,
@@ -163,9 +154,6 @@ export function normalizeProduct(value: unknown): ProductRecord {
     price,
     priceCurrency:
       nullableString(record.priceCurrency ?? record.price_currency) || "R$",
-    discountPercentage: nullableString(record.discountPercentage ?? record.discount_percentage),
-    discountType,
-    discountValue: nullableString(record.discountValue),
     imageReferences: listValue(
       record.imageRefs ?? record.imageReferences ?? record.image_references,
     ),
@@ -289,8 +277,6 @@ export async function createProduct(payload: ProductPayload) {
     targetContentCount,
     creatorPresence,
     constraints,
-    discountType,
-    discountValue,
   } = payload;
   return mutationFromResponse(
     await request<unknown>("/api/products", {
@@ -305,8 +291,6 @@ export async function createProduct(payload: ProductPayload) {
         price,
         priceCurrency,
         imageRefs,
-        discountType,
-        discountValue,
         url,
         targetContentCount,
         creatorPresence,

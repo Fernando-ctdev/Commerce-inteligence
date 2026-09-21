@@ -215,9 +215,12 @@ test("mapping context is compact and allowlisted without strategy plan skill or 
   assert.ok(!("strategy" in capturedContext));
   assert.ok(!("skill" in capturedContext));
   assert.ok(!("memory" in capturedContext));
-  // discount entra no allowlist do contexto (fato do desconto, chave enviada
-  // pelo worker); campos ausentes permanecem undefined — valor nunca inventado.
-  assert.deepEqual((capturedContext as { product: Record<string, unknown> }).product, { name: "Produto", description: "Tecido respirável", category: undefined, brand: undefined, priceAmount: undefined, priceCurrency: undefined, discount: "20% de desconto" });
+  // Desconto fora do allowlist (ADR-031): mesmo com `facts.discount` presente,
+  // a chave NUNCA chega ao mapping; demais campos do product preservados.
+  // Shape construído pela própria engine dentro do teste — cast nomeado, não input externo.
+  const productContext = (capturedContext as { product: Record<string, unknown> }).product;
+  assert.deepEqual(Object.keys(productContext).sort(), ["brand", "category", "description", "name", "priceAmount", "priceCurrency"]);
+  assert.equal("discount" in productContext, false);
 });
 test("Meu estilo: creatorContext completo (tone, recordsAlone, restrictions, executionStyle) chega íntegro ao Brief Generator", async () => {
   let briefContext: Record<string, unknown> | undefined;

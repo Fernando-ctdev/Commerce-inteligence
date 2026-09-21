@@ -40,11 +40,6 @@ export type ProductView = {
   category: string;
   price: string;
   priceCurrency: string;
-  // Desconto factual em percentual; null = sem desconto (compatível com produtos antigos).
-  discountPercentage: string | null;
-  // Desconto tipado (contrato oficial, Gate 5): PERCENTAGE|FIXED + valor; null = sem desconto tipado.
-  discountType: string | null;
-  discountValue: string | null;
   imageRefs: string[];
   notes: string;
   url: string;
@@ -112,9 +107,9 @@ async function productReadiness(tenantId: string, productId: string): Promise<Pr
   return terminal.status === "SUCCEEDED" || terminal.status === "SUCCEEDED_PARTIAL" ? "READY" : "FAILED";
 }
 function toProductView(product: Product, readiness: ProductView["readiness"] = "PENDING"): ProductView {
-  // Comissão/features (ADR-030): fora do contrato ativo — nunca projetadas,
-  // mesmo em registros históricos que ainda as carregam.
-  return { id: product.id, version: product.version, name: product.name, description: product.description ?? "", category: product.category ?? "", price: product.priceAmount ? product.priceAmount.toString() : "", priceCurrency: product.priceCurrency ?? "", discountPercentage: product.discountPercentage?.toString() ?? null, discountType: product.discountType, discountValue: product.discountValue, imageRefs: stringList(product.images), notes: constraintsNotes(product.generationConstraints), url: product.sourceUrl ?? product.submittedUrl ?? "", targetContentCount: product.targetContentCount, creatorPresence: constraintsCreatorPresence(product.generationConstraints), active: product.lifecycle === "ACTIVE", readiness };
+  // Comissão/features/desconto (ADR-030): fora do contrato ativo — nunca
+  // projetados, mesmo em registros históricos que ainda os carregam.
+  return { id: product.id, version: product.version, name: product.name, description: product.description ?? "", category: product.category ?? "", price: product.priceAmount ? product.priceAmount.toString() : "", priceCurrency: product.priceCurrency ?? "", imageRefs: stringList(product.images), notes: constraintsNotes(product.generationConstraints), url: product.sourceUrl ?? product.submittedUrl ?? "", targetContentCount: product.targetContentCount, creatorPresence: constraintsCreatorPresence(product.generationConstraints), active: product.lifecycle === "ACTIVE", readiness };
 }
 
 export async function handleListProducts(req: Request): Promise<Response> {

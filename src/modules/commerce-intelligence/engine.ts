@@ -1261,9 +1261,7 @@ export async function runFirstGeneration(
         brand: facts.brand,
         priceAmount: facts.priceAmount,
         priceCurrency: facts.priceCurrency,
-        // Fato do desconto (string projetada pelo worker, só quando existe).
-        // Contrato exclusivamente tipado (Gate 5): a chave é "discount".
-        discount: facts.discount,
+        // Desconto (ADR-031): fora do contrato ativo — não projetado.
       },
       understanding: {
         category: understanding?.category,
