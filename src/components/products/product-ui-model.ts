@@ -5,7 +5,6 @@ const productErrorOrder: Array<keyof ProductFieldErrors> = [
   "description",
   "category",
   "price",
-  "characteristics",
   "observations",
   "imageReferences",
   "url",

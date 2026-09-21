@@ -100,6 +100,8 @@ model Product {
   brand              String?
   priceAmount        Decimal?
   priceCurrency      String?
+  // Legado isolado (ADR-030): comissão saiu do contrato ativo. Colunas
+  // preservadas como histórico; o service nunca escreve nem lê estes campos.
   commissionType     String?
   commissionValue    Decimal?
   // Resquício de dados de desenvolvimento (Gate 5): sem status de contrato.
@@ -110,7 +112,9 @@ model Product {
   // Null = sem desconto: nunca inventado pela geração.
   discountType       String?
   discountValue      String?
-  features           Json
+  // Legado isolado (ADR-030): features saiu do contrato ativo. Coluna preservada
+  // como histórico (não destrutiva); default [] permite criar sem escrever o campo.
+  features           Json  @default("[]")
   variants           Json?
   images             Json
   seller             String?

@@ -35,7 +35,6 @@ Reutilizar os campos atuais do modelo `Product`:
 - `category` obrigatório após validação;
 - `priceAmount` e `priceCurrency` obrigatórios;
 - desconto opcional canônico como `discountType` (`PERCENTAGE|FIXED`) + `discountValue`; `FIXED` usa `priceCurrency`;
-- `features` como lista com ao menos uma característica não vazia;
 - `images` como lista vazia nesta etapa;
 - `brand`, `seller`, `variants`, `submittedUrl` e `sourceUrl` sem entrada na tela;
 - `provenance` com a origem manual factual já prevista pelo contrato vigente;
@@ -64,7 +63,7 @@ Criar migration aditiva para `discountType`/`discountValue`, restrições e idem
 2. Criar um caso de uso Product focado em `createProduct` e `listProducts`:
    - receber `tenantId` resolvido server-side, nunca do body;
    - validar e normalizar fatos, desconto, quantidade, formato, notas e Preço/Moeda;
-   - exigir Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações/restrições;
+   - exigir Nome, Descrição, Categoria, Preço, Moeda e Observações/restrições; comissão e características não fazem parte do contrato ativo (ADR-030) e, quando enviadas, são ignoradas sem erro e sem escrita;
    - aceitar preço não negativo, válido e com no máximo duas casas decimais;
    - aceitar desconto apenas como par `discountType` + `discountValue`: percentual `0–100` ou valor fixo não superior ao preço na moeda do Product;
    - montar `generationConstraints` somente com os valores de preparação;
@@ -80,7 +79,7 @@ Criar migration aditiva para `discountType`/`discountValue`, restrições e idem
 4. Adicionar `src/components/ui/breadcrumb.tsx` a partir do padrão shadcn/ui e compor `Produtos / Adicionar produto` na nova página.
 5. Criar `src/app/products/new/page.tsx` com `requireSession`, `ProductShell` e o formulário client-side.
 6. Criar ou extrair o formulário manual focado, reutilizando `Button`, `Select`, `Slider` e estilos/tokens existentes:
-   - campos exatamente: Nome do produto, Descrição, Categoria, Preço, Moeda e Características — uma por linha;
+   - campos exatamente: Nome do produto, Descrição, Categoria, Preço e Moeda;
    - seção `Preparação dos conteúdos` com quantidade, formato e observações/restrições;
    - marcar com `*` Quantidade, Formato e Observações/restrições; o asterisco é apenas indicação visual;
    - validar todos os campos obrigatórios no HTML/cliente e servidor;

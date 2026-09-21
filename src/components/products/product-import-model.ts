@@ -2,14 +2,15 @@ import type { ProductManualDraft } from "./product-form-model";
 
 /* Contrato do Slice 012 (ADR-028): o candidato é transitório, factual e
    limitado aos fatos suportados pelo formulário/serviço manual. Seller,
-   marca e variantes não existem neste contrato e nunca viram gap. */
+   marca e variantes não existem neste contrato e nunca viram gap.
+   features segue no candidato como contrato externo transitório do
+   importer, mas não é gap acionável: o formulário não tem mais o campo. */
 export type CandidateGap =
   | "name"
   | "description"
   | "category"
   | "price"
-  | "priceCurrency"
-  | "features";
+  | "priceCurrency";
 
 export type ProductSignals = {
   salesCount?: number;
@@ -76,9 +77,6 @@ export function mergeImportedCandidate(
     ...(candidate.category ? { category: candidate.category } : {}),
     ...(candidate.price ? { price: candidate.price } : {}),
     ...(currencySupported(candidate.priceCurrency) ? { currency: candidate.priceCurrency } : {}),
-    ...(candidate.features.length > 0
-      ? { characteristics: candidate.features.join("\n") }
-      : {}),
     /* Primeira imagem importada apenas — e somente quando o creator ainda
        não tem imagem manual/upload; imagens existentes têm prioridade. */
     ...(candidate.imageRefs[0] && !hasManualImages(draft)
@@ -101,7 +99,6 @@ const GAP_LABELS: Record<CandidateGap, string> = {
   category: "Categoria",
   price: "Preço",
   priceCurrency: "Moeda",
-  features: "Características",
 };
 
 /* Gaps na ordem recebida, com nome legível — texto, nunca só cor. Dados de

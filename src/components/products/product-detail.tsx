@@ -27,7 +27,7 @@ import {
   StrategyView,
 } from "./generation-views";
 import { statusMessage } from "./generation-ui-model";
-import { formatCommission, formatDiscount, formatPriceWithCurrency } from "./product-form-model";
+import { formatDiscount, formatPriceWithCurrency } from "./product-form-model";
 import { ProductCreateForm } from "./product-create-form";
 import { useGenerationJob } from "./use-generation-job";
 import styles from "./product-detail.module.css";
@@ -63,12 +63,6 @@ function cycleNeighbours(tab: ProductTab): { prev: CycleTab; next: CycleTab } {
 
 function ProductSummaryPanel({ product }: { product: ProductRecord }) {
   const imageUrl = product.imageReferences[0];
-  const commission = formatCommission(
-    product.commissionType,
-    product.commission,
-    product.price,
-    product.priceCurrency,
-  );
   const discount = formatDiscount(
     product.discountType,
     product.discountValue,
@@ -108,12 +102,6 @@ function ProductSummaryPanel({ product }: { product: ProductRecord }) {
             <dt>Categoria</dt>
             <dd>{product.category}</dd>
           </div>
-          {commission && (
-            <div className={styles.summaryFact}>
-              <dt>Comissão</dt>
-              <dd>{commission}</dd>
-            </div>
-          )}
           {discount && (
             <div className={styles.summaryFact}>
               <dt>Desconto</dt>
@@ -126,20 +114,6 @@ function ProductSummaryPanel({ product }: { product: ProductRecord }) {
           </div>
         </dl>
       </div>
-      {product.characteristics.length > 0 && (
-        <dl className={styles.summaryFacts}>
-          <div className={styles.summaryFact}>
-            <dt>Características</dt>
-            <dd>
-              <ul className={styles.summaryList}>
-                {product.characteristics.map((characteristic) => (
-                  <li key={characteristic}>{characteristic}</li>
-                ))}
-              </ul>
-            </dd>
-          </div>
-        </dl>
-      )}
       {product.url && (
         <dl className={styles.summaryFacts}>
           <div className={styles.summaryFact}>

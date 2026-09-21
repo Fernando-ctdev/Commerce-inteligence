@@ -19,7 +19,6 @@ test("engineFacts projeta o desconto do tipado, sem fallback de discountPercenta
     discountType: null,
     discountValue: null,
     discountPercentage: null,
-    features: ["x"],
     variants: null,
     images: [],
     seller: null,
@@ -35,7 +34,36 @@ test("engineFacts projeta o desconto do tipado, sem fallback de discountPercenta
   assert.equal(projectEngineFacts({ ...base, discountPercentage: { toString: () => "25.5" } } as never).discount, undefined);
   // A chave projetada é a mesma lida pela engine no mappingContext.
   const facts = projectEngineFacts({ ...base, discountType: "PERCENTAGE", discountValue: "15.5" });
-  assert.deepEqual(Object.keys(facts).sort(), ["brand", "category", "description", "discount", "features", "images", "name", "priceAmount", "priceCurrency", "productId", "seller", "sourceUrl", "variants"]);
+  assert.deepEqual(Object.keys(facts).sort(), ["brand", "category", "description", "discount", "images", "name", "priceAmount", "priceCurrency", "productId", "seller", "sourceUrl", "variants"]);
+});
+
+// ADR-030: linha histórica com comissão/features ainda carrega as colunas, mas
+// a projeção canônica NUNCA as expõe à engine — mesmo legado não vaza como fato.
+test("engineFacts não projeta comissão/features de linhas históricas", () => {
+  const legacyRow = {
+    id: "p2",
+    name: "Produto legado",
+    description: "D",
+    category: "C",
+    brand: null,
+    priceAmount: null,
+    priceCurrency: "R$",
+    discountType: null,
+    discountValue: null,
+    discountPercentage: null,
+    features: ["50 aulas", "certificado"],
+    commissionType: "PERCENT",
+    commissionValue: "10.50",
+    variants: null,
+    images: [],
+    seller: null,
+    sourceUrl: null,
+  };
+  const facts = projectEngineFacts(legacyRow);
+  assert.equal("features" in facts, false);
+  assert.equal("commissionType" in facts, false);
+  assert.equal("commissionValue" in facts, false);
+  assert.deepEqual(JSON.stringify(facts).includes("50 aulas"), false);
 });
 
 // Review: IntelligenceRun.metadata registra gateVersion junto do engineVersion.

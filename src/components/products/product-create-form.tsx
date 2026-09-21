@@ -37,10 +37,8 @@ import { createIdempotencyKey } from "./product-create-model";
 import {
   buildManualProductPayload,
   buildProductPayload,
-  COMMISSION_TYPES,
   DEFAULT_PRODUCT_CURRENCY,
   digitsToPrice,
-  formatCommission,
   formatDiscount,
   formatPriceDisplay,
   formatPriceWithCurrency,
@@ -60,9 +58,6 @@ const emptyDraft: ProductManualDraft = {
   category: "",
   price: "",
   currency: DEFAULT_PRODUCT_CURRENCY,
-  commissionType: "",
-  commission: "",
-  characteristics: "",
   discountType: "PERCENTAGE",
   discountValue: "",
   imageReferences: "",
@@ -82,11 +77,6 @@ const currencyOptions = [
   { value: "USD", label: "$ Dólar" },
   { value: "EUR", label: "€ Euro" },
 ];
-
-const commissionTypeOptions = [
-  { value: "PERCENT", label: "% Porcentagem" },
-  { value: "AMOUNT", label: "R$ Valor fixo" },
-] satisfies Array<{ value: (typeof COMMISSION_TYPES)[number]; label: string }>;
 
 const productCategories = [
   "Moda e acessórios",
@@ -144,9 +134,6 @@ function draftFromProduct(product?: ProductRecord): ProductManualDraft {
     category: product.category,
     price: product.price.replace(",", "."),
     currency: product.priceCurrency,
-    commissionType: product.commissionType,
-    characteristics: product.characteristics.join("\n"),
-    commission: product.commission,
     /* O ProductRecord já normaliza: registro legado chega como PERCENTAGE + valor. */
     discountType: product.discountType ?? "PERCENTAGE",
     discountValue: product.discountValue,
@@ -170,9 +157,6 @@ const errorFieldOrder: Array<keyof ProductManualFieldErrors> = [
   "category",
   "price",
   "currency",
-  "commissionType",
-  "commission",
-  "characteristics",
   "discountType",
   "discountValue",
   "imageReferences",
@@ -338,87 +322,6 @@ function CurrencyField({
         <p className={styles.fieldError} id={errorId} role="alert">
           {error}
         </p>
-      )}
-    </div>
-  );
-}
-
-function CommissionField({
-  price,
-  currency,
-  value,
-  type,
-  onChangeType,
-  onChangeValue,
-  typeError,
-  valueError,
-}: {
-  price: string;
-  currency: string;
-  value: string;
-  type: string;
-  onChangeType: (value: string) => void;
-  onChangeValue: (value: string) => void;
-  typeError?: string;
-  valueError?: string;
-}) {
-  const typeErrorId = `${fieldId("commissionType")}-error`;
-  const valueErrorId = `${fieldId("commission")}-error`;
-  const describedBy =
-    [typeError ? typeErrorId : undefined, valueError ? valueErrorId : undefined]
-      .filter(Boolean)
-      .join(" ") || undefined;
-  const preview = formatCommission(type, value, price, currency);
-  return (
-    <div className={styles.field}>
-      <label htmlFor={fieldId("commission")}>Comissão (opcional)</label>
-      <div className={styles.commissionRow}>
-        <Select
-          items={commissionTypeOptions}
-          onValueChange={(next) => onChangeType(next ?? "")}
-          value={type || null}
-        >
-          <SelectTrigger
-            aria-describedby={describedBy}
-            aria-invalid={Boolean(typeError)}
-            aria-label="Tipo de comissão"
-            className={styles.commissionTypeTrigger}
-            id={fieldId("commissionType")}
-          >
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent className={styles.currencyContent}>
-            {commissionTypeOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <input
-          aria-describedby={describedBy}
-          aria-invalid={Boolean(typeError || valueError)}
-          className={styles.commissionInput}
-          id={fieldId("commission")}
-          inputMode="decimal"
-          name={fieldId("commission")}
-          onChange={(event) => onChangeValue(event.target.value)}
-          placeholder={type === "PERCENT" ? "Ex.: 10" : "Ex.: 5,00"}
-          value={value}
-        />
-      </div>
-      {typeError && (
-        <p className={styles.fieldError} id={typeErrorId} role="alert">
-          {typeError}
-        </p>
-      )}
-      {valueError && (
-        <p className={styles.fieldError} id={valueErrorId} role="alert">
-          {valueError}
-        </p>
-      )}
-      {!typeError && !valueError && preview && (
-        <p className={styles.commissionPreview}>= {preview}</p>
       )}
     </div>
   );
@@ -624,16 +527,6 @@ function ProductReviewSummary({
         <div>
           <dt>Descrição</dt>
           <dd>{draft.description}</dd>
-        </div>
-        <div>
-          <dt>Características</dt>
-          <dd>
-            <ul className={styles.reviewList}>
-              {imageReferenceLines(draft.characteristics).map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </dd>
         </div>
         <div>
           <dt>Quantidade de conteúdos</dt>
@@ -949,7 +842,6 @@ export function ProductCreateForm({
           description: caught.fieldErrors.description,
           category: caught.fieldErrors.category,
           price: caught.fieldErrors.price,
-          characteristics: caught.fieldErrors.characteristics,
           imageReferences: caught.fieldErrors.imageReferences,
           url: caught.fieldErrors.url,
           targetContentCount: caught.fieldErrors.targetContentCount,
@@ -1016,11 +908,17 @@ export function ProductCreateForm({
 
       {!isEdit && (
         <ol aria-label="Etapas do cadastro" className={styles.formSteps}>
-          <li aria-current={formStep === "facts" ? "step" : undefined}>
+          <li
+            aria-current={formStep === "facts" ? "step" : undefined}
+            data-done={formStep === "facts" ? undefined : ""}
+          >
             <span aria-hidden="true">1</span>
             <strong>Informações</strong>
           </li>
-          <li aria-current={formStep === "preparation" ? "step" : undefined}>
+          <li
+            aria-current={formStep === "preparation" ? "step" : undefined}
+            data-done={formStep === "summary" ? "" : undefined}
+          >
             <span aria-hidden="true">2</span>
             <strong>Conteúdos</strong>
           </li>
@@ -1050,7 +948,7 @@ export function ProductCreateForm({
               abrem a seção, antes dos fatos manuais. */}
           <TextField
             error={combinedErrors.url}
-            help="Cole o link público (https) de um produto do TikTok Shop."
+            help="Cole o link de um produto do TikTok Shop."
             id={fieldId("url")}
             label={
               <>
@@ -1104,16 +1002,6 @@ export function ProductCreateForm({
               onChange={(value) => update("currency", value)}
               value={draft.currency}
             />
-            <CommissionField
-              currency={draft.currency}
-              onChangeType={(value) => update("commissionType", value)}
-              onChangeValue={(value) => update("commission", value)}
-              price={draft.price}
-              type={draft.commissionType ?? ""}
-              typeError={combinedErrors.commissionType}
-              value={draft.commission ?? ""}
-              valueError={combinedErrors.commission}
-            />
             <DiscountField
               currency={draft.currency}
               onChangeType={(value) => update("discountType", value)}
@@ -1124,16 +1012,6 @@ export function ProductCreateForm({
               valueError={combinedErrors.discountValue}
             />
           </div>
-          <TextField
-            error={combinedErrors.characteristics}
-            id={fieldId("characteristics")}
-            label="Características do produto"
-            multiline
-            onChange={(value) => update("characteristics", value)}
-            placeholder="Descreva as características do produto, isso ajuda a inteligencia do sistema a gerar conteúdos ainda melhores"
-            required
-            value={draft.characteristics}
-          />
           <div className={styles.imageManager}>
             <div className={styles.imageControls}>
               <p className={styles.imageManagerLabel}>Imagens do produto</p>

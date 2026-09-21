@@ -41,11 +41,8 @@ const FIELD_CODE_PRIORITY = [
   "category",
   "price",
   "priceCurrency",
-  "commissionType",
-  "commissionValue",
   "discountType",
   "discountValue",
-  "features",
   "imageRefs",
   "url",
   "constraints",
@@ -58,8 +55,6 @@ export const CREATOR_PRESENCE_OPTIONS = [
   "either",
 ] as const;
 export type CreatorPresence = (typeof CREATOR_PRESENCE_OPTIONS)[number];
-export const COMMISSION_TYPES = ["PERCENT", "AMOUNT"] as const;
-export type CommissionType = (typeof COMMISSION_TYPES)[number];
 
 // Defaults e limites da SPEC (RI-002/RI-003).
 export const DEFAULT_TARGET_CONTENT_COUNT = 5;
@@ -143,8 +138,6 @@ function validateImageRefs(value: unknown, fail: Fail): string[] {
 const NAME_MAX = 200;
 const DESCRIPTION_MAX = 2000;
 const CATEGORY_MAX = 100;
-const FEATURES_MAX_ITEMS = 30;
-const FEATURE_MAX_LENGTH = 200;
 
 export function isValidIdempotencyKey(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9._~-]{16,128}$/.test(value);
@@ -179,30 +172,6 @@ function normalizePriceAmount(price: string): string {
   if (price.includes(",")) return price.replace(/\./g, "").replace(",", ".");
   if (/^\d{1,3}(?:\.\d{3})+$/.test(price)) return price.replace(/\./g, "");
   return price;
-}
-// Desconto factual opcional, em percentual: null = sem desconto; presente, na faixa 0–100.
-function validateCommission(
-  input: ManualProductInput,
-  fail: Fail,
-): { commissionType: CommissionType | null; commissionValue: string | null } {
-  const rawType = asTrimmedString(input.commissionType)?.toUpperCase() ?? "";
-  const rawValue = asTrimmedString(input.commissionValue) ?? "";
-  if (!rawType && !rawValue) return { commissionType: null, commissionValue: null };
-  let commissionType: CommissionType | null = null;
-  if ((COMMISSION_TYPES as readonly string[]).includes(rawType)) {
-    commissionType = rawType as CommissionType;
-  } else {
-    fail("commissionType", "Informe um tipo de comissão válido.", "VAL-COMMISSION-TYPE");
-  }
-  if (!rawValue || !PRICE_PATTERN.test(rawValue)) {
-    fail("commissionValue", "Informe uma comissão válida e não negativa, com até duas casas decimais.", "VAL-COMMISSION-VALUE");
-    return { commissionType, commissionValue: null };
-  }
-  const commissionValue = normalizePriceAmount(rawValue);
-  if (commissionType === "PERCENT" && Number(commissionValue) > 100) {
-    fail("commissionValue", "A comissão percentual deve estar entre 0 e 100.", "VAL-COMMISSION-RANGE");
-  }
-  return { commissionType, commissionValue };
 }
 // Desconto (contrato oficial, Gate 5): exclusivamente tipado — PERCENTAGE
 // (0–100) ou FIXED (valor na moeda do produto, não negativo). Ausentes = sem
@@ -250,11 +219,8 @@ type ValidatedFacts = {
   category: string;
   priceAmount: string;
   priceCurrency: string;
-  commissionType: CommissionType | null;
-  commissionValue: string | null;
   discountType: DiscountType | null;
   discountValue: string | null;
-  features: string[];
   imageRefs: string[];
 };
 
@@ -340,49 +306,10 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
     );
   }
 
-  // Características: uma por linha no formulário; aqui chegam como lista de strings não vazias.
-  const rawFeatures = input.features;
-  let features: string[] = [];
-  if (rawFeatures == null) {
-    fail(
-      "features",
-      "Informe ao menos uma característica do produto.",
-      "VAL-FEATURES-REQUIRED",
-    );
-  } else if (Array.isArray(rawFeatures)) {
-    features = rawFeatures
-      .filter((item): item is string => typeof item === "string")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    if (features.length === 0) {
-      fail(
-        "features",
-        "Informe ao menos uma característica do produto.",
-        "VAL-FEATURES-REQUIRED",
-      );
-    } else if (features.length > FEATURES_MAX_ITEMS) {
-      fail(
-        "features",
-        `Use até ${FEATURES_MAX_ITEMS} características.`,
-        "VAL-FEATURES-INVALID",
-      );
-    } else if (features.some((item) => item.length > FEATURE_MAX_LENGTH)) {
-      fail(
-        "features",
-        `Cada característica deve ter até ${FEATURE_MAX_LENGTH} caracteres.`,
-        "VAL-FEATURES-INVALID",
-      );
-    }
-  } else {
-    fail(
-      "features",
-      "Informe as características como lista de textos.",
-      "VAL-FEATURES-INVALID",
-    );
-  }
+  // Características/comissão (ADR-030): fora do contrato ativo — enviados, são
+  // ignorados (sem erro, sem escrita); colunas históricas nunca são sobrescritas.
 
   const imageRefs = validateImageRefs(input.imageRefs, fail);
-  const commission = validateCommission(input, fail);
   const discount = validateDiscount(input, priceCurrency, fail);
 
   return {
@@ -391,9 +318,7 @@ function validateFacts(input: ManualProductInput, fail: Fail): ValidatedFacts {
     category,
     priceAmount: normalizePriceAmount(price),
     priceCurrency,
-    ...commission,
     ...discount,
-    features,
     imageRefs,
   };
 }
@@ -565,11 +490,10 @@ export async function createManualProduct(
         category: data.category,
         priceAmount: data.priceAmount,
         priceCurrency: data.priceCurrency,
-        commissionType: data.commissionType,
-        commissionValue: data.commissionValue,
         discountType: data.discountType,
         discountValue: data.discountValue,
-        features: data.features,
+        // Comissão/features (ADR-030): fora do contrato ativo — nunca escritas;
+        // colunas históricas permanecem no banco, features usa default [].
         images: data.imageRefs,
         submittedUrl: data.submittedUrl,
         provenance: { origin: "manual" },
@@ -652,11 +576,10 @@ export async function updateTenantProduct(
         category: facts.category,
         priceAmount: facts.priceAmount,
         priceCurrency: facts.priceCurrency,
-        commissionType: facts.commissionType,
-        commissionValue: facts.commissionValue,
         discountType: facts.discountType,
         discountValue: facts.discountValue,
-        features: facts.features,
+        // Comissão/features (ADR-030): ausentes no data — legados não enviados
+        // NUNCA sobrescrevem o histórico em edições.
         images: facts.imageRefs,
         submittedUrl: facts.submittedUrl,
         ...(generationConstraints ? { generationConstraints } : {}),

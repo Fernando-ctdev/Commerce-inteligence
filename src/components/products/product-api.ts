@@ -21,14 +21,11 @@ export type ProductRecord = {
   category: string;
   price: string;
   priceCurrency: string;
-  commissionType: string;
-  commission: string;
   discountPercentage: string;
   /** Desconto tipado — contrato oficial (Gate 5, exclusivamente tipado).
       null/ausente = sem desconto; sem derivação a partir de discountPercentage. */
   discountType: DiscountType | null;
   discountValue: string;
-  characteristics: string[];
   imageReferences: string[];
   observations: string;
   url: string;
@@ -110,14 +107,11 @@ const serverFieldNames: Record<string, string> = {
   description: "description",
   category: "category",
   price: "price",
-  features: "characteristics",
   imageRefs: "imageReferences",
   notes: "observations",
   url: "url",
   currency: "currency",
   priceCurrency: "currency",
-  commissionType: "commissionType",
-  commissionValue: "commission",
   discountType: "discountType",
   discountValue: "discountValue",
   targetContentCount: "targetContentCount",
@@ -169,15 +163,9 @@ export function normalizeProduct(value: unknown): ProductRecord {
     price,
     priceCurrency:
       nullableString(record.priceCurrency ?? record.price_currency) || "R$",
-    commissionType:
-      record.commissionType === "PERCENT" || record.commissionType === "AMOUNT"
-        ? record.commissionType
-        : "",
-    commission: nullableString(record.commissionValue ?? record.commission),
     discountPercentage: nullableString(record.discountPercentage ?? record.discount_percentage),
     discountType,
     discountValue: nullableString(record.discountValue),
-    characteristics: listValue(record.features ?? record.characteristics),
     imageReferences: listValue(
       record.imageRefs ?? record.imageReferences ?? record.image_references,
     ),
@@ -296,14 +284,11 @@ export async function createProduct(payload: ProductPayload) {
     category,
     price,
     priceCurrency,
-    features,
     imageRefs,
     url,
     targetContentCount,
     creatorPresence,
     constraints,
-    commissionType,
-    commissionValue,
     discountType,
     discountValue,
   } = payload;
@@ -319,10 +304,7 @@ export async function createProduct(payload: ProductPayload) {
         category,
         price,
         priceCurrency,
-        features,
         imageRefs,
-        commissionType,
-        commissionValue,
         discountType,
         discountValue,
         url,
@@ -338,7 +320,9 @@ export async function createProduct(payload: ProductPayload) {
    candidato. Fatos vazios/nulos ficam ausentes; sinais só passam com número
    finito não negativo; seller/brand/variants/payload bruto nunca cruzam aqui. */
 function candidateGaps(value: unknown): CandidateGap[] {
-  const known: string[] = ["name", "description", "category", "price", "priceCurrency", "features"];
+  /* features nunca vira gap aqui: sem campo no formulário, não há ação
+     para o creator; gaps desconhecidos continuam descartados. */
+  const known: string[] = ["name", "description", "category", "price", "priceCurrency"];
   return Array.isArray(value)
     ? value.filter(
         (item): item is CandidateGap => typeof item === "string" && known.includes(item),

@@ -28,13 +28,12 @@ Fontes de autoridade:
   - Categoria;
   - Preço;
   - Moeda;
-  - Características — uma por linha;
   - desconto opcional, com `discountType` `PERCENTAGE` ou `FIXED` e `discountValue`.
 - Seção `Preparação dos conteúdos` com:
   - quantidade inicial de conteúdos;
   - formato do creator;
   - observações ou restrições.
-- Todos os campos do formulário são obrigatórios: Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições.
+- Todos os campos do formulário são obrigatórios: Nome, Descrição, Categoria, Preço, Moeda e Observações ou restrições.
 - Preço deve ser não negativo, válido e ter no máximo duas casas decimais; Moeda deve ser uma das opções permitidas. Desconto, quando preenchido, exige tipo e valor; `PERCENTAGE` respeita `0–100` e `FIXED` usa a moeda do Product e não excede o preço.
 - Quantidade e formato têm defaults válidos e aparecem com `*`; Observações ou restrições aparecem com `*` e são obrigatórias, até `300` caracteres.
 - O asterisco é apenas indicação visual; HTML/cliente e servidor validam a obrigatoriedade.
@@ -66,9 +65,9 @@ Usuário autenticado acessa Produtos e aciona `Adicionar produto`. O sistema abr
 
 ### B-002 — Campos factuais
 
-O sistema apresenta somente os campos factuais definidos nesta SPEC. Nome, Descrição, Categoria, Preço, Moeda e Características são campos persistentes do Product e obrigatórios; deve existir ao menos uma característica não vazia.
+O sistema apresenta somente os campos factuais definidos nesta SPEC. Nome, Descrição, Categoria, Preço e Moeda são campos persistentes do Product e obrigatórios.
 
-Características são informadas uma por linha; cada linha não vazia representa uma característica.
+Características e comissão não fazem parte do contrato ativo (ADR-030): não são coletadas, validadas, projetadas nem expostas; colunas históricas permanecem isoladas no banco.
 
 ### B-003 — Preparação dos conteúdos
 
@@ -106,7 +105,7 @@ Se a mesma submissão for repetida por retry técnico, o sistema não cria Produ
 
 ### RI-001 — Obrigatoriedade
 
-Nome, Descrição e Categoria devem conter valor não vazio após remoção de espaços. Preço e Moeda devem ser informados e válidos. Deve existir ao menos uma Característica não vazia. Observações ou restrições devem conter valor não vazio após remoção de espaços e não exceder `300` caracteres. Nenhum Product é persistido sem esses campos obrigatórios.
+Nome, Descrição e Categoria devem conter valor não vazio após remoção de espaços. Preço e Moeda devem ser informados e válidos. Observações ou restrições devem conter valor não vazio após remoção de espaços e não exceder `300` caracteres. Nenhum Product é persistido sem esses campos obrigatórios.
 
 ### RI-002 — Preço, moeda e desconto
 
@@ -152,7 +151,6 @@ Este slice não inicia geração por efeito de salvar ou editar. A ação explí
 | `VAL-PRICE-REQUIRED`       | Preço ausente                                              | Bloquear salvamento e explicar que o preço é obrigatório.                                      |
 | `VAL-CURRENCY-REQUIRED`    | Moeda ausente                                              | Bloquear salvamento e explicar que a moeda é obrigatória.                                      |
 | `VAL-DISCOUNT-INVALID`     | Tipo/valor de desconto ausente, incompatível ou fora da faixa | Bloquear salvamento e explicar a regra do percentual ou valor fixo.                         |
-| `VAL-FEATURES-REQUIRED`    | Nenhuma característica não vazia                           | Bloquear salvamento e orientar o preenchimento de ao menos uma linha.                          |
 | `VAL-NOTES-REQUIRED`       | Observações/restrições ausentes ou vazias                  | Bloquear salvamento e exibir erro associado ao campo.                                          |
 | `VAL-PRICE-FORMAT`         | Preço negativo, formato inválido ou com mais de duas casas | Bloquear salvamento e explicar o formato esperado.                                             |
 | `VAL-QUANTITY-RANGE`       | Quantidade não inteira ou fora de `1–10`                   | Bloquear salvamento e manter o valor editável.                                                 |
@@ -201,8 +199,8 @@ Requisitos visuais e de acessibilidade:
 | ID          | Critério verificável                                                                                                                                                                                                                                                     |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `AC-002-01` | **WHEN** um usuário autenticado acionar `Adicionar produto` em Produtos, **o sistema SHALL** abrir `/products/new` dentro do contexto de Produtos. |
-| `AC-002-02` | **WHEN** `/products/new` for exibida, **o sistema SHALL** apresentar Nome do produto, Descrição, Categoria, Preço, Moeda, Características, desconto opcional e a seção Preparação dos conteúdos. |
-| `AC-002-03` | **WHILE** Nome, Descrição, Categoria, Preço, Moeda, Características (sem ao menos uma linha não vazia) ou Observações/restrições estiver ausente, vazio ou inválido, **o sistema SHALL** impedir o salvamento, exibir o erro associado e preservar os valores digitados. |
+| `AC-002-02` | **WHEN** `/products/new` for exibida, **o sistema SHALL** apresentar Nome do produto, Descrição, Categoria, Preço, Moeda, desconto opcional e a seção Preparação dos conteúdos. |
+| `AC-002-03` | **WHILE** Nome, Descrição, Categoria, Preço, Moeda ou Observações/restrições estiver ausente, vazio ou inválido, **o sistema SHALL** impedir o salvamento, exibir o erro associado e preservar os valores digitados. |
 | `AC-002-04` | **WHEN** Preço ou Moeda estiver ausente, ou o preço for negativo, inválido ou tiver mais de duas casas decimais, **o sistema SHALL** impedir o salvamento e informar a regra correspondente. |
 | `AC-002-05` | **WHEN** desconto for informado, **o sistema SHALL** exigir `discountType` `PERCENTAGE` ou `FIXED`, `discountValue` válido e moeda do Product. |
 | `AC-002-06` | **WHEN** o formulário for carregado, **o sistema SHALL** definir quantidade `20`, permitir somente inteiros de `1` a `30`, definir formato `Tanto faz`, exibir `*` em Quantidade, Formato e Observações/restrições e limitar estas últimas a `300` caracteres. |
@@ -231,7 +229,8 @@ Requisitos visuais e de acessibilidade:
 
 - A entrada desta etapa é a subpágina `/products/new` dentro de Produtos.
 - O formulário mantém os fatos e a preparação do modal manual, substituindo o modal pela subpágina e pelo resumo pós-cadastro.
-- Nome, Descrição, Categoria, Preço, Moeda, ao menos uma Característica não vazia e Observações ou restrições são obrigatórios.
+- Nome, Descrição, Categoria, Preço, Moeda e Observações ou restrições são obrigatórios.
+- Características e comissão foram retiradas do contrato ativo (ADR-030): não são coletadas, validadas, projetadas nem expostas; colunas históricas permanecem isoladas no banco.
 - Desconto opcional usa exclusivamente `discountType` `PERCENTAGE|FIXED` + `discountValue` + moeda do Product.
 - Quantidade e Formato mantêm defaults `5`, `1–10` e `Tanto faz`, aparecem com `*`; Observações/restrições também aparece com `*`, é obrigatória e limitada a `300` caracteres.
 - O asterisco é apenas indicação visual; HTML/cliente e servidor validam.
