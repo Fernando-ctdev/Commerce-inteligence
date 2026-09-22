@@ -13,8 +13,7 @@ export default function ProductsLoading() {
           <div>
             <h2 className={listStyles.pageTitle}>Produtos da sua vitrine</h2>
             <p className={listStyles.listHint}>
-              Produtos da vitrine TikTok Shop e produtos cadastrados
-              manualmente, no mesmo lugar.
+              Os produtos da sua vitrine estão sendo carregados...
             </p>
           </div>
           <span

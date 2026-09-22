@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Fragment, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Eye, EyeOff, Lightbulb, LockKeyhole, Mail, User } from "lucide-react";
 
@@ -38,6 +38,23 @@ function isAccessResponse(value: unknown): value is AccessResponse {
   return typeof value === "object" && value !== null;
 }
 
+function prefersReducedMotion() {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+const headlineWords: Array<{ text: string; accent?: boolean; cycle?: boolean }> = [
+  { text: "Inteligência" },
+  { text: "e" },
+  { text: "estratégia", accent: true, cycle: true },
+  { text: "para" },
+  { text: "criar" },
+  { text: "conteúdos", accent: true, cycle: true },
+  { text: "que" },
+  { text: "vendem", accent: true, cycle: true },
+  { text: "de" },
+  { text: "verdade." },
+];
+
 function GoogleIcon() {
   return (
     <svg aria-hidden="true" height="18" viewBox="0 0 48 48" width="18">
@@ -62,13 +79,72 @@ function GoogleIcon() {
 }
 
 export function AccessForm({ registrationEnabled, sessionExpired }: AccessFormProps) {
-  const [mode, setMode] = useState<AccessMode>(registrationEnabled ? "register" : "login");
+  const [mode, setMode] = useState<AccessMode>("login");
   const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [hintOpen, setHintOpen] = useState(false);
+  const brandPanelRef = useRef<HTMLElement>(null);
+  const headlineRef = useRef<HTMLParagraphElement>(null);
+  const markerRef = useRef<HTMLSpanElement>(null);
+  const wordRefs = useRef<Array<HTMLSpanElement | null>>([]);
+
+  useEffect(() => {
+    if (prefersReducedMotion()) return undefined;
+    const headline = headlineRef.current;
+    const marker = markerRef.current;
+    const words = wordRefs.current;
+    if (!headline || !marker || words.length === 0) return undefined;
+
+    headline.classList.add(styles.wordCycleOn);
+    const cycleWords = words
+      .map((el, i) => ({ el, cycle: headlineWords[i]?.cycle === true }))
+      .filter((entry): entry is { el: HTMLSpanElement; cycle: true } => entry.el !== null && entry.cycle);
+    let index = 0;
+    const first = cycleWords[0]?.el;
+    first?.classList.add(styles.headlineWordActive);
+
+    const placeMarker = (word: HTMLSpanElement) => {
+      marker.style.width = `${word.offsetWidth}px`;
+      marker.style.height = `${word.offsetHeight}px`;
+      marker.style.transform = `translate(${word.offsetLeft}px, ${word.offsetTop}px)`;
+    };
+    if (first) placeMarker(first);
+
+    const cycle = window.setInterval(() => {
+      cycleWords[index]?.el.classList.remove(styles.headlineWordActive);
+      index = (index + 1) % cycleWords.length;
+      const next = cycleWords[index]?.el;
+      next?.classList.add(styles.headlineWordActive);
+      if (next) placeMarker(next);
+    }, 1200);
+
+    return () => {
+      window.clearInterval(cycle);
+      headline.classList.remove(styles.wordCycleOn);
+      words.forEach((word) => word?.classList.remove(styles.headlineWordActive));
+    };
+  }, []);
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
+    if (event.pointerType === "touch" || prefersReducedMotion() || window.matchMedia("(hover: none)").matches) return;
+    const panel = brandPanelRef.current;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    const px = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const py = ((event.clientY - rect.top) / rect.height) * 2 - 1;
+    panel.style.setProperty("--px", px.toFixed(3));
+    panel.style.setProperty("--py", py.toFixed(3));
+  }
+
+  function handlePointerLeave() {
+    const panel = brandPanelRef.current;
+    if (!panel) return;
+    panel.style.setProperty("--px", "0");
+    panel.style.setProperty("--py", "0");
+  }
 
   function changeMode(nextMode: AccessMode) {
     setMode(nextMode);
@@ -132,32 +208,42 @@ export function AccessForm({ registrationEnabled, sessionExpired }: AccessFormPr
   return (
     <main className={styles.page}>
       <section className={styles.surface} aria-labelledby="access-title">
-        <aside className={styles.brandPanel} aria-label="Sobre o Commerce Intelligence">
+        <aside
+          aria-label="Sobre o Commerce Intelligence"
+          className={styles.brandPanel}
+          onPointerLeave={handlePointerLeave}
+          onPointerMove={handlePointerMove}
+          ref={brandPanelRef}
+        >
           <div aria-hidden="true" className={styles.brandArt}>
             <svg className={styles.brandArtSvg} focusable="false" viewBox="0 0 480 400">
               <g className={styles.artGmv}>
-                <rect fill="rgba(255,255,255,0.12)" height="184" rx="18" stroke="rgba(255,255,255,0.24)" width="136" x="52" y="112" />
-                <rect fill="rgba(255,255,255,0.16)" height="66" rx="12" width="108" x="68" y="130" />
-                <circle cx="122" cy="163" fill="rgba(255,255,255,0.28)" r="14" />
-                <text fill="rgba(255,255,255,0.92)" fontSize="17" fontWeight="800" x="68" y="226">4.9</text>
-                <path d="M0,-6 L1.76,-1.85 L6.22,-1.85 L2.7,0.95 L4.03,5.35 L0,2.7 L-4.03,5.35 L-2.7,0.95 L-6.22,-1.85 L-1.76,-1.85 Z" fill="rgba(255,255,255,0.90)" transform="translate(104 220)" />
-                <text fill="rgba(255,255,255,0.70)" fontSize="13" fontWeight="600" x="68" y="252">12 mil vendas</text>
-                <text fill="rgba(255,255,255,0.62)" fontSize="19" fontWeight="800" letterSpacing="2" x="68" y="282">$$$$$$</text>
+                <g className={styles.artGmvFloat}>
+                  <rect fill="rgba(255,255,255,0.12)" height="184" rx="18" stroke="rgba(255,255,255,0.24)" width="136" x="52" y="112" />
+                  <rect fill="rgba(255,255,255,0.16)" height="66" rx="12" width="108" x="68" y="130" />
+                  <circle cx="122" cy="163" fill="rgba(255,255,255,0.28)" r="14" />
+                  <text fill="rgba(255,255,255,0.92)" fontSize="17" fontWeight="800" x="68" y="226">4.9</text>
+                  <path d="M0,-6 L1.76,-1.85 L6.22,-1.85 L2.7,0.95 L4.03,5.35 L0,2.7 L-4.03,5.35 L-2.7,0.95 L-6.22,-1.85 L-1.76,-1.85 Z" fill="rgba(255,255,255,0.90)" transform="translate(104 220)" />
+                  <text fill="rgba(255,255,255,0.70)" fontSize="13" fontWeight="600" x="68" y="252">12 mil vendas</text>
+                  <text fill="rgba(255,255,255,0.62)" fontSize="19" fontWeight="800" letterSpacing="2" x="68" y="282">$$$$$$</text>
+                </g>
               </g>
               <g className={styles.artClap}>
-                <g className={styles.artClapBar}>
-                  <rect fill="rgba(255,255,255,0.22)" height="38" rx="12" stroke="rgba(255,255,255,0.30)" width="224" x="196" y="142" />
-                  <path d="M236 146h18l-12 30h-18z" fill="rgba(255,255,255,0.38)" />
-                  <path d="M284 146h18l-12 30h-18z" fill="rgba(255,255,255,0.38)" />
-                  <path d="M332 146h18l-12 30h-18z" fill="rgba(255,255,255,0.38)" />
+                <g className={styles.artClapFloat}>
+                  <g className={styles.artClapBar}>
+                    <rect fill="rgba(255,255,255,0.22)" height="38" rx="12" stroke="rgba(255,255,255,0.30)" width="224" x="196" y="142" />
+                    <path d="M236 146h18l-12 30h-18z" fill="rgba(255,255,255,0.38)" />
+                    <path d="M284 146h18l-12 30h-18z" fill="rgba(255,255,255,0.38)" />
+                    <path d="M332 146h18l-12 30h-18z" fill="rgba(255,255,255,0.38)" />
+                  </g>
+                  <rect fill="rgba(255,255,255,0.14)" height="140" rx="18" stroke="rgba(255,255,255,0.25)" width="224" x="196" y="184" />
+                  <rect fill="rgba(255,255,255,0.30)" height="12" rx="6" width="120" x="220" y="212" />
+                  <rect fill="rgba(255,255,255,0.22)" height="12" rx="6" width="88" x="220" y="236" />
+                  <rect fill="rgba(255,255,255,0.20)" height="32" rx="16" width="110" x="220" y="270" />
+                  <circle cx="238" cy="286" fill="rgba(255,255,255,0.45)" r="6" />
+                  <rect fill="rgba(255,255,255,0.35)" height="10" rx="5" width="60" x="252" y="281" />
+                  <circle cx="206" cy="190" fill="rgba(255,255,255,0.50)" r="6" />
                 </g>
-                <rect fill="rgba(255,255,255,0.14)" height="140" rx="18" stroke="rgba(255,255,255,0.25)" width="224" x="196" y="184" />
-                <rect fill="rgba(255,255,255,0.30)" height="12" rx="6" width="120" x="220" y="212" />
-                <rect fill="rgba(255,255,255,0.22)" height="12" rx="6" width="88" x="220" y="236" />
-                <rect fill="rgba(255,255,255,0.20)" height="32" rx="16" width="110" x="220" y="270" />
-                <circle cx="238" cy="286" fill="rgba(255,255,255,0.45)" r="6" />
-                <rect fill="rgba(255,255,255,0.35)" height="10" rx="5" width="60" x="252" y="281" />
-                <circle cx="206" cy="190" fill="rgba(255,255,255,0.50)" r="6" />
               </g>
             </svg>
           </div>
@@ -165,14 +251,42 @@ export function AccessForm({ registrationEnabled, sessionExpired }: AccessFormPr
             <Image alt="Viewefy" className={styles.logo} priority src={logoTextLight} />
           </div>
           <div className={styles.brandStatement}>
-            <p>Inteligência e estratégia para criar conteúdos que vendem de verdade.</p>
+            <p className={styles.eyebrow}>
+              <span aria-hidden="true" className={styles.eyebrowDot} />
+              Para TikTok Shop
+            </p>
+            <p className={styles.brandHeadline} ref={headlineRef}>
+              {headlineWords.map((word, index) => (
+                <Fragment key={word.text}>
+                  <span
+                    className={[
+                      styles.headlineWord,
+                      word.accent ? styles.headlineAccent : "",
+                      word.cycle ? styles.headlineWordCycle : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    ref={(el) => {
+                      wordRefs.current[index] = el;
+                    }}
+                  >
+                    {word.text}
+                  </span>
+                  {index < headlineWords.length - 1 ? " " : null}
+                </Fragment>
+              ))}
+              <span aria-hidden="true" className={styles.wordMarker} ref={markerRef} />
+            </p>
+            <p className={styles.brandSupport}>
+              Do produto ao lote de gravação: estratégia, briefings e conteúdos em um único fluxo.
+            </p>
           </div>
         </aside>
 
         <div className={styles.formPanel}>
           <div className={styles.intro}>
             <h1 id="access-title">{title}</h1>
-            <p>Crie conteúdos com estratégia para vender mais.</p>
+            <p>Conteúdos e estratégia para vender mais.</p>
           </div>
 
           {sessionExpired && (

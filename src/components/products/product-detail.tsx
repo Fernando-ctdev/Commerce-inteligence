@@ -1,10 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, CircleAlert, Package, Pencil, Save, Tag, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Archive, ArchiveRestore, CircleAlert, Tag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -23,29 +22,26 @@ import {
   ContentsView,
   GenerationActions,
   HistoryView,
-  OperationalSummaryCard,
   StrategyView,
 } from "./generation-views";
 import { statusMessage } from "./generation-ui-model";
-import { formatPriceWithCurrency } from "./product-form-model";
 import { ProductCreateForm } from "./product-create-form";
 import { useGenerationJob } from "./use-generation-job";
 import styles from "./product-detail.module.css";
 
-type ProductTab = "overview" | "strategy" | "contents" | "history";
+type ProductTab = "strategy" | "contents" | "history";
 
 const hashToTab = (hash: string): ProductTab | null =>
   hash === "#generated-contents" ? "contents" : null;
 
-/* Ciclo navegável do MVP: Conteúdos → Estratégia → Produto → Conteúdos.
+/* Ciclo navegável do MVP: Conteúdos → Estratégia → Conteúdos.
    Histórico permanece no código, fora da navegação visível. */
-const cycleTabs = ["contents", "strategy", "overview"] as const;
+const cycleTabs = ["contents", "strategy"] as const;
 type CycleTab = (typeof cycleTabs)[number];
 
 const tabLabels: Record<ProductTab, string> = {
   contents: "Conteúdos",
   strategy: "Estratégia",
-  overview: "Produto",
   history: "Histórico",
 };
 
@@ -58,86 +54,13 @@ function cycleNeighbours(tab: ProductTab): { prev: CycleTab; next: CycleTab } {
   };
 }
 
-/* Vislumbre do produto: imagem + fatos essenciais. O form completo só
-   aparece quando o usuário pede edição — a aba abre em modo leitura. */
-
-function ProductSummaryPanel({ product }: { product: ProductRecord }) {
-  const imageUrl = product.imageReferences[0];
-  return (
-    <section aria-labelledby="product-summary-title" className={styles.summaryPanel}>
-      <div className={styles.sideCardHeading}>
-        <Package aria-hidden="true" />
-        <h2 id="product-summary-title">Resumo do produto</h2>
-      </div>
-      <div className={styles.summaryBody}>
-        {imageUrl ? (
-          <Image
-            alt={`Imagem de ${product.name}`}
-            className={styles.summaryImage}
-            height={360}
-            src={imageUrl}
-            unoptimized
-            width={640}
-          />
-        ) : (
-          <div
-            aria-label={`Produto ${product.name} sem imagem cadastrada`}
-            className={styles.summaryImageFallback}
-            role="img"
-          >
-            Sem imagem
-          </div>
-        )}
-        <dl className={styles.summaryFacts}>
-          <div className={styles.summaryFact}>
-            <dt>Preço</dt>
-            <dd>{formatPriceWithCurrency(product.price, product.priceCurrency)}</dd>
-          </div>
-          <div className={styles.summaryFact}>
-            <dt>Categoria</dt>
-            <dd>{product.category}</dd>
-          </div>
-          <div className={styles.summaryFact}>
-            <dt>Descrição</dt>
-            <dd className={styles.summaryDescription} tabIndex={0}>{product.description}</dd>
-          </div>
-        </dl>
-      </div>
-      {product.url && (
-        <dl className={styles.summaryFacts}>
-          <div className={styles.summaryFact}>
-            <dt>Link do produto</dt>
-            <dd>
-              <a
-                className={styles.summaryLink}
-                href={product.url}
-                rel="noreferrer"
-                target="_blank"
-              >
-                {product.url}
-              </a>
-            </dd>
-          </div>
-        </dl>
-      )}
-      {product.observations && (
-        <dl className={styles.summaryFacts}>
-          <div className={styles.summaryFact}>
-            <dt>Observações para os conteúdos</dt>
-            <dd className={styles.summaryDescription} tabIndex={0}>{product.observations}</dd>
-          </div>
-        </dl>
-      )}
-    </section>
-  );
-}
+/* Vislumbre do produto removido: a aba Produto saiu da navegação; edição
+   acontece no drawer da Vitrine e o resumo completo vive no drawer/edição. */
 
 export function ProductDetail({
   id,
-  initialEditing = false,
 }: {
   id: string;
-  initialEditing?: boolean;
 }) {
   const [product, setProduct] = useState<ProductRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -156,24 +79,7 @@ export function ProductDetail({
     useState(false);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  /* A aba abre em leitura (resumo); o form completo só entra sob edição explícita. */
-  const [editing, setEditing] = useState(initialEditing);
-  const editButtonRef = useRef<HTMLButtonElement>(null);
   const router = useRouter();
-
-  function startEdit() {
-    setEditing(true);
-  }
-
-  /* Volta ao resumo devolvendo o foco ao gatilho — o botão só existe de novo
-     após o re-render, por isso o foco vai no próximo frame. */
-  function stopEdit() {
-    setEditing(false);
-    void router.replace("/products/" + encodeURIComponent(id), {
-      scroll: false,
-    });
-    requestAnimationFrame(() => editButtonRef.current?.focus());
-  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -388,16 +294,57 @@ export function ProductDetail({
         title="Excluir produto?"
       />
       {product.active ? (
-        <SectionSwitcher
-          className={styles.tabs}
-          onValueChange={changeTab}
-          value={tab}
-        >
+        <>
+          {generation.failed && generation.job && (
+            <div className={styles.failureBanner} role="alert">
+              <CircleAlert aria-hidden="true" />
+              <p>{`${statusMessage(generation.job.status)} Você pode tentar novamente.`}</p>
+            </div>
+          )}
+          <div className={styles.overviewLayout}>
+            <aside className={styles.sideRail}>
+              <section aria-labelledby="product-actions-card-title" className={styles.sideCard}>
+                <div className={styles.sideCardHeading}>
+                  <Archive aria-hidden="true" />
+                  <h2 id="product-actions-card-title">Ações</h2>
+                </div>
+                <Button
+                  className={styles.archiveAction}
+                  onClick={() => {
+                    setError(null);
+                    if (product.active) setArchiveConfirmationOpen(true);
+                    else setReactivateConfirmationOpen(true);
+                  }}
+                  type="button"
+                  variant="ghost"
+                >
+                  {product.active ? <Archive aria-hidden="true" /> : <ArchiveRestore aria-hidden="true" />}
+                  {product.active ? "Arquivar produto" : "Reativar produto"}
+                </Button>
+                <Button
+                  className={styles.deleteAction}
+                  onClick={() => {
+                    setError(null);
+                    setDeleteConfirmationOpen(true);
+                  }}
+                  type="button"
+                  variant="ghost"
+                >
+                  <Trash2 aria-hidden="true" />
+                  Excluir produto
+                </Button>
+              </section>
+            </aside>
+          </div>
+          <SectionSwitcher
+            className={styles.tabs}
+            onValueChange={changeTab}
+            value={tab}
+          >
           <div className={styles.tabsScroller}>
             <SectionSwitcherList className={styles.tabsList}>
               <SectionSwitcherTrigger value="contents">Conteúdos</SectionSwitcherTrigger>
               <SectionSwitcherTrigger value="strategy">Estratégia</SectionSwitcherTrigger>
-              <SectionSwitcherTrigger value="overview">Produto</SectionSwitcherTrigger>
               <SectionSwitcherTrigger value="history">Histórico</SectionSwitcherTrigger>
             </SectionSwitcherList>
           </div>
@@ -419,96 +366,6 @@ export function ProductDetail({
               {tabLabels[cycle.next]}
             </button>
           </nav>
-          <SectionSwitcherContent className={styles.overviewContent} value="overview">
-            {generation.failed && generation.job && (
-              <div className={styles.failureBanner} role="alert">
-                <CircleAlert aria-hidden="true" />
-                <p>{`${statusMessage(generation.job.status)} Você pode tentar novamente.`}</p>
-              </div>
-            )}
-            <div className={styles.overviewLayout}>
-              <div className={styles.editCard}>
-                {editing ? (
-                  <ProductCreateForm
-                    mode="edit"
-                    onAfterSave={stopEdit}
-                    onSaved={setProduct}
-                    product={product}
-                  />
-                ) : (
-                  <ProductSummaryPanel product={product} />
-                )}
-              </div>
-              <aside className={styles.sideRail}>
-                <OperationalSummaryCard
-                  className={styles.statusCard}
-                  job={generation.job}
-                  readiness={generation.readiness}
-                />
-                <section aria-labelledby="product-actions-card-title" className={styles.sideCard}>
-                  <div className={styles.sideCardHeading}>
-                    <Archive aria-hidden="true" />
-                    <h2 id="product-actions-card-title">Ações</h2>
-                  </div>
-                  {editing && (
-                    <Button className={styles.saveAction} form="product-edit-form" type="submit" variant="ghost">
-                      <Save aria-hidden="true" />
-                      Salvar apenas
-                    </Button>
-                  )}
-                  {/* Alternância editar/cancelar no mesmo slot: o foco nunca
-                      se perde e o rótulo comunica o próximo passo. */}
-                  {editing ? (
-                    <Button
-                      className={styles.saveAction}
-                      onClick={stopEdit}
-                      type="button"
-                      variant="ghost"
-                    >
-                      <X aria-hidden="true" />
-                      Cancelar alterações
-                    </Button>
-                  ) : (
-                    <Button
-                      className={styles.saveAction}
-                      onClick={startEdit}
-                      ref={editButtonRef}
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Pencil aria-hidden="true" />
-                      Editar produto
-                    </Button>
-                  )}
-                  <Button
-                    className={styles.archiveAction}
-                    onClick={() => {
-                      setError(null);
-                      if (product.active) setArchiveConfirmationOpen(true);
-                      else setReactivateConfirmationOpen(true);
-                    }}
-                    type="button"
-                    variant="ghost"
-                  >
-                    {product.active ? <Archive aria-hidden="true" /> : <ArchiveRestore aria-hidden="true" />}
-                    {product.active ? "Arquivar produto" : "Reativar produto"}
-                  </Button>
-                  <Button
-                    className={styles.deleteAction}
-                    onClick={() => {
-                      setError(null);
-                      setDeleteConfirmationOpen(true);
-                    }}
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Trash2 aria-hidden="true" />
-                    Excluir produto
-                  </Button>
-                </section>
-              </aside>
-            </div>
-          </SectionSwitcherContent>
           <SectionSwitcherContent className={styles.tabContent} value="contents">
             <GenerationActions
               generationAction={product.generationAction}
@@ -528,6 +385,7 @@ export function ProductDetail({
             <HistoryView error={historyError} history={history} loading={historyLoading} />
           </SectionSwitcherContent>
         </SectionSwitcher>
+        </>
       ) : (
         <div className={styles.archivedLayout}>
           <ProductCreateForm

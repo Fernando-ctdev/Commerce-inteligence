@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Tag, Trash2 } from "lucide-react";
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -498,6 +498,19 @@ export function ProductCreateForm({
     null,
   );
   const [previewUnavailable, setPreviewUnavailable] = useState(false);
+  /* Pré-carga da Vitrine: imagens HTTPS recebidas viram prévia fixa — sem
+     editor de links/upload; o valor permanece no draft e segue no payload. */
+  const readonlyImages = useMemo(() => {
+    if (!initialDraft) return [];
+    const lines = (initialDraft.imageReferences ?? "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    return lines.length > 0 && lines.every((line) => /^https:\/\//i.test(line))
+      ? lines
+      : [];
+  }, [initialDraft]);
+  const [brokenPreviews, setBrokenPreviews] = useState<string[]>([]);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
   /* Uma chave por tentativa lógica: gerada no primeiro submit e reutilizada
      em todo retry; limpa só após sucesso (novo formulário = novo mount). */
@@ -897,7 +910,7 @@ export function ProductCreateForm({
           />
           <TextField
             error={combinedErrors.description}
-            placeholder="Cole aqui a descrição do produto, ou descreva-o em detalhes"
+            placeholder="Descreva alguns detalhes ou características do produto."
             id={fieldId("description")}
             label="Descrição"
             multiline
@@ -929,8 +942,38 @@ export function ProductCreateForm({
             />
           </div>
           <div className={styles.imageManager}>
-            <div className={styles.imageControls}>
-              <p className={styles.imageManagerLabel}>Imagens do produto</p>
+            {readonlyImages.length > 0 ? (
+              <ul className={styles.readonlyImages}>
+                {readonlyImages.map((source, index) => (
+                  <li className={styles.readonlyImageItem} key={source}>
+                    {brokenPreviews.includes(source) ? (
+                      <p className={styles.readonlyImageFallback}>
+                        Não foi possível carregar esta imagem.
+                      </p>
+                    ) : (
+                      <Image
+                        alt={`Imagem ${index + 1} do produto ${draft.name}`}
+                        className={styles.readonlyImage}
+                        height={240}
+                        onError={() =>
+                          setBrokenPreviews((current) =>
+                            current.includes(source)
+                              ? current
+                              : [...current, source],
+                          )
+                        }
+                        src={source}
+                        unoptimized
+                        width={360}
+                      />
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <>
+                <div className={styles.imageControls}>
+                  <p className={styles.imageManagerLabel}>Imagens do produto</p>
               <Tabs
                 onValueChange={(value) => setImageSource(value as ImageSource)}
                 value={imageSource}
@@ -1059,26 +1102,28 @@ export function ProductCreateForm({
                   {combinedErrors.imageReferences}
                 </p>
               )}
-            </div>
-            <div aria-live="polite" className={styles.imagePreview}>
-              {previewImage && !previewUnavailable ? (
-                <Image
-                  alt={`Preview de ${previewImage.name}`}
-                  height={320}
-                  key={previewImage.reference}
-                  onError={() => setPreviewUnavailable(true)}
-                  src={previewImage.reference}
-                  unoptimized
-                  width={420}
-                />
-              ) : (
-                <p>
-                  {previewUnavailable
-                    ? "Preview indisponível"
-                    : "Selecione uma imagem"}
-                </p>
-              )}
-            </div>
+                </div>
+                <div aria-live="polite" className={styles.imagePreview}>
+                  {previewImage && !previewUnavailable ? (
+                    <Image
+                      alt={`Preview de ${previewImage.name}`}
+                      height={320}
+                      key={previewImage.reference}
+                      onError={() => setPreviewUnavailable(true)}
+                      src={previewImage.reference}
+                      unoptimized
+                      width={420}
+                    />
+                  ) : (
+                    <p>
+                      {previewUnavailable
+                        ? "Preview indisponível"
+                        : "Selecione uma imagem"}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
           {isEdit && (
             <TextField
@@ -1165,43 +1210,43 @@ export function ProductCreateForm({
               <legend>
                 Formato do creator <span aria-hidden="true">*</span>
               </legend>
-              <Tabs
+              <div
                 aria-describedby={
                   combinedErrors.creatorPresence
                     ? `${fieldId("creatorPresence")}-error`
                     : undefined
                 }
                 aria-label="Formato do creator"
-                className={styles.creatorModeTabs}
-                onValueChange={(value) =>
-                  setCreatorPresence(
-                    value as ContentPreparationPreferences["creatorPresence"],
-                  )
-                }
-                value={creatorPresence}
+                className={styles.creatorOptions}
+                role="radiogroup"
               >
-                <TabsList className={styles.creatorOptions} variant="line">
-                  {creatorPresenceOptions.map((option, index) => (
-                    <TabsTrigger
-                      id={index === 0 ? fieldId("creatorPresence") : undefined}
-                      key={option.value}
-                      value={option.value}
-                    >
-                      {option.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                {creatorPresenceOptions.map((option) => (
-                  <TabsContent
-                    className={styles.creatorDescription}
+                {creatorPresenceOptions.map((option, index) => (
+                  <label
+                    className={
+                      creatorPresence === option.value
+                        ? `${styles.creatorOption} ${styles.creatorOptionSelected}`
+                        : styles.creatorOption
+                    }
                     key={option.value}
-                    value={option.value}
                   >
-                    {" "}
-                    {option.description}
-                  </TabsContent>
+                    <input
+                      checked={creatorPresence === option.value}
+                      className={styles.creatorOptionInput}
+                      id={index === 0 ? fieldId("creatorPresence") : undefined}
+                      name={fieldId("creatorPresence")}
+                      onChange={() => setCreatorPresence(option.value)}
+                      type="radio"
+                      value={option.value}
+                    />
+                    <span className={styles.creatorOptionTitle}>
+                      {option.label}
+                    </span>
+                    <span className={styles.creatorOptionDescription}>
+                      {option.description}
+                    </span>
+                  </label>
                 ))}
-              </Tabs>
+              </div>
               {combinedErrors.creatorPresence && (
                 <p
                   className={styles.fieldError}

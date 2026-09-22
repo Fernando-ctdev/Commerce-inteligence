@@ -568,6 +568,42 @@
   margin: 0;
 }
 
+/* Pré-carga da Vitrine: somente prévia das imagens recebidas (HTTPS). */
+.readonlyImages {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.readonlyImageItem {
+  min-width: 0;
+}
+
+.readonlyImage {
+  aspect-ratio: 4 / 3;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  height: auto;
+  object-fit: cover;
+  width: 100%;
+}
+
+.readonlyImageFallback {
+  align-items: center;
+  aspect-ratio: 4 / 3;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 14px;
+  margin: 0;
+  padding: 12px;
+}
+
 /* Preparação dos conteúdos (Slice 002). */
 .preparationGrid {
   display: grid;
@@ -610,55 +646,72 @@
   line-height: 16px;
 }
 
-.creatorModeTabs {
-  gap: 8px;
-}
-
+/* Formato do creator: cards de seleção única (radio nativo). Grid auto-fit
+   nunca comprime texto: abaixo de ~492px vira 1 coluna; 3 colunas forçadas
+   nunca acontecem. */
 .creatorOptions {
-  border-bottom: 1px solid var(--color-border);
-  border-radius: 0;
   display: grid;
-  gap: 0;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  height: 44px;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   padding: 0;
   width: 100%;
 }
 
-.creatorOptions [data-slot="tabs-trigger"] {
-  border-radius: 0;
-  color: var(--color-text-secondary);
+.creatorOption {
+  align-content: start;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
   cursor: pointer;
-  min-height: 44px;
-}
-
-.creatorOptions [data-slot="tabs-trigger"]:nth-child(3) {
-  font-size: 13px;
-  line-height: 16px;
+  display: grid;
+  gap: 4px;
+  min-height: 72px;
+  overflow-wrap: anywhere;
+  padding: 14px 16px;
+  position: relative;
+  text-align: start;
   white-space: normal;
+  width: 100%;
 }
 
-.creatorOptions [data-slot="tabs-trigger"][data-active] {
-  color: var(--color-brand);
+.creatorOption:hover {
+  border-color: var(--color-brand);
 }
 
-.creatorOptions [data-slot="tabs-trigger"]::after {
-  background: var(--color-brand);
-  bottom: -1px;
-}
-
-.creatorDescription {
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  line-height: 18px;
+.creatorOptionInput {
+  appearance: none;
+  cursor: pointer;
+  inset: 0;
   margin: 0;
-  min-height: 44px;
-  padding: 8px 4px;
+  position: absolute;
 }
 
-.creatorDescription strong {
+.creatorOptionInput:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.creatorOptionTitle {
   color: var(--color-text);
+  font-size: 15px;
   font-weight: 600;
+  line-height: 20px;
+}
+
+.creatorOptionDescription {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.creatorOptionSelected {
+  background: color-mix(in srgb, var(--color-brand) 8%, var(--color-surface));
+  border-color: var(--color-brand);
+  box-shadow: inset 3px 0 0 var(--color-brand);
+}
+
+.creatorOptionSelected .creatorOptionTitle {
+  color: var(--color-brand);
 }
 
 .currencyTrigger {
@@ -874,35 +927,6 @@
 
   .preparationGrid {
     gap: 24px;
-  }
-
-  /* Formato do creator: lista vertical em vez de 3 colunas comprimidas. */
-  .creatorOptions {
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    display: grid;
-    grid-template-columns: 1fr;
-    height: auto;
-    overflow: hidden;
-    width: 100%;
-  }
-
-  .creatorOptions [data-slot="tabs-trigger"] {
-    justify-content: flex-start;
-    min-height: 44px;
-    padding: 10px 12px;
-    text-align: start;
-    white-space: normal;
-  }
-
-  .creatorOptions [data-slot="tabs-trigger"][data-active] {
-    background: color-mix(in srgb, var(--color-brand) 8%, var(--color-surface));
-    border-inline-start: 3px solid var(--color-brand);
-    color: var(--color-brand);
-  }
-
-  .creatorOptions [data-slot="tabs-trigger"]::after {
-    display: none;
   }
 }
 

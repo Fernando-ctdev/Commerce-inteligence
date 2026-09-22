@@ -15,16 +15,13 @@ import { ProductShell } from "@/components/products/product-shell";
 
 type ProductPageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ edit?: string }>;
 };
 
 export default async function ProductPage({
   params,
-  searchParams,
 }: ProductPageProps) {
   const session = await requireSession();
   const { id } = await params;
-  const { edit } = await searchParams;
 
   const product = await getTenantProduct(session.tenantId, id);
   const archived = product?.lifecycle === "ARCHIVED";
@@ -48,11 +45,7 @@ export default async function ProductPage({
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
-      <ProductDetail
-        key={`${id}-${edit === "1" ? "edit" : "view"}`}
-        id={id}
-        initialEditing={edit === "1"}
-      />
+      <ProductDetail id={id} />
     </ProductShell>
   );
 }

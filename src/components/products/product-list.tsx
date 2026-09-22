@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   Ellipsis,
   FileText,
-  Plus,
   Search,
   Sparkles,
   Store,
@@ -18,7 +17,10 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { stageMessage } from "./generation-ui-model";
-import { ProductCreateOverlay } from "./product-create-overlay";
+import {
+  ProductCreateOverlay,
+  ProductCreateTrigger,
+} from "./product-create-overlay";
 import {
   listShowcaseItems,
   type ShowcaseItem,
@@ -76,6 +78,9 @@ export function ProductList() {
      persistem no Product; salvar segue o caso de uso manual existente. */
   const [showcaseItems] = useState(() => listShowcaseItems());
   const [prefill, setPrefill] = useState<ShowcaseItem | null>(null);
+  /* Edição no drawer da Vitrine: o menu do card carrega o Product no overlay
+     existente (ProductCreateForm mode="edit"); salvar atualiza a lista. */
+  const [editProduct, setEditProduct] = useState<ProductRecord | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -194,14 +199,10 @@ export function ProductList() {
             Produtos da sua vitrine
           </h2>
           <p className={styles.listHint}>
-            Produtos da vitrine TikTok Shop e produtos cadastrados
-            manualmente, no mesmo lugar.
+            Os produtos da sua vitrine do TikTok Shop
           </p>
         </div>
-        <Link className={styles.primaryButton} href="/products/new">
-          <Plus aria-hidden="true" />
-          Adicionar produto
-        </Link>
+        <ProductCreateTrigger className={styles.primaryButton} />
       </div>
       <div className={styles.controls} role="search">
         <label className={styles.searchLabel} htmlFor="product-search">
@@ -284,12 +285,9 @@ export function ProductList() {
                 Nada disponível na vitrine agora. Use Adicionar produto para
                 cadastrar manualmente.
               </p>
-              <Link
+              <ProductCreateTrigger
                 className={`${styles.secondaryButton} ${showcaseStyles.link}`}
-                href="/products/new"
-              >
-                Adicionar produto
-              </Link>
+              />
             </>
           ) : (
             <>
@@ -391,11 +389,7 @@ export function ProductList() {
                           Arquivar produto
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          render={
-                            <Link
-                              href={`/products/${encodeURIComponent(product.id)}?edit=1`}
-                            />
-                          }
+                          onClick={() => setEditProduct(product)}
                         >
                           Editar produto
                         </DropdownMenuItem>
@@ -469,6 +463,16 @@ export function ProductList() {
           if (!open) setPrefill(null);
         }}
         open={prefill !== null}
+      />
+      {/* Editar produto (menu do card): o mesmo overlay em mode="edit";
+          salvar permanece no caso de uso existente e recarrega a lista. */}
+      <ProductCreateOverlay
+        onSaved={() => void load()}
+        onOpenChange={(open) => {
+          if (!open) setEditProduct(null);
+        }}
+        open={editProduct !== null}
+        product={editProduct ?? undefined}
       />
       {actionProduct && actionType && (
         <ConfirmationDialog

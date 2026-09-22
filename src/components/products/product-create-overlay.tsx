@@ -24,6 +24,7 @@ import {
 
 import { ProductCreateForm } from "./product-create-form";
 import type { ProductManualDraft } from "./product-form-model";
+import type { ProductRecord } from "./product-api";
 
 type ProductCreateOverlayProps = {
   open: boolean;
@@ -33,6 +34,10 @@ type ProductCreateOverlayProps = {
   /** Navega ao produto criado após salvar (Analisar produto fica explícito lá)
       em vez de permanecer na superfície que abriu o overlay. */
   navigateAfterSave?: boolean;
+  /** Produto em edição (drawer da Vitrine): carrega o registro no form edit. */
+  product?: ProductRecord;
+  /** Notifica o produto salvo (criação ou edição) antes de fechar o overlay. */
+  onSaved?: (product: ProductRecord) => void;
 };
 
 /**
@@ -45,6 +50,8 @@ export function ProductCreateOverlay({
   onOpenChange,
   initialDraft,
   navigateAfterSave = false,
+  product,
+  onSaved,
 }: ProductCreateOverlayProps) {
   const isMobile = useIsMobile();
   const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -84,7 +91,7 @@ export function ProductCreateOverlay({
     >
       {/* Pré-carga da vitrine: a descrição não existe no DTO por design —
           aviso visível e acessível orienta o preenchimento obrigatório. */}
-      {initialDraft && (
+      {/* {initialDraft && (
         <div
           className="mb-3 rounded-md border bg-surface-secondary p-3 text-sm text-text-secondary"
           role="status"
@@ -97,15 +104,22 @@ export function ProductCreateOverlay({
             que ele entrega.
           </p>
         </div>
-      )}
+      )} */}
       <ProductCreateForm
-        mode="create"
-        initialDraft={initialDraft}
-        onSaved={handleSaved}
+        mode={product ? "edit" : "create"}
+        initialDraft={product ? undefined : initialDraft}
+        product={product}
+        onSaved={(saved) => {
+          onSaved?.(saved);
+          handleSaved();
+        }}
         onCancel={() => handleOpenChange(false)}
         /* Sem no-op o formulário chamaria router.back() ao salvar dentro do
-           overlay; com navigateAfterSave o form navega ao produto criado. */
-        onAfterSave={navigateAfterSave ? undefined : () => {}}
+           overlay (criação e edição); com navigateAfterSave a criação navega
+           ao produto criado. Edição no drawer permanece na superfície. */
+        onAfterSave={
+          product ? () => {} : navigateAfterSave ? undefined : () => {}
+        }
       />
     </div>
   );
