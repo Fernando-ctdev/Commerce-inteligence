@@ -33,32 +33,9 @@ export default function ProductsLoading() {
             className={listStyles.searchInput}
             disabled
             id="product-search"
-            placeholder="Nome, categoria ou descrição"
+            placeholder="Nome ou categoria"
             type="search"
           />
-          <div
-            aria-label="Filtrar produtos"
-            className={listStyles.filterNav}
-            role="group"
-          >
-            {(
-              [
-                ["active", "Ativos"],
-                ["pending", "Pendentes"],
-                ["archived", "Arquivados"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                aria-pressed={value === "active"}
-                className={listStyles.filterTab}
-                disabled
-                key={value}
-                type="button"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
         <ul aria-hidden="true" className={listStyles.cards}>
           {Array.from({ length: 6 }, (_, index) => (
