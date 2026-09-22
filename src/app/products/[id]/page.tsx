@@ -27,7 +27,7 @@ export default async function ProductPage({
   const archived = product?.lifecycle === "ARCHIVED";
   return (
     <ProductShell
-      title={archived ? "Produto arquivado" : "Revisar produto"}
+      title={archived ? "Produto arquivado" : "Vitrine"}
       user={{ email: session.email }}
     >
       <Breadcrumb className="mb-6">
@@ -40,7 +40,7 @@ export default async function ProductPage({
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <BreadcrumbPage>
-              {archived ? "Produto arquivado" : "Revisar produto"}
+              {archived ? "Produto arquivado" : "Produto"}
             </BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>

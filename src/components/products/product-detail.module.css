@@ -96,15 +96,141 @@
   gap: 10px;
 }
 
-.objectFacts {
+/* Cabeçalho compacto do Produto (Slice 003): imagem, selo de origem, nome,
+   descrição curta, fatos e ações à direita — composição da referência. */
+.objectCard {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  display: flex;
+  gap: 16px;
+  margin-bottom: 26px;
+  min-width: 0;
+  padding: 16px 20px;
+}
+
+.objectImage {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  flex: 0 0 auto;
+  height: 96px;
+  object-fit: cover;
+  width: 96px;
+}
+
+.objectImageFallback {
+  align-items: center;
+  aspect-ratio: 1;
+  background: var(--color-surface-secondary);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  justify-content: center;
+  width: 96px;
+}
+
+.objectBody {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+}
+
+.objectName {
+  color: var(--color-text);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+  margin: 0;
+  min-width: 0;
+}
+
+.objectDescription {
   color: var(--color-text-secondary);
-  font-size: 14px;
-  line-height: 20px;
+  display: -webkit-box;
+  font-size: 13px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 18px;
+  margin: 0;
+  max-width: 60ch;
+  overflow: hidden;
+}
+
+.objectFacts {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 6px 0 0;
+  row-gap: 10px;
+}
+
+.objectFacts > div {
+  border-inline-start: 1px solid var(--color-border);
+  display: grid;
+  gap: 4px;
+  padding-inline: 24px;
+}
+
+.objectFacts > div:first-child {
+  border-inline-start: 0;
+  padding-inline-start: 0;
+}
+
+.objectFacts dt {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.objectFacts dd {
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 22px;
   margin: 0;
 }
 
-.archiveButton {
-  min-height: 44px;
+.objectActions {
+  align-self: center;
+  display: grid;
+  flex: 0 0 auto;
+  gap: 8px;
+  width: 248px;
+}
+
+.objectActionPrimary,
+.objectActionSoft,
+.objectActionOutline {
+  font-weight: 600;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.objectActionSoft {
+  background: color-mix(in srgb, var(--color-brand) 10%, var(--color-surface));
+  border: 1px solid transparent;
+  color: var(--color-brand);
+}
+
+.objectActionSoft:hover {
+  background: color-mix(in srgb, var(--color-brand) 14%, var(--color-surface));
+  color: var(--color-brand);
+}
+
+.objectActionOutline {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-brand);
+}
+
+.objectActionOutline:hover {
+  background: var(--color-surface);
+  border-color: var(--color-brand);
+  color: var(--color-brand);
 }
 
 .actionRegion h2,
@@ -128,11 +254,6 @@
   color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 18px;
-}
-
-.deleteError {
-  color: var(--color-danger);
-  margin: 12px 0;
 }
 
 .tabs {
@@ -232,13 +353,6 @@
   white-space: nowrap;
 }
 
-.overviewLayout {
-  align-items: start;
-  display: grid;
-  gap: 28px;
-  grid-template-columns: minmax(0, 1.75fr) minmax(280px, 0.75fr);
-}
-
 .editCard {
   min-width: 0;
 }
@@ -336,17 +450,6 @@
   width: 100%;
 }
 
-.sideRail {
-  display: grid;
-  gap: 20px;
-  min-width: 0;
-}
-
-.statusCard {
-  margin: 0;
-  max-width: none;
-}
-
 .sideCard {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -376,19 +479,6 @@
   margin: 0;
 }
 
-.saveAction,
-.archiveAction,
-.deleteAction {
-  justify-content: flex-start;
-  min-height: 44px;
-  padding: 10px 12px;
-  width: 100%;
-}
-
-.deleteAction {
-  color: var(--color-danger);
-}
-
 .archivedLayout {
   align-items: start;
   display: grid;
@@ -403,9 +493,17 @@
 }
 
 @media (max-width: 900px) {
-  .overviewLayout,
   .archivedLayout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .objectCard {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .objectActions {
+    width: 100%;
   }
 }
 
@@ -475,14 +573,6 @@
 
   .failureBanner button {
     margin-inline-start: 28px;
-  }
-
-  .sideRail {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .statusCard {
-    grid-column: auto;
   }
 
   .summaryPanel {

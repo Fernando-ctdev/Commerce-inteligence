@@ -1,22 +1,22 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { Archive, ArchiveRestore, CircleAlert, Tag, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import {
+  ArchiveRestore,
+  CircleAlert,
+  FileStack,
+  MonitorPlay,
+  Sparkles,
+  Store,
+  Video
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { SectionSwitcher, SectionSwitcherContent, SectionSwitcherList, SectionSwitcherTrigger } from "@/components/ui/section-switcher";
 
-import {
-  archiveProduct,
-  deleteProduct,
-  getProduct,
-  ProductApiError,
-  ProductRecord,
-  reactivateProduct,
-} from "./product-api";
+import { getProduct, ProductApiError, ProductRecord } from "./product-api";
+import { formatPriceWithCurrency } from "./product-form-model";
 import { loadProductHistory, type ProductHistoryResponse } from "./history-api";
 import {
   ContentsView,
@@ -28,6 +28,7 @@ import { statusMessage } from "./generation-ui-model";
 import { ProductCreateForm } from "./product-create-form";
 import { useGenerationJob } from "./use-generation-job";
 import styles from "./product-detail.module.css";
+import showcaseStyles from "./showcase.module.css";
 
 type ProductTab = "strategy" | "contents" | "history";
 
@@ -68,18 +69,10 @@ export function ProductDetail({
   const [history, setHistory] = useState<ProductHistoryResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [archiving, setArchiving] = useState(false);
-  const [reactivating, setReactivating] = useState(false);
   const [tab, setTab] = useState<ProductTab>(() =>
     hashToTab(typeof window === "undefined" ? "" : window.location.hash) ??
       "contents",
   );
-  const [archiveConfirmationOpen, setArchiveConfirmationOpen] = useState(false);
-  const [reactivateConfirmationOpen, setReactivateConfirmationOpen] =
-    useState(false);
-  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const router = useRouter();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -178,164 +171,99 @@ export function ProductDetail({
     );
   }
 
-  async function archive() {
-    if (!product || archiving) return;
-    setArchiving(true);
-    setError(null);
-    try {
-      // ADR-016: a mutação confirma { id, version }; o estado (com a projeção recalculada
-      // ou ArchivedProductView sem geraçãoAction) chega sempre pelo GET autenticado seguinte.
-      await archiveProduct(product.id);
-      setProduct(await getProduct(product.id));
-      setArchiveConfirmationOpen(false);
-    } catch (caught) {
-      const message =
-        caught instanceof ProductApiError
-          ? caught.message
-          : "Não foi possível arquivar este produto agora.";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setArchiving(false);
-    }
-  }
-
-  async function reactivate() {
-    if (!product || reactivating) return;
-    setReactivating(true);
-    setError(null);
-    try {
-      await reactivateProduct(product.id);
-      setProduct(await getProduct(product.id));
-      setReactivateConfirmationOpen(false);
-      toast.success("Produto reativado.");
-    } catch (caught) {
-      const message =
-        caught instanceof ProductApiError
-          ? caught.message
-          : "Não foi possível reativar este produto agora.";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setReactivating(false);
-    }
-  }
-
-  async function remove() {
-    if (!product || deleting) return;
-    setDeleting(true);
-    setError(null);
-    try {
-      await deleteProduct(product.id);
-      toast.success("Produto excluído.");
-      router.push("/products");
-    } catch (caught) {
-      const message =
-        caught instanceof ProductApiError
-          ? caught.message
-          : "Não foi possível excluir este produto agora.";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setDeleting(false);
-    }
-  }
+  const firstImage = product.imageReferences[0];
+  const imageUrl =
+    firstImage &&
+    /^(?:https?:\/\/|data:image\/[a-z0-9.+-]+;base64,)/i.test(firstImage)
+      ? firstImage
+      : null;
+  const priceText = formatPriceWithCurrency(
+    product.price,
+    product.priceCurrency,
+  );
+  const sourceLabel = /tiktok/i.test(product.url)
+    ? "TikTok Shop"
+    : "Manual";
 
   return (
     <>
-      {error && (
-        <p className={styles.deleteError} role="alert">
-          {error}
-        </p>
-      )}
-      <section
-        aria-labelledby="product-actions-title"
-        className={styles.objectHeader}
-      >
-        <div className={styles.objectIdentity}>
-          <p className={styles.eyebrow}>Produto</p>
-          <h2 className={styles.objectTitle} id="product-actions-title">
-            <Tag aria-hidden="true" className={styles.pageTitleIcon} />
-            <span className={styles.objectTitleText}>{product.name}</span>
-          </h2>
-        </div>
-      </section>
-      <ConfirmationDialog
-        confirmLabel="Arquivar produto"
-        description={`O produto “${product.name}” será arquivado e deixará de aparecer entre os produtos ativos. Os dados serão preservados.`}
-        error={error}
-        onConfirm={archive}
-        onOpenChange={setArchiveConfirmationOpen}
-        open={archiveConfirmationOpen}
-        pending={archiving}
-        pendingLabel="Arquivando…"
-        title="Arquivar produto?"
-      />
-      <ConfirmationDialog
-        confirmLabel="Reativar produto"
-        description={`O produto “${product.name}” voltará a aparecer entre os produtos ativos.`}
-        error={error}
-        onConfirm={reactivate}
-        onOpenChange={setReactivateConfirmationOpen}
-        open={reactivateConfirmationOpen}
-        pending={reactivating}
-        pendingLabel="Reativando…"
-        title="Reativar produto?"
-      />
-      <ConfirmationDialog
-        confirmLabel="Excluir produto"
-        description={`O produto “${product.name}” será excluído permanentemente. Produtos com análises ou conteúdos não podem ser excluídos — nesses casos, use Arquivar.`}
-        error={error}
-        onConfirm={remove}
-        onOpenChange={setDeleteConfirmationOpen}
-        open={deleteConfirmationOpen}
-        pending={deleting}
-        pendingLabel="Excluindo…"
-        title="Excluir produto?"
-      />
       {product.active ? (
         <>
+          <section
+            aria-labelledby="product-summary-title"
+            className={styles.objectCard}
+          >
+            {imageUrl ? (
+              <Image
+                alt={`Imagem de ${product.name}`}
+                className={styles.objectImage}
+                height={96}
+                src={imageUrl}
+                unoptimized
+                width={96}
+              />
+            ) : (
+              <div
+                aria-label={`Produto ${product.name} sem imagem cadastrada`}
+                className={styles.objectImageFallback}
+                role="img"
+              >
+                Sem imagem
+              </div>
+            )}
+            <div className={styles.objectBody}>
+              <span className={showcaseStyles.badge}>{sourceLabel}</span>
+              <h3 className={styles.objectName} id="product-summary-title">
+                {product.name}
+              </h3>
+              {product.description && (
+                <p className={styles.objectDescription}>{product.description}</p>
+              )}
+              {/* Quatro fatos da referência. Comissão/Estoque são fatos remotos
+                  do TikTok (ADR-030/031), fora do contrato do Product: exibem
+                  "—" até que a frente TikTok forneça os dados. */}
+              <dl className={styles.objectFacts}>
+                <div>
+                  <dt>Categoria</dt>
+                  <dd>{product.category || "—"}</dd>
+                </div>
+                <div>
+                  <dt>Preço</dt>
+                  <dd>{priceText ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>Comissão</dt>
+                  <dd>—</dd>
+                </div>
+                <div>
+                  <dt>Estoque</dt>
+                  <dd>—</dd>
+                </div>
+              </dl>
+            </div>
+            {/* Slice 003: ações de apresentação da referência; live e
+                multiplicador não têm handler por decisão de escopo. */}
+            <div className={styles.objectActions}>
+              <Button className={styles.objectActionPrimary} type="button">
+                <Sparkles aria-hidden="true" />
+                Gerar roteiro de posts
+              </Button>
+              <Button className={styles.objectActionSoft} type="button">
+                <Video aria-hidden="true" />
+                Gerar roteiro de live
+              </Button>
+              <Button className={styles.objectActionOutline} type="button">
+                <FileStack aria-hidden="true" />
+                Multiplicar conteúdos
+              </Button>
+            </div>
+          </section>
           {generation.failed && generation.job && (
             <div className={styles.failureBanner} role="alert">
               <CircleAlert aria-hidden="true" />
               <p>{`${statusMessage(generation.job.status)} Você pode tentar novamente.`}</p>
             </div>
           )}
-          <div className={styles.overviewLayout}>
-            <aside className={styles.sideRail}>
-              <section aria-labelledby="product-actions-card-title" className={styles.sideCard}>
-                <div className={styles.sideCardHeading}>
-                  <Archive aria-hidden="true" />
-                  <h2 id="product-actions-card-title">Ações</h2>
-                </div>
-                <Button
-                  className={styles.archiveAction}
-                  onClick={() => {
-                    setError(null);
-                    if (product.active) setArchiveConfirmationOpen(true);
-                    else setReactivateConfirmationOpen(true);
-                  }}
-                  type="button"
-                  variant="ghost"
-                >
-                  {product.active ? <Archive aria-hidden="true" /> : <ArchiveRestore aria-hidden="true" />}
-                  {product.active ? "Arquivar produto" : "Reativar produto"}
-                </Button>
-                <Button
-                  className={styles.deleteAction}
-                  onClick={() => {
-                    setError(null);
-                    setDeleteConfirmationOpen(true);
-                  }}
-                  type="button"
-                  variant="ghost"
-                >
-                  <Trash2 aria-hidden="true" />
-                  Excluir produto
-                </Button>
-              </section>
-            </aside>
-          </div>
           <SectionSwitcher
             className={styles.tabs}
             onValueChange={changeTab}
@@ -387,20 +315,33 @@ export function ProductDetail({
         </SectionSwitcher>
         </>
       ) : (
-        <div className={styles.archivedLayout}>
-          <ProductCreateForm
-            mode="edit"
-            onSaved={setProduct}
-            product={product}
-          />
-          <section aria-labelledby="product-actions-card-title" className={styles.sideCard}>
-            <div className={styles.sideCardHeading}>
-              <ArchiveRestore aria-hidden="true" />
-              <h2 id="product-actions-card-title">Produto arquivado</h2>
+        <>
+          <section
+            aria-labelledby="product-actions-title"
+            className={styles.objectHeader}
+          >
+            <div className={styles.objectIdentity}>
+              <h2 className={styles.objectTitle} id="product-actions-title">
+                <Store aria-hidden="true" className={styles.pageTitleIcon} />
+                <span className={styles.objectTitleText}>{product.name}</span>
+              </h2>
             </div>
-            <p>Este produto não aparece entre os produtos ativos.</p>
           </section>
-        </div>
+          <div className={styles.archivedLayout}>
+            <ProductCreateForm
+              mode="edit"
+              onSaved={setProduct}
+              product={product}
+            />
+            <section aria-labelledby="product-actions-card-title" className={styles.sideCard}>
+              <div className={styles.sideCardHeading}>
+                <ArchiveRestore aria-hidden="true" />
+                <h2 id="product-actions-card-title">Produto arquivado</h2>
+              </div>
+              <p>Este produto não aparece entre os produtos ativos.</p>
+            </section>
+          </div>
+        </>
       )}
     </>
   );
