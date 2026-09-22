@@ -3,11 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   ArchiveRestore,
   CircleAlert,
   FileStack,
   MonitorPlay,
+  Pencil,
+  Save,
   Sparkles,
   Store,
   Video
@@ -15,7 +18,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { SectionSwitcher, SectionSwitcherContent, SectionSwitcherList, SectionSwitcherTrigger } from "@/components/ui/section-switcher";
 
-import { getProduct, ProductApiError, ProductRecord } from "./product-api";
+import {
+  getProduct,
+  ProductApiError,
+  ProductRecord,
+  updateProduct,
+} from "./product-api";
 import { formatPriceWithCurrency } from "./product-form-model";
 import { loadProductHistory, type ProductHistoryResponse } from "./history-api";
 import {
@@ -69,6 +77,11 @@ export function ProductDetail({
   const [history, setHistory] = useState<ProductHistoryResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  /* Descrição editável no cabeçalho: lápis entra em edição, o mesmo botão
+     vira salvar; clicar fora (blur) ou Escape cancela sem salvar. */
+  const [descriptionEditing, setDescriptionEditing] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState("");
+  const [descriptionSaving, setDescriptionSaving] = useState(false);
   const [tab, setTab] = useState<ProductTab>(() =>
     hashToTab(typeof window === "undefined" ? "" : window.location.hash) ??
       "contents",
@@ -172,6 +185,56 @@ export function ProductDetail({
   }
 
   const firstImage = product.imageReferences[0];
+
+  function beginDescriptionEdit() {
+    if (!product) return;
+    setDescriptionDraft(product.description);
+    setDescriptionEditing(true);
+  }
+
+  function cancelDescriptionEdit() {
+    setDescriptionEditing(false);
+    setDescriptionDraft("");
+  }
+
+  async function saveDescription() {
+    if (!product || descriptionSaving) return;
+    const next = descriptionDraft.trim();
+    if (!next) {
+      toast.error("Informe a descrição do produto.");
+      return;
+    }
+    setDescriptionSaving(true);
+    try {
+      /* PATCH valida os fatos completos: reenvia os existentes com a
+         descrição nova e controle otimista de versão. */
+      const mutation = await updateProduct(product.id, {
+        name: product.name,
+        description: next,
+        category: product.category || null,
+        price: product.price || null,
+        priceCurrency: product.priceCurrency,
+        imageRefs: product.imageReferences,
+        notes: product.observations || null,
+        url: product.url || null,
+        expectedVersion: product.version,
+      });
+      setProduct({
+        ...product,
+        description: next,
+        version: mutation.version ?? product.version,
+      });
+      cancelDescriptionEdit();
+    } catch (caught) {
+      toast.error(
+        caught instanceof ProductApiError
+          ? caught.message
+          : "Não foi possível salvar a descrição agora.",
+      );
+    } finally {
+      setDescriptionSaving(false);
+    }
+  }
   const imageUrl =
     firstImage &&
     /^(?:https?:\/\/|data:image\/[a-z0-9.+-]+;base64,)/i.test(firstImage)
@@ -181,9 +244,18 @@ export function ProductDetail({
     product.price,
     product.priceCurrency,
   );
-  const sourceLabel = /tiktok/i.test(product.url)
-    ? "TikTok Shop"
-    : "Manual";
+  const sourceLabel = product.origin
+    ? product.origin === "showcase"
+      ? "TikTok Shop"
+      : "Manual"
+    : /tiktok/i.test(product.url)
+      ? "TikTok Shop"
+      : "Manual";
+  const commissionText = product.commission
+    ? product.commissionRate !== undefined && product.commissionRate > 0
+      ? `${product.commission} (${(product.commissionRate / 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%)`
+      : product.commission
+    : null;
 
   return (
     <>
@@ -197,7 +269,7 @@ export function ProductDetail({
               <Image
                 alt={`Imagem de ${product.name}`}
                 className={styles.objectImage}
-                height={96}
+                height={160}
                 src={imageUrl}
                 unoptimized
                 width={96}
@@ -216,12 +288,64 @@ export function ProductDetail({
               <h3 className={styles.objectName} id="product-summary-title">
                 {product.name}
               </h3>
-              {product.description && (
-                <p className={styles.objectDescription}>{product.description}</p>
-              )}
-              {/* Quatro fatos da referência. Comissão/Estoque são fatos remotos
-                  do TikTok (ADR-030/031), fora do contrato do Product: exibem
-                  "—" até que a frente TikTok forneça os dados. */}
+              <div className={styles.objectDescriptionRow}>
+                {descriptionEditing ? (
+                  <textarea
+                    aria-label="Descrição do produto"
+                    autoFocus
+                    className={styles.objectDescriptionInput}
+                    maxLength={2000}
+                    onBlur={cancelDescriptionEdit}
+                    onChange={(event) =>
+                      setDescriptionDraft(event.target.value)
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") cancelDescriptionEdit();
+                    }}
+                    rows={3}
+                    value={descriptionDraft}
+                  />
+                ) : (
+                  <p
+                    className={
+                      product.description
+                        ? styles.objectDescription
+                        : `${styles.objectDescription} ${styles.objectDescriptionEmpty}`
+                    }
+                    onClick={beginDescriptionEdit}
+                  >
+                    {product.description}
+                  </p>
+                )}
+                <button
+                  aria-label={
+                    descriptionEditing
+                      ? "Salvar descrição"
+                      : "Editar descrição"
+                  }
+                  className={styles.objectDescriptionAction}
+                  disabled={descriptionSaving}
+                  onClick={
+                    descriptionEditing
+                      ? () => void saveDescription()
+                      : beginDescriptionEdit
+                  }
+                  onMouseDown={(event) => {
+                    /* Evita o blur do textarea antes do clique: blur fora do
+                       botão cancela; clicar em salvar salva. */
+                    if (descriptionEditing) event.preventDefault();
+                  }}
+                  type="button"
+                >
+                  {descriptionEditing ? (
+                    <Save aria-hidden="true" />
+                  ) : (
+                    <Pencil aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+              {/* Quatro fatos da referência: Comissão/Estoque vêm do contrato
+                  do Product quando projetados; sem dados, exibem "—". */}
               <dl className={styles.objectFacts}>
                 <div>
                   <dt>Categoria</dt>
@@ -233,11 +357,15 @@ export function ProductDetail({
                 </div>
                 <div>
                   <dt>Comissão</dt>
-                  <dd>—</dd>
+                  <dd>{commissionText ?? "—"}</dd>
                 </div>
                 <div>
                   <dt>Estoque</dt>
-                  <dd>—</dd>
+                  <dd>
+                    {product.stockCount !== undefined
+                      ? product.stockCount
+                      : "—"}
+                  </dd>
                 </div>
               </dl>
             </div>

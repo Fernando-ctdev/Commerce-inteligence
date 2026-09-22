@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/sidebar";
 
 import { ShellNav, ShellRoot } from "./product-shell-nav";
-import { GenerationToast } from "./generation-toast";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import styles from "./product-shell.module.css";
 
@@ -122,7 +121,6 @@ export function ProductShell({
             <ThemeToggle />
           </div>
         </header>
-        <GenerationToast />
 
         <div className={styles.main}>{children}</div>
       </SidebarInset>

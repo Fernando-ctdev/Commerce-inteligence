@@ -133,9 +133,9 @@ function validateImageRefs(value: unknown, fail: Fail): string[] {
 }
 
 // Teto defensivo dos fatos opcionais além dos limites da SPEC (PRINCIPLES §7).
-const NAME_MAX = 200;
+export const NAME_MAX = 200;
 const DESCRIPTION_MAX = 2000;
-const CATEGORY_MAX = 100;
+export const CATEGORY_MAX = 100;
 
 export function isValidIdempotencyKey(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9._~-]{16,128}$/.test(value);
@@ -166,7 +166,7 @@ function requireBoundedText(
   return trimmed;
 }
 /** 23,44 → 23.44 | 1.234 / 1.234.567 → 1234 / 1234567 | 23.44 → 23.44. */
-function normalizePriceAmount(price: string): string {
+export function normalizePriceAmount(price: string): string {
   if (price.includes(",")) return price.replace(/\./g, "").replace(",", ".");
   if (/^\d{1,3}(?:\.\d{3})+$/.test(price)) return price.replace(/\./g, "");
   return price;

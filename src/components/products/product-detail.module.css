@@ -111,17 +111,19 @@
 }
 
 .objectImage {
+  align-self: stretch;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   flex: 0 0 auto;
-  height: 96px;
+  height: auto;
+  min-height: 0;
   object-fit: cover;
-  width: 96px;
+  width: 120px;
 }
 
 .objectImageFallback {
   align-items: center;
-  aspect-ratio: 1;
+  align-self: stretch;
   background: var(--color-surface-secondary);
   border-radius: 8px;
   color: var(--color-text-muted);
@@ -129,8 +131,9 @@
   flex: 0 0 auto;
   font-size: 12px;
   font-weight: 600;
+  height: auto;
   justify-content: center;
-  width: 96px;
+  width: 120px;
 }
 
 .objectBody {
@@ -149,8 +152,16 @@
   min-width: 0;
 }
 
+.objectDescriptionRow {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
 .objectDescription {
   color: var(--color-text-secondary);
+  cursor: pointer;
   display: -webkit-box;
   font-size: 13px;
   -webkit-box-orient: vertical;
@@ -158,7 +169,72 @@
   line-height: 18px;
   margin: 0;
   max-width: 60ch;
+  min-height: 18px;
   overflow: hidden;
+}
+
+/* Sem descrição: área em branco, mas clicável com o mesmo alvo do texto. */
+.objectDescriptionEmpty {
+  flex: 1 1 auto;
+}
+
+.objectDescriptionInput {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  min-width: 0;
+  padding: 8px 10px;
+  resize: vertical;
+  width: 100%;
+}
+
+.objectDescriptionInput:focus-visible {
+  border-color: var(--color-focus);
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+.objectDescriptionAction {
+  align-items: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 20px;
+  justify-content: center;
+  margin-top: 2px;
+  position: relative;
+  transition: color 80ms ease-out;
+  width: 20px;
+}
+
+.objectDescriptionAction > svg {
+  height: 14px;
+  width: 14px;
+}
+
+/* Área de toque 44px (DESIGN) sem inflar o botão visual de 20px. */
+.objectDescriptionAction::after {
+  content: "";
+  inset: -12px;
+  position: absolute;
+}
+
+.objectDescriptionAction:hover {
+  color: var(--color-brand);
+}
+
+.objectDescriptionAction:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
 }
 
 .objectFacts {
@@ -178,6 +254,10 @@
 .objectFacts > div:first-child {
   border-inline-start: 0;
   padding-inline-start: 0;
+}
+
+.objectFacts > div:last-child {
+  padding-inline-end: 0;
 }
 
 .objectFacts dt {
@@ -500,6 +580,15 @@
   .objectCard {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  /* Coluna: imagem vira faixa fluida, responsiva nas duas dimensões. */
+  .objectImage,
+  .objectImageFallback {
+    align-self: stretch;
+    aspect-ratio: 3 / 2;
+    height: auto;
+    width: 100%;
   }
 
   .objectActions {

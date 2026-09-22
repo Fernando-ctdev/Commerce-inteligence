@@ -13,6 +13,8 @@ import { URL_IMPORT_ENABLED } from "../../modules/products/import-config";
 
 export type ProductReadiness = "PENDING" | "ANALYZING" | "READY" | "FAILED";
 
+export type ProductOrigin = "showcase" | "manual";
+
 export type ProductRecord = {
   id: string;
   version: number;
@@ -30,6 +32,14 @@ export type ProductRecord = {
   readiness: ProductReadiness;
   /** ADR-016: presente apenas em ActiveProductView; ausente em archived. */
   generationAction?: GenerationActionProjection;
+  /* Fatos de apresentação da Vitrine: presentes só quando o backend os
+     projeta (produtos sincronizados); ausentes nunca são inventados. */
+  origin?: ProductOrigin;
+  commission?: string;
+  /** Basis point (900 = 9%), como no DTO da Vitrine. */
+  commissionRate?: number;
+  stockCount?: number;
+  labels?: string[];
 };
 
 export type ProductMutation = {
@@ -126,6 +136,28 @@ function mapFieldErrors(value: unknown): ServerFieldErrors {
   );
 }
 
+function optionalOrigin(value: unknown): ProductOrigin | undefined {
+  return value === "showcase" || value === "manual" ? value : undefined;
+}
+
+function labelList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const texts = value
+    .map((item) => {
+      if (typeof item === "string") return item.trim();
+      if (
+        item !== null &&
+        typeof item === "object" &&
+        "text" in item &&
+        typeof item.text === "string"
+      )
+        return item.text.trim();
+      return "";
+    })
+    .filter(Boolean);
+  return texts.length > 0 ? texts : undefined;
+}
+
 export function normalizeProduct(value: unknown): ProductRecord {
   if (typeof value !== "object" || value === null)
     throw new Error("Resposta de Product inválida.");
@@ -143,6 +175,20 @@ export function normalizeProduct(value: unknown): ProductRecord {
     cents !== null
       ? (cents / 100).toFixed(2).replace(".", ",")
       : nullableString(rawPrice);
+  const origin = optionalOrigin(record.origin);
+  const commission = nullableString(record.commission) || undefined;
+  const commissionRate =
+    typeof record.commissionRate === "number" &&
+    Number.isFinite(record.commissionRate)
+      ? record.commissionRate
+      : undefined;
+  const stockCount =
+    typeof record.stockCount === "number" &&
+    Number.isInteger(record.stockCount) &&
+    record.stockCount >= 0
+      ? record.stockCount
+      : undefined;
+  const labels = labelList(record.labels);
   // Desconto (ADR-031): fora do contrato ativo — nunca normalizado
   // nem exposto, mesmo em respostas históricas que ainda o carreguem.
   return {
@@ -159,6 +205,11 @@ export function normalizeProduct(value: unknown): ProductRecord {
     ),
     observations: nullableString(record.notes ?? record.observations),
     url,
+    ...(origin ? { origin } : {}),
+    ...(commission ? { commission } : {}),
+    ...(commissionRate !== undefined ? { commissionRate } : {}),
+    ...(stockCount !== undefined ? { stockCount } : {}),
+    ...(labels ? { labels } : {}),
     targetContentCount:
       typeof record.targetContentCount === "number"
         ? record.targetContentCount
@@ -238,6 +289,12 @@ export async function listProducts() {
     return (data as { products: unknown[] }).products.map(normalizeProduct);
   }
   return [];
+}
+
+/* Sincronização da Vitrine: o POST persiste/atualiza os produtos do
+   TikTok Shop; a lista exibida é sempre recarregada pelo GET seguinte. */
+export async function syncProducts() {
+  await request<unknown>("/api/products/sync", { method: "POST" });
 }
 
 export async function getProduct(id: string) {

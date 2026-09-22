@@ -27,6 +27,7 @@ import {
   reactivateTenantProduct,
   updateTenantProduct,
 } from "./service";
+import { syncShowcaseProducts } from "./sync";
 
 // ADR-016 (nota canônica): ActiveProductView sempre carrega generationAction completo
 // (state AVAILABLE|BLOCKED; reason/nextAction tokens do servidor, nunca texto pt-BR, nunca
@@ -47,6 +48,11 @@ export type ProductView = {
   creatorPresence: "on_camera" | "hands_only_product" | "either";
   active: boolean;
   readiness: "PENDING" | "ANALYZING" | "READY" | "FAILED";
+  origin: "showcase" | "manual";
+  commission: string | null;
+  commissionRate: number | null;
+  stockCount: number | null;
+  labels: string[];
 };
 
 export type ArchivedProductView = ProductView;
@@ -109,7 +115,17 @@ async function productReadiness(tenantId: string, productId: string): Promise<Pr
 function toProductView(product: Product, readiness: ProductView["readiness"] = "PENDING"): ProductView {
   // Comissão/features/desconto (ADR-030): fora do contrato ativo — nunca
   // projetados, mesmo em registros históricos que ainda os carregam.
-  return { id: product.id, version: product.version, name: product.name, description: product.description ?? "", category: product.category ?? "", price: product.priceAmount ? product.priceAmount.toString() : "", priceCurrency: product.priceCurrency ?? "", imageRefs: stringList(product.images), notes: constraintsNotes(product.generationConstraints), url: product.sourceUrl ?? product.submittedUrl ?? "", targetContentCount: product.targetContentCount, creatorPresence: constraintsCreatorPresence(product.generationConstraints), active: product.lifecycle === "ACTIVE", readiness };
+  // Metadados da Vitrine vivem em provenance (Json): leitura defensiva por
+  // campo; Products manuais/legados ficam nos defaults vazios/null.
+  const provenance = typeof product.provenance === "object" && product.provenance !== null
+    ? (product.provenance as Record<string, unknown>)
+    : {};
+  return { id: product.id, version: product.version, name: product.name, description: product.description ?? "", category: product.category ?? "", price: product.priceAmount ? product.priceAmount.toString() : "", priceCurrency: product.priceCurrency ?? "", imageRefs: stringList(product.images), notes: constraintsNotes(product.generationConstraints), url: product.sourceUrl ?? product.submittedUrl ?? "", targetContentCount: product.targetContentCount, creatorPresence: constraintsCreatorPresence(product.generationConstraints), active: product.lifecycle === "ACTIVE", readiness,
+    origin: provenance.origin === "showcase" ? "showcase" : "manual",
+    commission: typeof provenance.commissionWithCurrency === "string" ? provenance.commissionWithCurrency : null,
+    commissionRate: typeof provenance.commissionRate === "number" ? provenance.commissionRate : null,
+    stockCount: typeof provenance.stockCount === "number" ? provenance.stockCount : null,
+    labels: stringList(provenance.labels) };
 }
 
 export async function handleListProducts(req: Request): Promise<Response> {
@@ -335,6 +351,38 @@ export async function handleCreateProduct(req: Request): Promise<Response> {
     return json(500, {
       error: "Não foi possível salvar o Product agora. Tente novamente.",
       code: "SAVE-FAILED",
+    });
+  }
+}
+
+// POST /api/products/sync — Sincronização da Vitrine: upsert idempotente dos fixtures
+// showcase no Tenant (fonte temporária até a API real existir). Mutação same-origin
+// com sessão; sem Idempotency-Key no cabeçalho porque a chave é determinística por
+// item (createIdempotencyKey showcase-<id>). Não cria CommerceIntelligenceJob nem
+// consulta limite de geração; resposta é a projeção dos Products sincronizados.
+export async function handleSyncShowcaseProducts(req: Request): Promise<Response> {
+  if (!sameOriginRequest(req))
+    return json(403, { error: "Origem não permitida." });
+  const session = await sessionOf(req);
+  if (!session)
+    return json(401, {
+      error: "Sessão necessária para sincronizar a Vitrine.",
+      code: "AUTH-SESSION",
+    });
+  try {
+    const products = await syncShowcaseProducts(session.tenantId);
+    return jsonBody(200, {
+      products: await Promise.all(
+        products.map(async (product) =>
+          toProductView(product, await productReadiness(session.tenantId, product.id)),
+        ),
+      ),
+    });
+  } catch (error) {
+    console.error("[products] falha ao sincronizar a Vitrine", error);
+    return json(500, {
+      error: "Não foi possível sincronizar a Vitrine agora. Tente novamente.",
+      code: "SYNC-FAILED",
     });
   }
 }

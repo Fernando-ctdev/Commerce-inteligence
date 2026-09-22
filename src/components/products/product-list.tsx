@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -10,7 +10,6 @@ import {
   FileText,
   RefreshCw,
   Search,
-  Sparkles,
   Store,
   Video,
 } from "lucide-react";
@@ -20,11 +19,6 @@ import {
   ProductCreateOverlay,
   ProductCreateTrigger,
 } from "./product-create-overlay";
-import {
-  listShowcaseItems,
-  type ShowcaseItem,
-} from "@/modules/products/showcase";
-import { ShowcaseCard, showcaseToDraft } from "./showcase";
 import showcaseStyles from "./showcase.module.css";
 
 import {
@@ -45,7 +39,9 @@ import {
   listProducts,
   ProductApiError,
   ProductRecord,
+  syncProducts,
 } from "./product-api";
+import { formatPriceWithCurrency } from "./product-form-model";
 import styles from "./product-list.module.css";
 
 export function ProductList() {
@@ -60,22 +56,27 @@ export function ProductList() {
     null,
   );
   const [actionPending, setActionPending] = useState(false);
-  /* Sincronização da Vitrine (TikHub) ainda sem serviço: apenas o estado
-     de carregamento simulado (3s) foi aprovado. Nenhuma chamada de rede. */
+  /* Sincronização da Vitrine: somente o botão Atualizar dispara
+     POST /api/products/sync; a lista exibida vem sempre do GET autenticado
+     seguinte. Falha de sync não impede a lista persistida. */
   const [syncing, setSyncing] = useState(false);
-  const syncTimerRef = useRef<number | undefined>(undefined);
-  useEffect(() => () => window.clearTimeout(syncTimerRef.current), []);
-  /* Itens remotos de apresentação (DTO allowlist, fonte síncrona): nunca
-     persistem no Product; salvar segue o caso de uso manual existente. */
-  const [showcaseItems] = useState(() => listShowcaseItems());
-  const [prefill, setPrefill] = useState<ShowcaseItem | null>(null);
   /* Edição no drawer da Vitrine: o menu do card carrega o Product no overlay
      existente (ProductCreateForm mode="edit"); salvar atualiza a lista. */
   const [editProduct, setEditProduct] = useState<ProductRecord | null>(null);
 
-  const load = useCallback(async () => {
+  const refresh = useCallback(async (withSync: boolean) => {
+    if (withSync) setSyncing(true);
     setLoading(true);
     setError(null);
+    if (withSync) {
+      try {
+        await syncProducts();
+      } catch {
+        toast.error(
+          "Não foi possível sincronizar a vitrine do TikTok Shop agora.",
+        );
+      }
+    }
     try {
       const nextProducts = await listProducts();
       setProducts(nextProducts);
@@ -100,13 +101,15 @@ export function ProductList() {
       );
     } finally {
       setLoading(false);
+      if (withSync) setSyncing(false);
     }
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void load(), 0);
+    /* Montar /products apenas lista os Products persistidos; sync só no botão. */
+    const timer = window.setTimeout(() => void refresh(false), 0);
     return () => window.clearTimeout(timer);
-  }, [load]);
+  }, [refresh]);
 
   /* Sem abas/filtros (regra do usuário): a lista reúne tudo — produtos
      cadastrados + itens da Vitrine — e o usuário decide o que fazer.
@@ -127,23 +130,8 @@ export function ProductList() {
       }),
     [products, normalizedQuery],
   );
-  const visibleShowcase = useMemo(
-    () =>
-      showcaseItems.filter((item) => {
-        const hay = `${item.title} ${item.categoryName ?? ""}`
-          .toLocaleLowerCase("pt-BR")
-          .includes(normalizedQuery);
-        return !normalizedQuery || hay;
-      }),
-    [showcaseItems, normalizedQuery],
-  );
-  const totalVisible = visibleShowcase.length + filteredProducts.length;
+  const totalVisible = filteredProducts.length;
 
-  function startSync() {
-    if (syncing) return;
-    setSyncing(true);
-    syncTimerRef.current = window.setTimeout(() => setSyncing(false), 3000);
-  }
   async function confirmAction() {
     if (!actionProduct || actionPending) return;
     setActionPending(true);
@@ -151,7 +139,7 @@ export function ProductList() {
       await deleteProduct(actionProduct.id);
       toast.success("Produto excluído.");
       setActionProduct(null);
-      await load();
+      await refresh(false);
     } catch (caught) {
       const message =
         caught instanceof ProductApiError
@@ -204,14 +192,12 @@ export function ProductList() {
                 totalVisible === 1 ? "item disponível" : "itens disponíveis"
               }`}
         </p>
-        {/* Serviço de sincronização (TikHub) ainda não implementado: o clique
-            mantém apenas o carregamento simulado aprovado (3s). */}
         <button
           aria-busy={syncing}
           aria-label={syncing ? "Atualizando vitrine…" : "Atualizar vitrine do TikTok Shop"}
           className={styles.syncButton}
           disabled={syncing}
-          onClick={startSync}
+          onClick={() => void refresh(true)}
           title={syncing ? "Atualizando vitrine…" : "Atualizar vitrine do TikTok Shop"}
           type="button"
         >
@@ -249,7 +235,7 @@ export function ProductList() {
           <p>Não foi possível carregar seus produtos. {error}</p>
           <button
             className={styles.secondaryButton}
-            onClick={() => void load()}
+            onClick={() => void refresh(false)}
             type="button"
           >
             Tentar novamente
@@ -257,7 +243,7 @@ export function ProductList() {
         </div>
       ) : totalVisible === 0 ? (
         <div className={styles.galleryEmpty}>
-          {products.length === 0 && showcaseItems.length === 0 ? (
+          {products.length === 0 ? (
             <>
               <p>
                 Nada disponível na vitrine agora. Use Adicionar produto para
@@ -282,13 +268,6 @@ export function ProductList() {
         </div>
       ) : (
         <ul aria-label="Itens disponíveis na vitrine" className={styles.cards}>
-          {showcaseItems.map((item) => (
-            <ShowcaseCard
-              item={item}
-              key={item.id}
-              onUse={() => setPrefill(item)}
-            />
-          ))}
           {products.map((product) => {
             const firstImage = product.imageReferences[0];
             const imageUrl =
@@ -319,6 +298,17 @@ export function ProductList() {
             const currentStage = generation?.stage
               ? stageMessage(generation.stage)
               : "Preparando a análise...";
+            const priceText = formatPriceWithCurrency(
+              product.price,
+              product.priceCurrency,
+            );
+            const commissionText = product.commission
+              ? product.commissionRate !== undefined &&
+                product.commissionRate > 0
+                ? `${product.commission} (${(product.commissionRate / 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%)`
+                : product.commission
+              : null;
+            const cardLabels = product.labels ?? [];
             return (
               <li className={styles.card} key={product.id}>
                 {imageUrl ? (
@@ -341,7 +331,12 @@ export function ProductList() {
                 )}
                 <div className={styles.cardBody}>
                   <div className={styles.cardHeader}>
-                    <span className={showcaseStyles.badge}>Manual</span>
+                    {/* Origem pelo contrato do Product; sem palpite por URL. */}
+                    <span className={showcaseStyles.badge}>
+                      {product.origin === "showcase"
+                        ? "TikTok Shop"
+                        : "Manual"}
+                    </span>
                     <h3>{product.name}</h3>
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -365,6 +360,43 @@ export function ProductList() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
+                  {/* Fatos de apresentação "como antes" no card da Vitrine:
+                      Preço sempre que existir; Comissão (com percentual),
+                      Estoque e labels só quando o backend os projetar.
+                      Produtos manuais mostram apenas os fatos disponíveis. */}
+                  <dl className={showcaseStyles.facts}>
+                    <div>
+                      <dt>Preço</dt>
+                      <dd
+                        className={
+                          priceText ? undefined : showcaseStyles.missing
+                        }
+                      >
+                        {priceText ?? "Não informado"}
+                      </dd>
+                    </div>
+                    {commissionText && (
+                      <div>
+                        <dt>Comissão</dt>
+                        <dd>{commissionText}</dd>
+                      </div>
+                    )}
+                    {product.stockCount !== undefined && (
+                      <div>
+                        <dt>Estoque</dt>
+                        <dd>{product.stockCount}</dd>
+                      </div>
+                    )}
+                  </dl>
+                  {cardLabels.length > 0 && (
+                    <div className={showcaseStyles.labels}>
+                      {cardLabels.map((text) => (
+                        <span className={showcaseStyles.badge} key={text}>
+                          {text}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {analyzing ? (
                     <div
                       className={styles.cardProgress}
@@ -414,20 +446,10 @@ export function ProductList() {
           })}
         </ul>
       )}
-      {/* Usar produto (showcase): overlay com prefill seguro; salvar segue o
-          POST manual e navega ao produto, onde Analisar produto fica explícito. */}
-      <ProductCreateOverlay
-        initialDraft={prefill ? showcaseToDraft(prefill) : undefined}
-        navigateAfterSave
-        onOpenChange={(open) => {
-          if (!open) setPrefill(null);
-        }}
-        open={prefill !== null}
-      />
-      {/* Editar produto (menu do card): o mesmo overlay em mode="edit";
+      {/* Editar produto (menu do card): o overlay em mode="edit";
           salvar permanece no caso de uso existente e recarrega a lista. */}
       <ProductCreateOverlay
-        onSaved={() => void load()}
+        onSaved={() => void refresh(false)}
         onOpenChange={(open) => {
           if (!open) setEditProduct(null);
         }}

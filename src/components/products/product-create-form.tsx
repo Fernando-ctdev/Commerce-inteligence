@@ -763,13 +763,7 @@ export function ProductCreateForm({
           onAfterSave();
         }
       }
-      toast.success(
-        shouldAnalyze
-          ? "Produto salvo. Análise iniciada."
-          : isEdit
-            ? "Alterações salvas."
-            : "Produto salvo.",
-      );
+      toast.success(isEdit ? "Alterações salvas." : "Produto salvo.");
       idempotencyKey.current = undefined;
       if (!isEdit && createdId && !onAfterSave) router.push(`/products/${createdId}`);
     } catch (caught) {
