@@ -2,12 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
   Ellipsis,
   FileText,
+  RefreshCw,
   Search,
   Sparkles,
   Store,
@@ -59,6 +60,11 @@ export function ProductList() {
     null,
   );
   const [actionPending, setActionPending] = useState(false);
+  /* Sincronização da Vitrine (TikHub) ainda sem serviço: apenas o estado
+     de carregamento simulado (3s) foi aprovado. Nenhuma chamada de rede. */
+  const [syncing, setSyncing] = useState(false);
+  const syncTimerRef = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(syncTimerRef.current), []);
   /* Itens remotos de apresentação (DTO allowlist, fonte síncrona): nunca
      persistem no Product; salvar segue o caso de uso manual existente. */
   const [showcaseItems] = useState(() => listShowcaseItems());
@@ -132,6 +138,12 @@ export function ProductList() {
     [showcaseItems, normalizedQuery],
   );
   const totalVisible = visibleShowcase.length + filteredProducts.length;
+
+  function startSync() {
+    if (syncing) return;
+    setSyncing(true);
+    syncTimerRef.current = window.setTimeout(() => setSyncing(false), 3000);
+  }
   async function confirmAction() {
     if (!actionProduct || actionPending) return;
     setActionPending(true);
@@ -164,31 +176,51 @@ export function ProductList() {
             Os produtos da sua vitrine do TikTok Shop
           </p>
         </div>
-        <ProductCreateTrigger className={styles.primaryButton} />
       </div>
-      <div className={styles.controls} role="search">
-        <label className={styles.searchLabel} htmlFor="product-search">
-          Buscar produtos
-        </label>
-        <div className={styles.searchField}>
-          <Search aria-hidden="true" className={styles.searchIcon} />
-          <input
-            className={styles.searchInput}
-            id="product-search"
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Nome ou categoria"
-            type="search"
-            value={query}
-          />
+      <div className={styles.controls}>
+        <ProductCreateTrigger className={styles.primaryButton} />
+        <div className={styles.searchGroup} role="search">
+          <label className={styles.searchLabel} htmlFor="product-search">
+            Buscar produtos
+          </label>
+          <div className={styles.searchField}>
+            <Search aria-hidden="true" className={styles.searchIcon} />
+            <input
+              className={styles.searchInput}
+              id="product-search"
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Nome ou categoria"
+              type="search"
+              value={query}
+            />
+          </div>
         </div>
       </div>
-      <p aria-live="polite" className={styles.filterSummary}>
-        {loading
-          ? "Carregando produtos…"
-          : `${totalVisible} ${
-              totalVisible === 1 ? "item disponível" : "itens disponíveis"
-            }`}
-      </p>
+      <div className={styles.filterSummary}>
+        <p aria-live="polite">
+          {loading
+            ? "Carregando produtos…"
+            : `${totalVisible} ${
+                totalVisible === 1 ? "item disponível" : "itens disponíveis"
+              }`}
+        </p>
+        {/* Serviço de sincronização (TikHub) ainda não implementado: o clique
+            mantém apenas o carregamento simulado aprovado (3s). */}
+        <button
+          aria-busy={syncing}
+          aria-label={syncing ? "Atualizando vitrine…" : "Atualizar vitrine do TikTok Shop"}
+          className={styles.syncButton}
+          disabled={syncing}
+          onClick={startSync}
+          title={syncing ? "Atualizando vitrine…" : "Atualizar vitrine do TikTok Shop"}
+          type="button"
+        >
+          <RefreshCw
+            aria-hidden="true"
+            className={syncing ? `${styles.syncIcon} ${styles.syncIconSpinning}` : styles.syncIcon}
+          />
+        </button>
+      </div>
       {loading ? (
         <ul aria-hidden="true" className={styles.cards}>
           {Array.from({ length: 6 }, (_, index) => (

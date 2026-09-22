@@ -25,11 +25,6 @@
   .galleryEmpty {
     animation: none;
   }
-
-  .card,
-  .filterTab {
-    transition: none;
-  }
 }
 
 .listIntro {
@@ -61,8 +56,34 @@
 .controls {
   display: grid;
   gap: 12px;
+  grid-template-areas: "cta" "search";
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
+}
+
+.controls > .primaryButton {
+  grid-area: cta;
+  width: 100%;
+}
+
+.searchGroup {
+  display: grid;
+  gap: 12px;
+  grid-area: search;
+  min-width: 0;
+}
+
+@media (min-width: 1200px) {
+  .controls {
+    align-items: end;
+    grid-template-areas: "search cta";
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .controls > .primaryButton {
+    justify-self: end;
+    width: fit-content;
+  }
 }
 
 .searchLabel {
@@ -96,61 +117,65 @@
   padding: 10px 12px 10px 40px;
   width: 100%;
 }
-.filterNav {
-  border-block-end: 1px solid var(--color-border);
+.filterSummary {
+  align-items: center;
+  color: var(--color-text-secondary);
   display: flex;
-  gap: 20px;
-  width: fit-content;
+  font-size: 13px;
+  justify-content: space-between;
+  margin: 4px 0 0;
 }
 
-.filterTab {
+.filterSummary p {
+  margin: 0;
+}
+
+.syncButton {
+  align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 0;
-  color: var(--color-text-secondary);
+  border-radius: 8px;
+  color: var(--color-text);
   cursor: pointer;
-  flex: 0 1 auto;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  min-height: 44px;
-  padding: 8px 4px;
-  position: relative;
-  transition: color 160ms ease-out, transform 160ms ease-out;
+  display: grid;
+  height: 44px;
+  place-items: center;
+  width: 44px;
 }
 
-.filterTab[data-pressed] {
+.syncButton:hover {
   color: var(--color-brand);
-  font-weight: 600;
-  transform: translateY(-1px);
 }
 
-.filterTab[data-pressed]::after {
-  background: var(--color-brand);
-  block-size: 2px;
-  bottom: -1px;
-  content: "";
-  inset-inline: 0;
-  position: absolute;
+.syncButton:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
 }
 
-.filterCount {
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 400;
-  margin-inline-start: 4px;
-}
-
-.filterTab:focus-visible {
+.syncButton:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
-.filterSummary {
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  margin: 4px 0 0;
+.syncIcon {
+  height: 18px;
+  width: 18px;
+}
+
+.syncIconSpinning {
+  animation: syncSpin 1s linear infinite;
+}
+
+@keyframes syncSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .syncIconSpinning {
+    animation: none;
+  }
 }
 
 .secondaryButton {
@@ -554,27 +579,6 @@
     align-items: stretch;
     flex-direction: column;
     min-width: 0;
-  }
-
-  .listIntro .primaryButton {
-    width: 100%;
-  }
-
-  .filterNav {
-    gap: 0;
-    width: 100%;
-  }
-
-  .filterTab {
-    flex: 1 1 0;
-    font-size: 13px;
-    min-width: 0;
-    white-space: nowrap;
-  }
-
-
-  .filterCount {
-    display: none;
   }
 
   .cards {
