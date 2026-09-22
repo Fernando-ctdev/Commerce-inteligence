@@ -2,7 +2,7 @@
 
 import { FormEvent, Fragment, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Eye, EyeOff, Lightbulb, LockKeyhole, Mail, User } from "lucide-react";
+import { Check, Eye, EyeOff, Lightbulb, LockKeyhole, Mail, User } from "lucide-react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import logoTextLight from "@/assets/logo/logo_text_light.webp";
@@ -168,7 +168,9 @@ export function AccessForm({ registrationEnabled, sessionExpired }: AccessFormPr
             name: form.get("name"),
             email: form.get("email"),
             password: form.get("password"),
-            passwordConfirmation: form.get("passwordConfirmation"),
+            /* Sem campo de confirmação no formulário: o backend recebe a
+               própria senha como confirmação. */
+            passwordConfirmation: form.get("password"),
           }
         : { email: form.get("email"), password: form.get("password") };
 
@@ -364,39 +366,9 @@ export function AccessForm({ registrationEnabled, sessionExpired }: AccessFormPr
             </div>
 
             <div className={styles.field}>
-              {mode === "register" ? (
-                <div className={styles.labelRow}>
-                  <label htmlFor="password">Senha</label>
-                  <Tooltip onOpenChange={setHintOpen} open={hintOpen}>
-                    <TooltipTrigger
-                      onClick={() => setHintOpen((open) => !open)}
-                      render={
-                        <button
-                          aria-label="Ver requisitos de senha"
-                          className={styles.hintButton}
-                          type="button"
-                        >
-                          <Lightbulb aria-hidden="true" size={16} />
-                        </button>
-                      }
-                    />
-                    <TooltipContent align="end" className={styles.hintContent} side="bottom">
-                      <ul aria-label="Requisitos de senha" className={styles.passwordChecklist}>
-                        {rules.map((rule) => (
-                          <li data-ok={rule.ok} key={rule.label}>{rule.label}</li>
-                        ))}
-                      </ul>
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              ) : (
-                <div className={`${styles.labelRow} ${styles.labelRowSpread}`}>
-                  <label htmlFor="password">Senha</label>
-                  <button className={styles.textLink} type="button">
-                    Esqueci minha senha
-                  </button>
-                </div>
-              )}
+              <div className={styles.labelRow}>
+                <label htmlFor="password">Senha</label>
+              </div>
               <div className={styles.inputWrap}>
                 <LockKeyhole aria-hidden="true" className={styles.inputIcon} size={20} />
                 <input
@@ -420,42 +392,48 @@ export function AccessForm({ registrationEnabled, sessionExpired }: AccessFormPr
                 >
                   {showPassword ? <EyeOff aria-hidden="true" size={20} /> : <Eye aria-hidden="true" size={20} />}
                 </button>
+                {mode === "register" && (
+                  <Tooltip onOpenChange={setHintOpen} open={hintOpen}>
+                    <TooltipTrigger
+                      onClick={() => setHintOpen((open) => !open)}
+                      render={
+                        <button
+                          aria-label="Ver requisitos de senha"
+                          className={
+                            passwordValid
+                              ? `${styles.passwordToggle} ${styles.hintValid}`
+                              : styles.passwordToggle
+                          }
+                          type="button"
+                        >
+                          {passwordValid ? (
+                            <Check aria-hidden="true" size={20} />
+                          ) : (
+                            <Lightbulb aria-hidden="true" size={20} />
+                          )}
+                        </button>
+                      }
+                    />
+                    <TooltipContent align="end" className={styles.hintContent} side="bottom">
+                      <ul aria-label="Requisitos de senha" className={styles.passwordChecklist}>
+                        {rules.map((rule) => (
+                          <li data-ok={rule.ok} key={rule.label}>{rule.label}</li>
+                        ))}
+                      </ul>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
               </div>
 
               {fieldErrors.password && <p id="password-error" className={styles.fieldError} role="alert">{fieldErrors.password}</p>}
-            </div>
-
-            {mode === "register" && (
-              <div className={styles.field}>
-                <label htmlFor="passwordConfirmation">Confirmar senha</label>
-                <div className={styles.inputWrap}>
-                  <LockKeyhole aria-hidden="true" className={styles.inputIcon} size={20} />
-                  <input
-                    aria-describedby={fieldErrors.passwordConfirmation ? "passwordConfirmation-error" : undefined}
-                    aria-invalid={Boolean(fieldErrors.passwordConfirmation)}
-                    autoComplete="new-password"
-                    id="passwordConfirmation"
-                    maxLength={200}
-                    minLength={8}
-                    name="passwordConfirmation"
-                    placeholder="Repita a senha"
-                    required
-                    type={showPassword ? "text" : "password"}
-                  />
-                  <button
-                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                    className={styles.passwordToggle}
-                    onClick={() => setShowPassword((visible) => !visible)}
-                    type="button"
-                  >
-                    {showPassword ? <EyeOff aria-hidden="true" size={20} /> : <Eye aria-hidden="true" size={20} />}
+              {mode === "login" && (
+                <div className={`${styles.passwordActions} ${styles.passwordActionsEnd}`}>
+                  <button className={styles.textLink} type="button">
+                    Esqueci minha senha
                   </button>
                 </div>
-                {fieldErrors.passwordConfirmation && (
-                  <p id="passwordConfirmation-error" className={styles.fieldError} role="alert">{fieldErrors.passwordConfirmation}</p>
-                )}
-              </div>
-            )}
+              )}
+            </div>
 
             <button className={styles.submit} disabled={pending} type="submit">
               {submitLabel}

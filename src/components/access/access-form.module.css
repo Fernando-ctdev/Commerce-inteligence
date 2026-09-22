@@ -390,31 +390,18 @@
   gap: 8px;
 }
 
-.labelRowSpread {
-  justify-content: space-between;
+/* Esqueci minha senha: ação própria, abaixo do campo, alinhada ao fim. */
+.passwordActions {
+  display: flex;
 }
 
-.hintButton {
-  align-items: center;
-  background: var(--color-surface-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  display: inline-flex;
-  justify-content: center;
-  min-height: 28px;
-  min-width: 28px;
+.passwordActionsEnd {
+  justify-content: flex-end;
 }
 
-.hintButton:hover {
+.textLink {
   color: var(--color-text);
   filter: brightness(0.97);
-}
-
-.hintButton:focus-visible {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 2px;
 }
 
 .hintContent {
@@ -512,6 +499,12 @@
 
 .passwordToggle:hover {
   color: var(--color-text);
+}
+
+/* Requisitos cumpridos: ícone vira check no verde de sucesso do sistema. */
+.hintValid {
+  color: var(--color-success);
+  transition: color 160ms ease;
 }
 
 .help,
@@ -769,6 +762,10 @@
     display: none;
   }
 
+  .intro p {
+    display: none;
+  }
+
   .formPanel {
     align-content: start;
     gap: 20px;
@@ -781,5 +778,34 @@
 
   .textLink {
     min-height: 44px;
+  }
+
+  /* Mobile /access: labels saem do visual, mas permanecem associadas
+     (htmlFor/id + clipe sr-only) — AT anuncia o campo; placeholder apoia. */
+  .field > label,
+  .field > .labelRow > label {
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  .field input::placeholder {
+    color: var(--color-text-secondary);
+  }
+
+  /* Labels sr-only: o labelRow vira linha fantasma — zera o gap interno. */
+  .field {
+    gap: 0;
+  }
+
+  .fieldError {
+    margin-top: 8px;
+  }
+
+  .hintValid {
+    transition: none;
   }
 }
