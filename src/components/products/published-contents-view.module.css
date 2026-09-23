@@ -177,8 +177,10 @@
 /* Detail dentro do drawer: player + informações lado a lado no espaço largo,
    empilhados no estreito — sem carrossel nem swipe obrigatório. */
 .drawerContent {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0;
+  min-height: 0;
 }
 
 /* DrawerPrimitive.Content é overflow-hidden: o detalhe rola num wrapper
