@@ -8,9 +8,13 @@
 
 ## 1. Objetivo
 
-Definir o funcionamento conceitual e os contratos principais da **Commerce Intelligence Engine**, núcleo de inteligência do Commerce Intelligence System.
+Definir o funcionamento conceitual e os contratos principais da **Commerce Intelligence Engine**, núcleo de inteligência da Viewefy.
 
-A engine deve transformar um Produto confirmado em uma estratégia comercial estruturada e, a partir dela, produzir um conjunto de conteúdos variados, coerentes e executáveis para a plataforma de distribuição escolhida.
+A engine deve responder à pergunta central do produto:
+
+> **“Como criar um conteúdo que realmente gere venda para este Produto?”**
+
+Para isso, ela deve transformar fatos confirmados do Produto em raciocínio comercial sobre decisão de compra e, somente depois, materializar esse raciocínio em oportunidades e Briefings de conteúdo.
 
 No MVP, a plataforma de distribuição é:
 
@@ -18,7 +22,7 @@ No MVP, a plataforma de distribuição é:
 TikTok
 ```
 
-O resultado final da engine é:
+O resultado final da engine continua sendo:
 
 ```text
 Product
@@ -32,9 +36,21 @@ Content Opportunities
 Content Briefs
 ```
 
+Mas a semântica desse fluxo é obrigatória:
+
+```text
+fatos do Produto
+↓
+razões de compra + barreiras + provas + oportunidades
+↓
+hipóteses de mudança na decisão do espectador
+↓
+execução nativa da plataforma
+```
+
 A regra principal é:
 
-> **A Commerce Intelligence não deve simplesmente escrever conteúdos. Ela deve primeiro decidir como o Produto pode ser vendido e quais oportunidades comerciais merecem virar conteúdo.**
+> **A Commerce Intelligence não deve simplesmente decidir “o que postar”. Ela deve decidir qual lógica comercial pode levar um público a comprar o Produto e como transformar essa lógica em conteúdo.**
 
 A geração do texto final de cada Briefing é consequência dessa decisão.
 
@@ -53,8 +69,10 @@ fatos do Produto
 e:
 
 ```text
-conteúdo comercial executável
+conteúdo com lógica explícita de decisão de compra
 ```
+
+A engine não existe para maximizar quantidade, criatividade, variedade ou naturalidade isoladamente. Essas dimensões são restrições de qualidade. O objetivo comercial é produzir conteúdo capaz de construir relevância, desejo, confiança, prova ou redução de objeção suficiente para aproximar o espectador da compra.
 
 O fluxo completo do sistema permanece:
 
@@ -592,7 +610,11 @@ Ela produz matéria-prima estratégica.
 
 A engine não deve gerar listas independentes de públicos, dores e benefícios sem relação entre si.
 
-Ela deve construir **oportunidades comerciais relacionais**.
+Ela deve construir **oportunidades comerciais relacionais orientadas à decisão de compra**.
+
+Uma oportunidade só é útil quando existe uma explicação coerente de **por que aquele público poderia comprar**, **o que hoje impede ou atrasa essa decisão**, **qual valor do Produto é relevante naquele contexto** e **qual prova, argumento ou demonstração pode alterar essa percepção**.
+
+Audiência, dor ou desejo isolados não constituem uma oportunidade comercial.
 
 Modelo:
 
@@ -679,7 +701,7 @@ Depois de compreender o Produto e mapear oportunidades, a engine produz uma `Pro
 
 A estratégia deve responder:
 
-> **Quais caminhos comerciais fazem mais sentido para vender este Produto?**
+> **Quais razões de compra, barreiras, provas e mudanças de percepção precisam ser trabalhadas para aumentar a chance de diferentes públicos decidirem comprar este Produto?**
 
 Ela não é um conjunto de scripts.
 
@@ -843,7 +865,9 @@ PlatformSkill
 TikTok Commerce Creative Skill
 ```
 
-Essa Skill deve encapsular princípios de criação compatíveis com o comportamento esperado de creators de TikTok Shop.
+Essa Skill deve encapsular princípios de criação compatíveis com o comportamento esperado de creators de TikTok Shop **sem substituir a lógica comercial da Strategy**.
+
+Sua função é traduzir uma oportunidade de compra já identificada para uma execução que pareça nativa da plataforma. TikTok-native é meio; decisão de compra é o objetivo comercial.
 
 Ela deve favorecer conteúdos:
 
@@ -871,7 +895,11 @@ A Skill fornece limites e repertório.
 
 A versão inicial deve orientar capacidades da engine a:
 
-* capturar atenção cedo;
+* capturar atenção cedo **em função da oportunidade comercial**, evitando hooks desconectados da venda;
+* tornar a razão de compra compreensível sem transformar o vídeo em anúncio tradicional;
+* usar prova, demonstração ou contexto real quando ajudarem a reduzir incerteza ou objeção;
+* fazer hook, desenvolvimento, prova e CTA empurrarem a mesma mudança de percepção;
+* evitar conteúdo que entretenha ou gere curiosidade sem construir relevância comercial para o Produto;
 * evitar introduções longas;
 * começar pelo problema, curiosidade, resultado, demonstração, conflito ou prova quando fizer sentido;
 * priorizar linguagem falada;
@@ -1025,7 +1053,9 @@ Content Portfolio Planner
 
 # 25. Objetivo do Portfolio Planner
 
-O Planner decide **como distribuir a quantidade solicitada entre oportunidades estratégicas relevantes**.
+O Planner decide **como distribuir a quantidade solicitada entre hipóteses comerciais relevantes de decisão de compra**.
+
+A unidade de diversidade não é simplesmente formato, ângulo ou mecanismo de hook. O conjunto deve explorar razões de compra, barreiras, provas, públicos, situações e mudanças de percepção diferentes quando a Strategy oferecer essas alternativas.
 
 Exemplo conceitual:
 
@@ -1145,6 +1175,19 @@ Desired Viewer Response:
 O Brief Generator recebe essa decisão.
 
 Ele não precisa reinventá-la.
+
+### Semântica comercial obrigatória da ContentOpportunity
+
+Os campos existentes devem carregar uma lógica comercial explícita:
+
+* `commercialObjective` — qual avanço na decisão de compra este conteúdo pretende provocar;
+* `coreMessage` — qual razão, benefício ou argumento o espectador precisa compreender;
+* `proof` — o que pode aumentar credibilidade ou reduzir incerteza, quando aplicável;
+* `objection` — qual barreira de compra está sendo enfrentada, quando aplicável;
+* `desiredViewerResponse` — qual mudança de percepção, intenção ou próximo passo o conteúdo pretende provocar;
+* `angle`, `hookMechanism` e `narrativePattern` — formas de executar essa lógica, nunca substitutos para ela.
+
+Uma ContentOpportunity que possui formato interessante, mas não consegue explicar seu papel na decisão de compra, é estrategicamente fraca mesmo que seja variada ou TikTok-native.
 
 ---
 
@@ -1299,7 +1342,9 @@ Draft Content Brief
 
 # 33. Briefing orientado à execução
 
-O Briefing deve ajudar o creator a gravar.
+O Briefing deve ajudar o creator a **comunicar uma tese de venda e gravá-la**.
+
+Antes de ser executável, ele precisa preservar a lógica comercial da ContentOpportunity: qual percepção pretende alterar, qual razão de compra apresenta, qual objeção reduz e qual prova sustenta a mensagem quando necessária.
 
 Ele não deve parecer um artigo, anúncio tradicional ou texto que precisa ser decorado palavra por palavra.
 
@@ -1545,13 +1590,17 @@ Algumas dimensões são difíceis de validar somente com código.
 Um judge baseado em modelo pode avaliar:
 
 ```text
+clareza da intenção comercial
+coerência com a oportunidade e com o objetivo de compra
+força e relevância da razão de compra
+adequação entre objeção e resposta
+presença e qualidade de prova quando necessária
+capacidade do hook de atrair sem abandonar a tese comercial
+progressão entre hook, desenvolvimento, script e CTA
+risco de gerar atenção sem construir motivo para comprar
 naturalidade
 executabilidade
-clareza
-coerência com o ângulo
 coerência com a plataforma
-força do hook
-presença de prova quando necessária
 tom excessivamente publicitário
 complexidade de produção
 repetição semântica
@@ -1630,7 +1679,7 @@ Não introduzir ângulos ruins apenas para aumentar diversidade.
 
 # 42. Regra de variedade
 
-> **Primeiro relevância. Depois variedade.**
+> **Primeiro relevância comercial e capacidade de mover a decisão de compra. Depois variedade.**
 
 Proibido:
 
@@ -2684,23 +2733,31 @@ Quality + Variety Gate
 Avaliar manualmente:
 
 ```text
-Eu gravaria isso?
+Existe uma razão clara para alguém considerar comprar este Produto?
 
-Parece TikTok?
+O conteúdo trabalha uma barreira, desejo, benefício ou prova comercialmente relevante?
 
-As ideias são realmente diferentes?
+Depois de assistir, fica mais claro por que este Produto importa para aquele público?
+
+Hook, desenvolvimento, prova, script e CTA trabalham a mesma decisão comercial?
+
+O conteúdo apenas chama atenção ou também constrói motivo para comprar?
+
+Parece TikTok sem perder a lógica de venda?
 
 A estratégia faz sentido?
 
 Inventou alguma característica?
 
-As cenas são simples?
+As cenas são simples e demonstram o que precisa ser demonstrado?
 
 Os hooks soam naturais?
 
+As ideias exploram teses comerciais realmente diferentes?
+
 Existe variedade sem aleatoriedade?
 
-Os Briefings são melhores que pedir 20 scripts diretamente para uma LLM?
+Os Briefings são melhores para vender o Produto do que pedir 20 scripts diretamente para uma LLM?
 ```
 
 A última pergunta é crítica.
@@ -2813,13 +2870,13 @@ controle de variedade
 
 # 76. Regra final
 
-> **A engine primeiro decide o que vale a pena vender, para quem, por qual motivo e através de qual oportunidade. Só depois decide qual conteúdo deve existir.**
+> **A engine primeiro decide como uma pessoa pode chegar à decisão de comprar o Produto: por qual razão, em qual contexto, contra qual barreira e com qual prova. Só depois decide como essa lógica vira conteúdo.**
 
 E, no contexto do TikTok:
 
-> **O Briefing deve transformar essa decisão em algo natural, rápido, visual e simples o suficiente para um creator realmente gravar.**
+> **O Briefing deve transformar essa lógica de compra em algo natural, rápido, visual e simples o suficiente para um creator realmente gravar sem parecer um anúncio tradicional.**
 
-O objetivo não é produzir o conteúdo mais sofisticado.
+O objetivo não é produzir o conteúdo mais sofisticado, mais variado ou mais “TikTok” isoladamente.
 
-O objetivo é produzir **a próxima ideia comercial certa, de forma executável, sem repetir continuamente o que já foi explorado**.
+O objetivo é produzir **conteúdo comercialmente convincente, nativo e executável, cuja estrutura tenha um papel claro na decisão de compra do espectador**.
 O judge compara o resultado com `Meu estilo` e padrões de creator commerce para TikTok/TikTok Shop. A resposta é estruturada por parte (`PASS`, `REPAIR` ou `REJECT`), com criterion allowlisted e motivo sanitizado. Isto é curadoria da engine; não é aprovação/reprovação do creator, UI ou API de Content Operations. Repair recompõe somente a parte reprovada, preserva as partes PASS e revalida o conjunto no hard gate e no judge. No máximo 2 rounds globais; exaustão bloqueia `SUCCEEDED` e não publica resultado parcial. Cenas continuam em `ContentSceneSet`, mas são requisito de sucesso.
