@@ -3,9 +3,29 @@
    alvos 44px, grid responsivo auto-fill sem carrossel, reduced-motion sem
    movimento. */
 
+/* Contêiner alinhado ao .panel (generation-panel.module.css): mesma Surface,
+   Border, radius.card e padding das abas Roteiros/Histórico. */
 .view {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
   display: grid;
   gap: 16px;
+  margin-top: 24px;
+  min-width: 0;
+  padding: 24px;
+  width: 100%;
+}
+
+@media (max-width: 767px) {
+  .view {
+    padding: 20px;
+  }
+}
+
+.gallery {
+  display: grid;
+  gap: 20px;
   min-width: 0;
 }
 
@@ -47,6 +67,22 @@
   }
 }
 
+.searchField {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+  position: relative;
+}
+
+.searchIcon {
+  color: var(--color-text-secondary);
+  height: 16px;
+  left: 12px;
+  pointer-events: none;
+  position: absolute;
+  width: 16px;
+}
+
 .searchInput,
 .sortSelect {
   background: var(--color-surface);
@@ -58,6 +94,10 @@
   min-width: 0;
   padding: 10px 12px;
   width: 100%;
+}
+
+.searchInput {
+  padding-left: 36px;
 }
 
 .sortSelect {
