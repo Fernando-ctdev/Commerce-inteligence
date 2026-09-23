@@ -14,7 +14,7 @@ A engine deve responder à pergunta central do produto:
 
 > **“Como criar um conteúdo que realmente gere venda para este Produto?”**
 
-Para isso, ela deve transformar fatos confirmados do Produto em raciocínio comercial sobre decisão de compra e, somente depois, materializar esse raciocínio em oportunidades e Briefings de conteúdo.
+Para isso, ela deve combinar fatos confirmados do Produto com raciocínio comercial, comportamento humano, mecanismos de persuasão, repertório criativo e linguagem nativa da plataforma. A engine não deve assumir que toda compra nasce de uma dor consciente ou de uma razão racional previamente existente: o próprio conteúdo pode criar desejo, curiosidade, identificação, impulso, percepção de valor ou vontade de experimentar.
 
 No MVP, a plataforma de distribuição é:
 
@@ -40,17 +40,23 @@ Mas a semântica desse fluxo é obrigatória:
 
 ```text
 fatos do Produto
++
+comportamento humano
++
+psicologia de atenção e persuasão
++
+repertório criativo da plataforma
 ↓
-razões de compra + barreiras + provas + oportunidades
+hipóteses comerciais e criativas de conteúdo
 ↓
-hipóteses de mudança na decisão do espectador
+atenção / identificação / curiosidade / desejo / confiança / impulso / percepção de valor
 ↓
 execução nativa da plataforma
 ```
 
 A regra principal é:
 
-> **A Commerce Intelligence não deve simplesmente decidir “o que postar”. Ela deve decidir qual lógica comercial pode levar um público a comprar o Produto e como transformar essa lógica em conteúdo.**
+> **A Commerce Intelligence não deve simplesmente decidir “o que postar”. Ela deve descobrir quais combinações de produto, contexto, emoção, persuasão e execução criativa podem aumentar a vontade de comprar — mesmo quando o espectador não chegou ao conteúdo com uma necessidade consciente.**
 
 A geração do texto final de cada Briefing é consequência dessa decisão.
 
@@ -72,7 +78,7 @@ e:
 conteúdo com lógica explícita de decisão de compra
 ```
 
-A engine não existe para maximizar quantidade, criatividade, variedade ou naturalidade isoladamente. Essas dimensões são restrições de qualidade. O objetivo comercial é produzir conteúdo capaz de construir relevância, desejo, confiança, prova ou redução de objeção suficiente para aproximar o espectador da compra.
+A engine não existe para maximizar quantidade, criatividade, variedade ou naturalidade isoladamente. Mas criatividade e forma de execução também não são meras restrições externas: em muitos casos, **são parte do próprio mecanismo de venda**. O objetivo é produzir conteúdo capaz de despertar ou ampliar atenção, identificação, desejo, curiosidade, confiança, percepção de valor, impulso ou intenção de compra.
 
 O fluxo completo do sistema permanece:
 
@@ -610,30 +616,44 @@ Ela produz matéria-prima estratégica.
 
 A engine não deve gerar listas independentes de públicos, dores e benefícios sem relação entre si.
 
-Ela deve construir **oportunidades comerciais relacionais orientadas à decisão de compra**.
+Ela deve construir **oportunidades comerciais e criativas relacionais orientadas à venda**.
 
-Uma oportunidade só é útil quando existe uma explicação coerente de **por que aquele público poderia comprar**, **o que hoje impede ou atrasa essa decisão**, **qual valor do Produto é relevante naquele contexto** e **qual prova, argumento ou demonstração pode alterar essa percepção**.
+Uma oportunidade pode nascer de uma razão de compra já existente, mas também de um mecanismo criativo capaz de criar desejo ou relevância durante o próprio conteúdo.
 
-Audiência, dor ou desejo isolados não constituem uma oportunidade comercial.
+Exemplos de mecanismos válidos incluem: identificação por POV, humor, conflito, algo dando errado, surpresa, curiosidade visual, demonstração, reação, comparação, transformação, resultado primeiro, storytelling curto, situação cotidiana, prova, quebra de objeção ou percepção de valor.
 
-Modelo:
+Audiência, dor ou desejo isolados não constituem uma oportunidade. Também não é obrigatório que toda oportunidade contenha dor, objeção ou prova. Esses elementos entram quando ajudam o mecanismo de venda daquele conteúdo.
+
+Modelo conceitual possível, **não obrigatório**:
 
 ```text
-Audience
+Audience / Context
     ↓
-Situation
+Attention or Emotional Mechanism
     ↓
-Pain / Desire
+Product Relevance / Desire Trigger
     ↓
-Relevant Product Capability
+Commercial Message or Product Role
     ↓
-Benefit
+Proof / Demonstration / Payoff quando fizer sentido
     ↓
-Purchase Barrier / Objection
-    ↓
-Possible Proof
-    ↓
-Selling Opportunity
+Desired Viewer Response
+```
+
+Outros caminhos são igualmente válidos. Exemplo:
+
+```text
+algo dá errado
+↓
+humor + curiosidade
+↓
+Produto entra naturalmente na situação
+↓
+demonstração curta
+↓
+"eu quero isso"
+↓
+CTA
 ```
 
 Exemplo:
@@ -701,7 +721,7 @@ Depois de compreender o Produto e mapear oportunidades, a engine produz uma `Pro
 
 A estratégia deve responder:
 
-> **Quais razões de compra, barreiras, provas e mudanças de percepção precisam ser trabalhadas para aumentar a chance de diferentes públicos decidirem comprar este Produto?**
+> **Quais mecanismos comerciais, emocionais e criativos podem tornar este Produto interessante, desejável e comprável dentro de conteúdo nativo da plataforma?**
 
 Ela não é um conjunto de scripts.
 
@@ -867,7 +887,7 @@ TikTok Commerce Creative Skill
 
 Essa Skill deve encapsular princípios de criação compatíveis com o comportamento esperado de creators de TikTok Shop **sem substituir a lógica comercial da Strategy**.
 
-Sua função é traduzir uma oportunidade de compra já identificada para uma execução que pareça nativa da plataforma. TikTok-native é meio; decisão de compra é o objetivo comercial.
+Sua função é fornecer repertório de execução e mecanismos criativos próprios da plataforma para que a engine transforme o Produto em conteúdo persuasivo. A relação é bidirecional: a Strategy orienta a execução, mas certas formas criativas da plataforma também podem revelar oportunidades que não existiriam como copy racional isolada.
 
 Ela deve favorecer conteúdos:
 
@@ -895,11 +915,12 @@ A Skill fornece limites e repertório.
 
 A versão inicial deve orientar capacidades da engine a:
 
-* capturar atenção cedo **em função da oportunidade comercial**, evitando hooks desconectados da venda;
-* tornar a razão de compra compreensível sem transformar o vídeo em anúncio tradicional;
-* usar prova, demonstração ou contexto real quando ajudarem a reduzir incerteza ou objeção;
-* fazer hook, desenvolvimento, prova e CTA empurrarem a mesma mudança de percepção;
-* evitar conteúdo que entretenha ou gere curiosidade sem construir relevância comercial para o Produto;
+* capturar atenção cedo com mecanismos adequados ao contexto: hook visual, hook falado, conflito, falha, surpresa, curiosidade, reação, resultado, humor ou identificação;
+* permitir que entretenimento, humor, curiosidade ou identificação sejam parte legítima do mecanismo de venda quando o Produto estiver integrado de forma natural;
+* tornar o Produto desejável sem exigir sempre uma dor ou objeção explícita;
+* usar prova, demonstração ou contexto real quando aumentarem confiança ou desejo;
+* preservar coerência entre o mecanismo criativo escolhido, o papel do Produto e o CTA;
+* evitar conteúdo que viralize completamente desconectado do Produto ou em que o Produto pareça inserido artificialmente;
 * evitar introduções longas;
 * começar pelo problema, curiosidade, resultado, demonstração, conflito ou prova quando fizer sentido;
 * priorizar linguagem falada;
@@ -1053,9 +1074,11 @@ Content Portfolio Planner
 
 # 25. Objetivo do Portfolio Planner
 
-O Planner decide **como distribuir a quantidade solicitada entre hipóteses comerciais relevantes de decisão de compra**.
+O Planner decide **como distribuir a quantidade solicitada entre hipóteses comerciais e criativas capazes de gerar intenção de compra**.
 
-A unidade de diversidade não é simplesmente formato, ângulo ou mecanismo de hook. O conjunto deve explorar razões de compra, barreiras, provas, públicos, situações e mudanças de percepção diferentes quando a Strategy oferecer essas alternativas.
+A unidade de diversidade pode envolver razões de compra, públicos, situações, emoções, gatilhos de desejo, provas e objeções, mas também **mecanismos criativos**: POV, demonstração, humor, conflito, surpresa, visual-first, reação, storytelling, transformação, comparação e outros repertórios válidos da plataforma.
+
+A regra é evitar variedade vazia: formato só é valioso quando cria uma experiência de conteúdo coerente com o Produto e com a venda.
 
 Exemplo conceitual:
 
@@ -1187,7 +1210,7 @@ Os campos existentes devem carregar uma lógica comercial explícita:
 * `desiredViewerResponse` — qual mudança de percepção, intenção ou próximo passo o conteúdo pretende provocar;
 * `angle`, `hookMechanism` e `narrativePattern` — formas de executar essa lógica, nunca substitutos para ela.
 
-Uma ContentOpportunity que possui formato interessante, mas não consegue explicar seu papel na decisão de compra, é estrategicamente fraca mesmo que seja variada ou TikTok-native.
+Uma ContentOpportunity precisa explicar **como pretende gerar efeito comercial**, mas esse efeito não precisa ser racional ou explícito. Pode ser criar identificação, curiosidade, desejo, impulso, confiança, percepção de valor, redução de objeção ou simplesmente vontade de ter o Produto. O mecanismo criativo pode ser parte central dessa hipótese.
 
 ---
 
@@ -1342,9 +1365,9 @@ Draft Content Brief
 
 # 33. Briefing orientado à execução
 
-O Briefing deve ajudar o creator a **comunicar uma tese de venda e gravá-la**.
+O Briefing deve ajudar o creator a **executar uma hipótese comercial e criativa capaz de vender**.
 
-Antes de ser executável, ele precisa preservar a lógica comercial da ContentOpportunity: qual percepção pretende alterar, qual razão de compra apresenta, qual objeção reduz e qual prova sustenta a mensagem quando necessária.
+Ele precisa preservar o efeito pretendido da ContentOpportunity — por exemplo gerar identificação, desejo, curiosidade, confiança, percepção de valor, impulso ou redução de objeção — e também o mecanismo criativo escolhido para provocar esse efeito. Nem todo Briefing precisa conter razão de compra explícita, objeção ou prova.
 
 Ele não deve parecer um artigo, anúncio tradicional ou texto que precisa ser decorado palavra por palavra.
 
@@ -1590,14 +1613,16 @@ Algumas dimensões são difíceis de validar somente com código.
 Um judge baseado em modelo pode avaliar:
 
 ```text
-clareza da intenção comercial
-coerência com a oportunidade e com o objetivo de compra
-força e relevância da razão de compra
-adequação entre objeção e resposta
+clareza do efeito comercial pretendido
+coerência entre Produto, mecanismo criativo e intenção de compra
+capacidade de gerar identificação, desejo, curiosidade, confiança, percepção de valor ou impulso quando apropriado
+força da razão de compra quando o conteúdo usa uma razão explícita
+adequação entre objeção e resposta quando houver objeção
 presença e qualidade de prova quando necessária
-capacidade do hook de atrair sem abandonar a tese comercial
-progressão entre hook, desenvolvimento, script e CTA
-risco de gerar atenção sem construir motivo para comprar
+força do hook visual e/ou falado
+integração natural do Produto à situação ou narrativa
+progressão entre abertura, desenvolvimento, payoff e CTA
+risco de gerar atenção sem criar qualquer vínculo comercial com o Produto
 naturalidade
 executabilidade
 coerência com a plataforma
