@@ -12,7 +12,7 @@ A principal pergunta que o produto deve responder é:
 
 **“Como criar um conteúdo que realmente gere venda para este produto?”**
 
-A Commerce Intelligence é o núcleo responsável por responder essa pergunta. Ela deve compreender o Produto como uma oportunidade de compra e transformar fatos confirmados em razões de compra, barreiras, provas, argumentos, ângulos e execuções de conteúdo capazes de construir uma decisão comercial no espectador.
+A Commerce Intelligence é o núcleo responsável por responder essa pergunta. Ela deve combinar entendimento do Produto, comportamento humano, persuasão, criatividade e linguagem nativa da plataforma para descobrir **como aquele Produto pode se tornar desejável dentro de um conteúdo**. Isso pode acontecer ao revelar uma necessidade já existente, mas também ao criar curiosidade, identificação, desejo, impulso, percepção de valor, confiança, entretenimento ou vontade de experimentar.
 
 A partir de um produto, contexto e preferências do creator, o sistema pode gerar e organizar:
 
@@ -43,7 +43,7 @@ Esses elementos não possuem o mesmo peso.
 
 **Estratégia comercial e capacidade de produzir conteúdo orientado à decisão de compra são o core.** Planejamento, variedade, Briefings, lotes, Agenda, Estúdio e memória são mecanismos de suporte para tornar essa inteligência utilizável, executável e reaproveitável.
 
-Um conteúdo não é bom para a Viewefy apenas porque é criativo, natural, variado, gravável ou compatível com TikTok. Ele precisa possuir uma lógica comercial clara de como pode aumentar interesse, relevância, desejo, confiança ou reduzir uma barreira que impede a compra.
+Um conteúdo não é bom para a Viewefy apenas porque é criativo, natural, variado, gravável ou compatível com TikTok. Mas também não precisa seguir uma lógica racional clássica de dor → benefício → objeção → prova. Ele precisa utilizar produto, contexto, persuasão e execução criativa de forma capaz de despertar ou aumentar atenção, desejo e intenção de compra. **A própria forma criativa pode ser parte do mecanismo que vende.**
 
 A engine estratégica é a mesma para todos os planos.
 
@@ -59,19 +59,20 @@ Creators e afiliados de commerce não precisam apenas produzir conteúdo em volu
 
 Eles precisam produzir conteúdo que **venda**.
 
-A dificuldade real acontece antes e durante a criação: transformar um Produto em uma comunicação capaz de fazer uma pessoa perceber relevância, desejar o resultado, acreditar no que está sendo demonstrado, superar dúvidas e considerar a compra.
+A dificuldade real acontece antes e durante a criação: transformar um Produto em conteúdo capaz de fazer uma pessoa parar, sentir curiosidade, se identificar, desejar, se divertir, perceber valor, confiar, imaginar o uso ou simplesmente pensar **“eu quero isso”**. Às vezes o conteúdo responde a uma necessidade existente; em outras, a própria execução cria o desejo que antes não estava consciente.
 
 O creator precisa decidir repetidamente:
 
 * quem tem maior chance de se importar com aquele Produto;
 * em qual situação o Produto se torna relevante;
 * qual problema ou desejo merece ser explorado;
-* qual benefício realmente cria uma razão de compra;
-* qual objeção está impedindo a decisão;
-* qual prova pode reduzir incerteza;
-* qual argumento diferencia o Produto de simplesmente “mais um produto”;
-* qual ângulo torna essa razão de compra interessante;
-* qual hook captura atenção sem se desconectar da venda;
+* qual benefício, desejo, curiosidade ou percepção pode tornar o Produto atraente;
+* se existe uma objeção real a reduzir — sem obrigar todo conteúdo a começar por uma;
+* quando prova ou demonstração ajuda a gerar confiança;
+* qual mecanismo persuasivo ou emocional faz sentido;
+* qual formato criativo pode tornar o Produto desejável naquele contexto;
+* qual combinação de hook visual, hook falado, situação, ritmo, humor, POV, demonstração, reação, surpresa ou narrativa pode abrir o conteúdo;
+* como inserir o Produto naturalmente nessa execução sem transformar o vídeo em anúncio artificial;
 * como desenvolver o conteúdo sem parecer publicidade artificial;
 * como apresentar o Produto de forma convincente e natural;
 * qual CTA é coerente com o estágio de decisão criado pelo conteúdo;
@@ -115,7 +116,7 @@ O usuário entra com um Produto.
 
 A Viewefy deve devolver uma resposta prática para:
 
-> **por que alguém compraria, o que pode impedir essa compra, o que precisa ser demonstrado ou comunicado e como transformar isso em conteúdo que venda.**
+> **como este Produto pode se tornar interessante, desejável e comprável dentro de um conteúdo — seja explorando uma necessidade existente, seja criando desejo através de persuasão, criatividade e execução nativa da plataforma.**
 
 Briefings, memória, variedade e ferramentas operacionais existem para tornar essa resposta executável e repetível em escala.
 
@@ -227,67 +228,62 @@ A Viewefy existe para responder:
 
 Esse é o princípio raiz do produto.
 
-O sistema não deve confundir:
+Compra não é um processo exclusivamente racional e o espectador não precisa chegar ao conteúdo já possuindo uma necessidade, dor ou motivo consciente para comprar.
+
+Um bom conteúdo pode:
+
+* revelar uma necessidade existente;
+* criar desejo onde antes havia apenas indiferença;
+* gerar identificação;
+* despertar curiosidade;
+* aumentar percepção de valor;
+* reduzir risco ou objeção;
+* criar confiança por demonstração;
+* gerar impulso;
+* associar o Produto a uma situação divertida, aspiracional ou reconhecível;
+* fazer o espectador simplesmente pensar **“eu quero isso”**.
+
+Por isso, a Commerce Intelligence não deve ser construída como um funil rígido de copywriting clássico.
+
+A engine deve combinar três camadas:
 
 ```text
-conteúdo que prende atenção
+INTELIGÊNCIA COMERCIAL
+O que neste Produto pode se tornar atraente, desejável ou relevante?
+
+MECANISMOS PERSUASIVOS E CRIATIVOS
+O que pode fazer a pessoa parar, sentir, se identificar, desejar, acreditar ou agir?
+
+EXECUÇÃO NATIVA DA PLATAFORMA
+Como isso vira conteúdo real?
+POV, demonstração, hook visual, hook falado, humor, conflito, falha, surpresa, reação, storytelling, comparação, transformação, situação cotidiana etc.
 ```
 
-com:
+Essas camadas interagem entre si. **Estratégia comercial e forma criativa não são completamente separáveis:** em muitos conteúdos, é justamente o formato, o timing, o humor, o visual ou a narrativa que cria o desejo e torna a venda possível.
+
+Exemplos igualmente válidos de caminhos comerciais:
 
 ```text
-conteúdo que cria uma razão para comprar
+problema → solução → prova → CTA
+
+POV reconhecível → identificação → Produto entra naturalmente → desejo → CTA
+
+algo dá errado → humor/tensão → Produto entra no contexto → demonstração → CTA
+
+hook visual inesperado → curiosidade → reveal → Produto em uso → vontade de ter → CTA
+
+resultado primeiro → surpresa → explicação → demonstração → CTA
 ```
 
-Nem deve confundir:
+Nenhum desses caminhos deve ser tratado como fórmula obrigatória.
 
-```text
-variedade de formatos
-```
-
-com:
-
-```text
-variedade de mecanismos comerciais válidos
-```
-
-A engine precisa raciocinar sobre a decisão de compra antes de raciocinar sobre a execução do vídeo.
-
-Para cada conteúdo, deve existir uma hipótese comercial clara, por exemplo:
-
-```text
-quem precisa se importar
-+
-qual situação torna o Produto relevante
-+
-qual dor, desejo ou resultado está em jogo
-+
-qual razão de compra será construída
-+
-qual barreira precisa ser reduzida
-+
-qual prova ou demonstração aumenta confiança
-+
-qual mudança de percepção o conteúdo pretende provocar
-+
-como comunicar isso de forma nativa da plataforma
-```
-
-Existe uma diferença essencial entre:
-
-> “Gere 30 hooks para este produto.”
-
-e:
-
-> “Descubra quais razões de compra, objeções, provas e mudanças de percepção podem levar diferentes públicos a considerar este Produto e transforme essas oportunidades em 30 conteúdos comercialmente distintos e nativos da plataforma.”
-
-A segunda abordagem representa a inteligência central da Viewefy.
+A engine precisa possuir repertório suficiente para escolher e combinar mecanismos conforme Produto, contexto, plataforma e oportunidade.
 
 ### Regra de produto
 
-Sempre que uma feature, regra, métrica ou capability for proposta, deve existir uma resposta clara para:
+Sempre que uma feature, regra, capability ou critério de qualidade for proposta, deve existir uma resposta clara para:
 
-> **Como isso melhora a capacidade do creator de produzir conteúdo que gera decisão de compra?**
+> **Como isso aumenta a capacidade da Viewefy de criar conteúdo capaz de despertar ou ampliar intenção de compra?**
 
 Se não houver resposta, o item não pertence ao core do produto.
 
