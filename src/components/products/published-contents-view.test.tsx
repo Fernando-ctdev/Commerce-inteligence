@@ -215,6 +215,20 @@ test("busca filtra por título e assunto (case-insensitive) e estado vazio é ho
   assert.ok(!semResultado.includes("Esse whey realmente vale a pena"));
 });
 
+test("detail com metrics vazio: métricas conhecidas viram 0, seções vazias somem", async () => {
+  const markup = await detail({ ...videoBase, metrics: {} });
+
+  // métricas de vídeo allowlisted renderizam 0 mesmo sem nenhuma chave
+  const itemSold = markup.indexOf("Itens vendidos");
+  assert.ok(itemSold !== -1, "tiles de métricas presentes com record vazio");
+  assert.match(markup, /Itens vendidos<\/dt><dd>0<\/dd>/);
+  assert.match(markup, /Taxa de conclusão<\/dt><dd>0<\/dd>/);
+  // métricas de produto sem dados: seção oculta, nada inventado
+  assert.ok(!markup.includes("Cliques no produto"));
+  // negócio continua com — para ausentes
+  assert.ok(markup.includes("Categoria"));
+});
+
 test("filterAndSortVideos: recent/oldest determinísticos e sem data por último", async () => {
   const { filterAndSortVideos } = await viewModule();
   const antigo = { ...videoBase, itemId: "a-antigo", publishedAt: "2026-01-01T00:00:00.000Z" };

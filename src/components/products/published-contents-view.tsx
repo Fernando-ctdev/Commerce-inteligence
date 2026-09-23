@@ -214,6 +214,7 @@ function MetricSection({
   labels,
   record,
   absentValue = "—",
+  renderWhenEmpty = false,
 }: {
   title: string;
   labels: Record<string, string>;
@@ -221,11 +222,14 @@ function MetricSection({
   /** Métricas de vídeo ausentes mostram 0 (decisão do usuário); negócio e
    *  métricas de produto continuam com — explícito. null real segue "null". */
   absentValue?: string;
+  /** Renderiza os tiles mesmo sem nenhuma chave presente (usado só pela
+   *  seção de métricas de vídeo, que vira 0 com record vazio). */
+  renderWhenEmpty?: boolean;
 }) {
   /* Só rótulos estáticos allowlisted: chave fora do mapa nunca aparece, nem
      com rótulo cru. */
   const present = Object.keys(labels).filter((key) => key in record);
-  if (present.length === 0) return null;
+  if (present.length === 0 && !renderWhenEmpty) return null;
   return (
     <section className={styles.metricsSection}>
       <h4>{title}</h4>
@@ -301,6 +305,7 @@ export function PublishedContentDetail({
           labels={METRIC_LABELS}
           record={video.metrics}
           absentValue="0"
+          renderWhenEmpty
         />
         <MetricSection
           title="Métricas do produto neste conteúdo"
