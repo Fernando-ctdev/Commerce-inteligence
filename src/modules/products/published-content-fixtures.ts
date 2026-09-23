@@ -2,8 +2,10 @@
 // aprovadas post-https-api-tikhub-io-ap (analytics: 10 stats disponíveis de um total
 // upstream 21 — pages 2-3 não vieram na resposta capturada) e post-https-api-tikhub-io-ap-2
 // (associações item→produto, 2 pares). Só campos allowlisted: sem cookie, envelope,
-// cache_url, request_id, post_url assinado, thumbnails não usados ou payload bruto.
-// Playback restrito a hosts https *.tiktokcdn.com; money usa amount_formatted (ADR dos
+// cache_url, request_id ou payload bruto. Decisão do usuário (2026-09-23): duration do
+// video_meta e cover (post_url, imagem assinada tiktokcdn) entram como dados opcionais
+// aprovados; a URL da capa passa pela mesma sanitização de host do playback.
+// Playback/capa restritos a hosts https *.tiktokcdn.com; money usa amount_formatted (ADR dos
 // rulings); valores zero/nulo preservados. gmv/directGmv/itemSoldCnt são MetricField da SPEC: Nomes de origem (snake_case) vivem só aqui —
 // projectVideo produz o contrato camelCase compartilhado. teste.json nunca é lido.
 import { listShowcaseItems } from "./showcase";
@@ -13,6 +15,7 @@ export type PublishedVideoAnalyticsFixture = {
   item_id: string;
   title?: string;
   cover_url?: string;
+  duration?: number;
   main_url?: string;
   backup_url?: string;
   published_at?: string;
@@ -64,6 +67,8 @@ export const PUBLISHED_VIDEO_ANALYTICS_PAGES: PublishedVideoAnalyticsPageFixture
       items: [
       {
         item_id: "7687850025174437128",
+        duration: 28,
+        cover_url: "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oYfQwgcABDBEURgQfkDPcqIusIZrFuRjLF5ECC~tplv-noop.image?dr=18692&refresh_token=bd991382&x-expires=1790261335&x-signature=HAUyQng%2FKiSRWujp6n8ONbTQ4f8%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000daobln7og65v80i12fsg",
         title: "O TikTok me influenciou e, look bonito sem esforço, e eu gostei muito. #vestidoindiano #modaindiana #moda #modafeminina #vestido",
         published_at: "2026-09-21T10:50:00.000Z",
         main_url: "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/oMwL8DsvEAccQPQEfBuE9RrFlImRgtFQqwBC5f/?a=1180&bti=MzYzNGYxMS86&&bt=1649&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=OmgzNWc8M2Q5NmdmZ2VoZEBpamk0M3k5cnFlZDMzODczNEBeXmJfYDJjXjYxXjAxNjI2YSNwL2Y1MmQ0aWxhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261335&VSignature=R39hXDhz497sFXoQOXOSbA&btag=e000b8000&sp_exp=hash_v0",
@@ -73,6 +78,8 @@ export const PUBLISHED_VIDEO_ANALYTICS_PAGES: PublishedVideoAnalyticsPageFixture
       },
       {
         item_id: "7687849047557819655",
+        duration: 30,
+        cover_url: "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oIIwICDPjuxYAhGVfLqreaKcZPeIzIbA4TXgCC~tplv-noop.image?dr=18692&refresh_token=3ef7b02b&x-expires=1790261337&x-signature=kg%2B42kTQpZe4hPDJoHWVaedGvRI%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000daobjufog65vfn656qcg",
         title: "Atenção, essa calça parece muito mais cara… #modafeminina #moda #calcapantalona",
         published_at: "2026-09-21T10:45:00.000Z",
         main_url: "https://v16m.tiktokcdn.com/8a307d15c3df54587220caeca824f285/6ab53859/video/tos/alisg/tos-alisg-pve-0037c001/oQAEmIXiVDehu0z9AGCQ2k1YLgPQ4IejiI5ewy/?a=1180&bti=MzYzNGYxMS86&&bt=670&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=ZWVpMzUzZzk7ZjVpNjQzOEBpanQ4cXk5cnhlZDMzODczNEA0Y2IwYzAwNTIxXmBeMy9jYSNgMzNjMmRjZ2xhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e00088000&sp_exp=hash_v0",
@@ -82,6 +89,8 @@ export const PUBLISHED_VIDEO_ANALYTICS_PAGES: PublishedVideoAnalyticsPageFixture
       },
       {
         item_id: "7687847602544561426",
+        duration: 30,
+        cover_url: "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oE2EuIu4wAxOAO2LIifTF1BAxEWIZiCJLJ9UBw~tplv-noop.image?dr=18692&refresh_token=bd41c245&x-expires=1790261336&x-signature=wNDLbhbI7VhkDeriVALh0AzlhQI%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000daobhafog65m74vkibcg",
         title: "Essa foi a minha melhor compra e eu recomendo. #moda #modafeminina #calcapantalona",
         published_at: "2026-09-21T10:40:00.000Z",
         main_url: "https://v16m.tiktokcdn.com/4be86650d1d047242884be036809c0a7/6ab53858/video/tos/alisg/tos-alisg-pve-0037c001/o4ATC1FAOJxiCuiIsLEQzQAu9uwfZU2wgWWINB/?a=1180&bti=MzYzNGYxMS86&&bt=690&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=NWQ5NTRkNzdnODczOjpkZkBpamVuN3A5cmRlZDMzODczNEBfNWNjXmJeX18xNDQ1XjVjYSNgZnM0MmRjZWxhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e00088000&sp_exp=hash_v0",
@@ -91,6 +100,8 @@ export const PUBLISHED_VIDEO_ANALYTICS_PAGES: PublishedVideoAnalyticsPageFixture
       },
       {
         item_id: "7687802173412936978",
+        duration: 24,
+        cover_url: "https://p19-common-sign.tiktokcdn.com/tos-alisg-p-0037/okyhYYgsfAQVm91mEDRq9sBIHEBcFE87zI2Qf8~tplv-noop.image?dr=18692&refresh_token=a5ee39ad&x-expires=1790261330&x-signature=r14tyWrxnRLYBOboD8KaDvkGgfs%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000dao8um7og65ucvn5rc20",
         title: "Sério, o resultado disso me surpreendeu . #maquiagem #automaquiagem #autoestima",
         published_at: "2026-09-21T10:35:00.000Z",
         main_url: "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/oUdtAhXff34x1gkCDAMAi6YzjPVAPCbIVRQL8e/?a=1180&bti=MzYzNGYxMS86&&bt=955&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=ZTw4OjhpNDg1ZGk1ZzpkOUBpM2Y4eXg5cnA7ZDMzODczNEAtNjRhX15eNmIxM180Nl8vYSMvb2tgMmQ0cmxhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261330&VSignature=Neq2UHV1wvy-D4Vf0354eA&btag=e000b8000&sp_exp=hash_v0",
@@ -100,6 +111,8 @@ export const PUBLISHED_VIDEO_ANALYTICS_PAGES: PublishedVideoAnalyticsPageFixture
       },
       {
         item_id: "7687801356639358226",
+        duration: 24,
+        cover_url: "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oEuAWrYA2EgB7b7SCdDIqPfdCsAiwji1wIDIQ9~tplv-noop.image?dr=18692&refresh_token=372b0d6b&x-expires=1790261331&x-signature=8ZK2sOVIjhla2bi51oRLCWC%2BGmU%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000dao8t7vog65rdm411c1g",
         title: "Eu testei e, o resultado disso me surpreendeu , e fez diferença. #maquiagem #autocuidado #autoestima",
         published_at: "2026-09-21T10:30:00.000Z",
         main_url: "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/o4Vf02gGQEYAeGFDRHVIhDaCYIrx4hofAA2F9j/?a=1180&bti=MzYzNGYxMS86&&bt=954&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=NWU0Ozc8Nzs6MzQzOTlmO0BpamY0cHU5cjo7ZDMzODczNEAzNTEtMjViNTMxLmNgNTJiYSMuLjFhMmRzcWxhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261331&VSignature=gvIu4lkmEc1X22JXBxK8hA&btag=e000b8000&sp_exp=hash_v0",
@@ -118,6 +131,8 @@ export const PUBLISHED_VIDEO_ANALYTICS_PAGES: PublishedVideoAnalyticsPageFixture
       items: [
       {
         item_id: "7686315937775111431",
+        duration: 25,
+        cover_url: "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ocYXPlwIA7jimFt7ERNZqma8i0Z4rAAiBIhDB~tplv-noop.image?dr=18692&refresh_token=05f1deed&x-expires=1790261331&x-signature=4ws666u7SGNgKCSiM%2FOzn9G3Bw0%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000dalkap7og65ro047h5u0",
         title: "Quem indica amiga é! 😉 #academia #fitness #modafitness",
         published_at: "2026-09-17T01:51:50.000Z",
         main_url: "https://v16m.tiktokcdn.com/bd96667a9bf3a1e454ad454723a141df/6ab53853/video/tos/alisg/tos-alisg-pve-0037c001/oETfgA1rAWeGAAPzqtiaEeu4REGtwR4HFvAhYf/?a=1180&bti=MzYzNGYxMS86&&bt=1885&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=PDpoNDw6Ozw2OjRpM2QzZUBpMzg6M3U5cnNuZDMzODczNEBfXmJhMF4yXl8xM140LWJeYSNyZTFsMmQ0XmlhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e000b8000&sp_exp=hash_v0",
@@ -127,6 +142,8 @@ export const PUBLISHED_VIDEO_ANALYTICS_PAGES: PublishedVideoAnalyticsPageFixture
       },
       {
         item_id: "7685881552953183496",
+        duration: 35,
+        cover_url: "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/okpEIYBql77AG8diYvlaPXAYDK9OBmi1PUICN~tplv-noop.image?dr=18692&refresh_token=a5dcdbc8&x-expires=1790261342&x-signature=lexwvwPAgiOp8efkJDZ%2B%2FYXNbrc%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000dakrp57og65l367eat7g",
         title: "Eu ainda não estou acreditando que paguei tão pouco nessas duas leggin 😱 #academia #fitness #modafitness",
         published_at: "2026-09-15T21:46:06.000Z",
         main_url: "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/oseQIUyeILAZDUgAIjcG4puV30vRkUVpSDjeCM/?a=1180&bti=MzYzNGYxMS86&&bt=2018&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=NzQzZjc0Mzw1NDk8OmQ6NkBpandoOW85cjh1ZDMzODczNEAtMS0xYTBjX2AxNDQ0MGBgYSM0XjQwMmQ0bWhhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261342&VSignature=KMN3P5RWIrYcyVKSaWxdAQ&btag=e00088000&sp_exp=hash_v0",
@@ -136,6 +153,8 @@ export const PUBLISHED_VIDEO_ANALYTICS_PAGES: PublishedVideoAnalyticsPageFixture
       },
       {
         item_id: "7685776197527014663",
+        duration: 21,
+        cover_url: "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oEB6yiEfIEOdM1PBVXqEpDMBqIAGcNmfgAJFCR~tplv-noop.image?dr=18692&refresh_token=03b94369&x-expires=1790261327&x-signature=erLZ5BS1zbvti%2ByhynpSzvBO0wk%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000daklpenog65h28pqd7fg",
         title: "Sério, quem treina vai entender 😱😍 #academia #fitness #autoestima",
         published_at: "2026-09-15T14:57:05.000Z",
         main_url: "https://v16m.tiktokcdn.com/ed5ff742a4053303ace8d65f2677c0ad/6ab5384f/video/tos/alisg/tos-alisg-pve-0037c001/oEOpRVfcqIcEEmBiXBqFhyyEEdDQJjAN6gf1OG/?a=1180&bti=MzYzNGYxMS86&&bt=1822&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=ZTc3Nzs4ZzhlNTdkaGloN0Bpajp0O2s5cmhvZDMzODczNEA1Y2NiNjYwXzUxMS0uLTBjYSNjYW0vMmRrbWhhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e000b8000&sp_exp=hash_v0",
@@ -145,6 +164,8 @@ export const PUBLISHED_VIDEO_ANALYTICS_PAGES: PublishedVideoAnalyticsPageFixture
       },
       {
         item_id: "7685773833734819090",
+        duration: 15,
+        cover_url: "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/osERsVQpuC6DeMDlBgfgFoAcEjQdqrEoBVqqWE~tplv-noop.image?dr=18692&refresh_token=54f4afc3&x-expires=1790261322&x-signature=ZIwNgDKdEnHKX53Fu8rD5FMGKPg%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000daklhq7og65na0ep5eo0",
         title: "#autoestima #autocuidado #maquiagem",
         published_at: "2026-09-15T14:47:55.000Z",
         main_url: "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/o8ChdmEIQBgqowqfDWFcp0elgrjsdEAoDBVRgu/?a=1180&bti=MzYzNGYxMS86&&bt=683&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=aTtpNWhpZDQ1OWdpNTo1aEBpM2hzM3E5cnRvZDMzODczNEA2Y2EtNWAwNmExNTE2LTRgYSNsMmJeMmQ0ZWhhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261322&VSignature=pCrqt0fYiuXGG68QBWUD0g&btag=e000b8000&sp_exp=hash_v0",
@@ -154,6 +175,8 @@ export const PUBLISHED_VIDEO_ANALYTICS_PAGES: PublishedVideoAnalyticsPageFixture
       },
       {
         item_id: "7685499159243230472",
+        duration: 14,
+        cover_url: "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oQ1waRn4q9BlfodQBzFEgDDHEqARIi1QQGfKUG~tplv-noop.image?dr=18692&refresh_token=775b320b&x-expires=1790261321&x-signature=mc91NF7yTCPDkNFRWYWGF27vLLQ%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v14044g50000dak61hvog65phmlqake0",
         title: "O look que deixa sua princesa ainda mais linda 😍 #modainfantil #roupainfantil #maternidade",
         published_at: "2026-09-14T21:02:09.000Z",
         main_url: "https://v45.tiktokcdn.com/3eeefecd95f4c65703fe6322ec491e5b/6ab53849/video/tos/alisg/tos-alisg-pve-0037c001/o4ERdcIoz2q1e7DKBgf4FGAUgDQoOGOHBGqqYE/?a=1180&bti=MzYzNGYxMS86&&bt=2016&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=ZDU5ZTc2NzVmZjg2NDs7N0BpM250cHM5cms5ZDMzODczNEBiMmAzMF81X2ExYi0vYF81YSNiXmllMmRzLmhhLS1kMTFzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e000b5000&sp_exp=hash_v0",

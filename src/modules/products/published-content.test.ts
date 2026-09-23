@@ -192,6 +192,8 @@ test("projectVideo descarta chaves desconhecidas e só projeta o contrato", () =
   const video = response.videos[0]!;
   assert.deepEqual(Object.keys(video).sort(), [
     "business",
+    "coverUrl",
+    "duration",
     "fallbackPlaybackUrl",
     "itemId",
     "metrics",
@@ -200,8 +202,10 @@ test("projectVideo descarta chaves desconhecidas e só projeta o contrato", () =
     "publishedAt",
     "title",
   ]);
-  // post_url assinado nunca vira coverUrl; sem cover na fixture, o campo fica ausente.
-  assert.equal("coverUrl" in video, false);
+  // cover aprovada (decisão do usuário 2026-09-23): post_url do video_meta como
+  // coverUrl, com a mesma sanitização https *.tiktokcdn.com do playback.
+  assert.match(video.coverUrl!, /^https:\/\/[a-z0-9.-]+\.tiktokcdn\.com\//);
+  assert.equal(video.duration, 14);
   assert.ok(video.playbackUrl!.startsWith("https://"));
   assert.equal(new URL(video.playbackUrl!).hostname.endsWith(".tiktokcdn.com"), true);
 });
@@ -464,4 +468,65 @@ test("playback com credenciais na URL (userinfo) é omitido; host assinado váli
   ).videos[0]!;
   assert.equal(new URL(valido.playbackUrl!).username, "");
   assert.equal(new URL(valido.playbackUrl!).password, "");
+});
+
+// Slice 013 — alinhamento da galeria (decisão do usuário 2026-09-23): duration
+// e cover (post_url da nota aprovada) cruzam o DTO com a mesma sanitização de
+// URL; envelope/cookies/cache/request_id continuam de fora.
+test("projeção carrega duration positivo e coverUrl tiktokcdn sani­tizada", () => {
+  const response = buildLinkedContents(
+    { id: "p-local", provenance: { sourceId: PRODUCT_A } },
+    1,
+    20,
+    injected(
+      onePage([
+        {
+          ...analyticsItem(ITEM_A),
+          duration: 28,
+          cover_url: "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/abc~tplv-noop.image?x-expires=1&x-signature=s",
+        },
+      ]),
+      [{ item_id: ITEM_A, product_id: PRODUCT_A }],
+    ),
+  );
+
+  assert.equal(response.videos[0].duration, 28);
+  assert.match(response.videos[0].coverUrl!, /^https:\/\/[a-z0-9.-]+\.tiktokcdn\.com\//);
+});
+
+test("duration não positivo e capa fora de *.tiktokcdn.com ficam de fora do DTO", () => {
+  for (const duration of [0, -3, Number.NaN, Number.POSITIVE_INFINITY]) {
+    const response = buildLinkedContents(
+      { id: "p-local", provenance: { sourceId: PRODUCT_A } },
+      1,
+      20,
+      injected(
+        onePage([{ ...analyticsItem(ITEM_A), duration, cover_url: "https://p16-common-sign.tiktokcdn.com/a.jpg" }]),
+        [{ item_id: ITEM_A, product_id: PRODUCT_A }],
+      ),
+    );
+    assert.equal(response.videos[0].duration, undefined, `duration ${String(duration)} não deve cruzar`);
+  }
+
+  const capaEstrangeira = buildLinkedContents(
+    { id: "p-local", provenance: { sourceId: PRODUCT_A } },
+    1,
+    20,
+    injected(
+      onePage([{ ...analyticsItem(ITEM_A), duration: 28, cover_url: "https://cdn.example.com/capa.jpg" }]),
+      [{ item_id: ITEM_A, product_id: PRODUCT_A }],
+    ),
+  );
+  assert.equal(capaEstrangeira.videos[0].coverUrl, undefined);
+});
+
+test("fixtures reais da nota aprovada carregam duration e cover", () => {
+  const response = buildLinkedContents(
+    { id: "p-local", provenance: { sourceId: PRODUCT_A } },
+    1,
+    20,
+  );
+
+  assert.equal(response.videos[0].duration, 14);
+  assert.match(response.videos[0].coverUrl!, /\.tiktokcdn\.com\//);
 });

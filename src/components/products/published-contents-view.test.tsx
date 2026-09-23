@@ -26,6 +26,7 @@ const videoBase: PublishedVideo = {
   publishedAt: "2026-03-12T12:00:00.000Z",
   playbackUrl: "https://video.tiktokcdn.com/main.mp4?sign=abc",
   fallbackPlaybackUrl: "https://video.tiktokcdn.com/backup.mp4?sign=def",
+  duration: 28,
   business: {
     productTitle: "Whey Concentrado",
     priceLabel: "R$ 12,4 mil",
@@ -47,6 +48,7 @@ const videoSemFallback: PublishedVideo = {
   publishedAt: undefined,
   playbackUrl: "https://video.tiktokcdn.com/solo.mp4?sign=ghi",
   fallbackPlaybackUrl: undefined,
+  duration: 75,
 };
 
 const response: LinkedContentsResponse = {
@@ -75,6 +77,10 @@ function gallery(response: LinkedContentsResponse | null, extra: Record<string, 
         onSelect: () => {},
         onLoadMore: () => {},
         onRetry: () => {},
+        query: "",
+        onQueryChange: () => {},
+        sort: "recent",
+        onSortChange: () => {},
         ...extra,
       }),
     ),
@@ -108,7 +114,79 @@ test("galeria: contagem contextual, ordem preservada e botão de seleção com a
   assert.ok(markup.indexOf("Esse whey realmente vale a pena") < markup.indexOf("Base Matte"));
   assert.ok(/aria-pressed="true"/.test(markup));
   assert.ok(/aria-pressed="false"/.test(markup));
-  assert.ok(!markup.includes("Busca") && !markup.includes("Mais recentes"));
+});
+
+test("galeria: busca e ordenação visíveis com rótulos acessíveis", async () => {
+  const markup = await gallery(response);
+
+  // campo de busca com label associada (sr-only) e placeholder da referência
+  assert.match(markup, /placeholder="Buscar por título ou assunto\.\.\."/);
+  assert.match(markup, /<label[^>]*for="published-contents-search"/);
+  assert.match(markup, /id="published-contents-search"/);
+  // ordenação funcional: select com Mais recentes/Mais antigas
+  assert.match(markup, /<select[^>]*aria-label="Ordenar conteúdos"/);
+  assert.match(markup, /<option[^>]*value="recent"[^>]*>Mais recentes</);
+  assert.match(markup, /<option[^>]*value="oldest"[^>]*>Mais antigas</);
+});
+
+test("galeria: duração em badge MM:SS e kebab decorativo", async () => {
+  const markup = await gallery(response);
+
+  assert.ok(markup.includes("00:28"));
+  assert.ok(markup.includes("01:15"));
+  assert.ok(!markup.includes("00:38")); // vídeo sem duration não inventa badge
+  assert.match(markup, /aria-hidden="true"[^>]*>[\s\S]*lucide-(more|ellipsis)-vertical/);
+});
+
+test("formatDuration: mm:ss determinístico, ausente é null", async () => {
+  const { formatDuration } = await viewModule();
+  assert.equal(formatDuration(28), "00:28");
+  assert.equal(formatDuration(61), "01:01");
+  assert.equal(formatDuration(3599.7), "59:59");
+  assert.equal(formatDuration(0), "00:00");
+  assert.equal(formatDuration(undefined), null);
+  assert.equal(formatDuration(-5), null);
+  assert.equal(formatDuration(Number.NaN), null);
+});
+
+test("busca filtra por título e assunto (case-insensitive) e estado vazio é honesto", async () => {
+  const buscaResponse: LinkedContentsResponse = {
+    ...response,
+    videos: [
+      videoBase,
+      { ...videoSemFallback, title: "Base Matte: teste honesto", business: { productTitle: "Cosméticos" } },
+    ],
+  };
+  const markup = await gallery(buscaResponse, { query: "WHEY" });
+  assert.ok(!markup.includes("Base Matte"));
+  assert.ok(markup.includes("Esse whey realmente vale a pena"));
+
+  const porAssunto = await gallery(
+    { ...response, videos: [{ ...videoBase, title: "Sem palavra chave", business: { productTitle: "Conjunto Batinha" }, metrics: {} }] },
+    { query: "batinha" },
+  );
+  assert.ok(porAssunto.includes("Sem palavra chave"));
+
+  const semResultado = await gallery(response, { query: "inexistente" });
+  assert.ok(semResultado.includes("Nenhum conteúdo encontrado para a busca."));
+  assert.ok(!semResultado.includes("Esse whey realmente vale a pena"));
+});
+
+test("filterAndSortVideos: recent/oldest determinísticos e sem data por último", async () => {
+  const { filterAndSortVideos } = await viewModule();
+  const antigo = { ...videoBase, itemId: "a-antigo", publishedAt: "2026-01-01T00:00:00.000Z" };
+  const recente = { ...videoBase, itemId: "b-recente", publishedAt: "2026-06-01T00:00:00.000Z" };
+  const semData = { ...videoBase, itemId: "c-sem-data", publishedAt: undefined };
+
+  const recentes = filterAndSortVideos([antigo, recente, semData], "", "recent");
+  assert.deepEqual(recentes.map((video) => video.itemId), ["b-recente", "a-antigo", "c-sem-data"]);
+
+  const antigas = filterAndSortVideos([antigo, recente, semData], "", "oldest");
+  assert.deepEqual(antigas.map((video) => video.itemId), ["a-antigo", "b-recente", "c-sem-data"]);
+
+  // sem data em ambos os modos: afundam, ordem relativa preservada
+  const doisSemData = filterAndSortVideos([semData, { ...semData, itemId: "d-sem-data" }], "", "recent");
+  assert.deepEqual(doisSemData.map((video) => video.itemId), ["c-sem-data", "d-sem-data"]);
 });
 
 test("galeria: data pt-BR, métrica zero visível e thumbnail com fallback ausente", async () => {

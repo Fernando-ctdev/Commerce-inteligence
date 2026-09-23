@@ -7,7 +7,7 @@
 // false e null preservados, campo conhecido ausente é "—". Sem busca, ordenação
 // client-side, autoplay, fetch de mídia ou geração de roteiro.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, ShoppingCart, TrendingUp } from "lucide-react";
+import { Eye, MoreVertical, ShoppingCart, TrendingUp } from "lucide-react";
 
 import type { LinkedContentsResponse, PublishedVideo } from "../../modules/products/published-content-contract";
 import { loadPublishedContents } from "./published-contents-api";
@@ -139,6 +139,55 @@ export function focusDetailTitle(
   if (narrowViewport && heading) heading.focus();
 }
 
+export type PublishedContentsSort = "recent" | "oldest";
+
+/** Duração em MM:SS (minutos não limitados); ausente/inválida → null. */
+export function formatDuration(seconds?: number): string | null {
+  if (
+    seconds === undefined ||
+    !Number.isFinite(seconds) ||
+    seconds < 0
+  ) {
+    return null;
+  }
+  const total = Math.floor(seconds);
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+}
+
+const publishedTime = (video: PublishedVideo): number | null => {
+  if (!video.publishedAt) return null;
+  const time = new Date(video.publishedAt).getTime();
+  return Number.isNaN(time) ? null : time;
+};
+
+/** Busca por título/assunto (business.productTitle) e ordenação por publicação
+ *  sobre os vídeos JÁ carregados — nunca sugere dados fora das páginas.
+ *  Sem data válida afunda nos dois modos, ordem relativa preservada. */
+export function filterAndSortVideos(
+  videos: PublishedVideo[],
+  query: string,
+  sort: PublishedContentsSort,
+): PublishedVideo[] {
+  const needle = query.trim().toLowerCase();
+  const filtered = needle
+    ? videos.filter((video) =>
+        [video.title ?? "", String(video.business.productTitle ?? "")]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle),
+      )
+    : [...videos];
+  const dated = filtered.filter((video) => publishedTime(video) !== null);
+  const undated = filtered.filter((video) => publishedTime(video) === null);
+  const direction = sort === "oldest" ? 1 : -1;
+  dated.sort(
+    (a, b) => direction * ((publishedTime(a) ?? 0) - (publishedTime(b) ?? 0)),
+  );
+  return [...dated, ...undated];
+}
+
 function MetricTile({ label, value }: { label: string; value: string }) {
   return (
     <div className={styles.tile}>
@@ -251,24 +300,34 @@ export function PublishedContentDetail({
   );
 }
 
-/** Lista (master) de conteúdos publicados: contagem contextual, ordem do
- *  endpoint, botão de seleção acessível e Carregar mais quando houver página.
- *  Sem busca nem ordenação client-side. Exportado para teste de markup. */
+/** Lista (master) de conteúdos publicados: contagem contextual, controles de
+ *  busca/ordenação FUNCIONAIS sobre os vídeos já carregados (decisão do
+ *  usuário 2026-09-23; nunca sugerem dados fora das páginas), botão de
+ *  seleção acessível e Carregar mais quando houver página. Exportado para
+ *  teste de markup. */
 export function PublishedContentsGallery({
   error,
   loading,
   loadingMore,
   onSelect,
   onLoadMore,
+  onQueryChange,
   onRetry,
+  onSortChange,
+  query,
   response,
   selectedItemId,
+  sort,
 }: {
   response: LinkedContentsResponse | null;
   selectedItemId: string | null;
   error: string | null;
   loading: boolean;
   loadingMore: boolean;
+  query: string;
+  onQueryChange: (query: string) => void;
+  sort: PublishedContentsSort;
+  onSortChange: (sort: PublishedContentsSort) => void;
   onSelect: (itemId: string) => void;
   onLoadMore: () => void;
   onRetry: () => void;
@@ -311,41 +370,88 @@ export function PublishedContentsGallery({
     );
   }
 
+  const visibleVideos = filterAndSortVideos(videos, query, sort);
+
   return (
     <div className={styles.gallery}>
       <h3 className={styles.count}>Conteúdos vinculados ({response.total})</h3>
-      <ul className={styles.cards}>
-        {videos.map((video) => {
-          const selected = video.itemId === selectedItemId;
-          const date = formatDate(video.publishedAt);
-          return (
-            <li key={video.itemId}>
-              <button
-                type="button"
-                className={`${styles.card} ${selected ? styles.cardSelected : ""}`}
-                aria-pressed={selected}
-                onClick={() => onSelect(video.itemId)}
-              >
-                {video.coverUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- thumbnail do DTO; next/image exige domínios em runtime
-                  <img className={styles.cover} src={video.coverUrl} alt="" loading="lazy" />
-                ) : (
-                  <span className={styles.coverFallback}>Sem prévia</span>
-                )}
-                <span className={styles.cardBody}>
-                  <span className={styles.cardTitle}>{video.title ?? video.itemId}</span>
-                  {date ? <span className={styles.cardDate}>{date}</span> : null}
-                  <span className={styles.cardMetrics}>
-                    <CardMetric label="Visualizações" icon={<Eye aria-hidden />} value={video.metrics.views} />
-                    <CardMetric label="GMV" icon={<ShoppingCart aria-hidden />} value={video.metrics.gmv} />
-                    <CardMetric label="CTR" icon={<TrendingUp aria-hidden />} value={video.metrics.ctr} />
+      <div className={styles.controls}>
+        <div className={styles.searchField}>
+          <label className={styles.srOnly} htmlFor="published-contents-search">
+            Buscar por título ou assunto
+          </label>
+          <input
+            className={styles.searchInput}
+            id="published-contents-search"
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Buscar por título ou assunto..."
+            type="search"
+            value={query}
+          />
+        </div>
+        <div>
+          <label className={styles.srOnly} htmlFor="published-contents-sort">
+            Ordenar conteúdos
+          </label>
+          <select
+            aria-label="Ordenar conteúdos"
+            className={styles.sortSelect}
+            id="published-contents-sort"
+            onChange={(event) =>
+              onSortChange(event.target.value as PublishedContentsSort)
+            }
+            value={sort}
+          >
+            <option value="recent">Mais recentes</option>
+            <option value="oldest">Mais antigas</option>
+          </select>
+        </div>
+      </div>
+      {visibleVideos.length === 0 ? (
+        <p className={styles.state}>Nenhum conteúdo encontrado para a busca.</p>
+      ) : (
+        <ul className={styles.cards}>
+          {visibleVideos.map((video) => {
+            const selected = video.itemId === selectedItemId;
+            const date = formatDate(video.publishedAt);
+            const duration = formatDuration(video.duration);
+            return (
+              <li key={video.itemId}>
+                <button
+                  type="button"
+                  className={`${styles.card} ${selected ? styles.cardSelected : ""}`}
+                  aria-pressed={selected}
+                  onClick={() => onSelect(video.itemId)}
+                >
+                  {video.coverUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- thumbnail do DTO; next/image exige domínios em runtime
+                    <img className={styles.cover} src={video.coverUrl} alt="" loading="lazy" />
+                  ) : (
+                    <span className={styles.coverFallback}>Sem prévia</span>
+                  )}
+                  {/* Kebab visual (referência aprovada): sem handler por decisão de
+                      escopo, como os CTAs visuais do ProductDetail. */}
+                  <span aria-hidden="true" className={styles.kebab}>
+                    <MoreVertical />
                   </span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+                  {duration ? (
+                    <span className={styles.durationBadge}>{duration}</span>
+                  ) : null}
+                  <span className={styles.cardBody}>
+                    <span className={styles.cardTitle}>{video.title ?? video.itemId}</span>
+                    {date ? <span className={styles.cardDate}>{date}</span> : null}
+                    <span className={styles.cardMetrics}>
+                      <CardMetric label="Visualizações" icon={<Eye aria-hidden />} value={video.metrics.views} />
+                      <CardMetric label="GMV" icon={<ShoppingCart aria-hidden />} value={video.metrics.gmv} />
+                      <CardMetric label="CTR" icon={<TrendingUp aria-hidden />} value={video.metrics.ctr} />
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       {error ? (
         <div className={styles.inlineError} role="alert">
           <p>{error}</p>
@@ -402,6 +508,8 @@ export function PublishedContentsView({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [fallbackUsed, setFallbackUsed] = useState(false);
   const [playbackFailed, setPlaybackFailed] = useState(false);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<PublishedContentsSort>("recent");
   const requestSeq = useRef(0);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
 
@@ -496,6 +604,10 @@ export function PublishedContentsView({
         error={gallery.error}
         loading={gallery.loading}
         loadingMore={gallery.loadingMore}
+        query={query}
+        onQueryChange={setQuery}
+        sort={sort}
+        onSortChange={setSort}
         onSelect={(itemId) => {
           setSelectedItemId(itemId);
           setDrawerOpen(true);

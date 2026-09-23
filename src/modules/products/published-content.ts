@@ -137,10 +137,19 @@ function projectVideo(
 ): PublishedVideo {
   const playback = playbackUrl(item.main_url);
   const fallback = playbackUrl(item.backup_url);
+  // Cover aprovada (decisão do usuário 2026-09-23): post_url do video_meta
+  // (imagem assinada tiktokcdn) passa pela mesma sanitização de URL do playback.
+  const cover = playbackUrl(item.cover_url);
+  const duration =
+    typeof item.duration === "number" && Number.isFinite(item.duration) && item.duration > 0
+      ? item.duration
+      : undefined;
   return {
     itemId: item.item_id,
     productIds,
     ...(item.title ? { title: item.title } : {}),
+    ...(cover ? { coverUrl: cover } : {}),
+    ...(duration !== undefined ? { duration } : {}),
     ...(playback ? { playbackUrl: playback } : {}),
     ...(fallback ? { fallbackPlaybackUrl: fallback } : {}),
     ...(item.published_at ? { publishedAt: item.published_at } : {}),

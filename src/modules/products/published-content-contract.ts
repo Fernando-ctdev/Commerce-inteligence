@@ -32,6 +32,7 @@ export type PublishedVideo = {
   productIds: string[];
   title?: string;
   coverUrl?: string;
+  duration?: number;
   publishedAt?: string;
   playbackUrl?: string;
   fallbackPlaybackUrl?: string;
