@@ -81,6 +81,12 @@ function gallery(response: LinkedContentsResponse | null, extra: Record<string, 
   );
 }
 
+const noHandlers = {
+  onSelect: () => {},
+  onLoadMore: () => {},
+  onRetry: () => {},
+};
+
 function detail(video: PublishedVideo, extra: Record<string, unknown> = {}) {
   return viewModule().then(({ PublishedContentDetail }) =>
     renderToStaticMarkup(
@@ -196,4 +202,102 @@ test("carregamento: região aria-live polite", async () => {
   const markup = await gallery(null, { loading: true });
 
   assert.match(markup, /aria-live="polite"/);
+});
+
+test("foco do título do detail: só em viewport móvel e com elemento presente", async () => {
+  const { focusDetailTitle } = await viewModule();
+  let focused = 0;
+  const el = { focus: () => { focused += 1; } } as unknown as HTMLElement;
+
+  focusDetailTitle(el, false);
+  assert.equal(focused, 0);
+  focusDetailTitle(el, true);
+  assert.equal(focused, 1);
+  focusDetailTitle(null, true);
+  assert.equal(focused, 1);
+});
+
+test("erro de load-more preserva cards e mostra alert de retry junto", async () => {
+  const markup = await gallery(response, {
+    error: "Não foi possível carregar os conteúdos publicados agora.",
+  });
+
+  assert.ok(markup.includes("Conteúdos vinculados (2)"));
+  assert.ok(markup.includes("Esse whey realmente vale a pena"));
+  assert.match(markup, /role="alert"/);
+  assert.ok(markup.includes("Tentar novamente"));
+});
+
+test("erro inicial sem resposta substitui o estado vazio", async () => {
+  const markup = await gallery(null, { error: "Erro inicial." });
+
+  assert.match(markup, /role="alert"/);
+  assert.ok(!markup.includes("Conteúdos vinculados"));
+});
+
+test("chaves desconhecidas de business/metrics nunca aparecem no markup", async () => {
+  const markup = await detail({
+    ...videoBase,
+    business: { ...videoBase.business, raw_provider_field: "secreto" },
+    metrics: { ...videoBase.metrics, weirdProviderKey: 1 },
+  });
+
+  assert.ok(!markup.includes("raw_provider_field"));
+  assert.ok(!markup.includes("weirdProviderKey"));
+  assert.ok(markup.includes("Produto"));
+  assert.ok(markup.includes("Visualizações"));
+});
+
+test("seleção efetiva: primeira entrada por padrão e estável ao anexar páginas", async () => {
+  const { resolveSelection } = await viewModule();
+  const terceiro: PublishedVideo = { ...videoSemFallback, itemId: "7685499999999999999" };
+  const pagina2: LinkedContentsResponse = { ...response, videos: [...response.videos, terceiro] };
+
+  assert.equal(resolveSelection(null, response.videos), response.videos[0]);
+  assert.equal(resolveSelection(null, pagina2.videos), pagina2.videos[0]);
+  assert.equal(
+    resolveSelection(videoSemFallback.itemId, pagina2.videos)?.itemId,
+    videoSemFallback.itemId,
+  );
+  assert.equal(resolveSelection(null, []), null);
+});
+
+test("fallback de playback: uma única troca e falha final sem loop", async () => {
+  const { playbackFallbackState } = await viewModule();
+
+  assert.deepEqual(playbackFallbackState(false, videoBase), {
+    fallbackUsed: true,
+    playbackFailed: false,
+  });
+  assert.deepEqual(playbackFallbackState(true, videoBase), {
+    fallbackUsed: false,
+    playbackFailed: true,
+  });
+  assert.deepEqual(playbackFallbackState(false, videoSemFallback), {
+    fallbackUsed: false,
+    playbackFailed: true,
+  });
+  assert.deepEqual(
+    playbackFallbackState(false, { ...videoBase, fallbackPlaybackUrl: videoBase.playbackUrl }),
+    { fallbackUsed: false, playbackFailed: true },
+  );
+});
+
+test("merge de páginas preserva itens já renderizados e metadados da próxima", async () => {
+  const { mergePage } = await viewModule();
+  const terceiro: PublishedVideo = { ...videoSemFallback, itemId: "7685499999999999999" };
+  const proxima: LinkedContentsResponse = {
+    ...response,
+    videos: [terceiro],
+    page: 2,
+    total: 3,
+    hasMore: false,
+  };
+
+  const merged = mergePage(response, proxima);
+  assert.equal(merged.videos.length, 3);
+  assert.equal(merged.videos[0].itemId, response.videos[0].itemId);
+  assert.equal(merged.page, 2);
+  assert.equal(merged.total, 3);
+  assert.equal(merged.hasMore, false);
 });

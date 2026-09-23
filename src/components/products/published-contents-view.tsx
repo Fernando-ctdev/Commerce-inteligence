@@ -94,6 +94,49 @@ function formatDate(iso?: string) {
 const scalar = (value: LinkedContentsResponse["videos"][number]["metrics"][string]) =>
   value === null ? "null" : String(value);
 
+/** Seleção efetiva (SPEC §8): escolha do usuário prevalece; sem escolha, a
+ *  primeira entrada — estável quando páginas seguintes são anexadas. */
+export function resolveSelection(
+  selectedItemId: string | null,
+  videos: PublishedVideo[],
+): PublishedVideo | null {
+  return videos.find((video) => video.itemId === selectedItemId) ?? videos[0] ?? null;
+}
+
+/** Fallback único (SPEC §9): a primeira falha troca para o backup quando ele
+ *  existe e é diferente; qualquer falha seguinte encerra, sem loop. */
+export function playbackFallbackState(
+  fallbackUsed: boolean,
+  video: Pick<PublishedVideo, "playbackUrl" | "fallbackPlaybackUrl">,
+): { fallbackUsed: boolean; playbackFailed: boolean } {
+  if (
+    !fallbackUsed &&
+    video.fallbackPlaybackUrl &&
+    video.fallbackPlaybackUrl !== video.playbackUrl
+  ) {
+    return { fallbackUsed: true, playbackFailed: false };
+  }
+  return { fallbackUsed: false, playbackFailed: true };
+}
+
+/** Paginação por anexo: itens já renderizados permanecem; página, total e
+ *  hasMore vêm da resposta mais recente do endpoint. */
+export function mergePage(
+  previous: LinkedContentsResponse,
+  next: LinkedContentsResponse,
+): LinkedContentsResponse {
+  return { ...next, videos: [...previous.videos, ...next.videos] };
+}
+
+/** Foco do título do detail após seleção, apenas em viewport móvel (SPEC §8).
+ *  O matchMedia fica no chamador; aqui só a decisão determinística. */
+export function focusDetailTitle(
+  heading: HTMLElement | null,
+  narrowViewport: boolean,
+): void {
+  if (narrowViewport && heading) heading.focus();
+}
+
 function MetricTile({ label, value }: { label: string; value: string }) {
   return (
     <div className={styles.tile}>
@@ -112,23 +155,21 @@ function MetricSection({
   labels: Record<string, string>;
   record: PublishedVideo["metrics"];
 }) {
-  const keys = Object.keys(labels);
-  const extras = Object.keys(record).filter((key) => !(key in labels));
-  if (!keys.some((key) => key in record) && extras.length === 0) return null;
+  /* Só rótulos estáticos allowlisted: chave fora do mapa nunca aparece, nem
+     com rótulo cru. Campo conhecido ausente continua como "—" explícito. */
+  const present = Object.keys(labels).filter((key) => key in record);
+  if (present.length === 0) return null;
   return (
     <section className={styles.metricsSection}>
       <h4>{title}</h4>
       <dl className={styles.tiles}>
-        {keys.map((key) =>
+        {Object.keys(labels).map((key) =>
           key in record ? (
             <MetricTile key={key} label={labels[key]} value={scalar(record[key])} />
           ) : (
             <MetricTile key={key} label={labels[key]} value="—" />
           ),
         )}
-        {extras.map((key) => (
-          <MetricTile key={key} label={key} value={scalar(record[key])} />
-        ))}
       </dl>
     </section>
   );
@@ -142,11 +183,13 @@ export function PublishedContentDetail({
   fallbackUsed,
   playbackFailed,
   onPlaybackError,
+  headingRef,
 }: {
   video: PublishedVideo;
   fallbackUsed: boolean;
   playbackFailed: boolean;
   onPlaybackError: () => void;
+  headingRef?: React.Ref<HTMLHeadingElement>;
 }) {
   const date = formatDate(video.publishedAt);
   const src =
@@ -176,7 +219,7 @@ export function PublishedContentDetail({
         ) : null}
       </div>
       <div className={styles.detailBody}>
-        <h3 className={styles.detailTitle} tabIndex={-1}>
+        <h3 ref={headingRef} className={styles.detailTitle} tabIndex={-1}>
           {video.title ?? video.itemId}
         </h3>
         {date ? <p className={styles.detailDate}>{date}</p> : null}
@@ -236,7 +279,10 @@ export function PublishedContentsGallery({
     );
   }
 
-  if (error) {
+  /* Erro com cards já renderizados: alert de retry junto da lista — só erro
+     inicial (sem resposta) substitui o estado vazio. */
+  const hasCards = response !== null && response.videos.length > 0;
+  if (error && !hasCards) {
     return (
       <div className={styles.state} role="alert">
         <p>{error}</p>
@@ -298,6 +344,14 @@ export function PublishedContentsGallery({
           );
         })}
       </ul>
+      {error ? (
+        <div className={styles.inlineError} role="alert">
+          <p>{error}</p>
+          <button type="button" className={styles.retry} onClick={onRetry}>
+            Tentar novamente
+          </button>
+        </div>
+      ) : null}
       {response.hasMore ? (
         <button
           type="button"
@@ -347,6 +401,7 @@ export function PublishedContentsView({
   const [fallbackUsed, setFallbackUsed] = useState(false);
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const requestSeq = useRef(0);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
 
   const load = useCallback(
     async (page: number, append: boolean) => {
@@ -362,9 +417,7 @@ export function PublishedContentsView({
         const next = await loadPublishedContents(productId, page, PAGE_SIZE);
         if (seq !== requestSeq.current) return;
         setGallery((prev) => ({
-          response: append && prev.response
-            ? { ...next, videos: [...prev.response.videos, ...next.videos] }
-            : next,
+          response: append && prev.response ? mergePage(prev.response, next) : next,
           error: null,
           loading: false,
           loadingMore: false,
@@ -401,8 +454,7 @@ export function PublishedContentsView({
   const videos = gallery.response?.videos ?? [];
   /* Primeira entrada é a seleção efetiva até o usuário escolher outra;
      páginas seguintes não trocam (videos[0] permanece). */
-  const effectiveSelected =
-    videos.find((video) => video.itemId === selectedItemId) ?? videos[0] ?? null;
+  const effectiveSelected = resolveSelection(selectedItemId, videos);
   const effectiveId = effectiveSelected?.itemId ?? null;
 
   useEffect(() => {
@@ -410,18 +462,24 @@ export function PublishedContentsView({
     setPlaybackFailed(false);
   }, [effectiveId]);
 
+  /* SPEC §8: selecionar move o foco para o título do detail, apenas no
+     layout empilhado (≤767px). Com o drawer fechado o ref é null e não há
+     o que focar. */
+  useEffect(() => {
+    if (!effectiveId) return;
+    focusDetailTitle(
+      headingRef.current,
+      window.matchMedia("(max-width: 767px)").matches,
+    );
+  }, [effectiveId]);
+
   if (!active) return null;
 
   const handlePlaybackError = () => {
-    if (
-      !fallbackUsed &&
-      effectiveSelected?.fallbackPlaybackUrl &&
-      effectiveSelected.fallbackPlaybackUrl !== effectiveSelected.playbackUrl
-    ) {
-      setFallbackUsed(true);
-    } else {
-      setPlaybackFailed(true);
-    }
+    if (!effectiveSelected) return;
+    const next = playbackFallbackState(fallbackUsed, effectiveSelected);
+    setFallbackUsed(next.fallbackUsed);
+    setPlaybackFailed(next.playbackFailed);
   };
 
   return (
@@ -442,15 +500,18 @@ export function PublishedContentsView({
       <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
         <DrawerContent className={styles.drawerContent}>
           <DrawerHeader className={styles.drawerHeader}>
-            <DrawerTitle>Conteúdos selecionado</DrawerTitle>
+            <DrawerTitle>Conteúdo selecionado</DrawerTitle>
           </DrawerHeader>
           {effectiveSelected ? (
-            <PublishedContentDetail
-              video={effectiveSelected}
-              fallbackUsed={fallbackUsed}
-              playbackFailed={playbackFailed}
-              onPlaybackError={handlePlaybackError}
-            />
+            <div className={styles.drawerScroll}>
+              <PublishedContentDetail
+                video={effectiveSelected}
+                fallbackUsed={fallbackUsed}
+                playbackFailed={playbackFailed}
+                onPlaybackError={handlePlaybackError}
+                headingRef={headingRef}
+              />
+            </div>
           ) : null}
         </DrawerContent>
       </Drawer>
