@@ -7,16 +7,27 @@
 // false e null preservados, campo conhecido ausente é "—". Sem busca, ordenação
 // client-side, autoplay, fetch de mídia ou geração de roteiro.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, Search, ShoppingCart, TrendingUp } from "lucide-react";
+import { Eye, Search, ShoppingCart, TrendingUp, XIcon } from "lucide-react";
+
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Button } from "@/components/ui/button";
 
 import type { LinkedContentsResponse, PublishedVideo } from "../../modules/products/published-content-contract";
 import { loadPublishedContents } from "./published-contents-api";
 import {
   Drawer,
+  DrawerClose,
   DrawerContent,
   DrawerHeader,
   DrawerTitle,
 } from "../ui/drawer";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "../ui/sheet";
 import styles from "./published-contents-view.module.css";
 
 /** Recorte do cliente: 9 itens por página do endpoint (referência aprovada). */
@@ -515,6 +526,7 @@ export function PublishedContentsView({
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<PublishedContentsSort>("recent");
+  const isMobile = useIsMobile();
   const requestSeq = useRef(0);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
 
@@ -601,6 +613,20 @@ export function PublishedContentsView({
     setPlaybackFailed(next.playbackFailed);
   };
 
+  const drawerBody = (
+    <div className={styles.drawerScroll}>
+      {effectiveSelected ? (
+        <PublishedContentDetail
+          video={effectiveSelected}
+          fallbackUsed={fallbackUsed}
+          playbackFailed={playbackFailed}
+          onPlaybackError={handlePlaybackError}
+          headingRef={headingRef}
+        />
+      ) : null}
+    </div>
+  );
+
   return (
     <section className={styles.view}>
       <PublishedContentsGallery
@@ -620,24 +646,36 @@ export function PublishedContentsView({
         onLoadMore={() => void load(gallery.currentPage + 1, true)}
         onRetry={() => void load(gallery.currentPage || 1, gallery.currentPage > 1)}
       />
-      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DrawerContent className={styles.drawerContent}>
-          <DrawerHeader className={styles.drawerHeader}>
-            <DrawerTitle>Conteúdo selecionado</DrawerTitle>
-          </DrawerHeader>
-          {effectiveSelected ? (
-            <div className={styles.drawerScroll}>
-              <PublishedContentDetail
-                video={effectiveSelected}
-                fallbackUsed={fallbackUsed}
-                playbackFailed={playbackFailed}
-                onPlaybackError={handlePlaybackError}
-                headingRef={headingRef}
-              />
-            </div>
-          ) : null}
-        </DrawerContent>
-      </Drawer>
+      {/* Mesmo padrão reutilizável do ProductCreateOverlay (DESIGN.md §3):
+          Sheet lateral no desktop, Drawer bottom sheet no mobile. */}
+      {isMobile ? (
+        <Drawer open={drawerOpen} onOpenChange={setDrawerOpen} swipeDirection="right">
+          <DrawerContent className="data-[swipe-axis=x]:w-full max-w-[40rem]">
+            <DrawerHeader className="flex-row items-center justify-between border-b px-4 py-3">
+              <DrawerTitle>Conteúdo selecionado</DrawerTitle>
+              <DrawerClose
+                aria-label="Fechar conteúdo selecionado"
+                render={<Button size="icon-sm" variant="ghost" />}
+              >
+                <XIcon aria-hidden="true" />
+              </DrawerClose>
+            </DrawerHeader>
+            {drawerBody}
+          </DrawerContent>
+        </Drawer>
+      ) : (
+        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+          <SheetContent className="w-full gap-0 overflow-y-auto p-0 data-[side=right]:sm:max-w-xl">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Conteúdo selecionado</SheetTitle>
+              <SheetDescription>
+                Detalhe do conteúdo publicado selecionado.
+              </SheetDescription>
+            </SheetHeader>
+            {drawerBody}
+          </SheetContent>
+        </Sheet>
+      )}
     </section>
   );
 }
