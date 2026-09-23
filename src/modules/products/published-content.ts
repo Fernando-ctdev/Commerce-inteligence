@@ -5,7 +5,11 @@
 // ledger). Fail-closed: fixture inválida, página inválida ou provenance sem sourceId
 // não inventam dados. Playback só https *.tiktokcdn.com; post_url assinado nunca vira
 // coverUrl (ruling); chaves fora do allowlist nunca cruzam; nada é logado.
-import type { LinkedContentsResponse, PublishedVideo } from "./published-content-contract";
+import type {
+  LinkedContentsResponse,
+  PublishedContentScalar,
+  PublishedVideo,
+} from "./published-content-contract";
 import {
   PUBLISHED_VIDEO_ANALYTICS_PAGES,
   PUBLISHED_VIDEO_ITEM_ASSOCIATIONS,
@@ -33,7 +37,53 @@ const DEFAULT_SOURCE: PublishedContentSource = {
   associations: PUBLISHED_VIDEO_ITEM_ASSOCIATIONS,
 };
 
-const PLAYBACK_HOST_SUFFIX = ".tiktokcdn.com";
+const PLAYBACK_HOST_PATTERN =
+  /^[a-z0-9-]+(\.[a-z0-9-]+)*\.tiktokcdn\.com$/;
+
+/** Listas fechadas da SPEC §6.1: campo fora da lista é descartado; presente, mantido (0/false/null inclusive). */
+export const BUSINESS_FIELD_ALLOWLIST: ReadonlySet<string> = new Set([
+  "productTitle",
+  "title",
+  "categoryName",
+  "priceLabel",
+  "sellerName",
+  "sellerId",
+  "stockCount",
+  "canAdd",
+  "commission",
+  "commissionRate",
+  "commissionExpense",
+  "labels",
+]);
+
+export const METRIC_FIELD_ALLOWLIST: ReadonlySet<string> = new Set([
+  "views",
+  "vvCnt",
+  "newFollowerCnt",
+  "ctr",
+  "gmv",
+  "directGmv",
+  "itemSoldCnt",
+  "completionRate",
+  "likes",
+  "comments",
+  "shares",
+  "productClicks",
+  "productUnits",
+  "productRevenue",
+]);
+
+/** Mantém só chaves allowlisted presentes; não cria valor derivado e preserva 0/false/null. */
+function filterFields(
+  record: Record<string, PublishedContentScalar>,
+  allowlist: ReadonlySet<string>,
+): Record<string, PublishedContentScalar> {
+  const filtered: Record<string, PublishedContentScalar> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (allowlist.has(key)) filtered[key] = value;
+  }
+  return filtered;
+}
 
 /** Aceita somente provenance objeto com sourceId string não vazia. */
 function readSourceId(value: unknown): string | null {
@@ -64,20 +114,22 @@ function requirePositiveInteger(value: number, label: string): void {
   }
 }
 
-/** URLs de playback: somente https em host *.tiktokcdn.com; inválida ou ausente deixa o campo de fora. */
+/** URLs de playback: somente https em hostname *.tiktokcdn.com bem-formado (sem rótulo
+ *  vazio, sem sufixo nu ou hostname estranho); inválida ou ausente deixa o campo de fora. */
 function playbackUrl(value: string | undefined): string | undefined {
   if (!value) return undefined;
   try {
     const parsed = new URL(value);
     if (parsed.protocol !== "https:") return undefined;
-    if (!parsed.hostname.endsWith(PLAYBACK_HOST_SUFFIX)) return undefined;
+    if (!PLAYBACK_HOST_PATTERN.test(parsed.hostname)) return undefined;
     return value;
   } catch {
     return undefined;
   }
 }
 
-/** Copia somente campos allowlisted para o contrato camelCase compartilhado. */
+/** Copia somente campos allowlisted para o contrato camelCase compartilhado; business e
+ *  metrics passam pelas listas fechadas da SPEC antes de cruzar o DTO. */
 function projectVideo(
   item: PublishedVideoAnalyticsFixture,
   productIds: string[],
@@ -91,29 +143,40 @@ function projectVideo(
     ...(playback ? { playbackUrl: playback } : {}),
     ...(fallback ? { fallbackPlaybackUrl: fallback } : {}),
     ...(item.published_at ? { publishedAt: item.published_at } : {}),
-    business: item.business,
-    metrics: item.metrics,
+    business: filterFields(item.business, BUSINESS_FIELD_ALLOWLIST),
+    metrics: filterFields(item.metrics, METRIC_FIELD_ALLOWLIST),
   };
 }
 
-/** Valida integridade da fixture antes de qualquer recorte: IDs não vazios, sem
- *  associação duplicada, sem referência fora da analytics, páginas contíguas e
- *  metadados coerentes (total = itens distintos; só a última página pode ser parcial). */
+/** Valida integridade da fixture antes de qualquer recorte: sequência de páginas
+ *  começando em 1 com pageSize único, intermediárias cheias e hasMore true (última
+ *  cheia ou parcial e false), total coerente com itens distintos, item_id único na
+ *  analytics inteira, associação sem duplicata, sempre com item na analytics e
+ *  product na Vitrine. Qualquer desvio é PublishedContentFixtureError. */
 function validatedSource(source: PublishedContentSource): PublishedVideoAnalyticsFixture[] {
-  const seenPages: number[] = [];
   const ids = new Set<string>();
   let declaredTotal: number | null = null;
+  let declaredPageSize: number | null = null;
   source.analytics.forEach((page, index) => {
     requirePositiveInteger(page.page, "Página da fixture");
     requirePositiveInteger(page.pageSize, "PageSize da fixture");
-    if (index > 0 && page.page !== seenPages[index - 1]! + 1) {
-      throw new PublishedContentFixtureError("Páginas da fixture não são contíguas");
+    // Sequência estrita: 1, 2, 3… — cobre início em 1 e contiguidade de uma vez.
+    if (page.page !== index + 1) {
+      throw new PublishedContentFixtureError("Páginas da fixture não começam em 1 ou não são contíguas");
     }
-    if (page.items.length > page.pageSize) {
-      throw new PublishedContentFixtureError("Página da fixture maior que o pageSize declarado");
+    if (declaredPageSize === null) declaredPageSize = page.pageSize;
+    else if (page.pageSize !== declaredPageSize) {
+      throw new PublishedContentFixtureError("PageSize varia entre páginas da fixture");
     }
-    if (index > 0 && page.items.length < page.pageSize) {
-      throw new PublishedContentFixtureError("Página parcial só é permitida na última página");
+    const isLast = index === source.analytics.length - 1;
+    if (!isLast && page.items.length !== page.pageSize) {
+      throw new PublishedContentFixtureError("Página intermediária da fixture não está cheia");
+    }
+    if (!isLast && !page.hasMore) {
+      throw new PublishedContentFixtureError("Página intermediária da fixture precisa anunciar hasMore");
+    }
+    if (isLast && page.hasMore) {
+      throw new PublishedContentFixtureError("Última página da fixture não pode anunciar hasMore");
     }
     if (typeof page.total !== "number" || page.total < 0) {
       throw new PublishedContentFixtureError("Total da fixture inválido");
@@ -122,19 +185,18 @@ function validatedSource(source: PublishedContentSource): PublishedVideoAnalytic
       throw new PublishedContentFixtureError("Totais das páginas divergem");
     }
     declaredTotal = page.total;
-    seenPages.push(page.page);
     for (const item of page.items) {
       if (!item.item_id || typeof item.item_id !== "string") {
         throw new PublishedContentFixtureError("item_id da analytics é obrigatório");
+      }
+      if (ids.has(item.item_id)) {
+        throw new PublishedContentFixtureError("item_id repetido na analytics da fixture");
       }
       ids.add(item.item_id);
     }
   });
   if (declaredTotal !== ids.size) {
     throw new PublishedContentFixtureError("Total da fixture não corresponde aos itens distintos");
-  }
-  if (source.analytics.length > 0 && source.analytics[source.analytics.length - 1]!.hasMore) {
-    throw new PublishedContentFixtureError("Última página da fixture não pode anunciar hasMore");
   }
 
   const edges = new Set<string>();
@@ -144,6 +206,13 @@ function validatedSource(source: PublishedContentSource): PublishedVideoAnalytic
     }
     if (!ids.has(edge.item_id)) {
       throw new PublishedContentFixtureError("Associação aponta para item sem analytics");
+    }
+    if (
+      !SHOWCASE_PRODUCT_FIXTURES.some(
+        (showcase) => showcase.externalProductId === edge.product_id,
+      )
+    ) {
+      throw new PublishedContentFixtureError("Associação aponta para produto fora da Vitrine");
     }
     const key = `${edge.item_id}\u0000${edge.product_id}`;
     if (edges.has(key)) {
@@ -182,6 +251,9 @@ export function buildLinkedContents(
 ): LinkedContentsResponse {
   requirePositiveInteger(page, "Página");
   requirePositiveInteger(pageSize, "PageSize");
+  if (typeof product.id !== "string" || !product.id.trim()) {
+    throw new PublishedContentFixtureError("Product id inválido");
+  }
 
   const externalProductId = readSourceId(product.provenance);
   if (!externalProductId) return emptyResponse(product.id, page, pageSize);

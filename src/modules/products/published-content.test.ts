@@ -275,3 +275,165 @@ test("fixture padrão é coerente: páginas contíguas, total distinto e associa
   );
   assert.deepEqual(response.videos.map((video) => video.itemId), [ITEM_B]);
 });
+
+// —— Regressões da revisão (Task 1, REQUEST_CHANGES) ——
+
+test("item_id repetido entre páginas da analytics falha fechado (global)", () => {
+  const item = analyticsItem(ITEM_A);
+  const source = injected(
+    [
+      { page: 1, pageSize: 1, total: 2, hasMore: true, items: [item] },
+      {
+        page: 2,
+        pageSize: 1,
+        total: 2,
+        hasMore: false,
+        items: [{ ...item, title: "cópia" }],
+      },
+    ],
+    [{ item_id: ITEM_A, product_id: PRODUCT_A }],
+  );
+  assert.throws(
+    () =>
+      buildLinkedContents(
+        { id: "p", provenance: { sourceId: PRODUCT_A } },
+        1,
+        20,
+        source,
+      ),
+    (error: unknown) => error instanceof PublishedContentFixtureError,
+  );
+});
+
+test("associação com product_id fora da Vitrine falha fechado", () => {
+  assert.throws(
+    () =>
+      buildLinkedContents(
+        { id: "p", provenance: { sourceId: PRODUCT_A } },
+        1,
+        20,
+        injected(onePage([analyticsItem(ITEM_A)]), [
+          { item_id: ITEM_A, product_id: "1739999999999999999" },
+        ]),
+      ),
+    (error: unknown) => error instanceof PublishedContentFixtureError,
+  );
+});
+
+test("business e metrics passam por allowlists da SPEC: desconhecida fora, 0/false/null preservados", () => {
+  const item = analyticsItem(ITEM_A);
+  const source = injected(
+    onePage([
+      {
+        ...item,
+        business: {
+          productTitle: "Vestido",
+          gmv: "R$ 9,99",
+          campoEstranho: "fora",
+        },
+        metrics: { ...item.metrics, vvCnt: 0, likes: null, roas: 3.5 },
+      },
+    ]),
+    [{ item_id: ITEM_A, product_id: PRODUCT_A }],
+  );
+  const video = buildLinkedContents(
+    { id: "p", provenance: { sourceId: PRODUCT_A } },
+    1,
+    20,
+    source,
+  ).videos[0]!;
+  // gmv é MetricField na SPEC: fora do allowlist de business, não migra por conta própria.
+  assert.deepEqual(video.business, { productTitle: "Vestido" });
+  assert.equal(video.metrics.vvCnt, 0);
+  assert.equal(video.metrics.likes, null);
+  assert.equal("roas" in video.metrics, false);
+  assert.equal("campoEstranho" in video.business, false);
+});
+
+test("fixture padrão classifica gmv/directGmv/itemSoldCnt em metrics, não em business", () => {
+  const flat = PUBLISHED_VIDEO_ANALYTICS_PAGES.flatMap((page) => page.items);
+  for (const item of flat) {
+    assert.deepEqual(item.business, {});
+    assert.equal("gmv" in item.metrics, true);
+    assert.equal("directGmv" in item.metrics, true);
+    assert.equal("itemSoldCnt" in item.metrics, true);
+    assert.equal(item.metrics.gmv, "R$ 0,00");
+  }
+});
+
+test("sequência de páginas inválida falha fechado", () => {
+  const item = analyticsItem(ITEM_A);
+  const base = { total: 1, items: [item] };
+  const casos: PublishedVideoAnalyticsPageFixture[][] = [
+    // Primeira página precisa ser 1.
+    [{ page: 2, pageSize: 1, hasMore: false, ...base }],
+    // pageSize precisa ser igual entre páginas.
+    [
+      { page: 1, pageSize: 1, total: 1, hasMore: false, items: [item] },
+      { page: 2, pageSize: 2, total: 1, hasMore: false, items: [] },
+    ],
+    // Página intermediária precisa ser cheia.
+    [
+      { page: 1, pageSize: 2, total: 1, hasMore: true, items: [item] },
+      { page: 2, pageSize: 2, total: 1, hasMore: false, items: [] },
+    ],
+    // Página intermediária precisa anunciar hasMore true.
+    [
+      { page: 1, pageSize: 1, total: 1, hasMore: false, items: [item] },
+      { page: 2, pageSize: 1, total: 1, hasMore: false, items: [] },
+    ],
+    // Última página não pode anunciar hasMore true.
+    [{ page: 1, pageSize: 1, total: 1, hasMore: true, items: [item] }],
+  ];
+  for (const pages of casos) {
+    assert.throws(
+      () =>
+        buildLinkedContents(
+          { id: "p", provenance: { sourceId: PRODUCT_A } },
+          1,
+          20,
+          injected(pages, [{ item_id: ITEM_A, product_id: PRODUCT_A }]),
+        ),
+      (error: unknown) => error instanceof PublishedContentFixtureError,
+      `caso: ${JSON.stringify(pages.map((page) => [page.page, page.pageSize, page.hasMore]))}`,
+    );
+  }
+});
+
+test("Product com id vazio ou malformado falha fechado", () => {
+  for (const id of ["", "   ", 42, null, undefined]) {
+    assert.throws(
+      () =>
+        buildLinkedContents(
+          { id, provenance: { sourceId: PRODUCT_A } } as {
+            id: string;
+            provenance: unknown;
+          },
+          1,
+          20,
+        ),
+      (error: unknown) => error instanceof PublishedContentFixtureError,
+    );
+  }
+});
+
+test("hostname de playback rejeita sufixo malformado e aceita subdomínio normal", () => {
+  const item = analyticsItem(ITEM_A);
+  for (const url of [
+    "https://tiktokcdn.com/video/tos/x.mp4",
+    "https://x..tiktokcdn.com/video/tos/x.mp4",
+    "https://tiktokcdn.com.evil.example/video/tos/x.mp4",
+  ]) {
+    const source = injected(
+      onePage([{ ...item, main_url: url }]),
+      [{ item_id: ITEM_A, product_id: PRODUCT_A }],
+    );
+    const video = buildLinkedContents(
+      { id: "p", provenance: { sourceId: PRODUCT_A } },
+      1,
+      20,
+      source,
+    ).videos[0]!;
+    assert.equal(video.playbackUrl, undefined, url);
+  }
+});
