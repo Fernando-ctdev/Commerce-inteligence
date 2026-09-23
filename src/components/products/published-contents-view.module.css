@@ -76,6 +76,8 @@
   min-width: 0;
   overflow: hidden;
   padding: 0;
+  /* Âncora dos overlays posicionados (durationBadge, kebab). */
+  position: relative;
   text-align: left;
   transition: border-color 160ms ease-out;
   width: 100%;
