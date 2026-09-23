@@ -2,7 +2,9 @@
 
 ## 1. Objetivo
 
-Transformar os conteúdos gerados pela estratégia em unidades claras, editáveis, aprováveis e prontas para uma sessão real de gravação.
+Transformar as decisões comerciais produzidas pela Commerce Intelligence em unidades claras, editáveis, aprováveis e executáveis sem perder a lógica de venda que originou cada conteúdo.
+
+O Briefing não existe apenas para dizer ao creator **o que gravar**. Ele deve preservar, em linguagem utilizável, **qual efeito comercial o conteúdo pretende provocar e qual mecanismo criativo ajuda a provocar esse efeito**. Esse efeito pode ser racional, emocional ou comportamental: identificação, curiosidade, desejo, confiança, percepção de valor, impulso, redução de objeção ou vontade de experimentar.
 
 Fluxo principal:
 
@@ -32,7 +34,9 @@ Histórico
 
 A regra é:
 
-> **A inteligência decide o que produzir. O Briefing transforma essa decisão em algo que o creator consegue revisar e executar. O lote organiza essa execução no tempo.**
+> **A inteligência define uma hipótese comercial e criativa de como o conteúdo pode gerar vontade de comprar. O Briefing transforma essa hipótese em execução natural para o creator. O lote apenas organiza essa execução no tempo.**
+
+Content Operations não redefine a estratégia de venda. Sua responsabilidade é preservar essa intenção durante revisão, versionamento e execução.
 
 ---
 
@@ -67,7 +71,7 @@ A engine deve variar estrategicamente entre eles:
 * cenas;
 * CTAs.
 
-O objetivo não é produzir 20 variações superficiais da mesma ideia.
+O objetivo não é produzir 20 variações superficiais da mesma ideia nem 20 formatos usados por obrigação. A variação deve explorar, quando fizer sentido, **teses de venda, emoções, situações, mecanismos persuasivos e mecanismos criativos diferentes** — por exemplo POV, demonstração, humor, surpresa, reação, transformação, comparação, storytelling ou visual-first — sempre conectados ao Produto e à intenção de venda.
 
 ---
 
@@ -135,7 +139,7 @@ Nem todos os elementos estratégicos precisam aparecer permanentemente na interf
 
 A interface deve priorizar aquilo que ajuda o creator a decidir:
 
-> **“Quero produzir este conteúdo?”**
+> **“Entendo qual efeito este conteúdo quer provocar, como o Produto participa disso e consigo executar essa ideia de forma natural?”**
 
 ---
 
@@ -667,7 +671,7 @@ A introdução futura de IA como executor não deve exigir reconstrução do Bri
 
 ```text
 Commerce Intelligence Engine
-= decide como vender
+= decide como o conteúdo pode mover o público em direção à compra
 + constrói ProductStrategy
 + planeja o conjunto em ContentPlan / ContentOpportunity
 + cria Content + Briefing inicial em DRAFT
@@ -765,6 +769,6 @@ Concluir
 Preservar histórico
 ```
 
-O usuário nunca deve precisar compreender a complexidade interna da engine para decidir ou organizar o que gravar.
+O usuário nunca deve precisar compreender a complexidade interna da engine para executar a estratégia, mas deve conseguir perceber a intenção comercial do conteúdo que está revisando.
 
-> **O Briefing do Conteúdo é a ponte entre inteligência e execução. O lote de gravação transforma essa execução em uma sessão organizada.**
+> **O Briefing do Conteúdo é a ponte entre a lógica de decisão de compra criada pela inteligência e a execução do creator. O lote de gravação apenas organiza essa execução em uma sessão.**
