@@ -463,6 +463,7 @@ export function ProductDetail({
             <PublishedContentsView
               active={tab === "contents"}
               productId={product.id}
+              productTitle={product.name}
             />
           </SectionSwitcherContent>
           <SectionSwitcherContent className={styles.tabContent} value="strategy">

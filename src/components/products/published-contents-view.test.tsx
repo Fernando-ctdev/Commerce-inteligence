@@ -271,7 +271,7 @@ test("detail: fallback único troca a fonte e erro final aparece em role alert",
   assert.ok(!semFallback.includes("backup.mp4"));
 });
 
-test("detail: métricas com zero, null, ausência explícita e sem cálculo derivado", async () => {
+test("detail: métricas com zero, null, ausência como 0 e sem cálculo derivado", async () => {
   const markup = await detail({
     ...videoBase,
     metrics: { views: 128000, likes: 0, comments: null },
@@ -281,8 +281,13 @@ test("detail: métricas com zero, null, ausência explícita e sem cálculo deri
   assert.ok(markup.includes("Curtidas"));
   assert.ok(markup.includes("0"));
   assert.ok(markup.includes("null"));
-  // campo conhecido inexistente no DTO é ausência explícita, não invenção
-  assert.ok(markup.includes("—"));
+  // campo de MÉTRICA conhecido ausente no DTO mostra 0 (pedido do usuário),
+  // não traço; dados de negócio ausentes continuam com —
+  const itemSold = markup.indexOf("Itens vendidos");
+  assert.ok(itemSold !== -1, "tile de métrica conhecida presente");
+  assert.match(markup, /Itens vendidos<\/dt><dd>0<\/dd>/);
+  const categoria = markup.indexOf("Categoria");
+  assert.match(markup.slice(categoria, categoria + 40), /—/);
   // sem CTR/ROAS/total calculado no cliente
   assert.ok(!markup.includes("% calculado"));
 });

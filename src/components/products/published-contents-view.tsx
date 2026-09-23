@@ -213,13 +213,17 @@ function MetricSection({
   title,
   labels,
   record,
+  absentValue = "—",
 }: {
   title: string;
   labels: Record<string, string>;
   record: PublishedVideo["metrics"];
+  /** Métricas de vídeo ausentes mostram 0 (decisão do usuário); negócio e
+   *  métricas de produto continuam com — explícito. null real segue "null". */
+  absentValue?: string;
 }) {
   /* Só rótulos estáticos allowlisted: chave fora do mapa nunca aparece, nem
-     com rótulo cru. Campo conhecido ausente continua como "—" explícito. */
+     com rótulo cru. */
   const present = Object.keys(labels).filter((key) => key in record);
   if (present.length === 0) return null;
   return (
@@ -230,7 +234,7 @@ function MetricSection({
           key in record ? (
             <MetricTile key={key} label={labels[key]} value={scalar(record[key])} />
           ) : (
-            <MetricTile key={key} label={labels[key]} value="—" />
+            <MetricTile key={key} label={labels[key]} value={absentValue} />
           ),
         )}
       </dl>
@@ -292,7 +296,12 @@ export function PublishedContentDetail({
           labels={BUSINESS_LABELS}
           record={video.business}
         />
-        <MetricSection title="Métricas" labels={METRIC_LABELS} record={video.metrics} />
+        <MetricSection
+          title="Métricas"
+          labels={METRIC_LABELS}
+          record={video.metrics}
+          absentValue="0"
+        />
         <MetricSection
           title="Métricas do produto neste conteúdo"
           labels={PRODUCT_METRIC_LABELS}
@@ -514,9 +523,12 @@ function CardMetric({
  *  pagina anexando vídeos e mantém o playback fallback por seleção. */
 export function PublishedContentsView({
   active,
+  productTitle,
   productId,
 }: {
   active: boolean;
+  /** Nome do Product para o header do overlay (vem do ProductRecord, não do payload). */
+  productTitle: string;
   productId: string;
 }) {
   const [gallery, setGallery] = useState<GalleryState>(IDLE);
@@ -652,7 +664,9 @@ export function PublishedContentsView({
         <Drawer open={drawerOpen} onOpenChange={setDrawerOpen} swipeDirection="right">
           <DrawerContent className="data-[swipe-axis=x]:w-full max-w-[40rem]">
             <DrawerHeader className="flex-row items-center justify-between border-b px-4 py-3">
-              <DrawerTitle>Conteúdo selecionado</DrawerTitle>
+              <DrawerTitle className="min-w-0 truncate text-base font-semibold">
+                {productTitle}
+              </DrawerTitle>
               <DrawerClose
                 aria-label="Fechar conteúdo selecionado"
                 render={<Button size="icon-sm" variant="ghost" />}
@@ -666,9 +680,13 @@ export function PublishedContentsView({
       ) : (
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetContent className="w-full gap-0 overflow-y-auto p-0 data-[side=right]:sm:max-w-xl">
-            <SheetHeader className="sr-only">
-              <SheetTitle>Conteúdo selecionado</SheetTitle>
-              <SheetDescription>
+            {/* Header visível de uma linha: título do produto à esquerda,
+                close nativo do Sheet alinhado à direita. */}
+            <SheetHeader className="flex-row items-center justify-between border-b px-4 py-3">
+              <SheetTitle className="min-w-0 truncate text-base font-semibold">
+                {productTitle}
+              </SheetTitle>
+              <SheetDescription className="sr-only">
                 Detalhe do conteúdo publicado selecionado.
               </SheetDescription>
             </SheetHeader>
