@@ -6,13 +6,15 @@ O produto é uma plataforma de inteligência comercial para creators e afiliados
 
 O MVP não tem como objetivo gerar vídeos ou imagens com IA.
 
-O núcleo do produto é a engine de inteligência comercial e estratégica responsável por transformar um produto em um plano completo de conteúdo orientado a vendas.
+A essência da Viewefy é ajudar um creator de commerce a criar conteúdos que façam o público avançar até a decisão de compra do produto apresentado.
 
-A plataforma deve responder, de forma prática e operacional, à principal pergunta do creator:
+A principal pergunta que o produto deve responder é:
 
-**“O que eu devo gravar para vender este produto?”**
+**“Como criar um conteúdo que realmente gere venda para este produto?”**
 
-A partir de um produto, contexto e preferências do creator, o sistema gera e organiza:
+A Commerce Intelligence é o núcleo responsável por responder essa pergunta. Ela deve compreender o Produto como uma oportunidade de compra e transformar fatos confirmados em razões de compra, barreiras, provas, argumentos, ângulos e execuções de conteúdo capazes de construir uma decisão comercial no espectador.
+
+A partir de um produto, contexto e preferências do creator, o sistema pode gerar e organizar:
 
 * análise comercial do produto;
 * identificação de público;
@@ -20,7 +22,9 @@ A partir de um produto, contexto e preferências do creator, o sistema gera e or
 * desejos;
 * objeções;
 * benefícios;
+* razões de compra;
 * argumentos de venda;
+* provas;
 * posicionamento;
 * ângulos de conteúdo;
 * hooks;
@@ -35,6 +39,12 @@ A partir de um produto, contexto e preferências do creator, o sistema gera e or
 * execução e progresso no Estúdio;
 * histórico e memória de cada Produto.
 
+Esses elementos não possuem o mesmo peso.
+
+**Estratégia comercial e capacidade de produzir conteúdo orientado à decisão de compra são o core.** Planejamento, variedade, Briefings, lotes, Agenda, Estúdio e memória são mecanismos de suporte para tornar essa inteligência utilizável, executável e reaproveitável.
+
+Um conteúdo não é bom para a Viewefy apenas porque é criativo, natural, variado, gravável ou compatível com TikTok. Ele precisa possuir uma lógica comercial clara de como pode aumentar interesse, relevância, desejo, confiança ou reduzir uma barreira que impede a compra.
+
 A engine estratégica é a mesma para todos os planos.
 
 Os planos comerciais limitam principalmente quantidade de produtos, campanhas e conteúdos entregues por mês. Gerações de conteúdo são ilimitadas: o creator pode solicitar novos conteúdos de um produto quantas vezes quiser; a quota mede o conteúdo entregue, não as tentativas (ADR-021).
@@ -45,52 +55,45 @@ No futuro, planos premium poderão adicionar produção automática por IA, util
 
 # 2. Problema
 
-Creators e afiliados de TikTok Shop trabalham com grande volume de conteúdo.
+Creators e afiliados de commerce não precisam apenas produzir conteúdo em volume.
 
-Um creator pode precisar produzir dezenas de vídeos por semana para diferentes produtos.
+Eles precisam produzir conteúdo que **venda**.
 
-O principal gargalo não é necessariamente a gravação.
-
-O problema começa antes.
+A dificuldade real acontece antes e durante a criação: transformar um Produto em uma comunicação capaz de fazer uma pessoa perceber relevância, desejar o resultado, acreditar no que está sendo demonstrado, superar dúvidas e considerar a compra.
 
 O creator precisa decidir repetidamente:
 
-* qual produto trabalhar;
-* qual argumento utilizar;
-* qual público atacar;
-* qual dor explorar;
-* qual benefício destacar;
-* qual hook utilizar;
-* como estruturar o vídeo;
-* como diferenciar um vídeo do anterior;
-* qual CTA utilizar;
-* quais ideias ainda não foram exploradas;
-* quais conteúdos precisam ser gravados;
-* como organizar o volume de produção.
+* quem tem maior chance de se importar com aquele Produto;
+* em qual situação o Produto se torna relevante;
+* qual problema ou desejo merece ser explorado;
+* qual benefício realmente cria uma razão de compra;
+* qual objeção está impedindo a decisão;
+* qual prova pode reduzir incerteza;
+* qual argumento diferencia o Produto de simplesmente “mais um produto”;
+* qual ângulo torna essa razão de compra interessante;
+* qual hook captura atenção sem se desconectar da venda;
+* como desenvolver o conteúdo sem parecer publicidade artificial;
+* como apresentar o Produto de forma convincente e natural;
+* qual CTA é coerente com o estágio de decisão criado pelo conteúdo;
+* como explorar novas teses comerciais sem repetir apenas a mesma fórmula.
 
-Esse processo costuma acontecer de forma fragmentada através de:
-
-* notas;
-* planilhas;
-* documentos;
-* chats com IA;
-* mensagens;
-* memória;
-* improvisação.
+Hoje esse raciocínio costuma acontecer de forma fragmentada através de experiência pessoal, improvisação, observação de outros creators, notas, planilhas e chats genéricos com IA.
 
 Isso gera:
 
-* repetição de ideias;
-* conteúdo sem estratégia;
-* excesso de tempo planejando;
-* dificuldade em manter volume;
-* dificuldade em organizar campanhas;
-* fadiga criativa;
-* pouca variedade;
-* perda de consistência;
-* dificuldade para transformar estratégia em execução.
+* conteúdos que chamam atenção mas não constroem motivo para comprar;
+* roteiros genéricos que poderiam servir para qualquer Produto;
+* excesso de features sem benefício percebido;
+* benefícios sem prova;
+* CTAs desconectados do que o conteúdo construiu;
+* repetição das mesmas teses de venda;
+* conteúdo artificial com aparência de anúncio;
+* dificuldade de transformar conhecimento comercial em execução nativa da plataforma;
+* dependência excessiva da intuição do creator.
 
-A plataforma existe para eliminar esse caos.
+A Viewefy existe para reduzir esse vazio entre **“eu tenho um produto para divulgar”** e **“eu sei como comunicar esse produto de uma forma capaz de gerar decisão de compra”**.
+
+Organização e escala continuam importantes, mas são problemas secundários. Organizar muito conteúdo fraco não resolve o problema principal.
 
 ---
 
@@ -98,19 +101,23 @@ A plataforma existe para eliminar esse caos.
 
 A proposta central do produto é:
 
-> **Transformar qualquer produto em um plano organizado de conteúdo comercial pronto para gravação.**
+> **Transformar qualquer Produto em uma estratégia de comunicação e em conteúdos desenhados para conduzir o público em direção à decisão de compra.**
 
 A plataforma não deve ser posicionada como um simples gerador de scripts.
 
-Também não deve ser posicionada como uma ferramenta genérica de marketing.
+Também não deve ser posicionada como uma ferramenta genérica de marketing, organização ou produtividade.
 
 O valor está em combinar:
 
-**inteligência comercial + estratégia de conteúdo + organização operacional da produção.**
+**inteligência comercial + psicologia da decisão de compra + estratégia de conteúdo + execução nativa da plataforma.**
 
-O usuário entra com um produto.
+O usuário entra com um Produto.
 
-O sistema devolve uma máquina de produção estruturada.
+A Viewefy deve devolver uma resposta prática para:
+
+> **por que alguém compraria, o que pode impedir essa compra, o que precisa ser demonstrado ou comunicado e como transformar isso em conteúdo que venda.**
+
+Briefings, memória, variedade e ferramentas operacionais existem para tornar essa resposta executável e repetível em escala.
 
 ---
 
@@ -155,21 +162,24 @@ A principal necessidade é transformar estratégia em uma operação repetível 
 
 # 5. Objetivos do MVP
 
-O MVP deve provar que creators estão dispostos a utilizar e pagar por uma plataforma que resolve planejamento, organização e execução operacional de conteúdo antes e durante a gravação.
+O MVP deve provar que creators estão dispostos a utilizar e pagar por uma plataforma que melhora a qualidade comercial do conteúdo que produzem para vender Produtos.
 
 Os principais objetivos são:
 
-1. reduzir o tempo necessário para transformar um produto em ideias de conteúdo;
-2. impedir que o creator fique sem saber o que gravar;
-3. gerar variedade estratégica;
-4. transformar ideias em conteúdos realmente executáveis;
-5. organizar grandes volumes de conteúdo;
-6. ajudar o creator a trabalhar vários produtos simultaneamente;
-7. permitir agrupar conteúdos aprovados em lotes de gravação;
-8. permitir planejar quando cada lote será gravado;
-9. acompanhar a execução real no Estúdio sem gestão manual de status;
-10. criar recorrência de uso;
-11. validar disposição de pagamento pela inteligência estratégica sem depender de geração de vídeo por IA.
+1. ajudar o creator a compreender por que diferentes públicos poderiam comprar um Produto;
+2. transformar fatos e capacidades do Produto em benefícios, resultados desejados e razões de compra relevantes;
+3. identificar barreiras, objeções e incertezas que precisam ser resolvidas pelo conteúdo;
+4. selecionar argumentos e provas coerentes com cada oportunidade comercial;
+5. criar conteúdos em que hook, desenvolvimento, prova, script e CTA trabalhem a mesma intenção comercial;
+6. produzir comunicação natural e nativa da plataforma sem perder a lógica de venda;
+7. gerar variedade entre **teses comerciais válidas**, e não variedade pela variedade;
+8. impedir que novos conteúdos sejam apenas reformulações das mesmas razões de compra já exploradas;
+9. transformar a inteligência comercial em Briefings realmente executáveis pelo creator;
+10. permitir que o creator revise, aprove e execute esses conteúdos sem precisar compreender a complexidade interna da engine;
+11. preservar memória suficiente para melhorar continuidade e diversidade comercial das próximas gerações;
+12. validar disposição de pagamento pela inteligência de conteúdo para venda sem depender de geração automática de vídeo por IA.
+
+Lotes de gravação, Agenda e Estúdio podem reduzir fricção operacional, mas não são a hipótese central que o MVP precisa provar.
 
 ---
 
@@ -211,9 +221,57 @@ O produto precisa permanecer extremamente focado.
 
 # 7. Princípio Central do Produto
 
-O sistema não deve simplesmente gerar conteúdo.
+A Viewefy existe para responder:
 
-Ele deve tomar decisões estratégicas.
+> **“Como criar um conteúdo que realmente gere venda para este Produto?”**
+
+Esse é o princípio raiz do produto.
+
+O sistema não deve confundir:
+
+```text
+conteúdo que prende atenção
+```
+
+com:
+
+```text
+conteúdo que cria uma razão para comprar
+```
+
+Nem deve confundir:
+
+```text
+variedade de formatos
+```
+
+com:
+
+```text
+variedade de mecanismos comerciais válidos
+```
+
+A engine precisa raciocinar sobre a decisão de compra antes de raciocinar sobre a execução do vídeo.
+
+Para cada conteúdo, deve existir uma hipótese comercial clara, por exemplo:
+
+```text
+quem precisa se importar
++
+qual situação torna o Produto relevante
++
+qual dor, desejo ou resultado está em jogo
++
+qual razão de compra será construída
++
+qual barreira precisa ser reduzida
++
+qual prova ou demonstração aumenta confiança
++
+qual mudança de percepção o conteúdo pretende provocar
++
+como comunicar isso de forma nativa da plataforma
+```
 
 Existe uma diferença essencial entre:
 
@@ -221,9 +279,17 @@ Existe uma diferença essencial entre:
 
 e:
 
-> “Crie uma estratégia de 30 conteúdos para este produto, distribuindo diferentes públicos, dores, objeções, benefícios, níveis de consciência, formatos e argumentos comerciais para evitar repetição.”
+> “Descubra quais razões de compra, objeções, provas e mudanças de percepção podem levar diferentes públicos a considerar este Produto e transforme essas oportunidades em 30 conteúdos comercialmente distintos e nativos da plataforma.”
 
-A segunda abordagem representa a inteligência central da plataforma.
+A segunda abordagem representa a inteligência central da Viewefy.
+
+### Regra de produto
+
+Sempre que uma feature, regra, métrica ou capability for proposta, deve existir uma resposta clara para:
+
+> **Como isso melhora a capacidade do creator de produzir conteúdo que gera decisão de compra?**
+
+Se não houver resposta, o item não pertence ao core do produto.
 
 ---
 
@@ -287,7 +353,7 @@ Esse ciclo deve poder ser repetido continuamente.
 
 Quando parte de uma geração não atinge a qualidade exigida após os repairs permitidos, o job conclui como **parcial declarado** (`SUCCEEDED_PARTIAL`): o creator recebe imediatamente os conteúdos aprovados, é informado dos faltantes com motivo sanitizado por item, e pode completá-los com a ação `Gerar faltantes`, que reutiliza a Strategy e a memória do produto. Nenhum conteúdo reprovado é publicado; a variedade do conjunto entregue é revalidada; a quota cobra somente o entregue; falhas acima do teto de política ou a inexistência de aprovados reprova o job inteiro como antes (ADR-021).
 
-A plataforma precisa fechar o espaço entre **“tenho ideias aprovadas”** e **“sei o que vou gravar e consigo executar”**.
+A plataforma precisa fechar principalmente o espaço entre **“tenho um Produto para divulgar”** e **“tenho conteúdos com uma lógica comercial clara para fazer o público considerar e decidir a compra”**. A operação de gravação existe para ajudar essa inteligência a chegar à execução.
 
 ---
 
