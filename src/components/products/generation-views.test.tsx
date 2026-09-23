@@ -305,3 +305,25 @@ test("Resumo operacional expõe Dados da execução com jobId e indisponíveis e
     assert.doesNotMatch(html, new RegExp(field, "i"));
   }
 });
+
+// Slice 013 Task 5 — separação de deep-links das abas do Product: o conteúdo
+// gerado interno continua sob Roteiros (#generated-contents) e a leitura
+// externa de conteúdos publicados tem alvo próprio (#published-contents).
+test("deep-link: #generated-contents abre Roteiros (conteúdo interno), nunca Conteúdos", async () => {
+  const { hashToTab } = await import("./product-detail");
+  assert.equal(hashToTab("#generated-contents"), "strategy");
+});
+
+test("deep-link: #published-contents abre Conteúdos (leitura externa)", async () => {
+  const { hashToTab } = await import("./product-detail");
+  assert.equal(hashToTab("#published-contents"), "contents");
+  assert.equal(hashToTab(""), null);
+  assert.equal(hashToTab("#outra-ancora"), null);
+});
+
+test("troca de aba escreve o hash correspondente", async () => {
+  const { tabToHash } = await import("./product-detail");
+  assert.equal(tabToHash("contents"), "#published-contents");
+  assert.equal(tabToHash("strategy"), "#generated-contents");
+  assert.equal(tabToHash("history"), "");
+});

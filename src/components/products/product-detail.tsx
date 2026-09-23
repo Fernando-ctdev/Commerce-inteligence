@@ -32,6 +32,7 @@ import {
   HistoryView,
   StrategyView,
 } from "./generation-views";
+import { PublishedContentsView } from "./published-contents-view";
 import { statusMessage } from "./generation-ui-model";
 import { ProductCreateForm } from "./product-create-form";
 import { useGenerationJob } from "./use-generation-job";
@@ -40,8 +41,22 @@ import showcaseStyles from "./showcase.module.css";
 
 type ProductTab = "strategy" | "contents" | "history";
 
-const hashToTab = (hash: string): ProductTab | null =>
-  hash === "#generated-contents" ? "contents" : null;
+/* Deep-links separados (Slice 013): #generated-contents continua abrindo o
+   conteúdo gerado interno, agora sob Roteiros; a leitura externa de conteúdos
+   publicados tem alvo próprio (#published-contents). Histórico não tem hash. */
+export const hashToTab = (hash: string): ProductTab | null =>
+  hash === "#generated-contents"
+    ? "strategy"
+    : hash === "#published-contents"
+      ? "contents"
+      : null;
+
+export const tabToHash = (tab: ProductTab): string =>
+  tab === "contents"
+    ? "#published-contents"
+    : tab === "strategy"
+      ? "#generated-contents"
+      : "";
 
 /* Ciclo navegável do MVP: Conteúdos → Estratégia → Conteúdos.
    Histórico permanece no código, fora da navegação visível. */
@@ -137,10 +152,11 @@ export function ProductDetail({
   function changeTab(next: string) {
     const value = next as ProductTab;
     setTab(value);
+    const hash = tabToHash(value);
     window.history.replaceState(
       null,
       "",
-      value === "contents" ? "#generated-contents" : window.location.pathname,
+      hash ? hash : window.location.pathname,
     );
   }
 
@@ -440,7 +456,17 @@ export function ProductDetail({
               {tabLabels[cycle.next]}
             </button>
           </nav>
+          {/* Conteúdos = leitura externa tenant-scoped (Slice 013); carrega
+              só com a aba ativa. Conteúdo gerado interno permanece sob
+              Roteiros, sem PublishedVideo cruzando para lá. */}
           <SectionSwitcherContent className={styles.tabContent} value="contents">
+            <PublishedContentsView
+              active={tab === "contents"}
+              productId={product.id}
+            />
+          </SectionSwitcherContent>
+          <SectionSwitcherContent className={styles.tabContent} value="strategy">
+            <StrategyView job={generation.job} />
             <GenerationActions
               generationAction={product.generationAction}
               onGenerateMissing={() => void generation.generateMissing()}
@@ -452,9 +478,6 @@ export function ProductDetail({
               active={generation.active}
               job={generation.job}
             />
-          </SectionSwitcherContent>
-          <SectionSwitcherContent className={styles.tabContent} value="strategy">
-            <StrategyView job={generation.job} />
           </SectionSwitcherContent>
           <SectionSwitcherContent className={styles.tabContent} value="history">
             <HistoryView error={historyError} history={history} loading={historyLoading} />
