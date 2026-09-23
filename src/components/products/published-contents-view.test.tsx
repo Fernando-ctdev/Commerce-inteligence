@@ -204,16 +204,19 @@ test("carregamento: região aria-live polite", async () => {
   assert.match(markup, /aria-live="polite"/);
 });
 
-test("foco do título do detail: só em viewport móvel e com elemento presente", async () => {
+test("foco do título do detail: só viewport móvel, com elemento montado (drawer aberto)", async () => {
   const { focusDetailTitle } = await viewModule();
   let focused = 0;
   const el = { focus: () => { focused += 1; } } as unknown as HTMLElement;
 
+  // drawer fechado: título não montado (ref null) — nunca foca
+  focusDetailTitle(null, true);
+  assert.equal(focused, 0);
+  // desktop: mesmo com drawer aberto do item padrão, não rouba foco
   focusDetailTitle(el, false);
   assert.equal(focused, 0);
+  // drawer aberto do item padrão em viewport móvel: foca
   focusDetailTitle(el, true);
-  assert.equal(focused, 1);
-  focusDetailTitle(null, true);
   assert.equal(focused, 1);
 });
 
@@ -262,17 +265,21 @@ test("seleção efetiva: primeira entrada por padrão e estável ao anexar pági
   assert.equal(resolveSelection(null, []), null);
 });
 
-test("fallback de playback: uma única troca e falha final sem loop", async () => {
+test("fallback de playback: uma única troca, falha terminal preserva fallbackUsed e sem loop", async () => {
   const { playbackFallbackState } = await viewModule();
 
   assert.deepEqual(playbackFallbackState(false, videoBase), {
     fallbackUsed: true,
     playbackFailed: false,
   });
-  assert.deepEqual(playbackFallbackState(true, videoBase), {
-    fallbackUsed: false,
-    playbackFailed: true,
-  });
+  // backup falha: terminal, mas mantém fallbackUsed para a src não voltar ao principal
+  const second = playbackFallbackState(true, videoBase);
+  assert.deepEqual(second, { fallbackUsed: true, playbackFailed: true });
+  // terceiro/repetido onError: mesmo estado terminal — sem troca de src, sem loop
+  const third = playbackFallbackState(second.fallbackUsed, videoBase);
+  assert.deepEqual(third, { fallbackUsed: true, playbackFailed: true });
+  assert.equal(third.fallbackUsed, second.fallbackUsed);
+  // sem backup (ou igual ao principal): falha terminal direta, fallbackUsed preservado
   assert.deepEqual(playbackFallbackState(false, videoSemFallback), {
     fallbackUsed: false,
     playbackFailed: true,

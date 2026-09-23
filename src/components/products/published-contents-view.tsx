@@ -104,7 +104,9 @@ export function resolveSelection(
 }
 
 /** Fallback único (SPEC §9): a primeira falha troca para o backup quando ele
- *  existe e é diferente; qualquer falha seguinte encerra, sem loop. */
+ *  existe e é diferente; qualquer falha seguinte é terminal e PRESERVA
+ *  fallbackUsed — a src não volta ao principal, então um terceiro onError
+ *  não reinicia o ciclo. */
 export function playbackFallbackState(
   fallbackUsed: boolean,
   video: Pick<PublishedVideo, "playbackUrl" | "fallbackPlaybackUrl">,
@@ -116,7 +118,7 @@ export function playbackFallbackState(
   ) {
     return { fallbackUsed: true, playbackFailed: false };
   }
-  return { fallbackUsed: false, playbackFailed: true };
+  return { fallbackUsed, playbackFailed: true };
 }
 
 /** Paginação por anexo: itens já renderizados permanecem; página, total e
@@ -463,15 +465,19 @@ export function PublishedContentsView({
   }, [effectiveId]);
 
   /* SPEC §8: selecionar move o foco para o título do detail, apenas no
-     layout empilhado (≤767px). Com o drawer fechado o ref é null e não há
-     o que focar. */
+     layout empilhado (≤767px). Depende também de drawerOpen: abrir o drawer
+     do item padrão (primeira entrada, já seleção efetiva) agenda o foco.
+     rAF com cancel cobre montagem do portal do drawer no commit seguinte;
+     com o drawer fechado o ref é null e o helper não faz nada. */
   useEffect(() => {
-    if (!effectiveId) return;
-    focusDetailTitle(
-      headingRef.current,
-      window.matchMedia("(max-width: 767px)").matches,
+    if (!drawerOpen || !effectiveId) return;
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
+    let raf = 0;
+    raf = window.requestAnimationFrame(() =>
+      focusDetailTitle(headingRef.current, true),
     );
-  }, [effectiveId]);
+    return () => window.cancelAnimationFrame(raf);
+  }, [drawerOpen, effectiveId]);
 
   if (!active) return null;
 
