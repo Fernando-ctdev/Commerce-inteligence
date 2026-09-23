@@ -7,7 +7,7 @@
 // false e null preservados, campo conhecido ausente é "—". Sem busca, ordenação
 // client-side, autoplay, fetch de mídia ou geração de roteiro.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, MoreVertical, ShoppingCart, TrendingUp } from "lucide-react";
+import { Eye, Search, ShoppingCart, TrendingUp } from "lucide-react";
 
 import type { LinkedContentsResponse, PublishedVideo } from "../../modules/products/published-content-contract";
 import { loadPublishedContents } from "./published-contents-api";
@@ -381,6 +381,7 @@ export function PublishedContentsGallery({
           <label className={styles.srOnly} htmlFor="published-contents-search">
             Buscar por título ou assunto
           </label>
+          <Search aria-hidden="true" className={styles.searchIcon} />
           <input
             className={styles.searchInput}
             id="published-contents-search"
@@ -424,8 +425,8 @@ export function PublishedContentsGallery({
                   aria-pressed={selected}
                   onClick={() => onSelect(video.itemId)}
                 >
-                  {/* Frame da thumb: capa + overlays (kebab, duração) ficam
-                      ancorados aqui, não no card inteiro. */}
+                  {/* Frame da thumb: capa + badge de duração ancorados aqui,
+                      não no card inteiro. */}
                   <span className={styles.coverFrame}>
                     {video.coverUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element -- thumbnail do DTO; next/image exige domínios em runtime
@@ -433,11 +434,6 @@ export function PublishedContentsGallery({
                     ) : (
                       <span className={styles.coverFallback}>Sem prévia</span>
                     )}
-                    {/* Kebab visual (referência aprovada): sem handler por decisão de
-                        escopo, como os CTAs visuais do ProductDetail. */}
-                    <span aria-hidden="true" className={styles.kebab}>
-                      <MoreVertical />
-                    </span>
                     {duration ? (
                       <span className={styles.durationBadge}>{duration}</span>
                     ) : null}

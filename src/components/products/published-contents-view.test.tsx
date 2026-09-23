@@ -129,36 +129,33 @@ test("galeria: busca e ordenação visíveis com rótulos acessíveis", async ()
   assert.match(markup, /<option[^>]*value="oldest"[^>]*>Mais antigas</);
 });
 
-test("galeria: duração em badge MM:SS e kebab decorativo", async () => {
+test("galeria: duração em badge MM:SS sobre a thumb", async () => {
   const markup = await gallery(response);
 
   assert.ok(markup.includes("00:28"));
   assert.ok(markup.includes("01:15"));
   assert.ok(!markup.includes("00:38")); // vídeo sem duration não inventa badge
-  assert.match(markup, /aria-hidden="true"[^>]*>[\s\S]*lucide-(more|ellipsis)-vertical/);
+  assert.ok(!/lucide-(more|ellipsis)-vertical/.test(markup)); // kebab removido a pedido do usuário
 });
 
-test("coverFrame: capa, kebab e duração dentro do frame da thumb, antes do corpo", async () => {
+test("coverFrame: capa e duração dentro do frame da thumb, antes do corpo", async () => {
   const markup = await gallery(response);
 
-  const frameStart = markup.indexOf('aria-hidden="true"'); // kebab é o primeiro filho decorativo
+  const cover = markup.indexOf('src="https://cover.example');
   const badge = markup.indexOf("00:28");
   const body = markup.indexOf("Esse whey realmente vale a pena");
-  const cover = markup.indexOf('src="https://cover.example');
-  // capa → overlays → corpo: overlays não escapam do frame da thumb
-  assert.ok(cover !== -1 && cover < frameStart, "capa antes do kebab");
-  assert.ok(frameStart !== -1 && frameStart < badge, "kebab antes da duração");
+  // capa → duração → corpo: o badge pertence ao frame da thumb
+  assert.ok(cover !== -1 && cover < badge, "capa antes da duração");
   assert.ok(badge !== -1 && badge < body, "duração antes do corpo do card");
 
-  // card sem capa: fallback dentro do frame, badge/kebab junto
+  // card sem capa: fallback dentro do frame, duração junto
   const fallbackMarkup = await gallery({
     ...response,
     videos: [{ ...videoSemFallback, duration: 75 }],
   });
   const fallback = fallbackMarkup.indexOf("Sem prévia");
-  const kebab = fallbackMarkup.indexOf('aria-hidden="true"');
   const dur = fallbackMarkup.indexOf("01:15");
-  assert.ok(fallback !== -1 && fallback < kebab && kebab < dur);
+  assert.ok(fallback !== -1 && fallback < dur);
 });
 
 test("visualizações: views ?? vvCnt com zero preservado", async () => {

@@ -164,8 +164,7 @@
   width: 100%;
 }
 
-/* Badge de duração (MM:SS) no canto inferior direito da capa; kebab no
-   superior direito. Ambos sobre a imagem, legíveis em qualquer capa. */
+/* Badge de duração (MM:SS) no canto inferior direito da capa, sobre a imagem. */
 .durationBadge {
   background: color-mix(in srgb, #000 70%, transparent);
   border-radius: 6px;
@@ -177,20 +176,6 @@
   padding: 2px 6px;
   position: absolute;
   right: 8px;
-}
-
-.kebab {
-  color: var(--color-text-secondary);
-  position: absolute;
-  right: 8px;
-  top: 8px;
-}
-
-.kebab svg {
-  display: block;
-  filter: drop-shadow(0 0 2px color-mix(in srgb, #000 60%, transparent));
-  height: 20px;
-  width: 20px;
 }
 
 .coverFallback {
@@ -232,7 +217,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  justify-content: space-between;
   margin-top: 4px;
+  width: 100%;
 }
 
 .cardMetric {
