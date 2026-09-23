@@ -6,7 +6,7 @@
 
 ## 1. Objetivo
 
-Criar uma camada de inteligência capaz de utilizar modelos diferentes conforme a complexidade de cada tarefa, evitando o uso desnecessário de modelos high-end sem comprometer a qualidade estratégica do produto.
+Criar uma camada de inteligência capaz de utilizar modelos diferentes conforme a complexidade de cada tarefa, evitando o uso desnecessário de modelos high-end sem comprometer a capacidade central do produto de raciocinar sobre **como produto, comportamento humano, persuasão e execução criativa podem se combinar para gerar vontade de comprar**.
 
 A plataforma não deve possuir “um modelo principal”.
 
@@ -94,7 +94,9 @@ Reservado para decisões em que a qualidade do raciocínio afeta diretamente a e
 
 Exemplos:
 
-- síntese da estratégia comercial;
+- síntese da estratégia comercial e dos mecanismos de desejo/compra;
+- decisão sobre contextos, emoções, barreiras, provas e efeitos comportamentais relevantes;
+- escolha de mecanismos criativos quando eles forem parte da própria hipótese de venda;
 - construção do Content Plan;
 - distribuição estratégica dos conteúdos;
 - controle global de variedade;
@@ -317,8 +319,16 @@ Os testes devem considerar produtos de diferentes categorias e aspectos como:
 - qualidade dos públicos encontrados;
 - dores e objeções;
 - raciocínio comercial;
+- capacidade de identificar razões de compra quando existirem;
+- capacidade de criar desejo mesmo sem dor ou necessidade previamente consciente;
+- capacidade de relacionar produto, contexto, emoção, mecanismo persuasivo e execução criativa;
+- capacidade de relacionar objeção, argumento e prova quando aplicável;
 - qualidade da estratégia;
-- variedade;
+- clareza do efeito comercial pretendido em cada ContentOpportunity;
+- coerência entre abertura, desenvolvimento, payoff, Produto e CTA;
+- capacidade de criar conteúdo que desperta atenção e também gera vínculo comercial com o Produto;
+- qualidade de mecanismos como POV, demonstração, humor, surpresa, visual-first, reação, comparação e storytelling quando adequados;
+- variedade entre teses comerciais e mecanismos criativos válidos;
 - naturalidade para TikTok;
 - qualidade de hooks;
 - capacidade de produzir scripts graváveis;
