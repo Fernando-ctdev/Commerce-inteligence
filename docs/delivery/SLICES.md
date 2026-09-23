@@ -490,6 +490,23 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 
 ---
 
+### Slice 013 — Conteúdos publicados e performance vinculada ao Produto
+**Status:** `Pendente — implementação bloqueada até aprovação da SPEC`
+
+**User Outcome:** No detalhe de um Product, o creator abre Conteúdos e vê os vídeos publicados associados ao item da Vitrine daquele Product, incluindo dados de negócio e métricas fornecidos, com reprodução sob demanda e sem confundir esses vídeos externos com os Briefings gerados pela Commerce Intelligence.
+
+**Depends On:** Slice 002 para `Product.provenance.sourceId`; é independente do Slice 003 porque o read model externo não reutiliza `Content` nem `ContentBriefVersion`.
+
+**Domain Areas:** Product (leitura autenticada), Conteúdos publicados (read model externo transitório), associação item→Product, apresentação de performance.
+
+**Scope:** fixtures sanitizadas e separadas para Products da Vitrine, analytics paginado de vídeos e associação `item_id (vídeo) → product_id (produto externo)`; join server-side pelo `Product.provenance.sourceId === association.product_id`; `GET /api/products/:id/linked-contents?page&pageSize` tenant-scoped; associação many-to-many; preservação de `total`, `hasMore` e paginação; reprodução de `main_url` com um único fallback para `backup_url`; carga automática ao abrir Conteúdos; CTA de gerar roteiro derivado visível, desabilitado e explicado; master-detail desktop e pilha mobile.
+
+**Out of Scope:** chamada TikHub ou qualquer provedor externo, OAuth, cookies/tokens de autenticação, persistência, tabela/migração, mutação de Product/Content/Strategy, geração de roteiro, publicação, agendamento, sincronização, retry de rede, aprendizado por performance, ranking, alteração automática de Strategy ou nova geração. A exceção de leitura é somente `main_url`/`backup_url` normalizados como URLs HTTPS expiráveis de playback em `*.tiktokcdn.com`.
+
+**Documentação:** `docs/specs/slice-013/SPEC.md`, `docs/architecture/adr-032-conteudos-publicados-e-performance.md`.
+
+---
+
 ### Atualização deliberada de navegação
 
 O `DESIGN.md` mantém sua lista fixa como baseline visual, mas a decisão explícita do usuário prevalece para este slice: `Meu estilo` é um botão adicional da sidebar. Ele aponta somente para a área de preferências e não cria destinos paralelos para Hoje, Produção, Conteúdos ou Vault.
@@ -502,16 +519,17 @@ O `DESIGN.md` mantém sua lista fixa como baseline visual, mas a decisão explí
 ```text
 001 Workspace
  └─ 002 Entrada de Product: cadastro manual + ação explícita `Analisar produto`
-     ├─ 012 Entrada URL via CaptAPI: candidato transitório + confirmação no formulário manual
-     └─ 003 Primeira geração (job + engine + briefings)
-         ├─ 004 Revisão e controle de Content
-         │   ├─ 005 Regeneração contextual
-         │   └─ 006 Lote e Agenda
-         │       └─ 007 Estúdio e execução
-         │           └─ 009 Home operacional (também depende de 006)
-         ├─ 008 Nova geração com memória (após 004/005 para o loop completo)
-         ├─ 010 Histórico do Produto (depende de 004 e 006)
-         └─ 011 Meu estilo e CreatorContext (depende de 001 e integra geração após 003)
+      ├─ 003 Primeira geração (job + engine + briefings)
+      │   ├─ 004 Revisão e controle de Content
+      │   │   ├─ 005 Regeneração contextual
+      │   │   └─ 006 Lote e Agenda
+      │   │       └─ 007 Estúdio e execução
+      │   │           └─ 009 Home operacional (também depende de 006)
+      │   ├─ 008 Nova geração com memória (após 004/005 para o loop completo)
+      │   ├─ 010 Histórico do Produto (depende de 004 e 006)
+      │   └─ 011 Meu estilo e CreatorContext (depende de 001 e integra geração após 003)
+      ├─ 012 Entrada URL via CaptAPI: candidato transitório + confirmação no formulário manual
+      └─ 013 Conteúdos publicados e performance (leitura externa mockada; independente de 003)
 ```
 
 Nenhuma alteração deste mapa antecipa código, SPEC ou PLAN de um slice futuro.
@@ -543,5 +561,6 @@ Nenhuma alteração deste mapa antecipa código, SPEC ou PLAN de um slice futuro
 | §46: explicabilidade | 004 |
 | §39: busca e filtros contextuais | 004 / 006 / 007 / 010 |
 | §49–50: métricas de produto (instrumentação) | transversal aos slices, sem slice próprio |
+| Decisão explícita do usuário: vídeos publicados e performance mockada no contexto do Product | 013; exceção localizada, sem alterar PRD/DESIGN/SYSTEM-DESIGN |
 
 Todo requisito do MVP está coberto por exatamente um slice responsável; nenhum slice é puramente técnico.
