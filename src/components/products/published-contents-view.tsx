@@ -19,7 +19,8 @@ import {
 } from "../ui/drawer";
 import styles from "./published-contents-view.module.css";
 
-const PAGE_SIZE = 20;
+/** Recorte do cliente: 9 itens por página do endpoint (referência aprovada). */
+export const PAGE_SIZE = 9;
 
 type GalleryState = {
   response: LinkedContentsResponse | null;
@@ -423,25 +424,33 @@ export function PublishedContentsGallery({
                   aria-pressed={selected}
                   onClick={() => onSelect(video.itemId)}
                 >
-                  {video.coverUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- thumbnail do DTO; next/image exige domínios em runtime
-                    <img className={styles.cover} src={video.coverUrl} alt="" loading="lazy" />
-                  ) : (
-                    <span className={styles.coverFallback}>Sem prévia</span>
-                  )}
-                  {/* Kebab visual (referência aprovada): sem handler por decisão de
-                      escopo, como os CTAs visuais do ProductDetail. */}
-                  <span aria-hidden="true" className={styles.kebab}>
-                    <MoreVertical />
+                  {/* Frame da thumb: capa + overlays (kebab, duração) ficam
+                      ancorados aqui, não no card inteiro. */}
+                  <span className={styles.coverFrame}>
+                    {video.coverUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- thumbnail do DTO; next/image exige domínios em runtime
+                      <img className={styles.cover} src={video.coverUrl} alt="" loading="lazy" />
+                    ) : (
+                      <span className={styles.coverFallback}>Sem prévia</span>
+                    )}
+                    {/* Kebab visual (referência aprovada): sem handler por decisão de
+                        escopo, como os CTAs visuais do ProductDetail. */}
+                    <span aria-hidden="true" className={styles.kebab}>
+                      <MoreVertical />
+                    </span>
+                    {duration ? (
+                      <span className={styles.durationBadge}>{duration}</span>
+                    ) : null}
                   </span>
-                  {duration ? (
-                    <span className={styles.durationBadge}>{duration}</span>
-                  ) : null}
                   <span className={styles.cardBody}>
                     <span className={styles.cardTitle}>{video.title ?? video.itemId}</span>
                     {date ? <span className={styles.cardDate}>{date}</span> : null}
                     <span className={styles.cardMetrics}>
-                      <CardMetric label="Visualizações" icon={<Eye aria-hidden />} value={video.metrics.views} />
+                      <CardMetric
+                        label="Visualizações"
+                        icon={<Eye aria-hidden />}
+                        value={video.metrics.views ?? video.metrics.vvCnt}
+                      />
                       <CardMetric label="GMV" icon={<ShoppingCart aria-hidden />} value={video.metrics.gmv} />
                       <CardMetric label="CTR" icon={<TrendingUp aria-hidden />} value={video.metrics.ctr} />
                     </span>
