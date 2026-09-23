@@ -6,7 +6,7 @@
 
 ## 1. Objetivo
 
-Criar uma camada de inteligência capaz de utilizar modelos diferentes conforme a complexidade de cada tarefa, evitando o uso desnecessário de modelos high-end sem comprometer a qualidade estratégica do produto.
+Criar uma camada de inteligência capaz de utilizar modelos diferentes conforme a complexidade de cada tarefa, evitando o uso desnecessário de modelos high-end sem comprometer a capacidade central do produto de raciocinar sobre **como conteúdo pode levar um público à decisão de compra**.
 
 A plataforma não deve possuir “um modelo principal”.
 
@@ -94,7 +94,8 @@ Reservado para decisões em que a qualidade do raciocínio afeta diretamente a e
 
 Exemplos:
 
-- síntese da estratégia comercial;
+- síntese da estratégia comercial e das razões de compra;
+- decisão sobre barreiras, provas e mudanças de percepção relevantes;
 - construção do Content Plan;
 - distribuição estratégica dos conteúdos;
 - controle global de variedade;
@@ -317,8 +318,13 @@ Os testes devem considerar produtos de diferentes categorias e aspectos como:
 - qualidade dos públicos encontrados;
 - dores e objeções;
 - raciocínio comercial;
+- capacidade de identificar razões de compra relevantes;
+- capacidade de relacionar objeção, argumento e prova;
 - qualidade da estratégia;
-- variedade;
+- clareza da mudança de percepção pretendida em cada ContentOpportunity;
+- coerência entre hook, desenvolvimento, prova, script e CTA;
+- capacidade de criar conteúdo que constrói motivo para comprar, e não apenas atenção;
+- variedade entre teses comerciais válidas;
 - naturalidade para TikTok;
 - qualidade de hooks;
 - capacidade de produzir scripts graváveis;
