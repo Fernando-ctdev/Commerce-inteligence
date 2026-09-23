@@ -121,6 +121,7 @@ function playbackUrl(value: string | undefined): string | undefined {
   try {
     const parsed = new URL(value);
     if (parsed.protocol !== "https:") return undefined;
+    if (parsed.username || parsed.password) return undefined;
     if (!PLAYBACK_HOST_PATTERN.test(parsed.hostname)) return undefined;
     return value;
   } catch {

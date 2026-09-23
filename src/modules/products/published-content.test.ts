@@ -437,3 +437,31 @@ test("hostname de playback rejeita sufixo malformado e aceita subdomínio normal
     assert.equal(video.playbackUrl, undefined, url);
   }
 });
+
+test("playback com credenciais na URL (userinfo) é omitido; host assinado válido permanece", () => {
+  const item = analyticsItem(ITEM_A);
+  const source = injected(
+    onePage([
+      {
+        ...item,
+        main_url: "https://user:pass@v58.tiktokcdn.com/video/tos/x.mp4",
+      },
+    ]),
+    [{ item_id: ITEM_A, product_id: PRODUCT_A }],
+  );
+  const video = buildLinkedContents(
+    { id: "p", provenance: { sourceId: PRODUCT_A } },
+    1,
+    20,
+    source,
+  ).videos[0]!;
+  assert.equal(video.playbackUrl, undefined);
+  // Comportamento válido preservado: host permitido com assinatura na query passa.
+  const valido = buildLinkedContents(
+    { id: "p", provenance: { sourceId: PRODUCT_A } },
+    1,
+    20,
+  ).videos[0]!;
+  assert.equal(new URL(valido.playbackUrl!).username, "");
+  assert.equal(new URL(valido.playbackUrl!).password, "");
+});
