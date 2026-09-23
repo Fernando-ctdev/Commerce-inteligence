@@ -2,9 +2,13 @@
 // e POST /api/products/:id/archive (arquivar, idempotente, sem apagar dados).
 // Sessão/Tenant resolvidos server-side (RI-005); POST exige Idempotency-Key válida (RI-007);
 // PATCH edita fatos com controle otimista de versão; erros sanitizados, sem detalhes internos.
-import type { Product } from "@prisma/client";
+import type { Prisma, Product } from "@prisma/client";
 import { prisma } from "../db";
 import { projectGenerationAction, type GenerationAction } from "../commerce-intelligence/service";
+import {
+  PublishedContentFixtureError,
+  buildLinkedContents,
+} from "./published-content";
 
 import {
   SESSION_COOKIE,
@@ -383,6 +387,87 @@ export async function handleSyncShowcaseProducts(req: Request): Promise<Response
     return json(500, {
       error: "Não foi possível sincronizar a Vitrine agora. Tente novamente.",
       code: "SYNC-FAILED",
+    });
+  }
+}
+
+// GET /api/products/:id/linked-contents — conteúdos publicados do Product na fonte
+// externa (fixtures sanitizadas da Vitrine; API real chega depois pelo mesmo join).
+// Leitura autenticada por sessão (sem same-origin, como os demais GET); Product
+// resolvido com tenantId da sessão e 404 sem vazar existência; paginação validada
+// com parsing seguro antes de qualquer consulta; fixture inválida vira 500 sanitizado
+// LINKED-CONTENTS-UNAVAILABLE sem stack, fixture, URL ou objeto Prisma no corpo.
+
+const LINKED_CONTENTS_MAX_PAGE = 10_000;
+const LINKED_CONTENTS_MAX_PAGE_SIZE = 50;
+
+/** Parsing seguro: ausência usa o default; aceita somente dígitos decimais que
+ *  representem inteiro positivo dentro do limite. Zero, sinal, decimal, texto,
+ *  repetição ambígua ou valor além de Number.MAX_SAFE_INTEGER devolvem null. */
+function linkedContentsParam(
+  searchParams: URLSearchParams,
+  name: string,
+  fallback: number,
+  max: number,
+): number | null {
+  const values = searchParams.getAll(name);
+  if (values.length === 0) return fallback;
+  if (values.length > 1) return null;
+  const raw = values[0]!;
+  if (!/^\d+$/.test(raw)) return null;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > max) return null;
+  return parsed;
+}
+
+export async function handleGetLinkedContents(
+  req: Request,
+  id: string,
+): Promise<Response> {
+  const session = await sessionOf(req);
+  if (!session)
+    return json(401, {
+      error: "Sessão necessária para acessar conteúdos publicados.",
+      code: "AUTH-SESSION",
+    });
+
+  const searchParams = new URL(req.url).searchParams;
+  const page = linkedContentsParam(searchParams, "page", 1, LINKED_CONTENTS_MAX_PAGE);
+  const pageSize = linkedContentsParam(
+    searchParams,
+    "pageSize",
+    20,
+    LINKED_CONTENTS_MAX_PAGE_SIZE,
+  );
+  if (page === null || pageSize === null)
+    return json(400, {
+      error: "Parâmetros de paginação inválidos.",
+      code: "LINKED-CONTENTS-PAGINATION",
+    });
+
+  // Somente id/provenance cruzam o join: fatos do Product ficam fora da consulta.
+  const product = await prisma.product.findFirst({
+    where: { id, tenantId: session.tenantId },
+    select: { id: true, provenance: true },
+  });
+  if (!product)
+    return json(404, {
+      error: "Product não encontrado.",
+      code: "PRODUCT-NOT-FOUND",
+    });
+
+  try {
+    const response = buildLinkedContents(product, page, pageSize);
+    return jsonBody(200, response);
+  } catch (error) {
+    console.error(
+      "[products] falha ao projetar conteúdos publicados",
+      error instanceof Error ? error.name : "unknown",
+    );
+    return json(500, {
+      error:
+        "Não foi possível carregar os conteúdos publicados agora. Tente novamente.",
+      code: "LINKED-CONTENTS-UNAVAILABLE",
     });
   }
 }
