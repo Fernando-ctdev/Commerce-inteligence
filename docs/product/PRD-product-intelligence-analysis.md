@@ -30,19 +30,21 @@ A análise estratégica não deve virar uma nova etapa burocrática ou uma tela 
 
 A regra é:
 
-> **Depois que o usuário confirma qual é o produto, a plataforma assume o trabalho até existir conteúdo útil para revisar.**
+> **Depois que o usuário confirma qual é o Produto, a plataforma assume o trabalho até existirem Briefings com uma lógica comercial clara de como aquele conteúdo pode ajudar a gerar decisão de compra.**
 
 ---
 
 ## 2. Problema
 
-Depois da importação do produto, o Commerce Intelligence precisa executar várias decisões antes de produzir conteúdos utilizáveis:
+Depois da importação do Produto, o Commerce Intelligence precisa executar várias decisões antes de produzir conteúdos comercialmente utilizáveis. Essas decisões não existem apenas para preencher um Briefing; elas precisam construir uma hipótese de como o conteúdo pode mover o público em direção à compra:
 
 * compreender o produto;
 * identificar públicos relevantes;
 * identificar dores e desejos;
 * mapear objeções;
 * compreender benefícios e argumentos;
+* identificar razões de compra, barreiras e provas relevantes;
+* definir qual mudança de percepção cada oportunidade deve provocar;
 * definir oportunidades e ângulos comerciais;
 * construir a estratégia;
 * montar o plano de conteúdos;
@@ -979,7 +981,7 @@ O fluxo não deve ensinar ao usuário como a Commerce Intelligence funciona inte
 
 Ele deve comunicar apenas o necessário para manter confiança e continuidade:
 
-> **“Recebi seu produto, estou trabalhando nele e vou avisar quando existir algo útil para você revisar.”**
+> **“Recebi seu Produto, estou construindo a estratégia de venda e vou avisar quando existirem conteúdos comercialmente úteis para você revisar.”**
 
 A complexidade estratégica permanece na engine.
 
