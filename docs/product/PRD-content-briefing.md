@@ -4,7 +4,7 @@
 
 Transformar as decisões comerciais produzidas pela Commerce Intelligence em unidades claras, editáveis, aprováveis e executáveis sem perder a lógica de venda que originou cada conteúdo.
 
-O Briefing não existe apenas para dizer ao creator **o que gravar**. Ele deve preservar, em linguagem utilizável, **por que aquele conteúdo pode ajudar a vender o Produto** e como executar essa tese de forma natural.
+O Briefing não existe apenas para dizer ao creator **o que gravar**. Ele deve preservar, em linguagem utilizável, **qual efeito comercial o conteúdo pretende provocar e qual mecanismo criativo ajuda a provocar esse efeito**. Esse efeito pode ser racional, emocional ou comportamental: identificação, curiosidade, desejo, confiança, percepção de valor, impulso, redução de objeção ou vontade de experimentar.
 
 Fluxo principal:
 
@@ -34,7 +34,7 @@ Histórico
 
 A regra é:
 
-> **A inteligência define a lógica comercial que pode mover a decisão de compra. O Briefing transforma essa lógica em conteúdo que o creator consegue compreender, revisar e executar. O lote apenas organiza essa execução no tempo.**
+> **A inteligência define uma hipótese comercial e criativa de como o conteúdo pode gerar vontade de comprar. O Briefing transforma essa hipótese em execução natural para o creator. O lote apenas organiza essa execução no tempo.**
 
 Content Operations não redefine a estratégia de venda. Sua responsabilidade é preservar essa intenção durante revisão, versionamento e execução.
 
@@ -71,7 +71,7 @@ A engine deve variar estrategicamente entre eles:
 * cenas;
 * CTAs.
 
-O objetivo não é produzir 20 variações superficiais da mesma ideia nem 20 formatos diferentes sem função comercial. A variação deve representar, sempre que possível, **teses de venda, barreiras, provas, públicos, situações ou mudanças de percepção comercialmente distintas**.
+O objetivo não é produzir 20 variações superficiais da mesma ideia nem 20 formatos usados por obrigação. A variação deve explorar, quando fizer sentido, **teses de venda, emoções, situações, mecanismos persuasivos e mecanismos criativos diferentes** — por exemplo POV, demonstração, humor, surpresa, reação, transformação, comparação, storytelling ou visual-first — sempre conectados ao Produto e à intenção de venda.
 
 ---
 
@@ -139,7 +139,7 @@ Nem todos os elementos estratégicos precisam aparecer permanentemente na interf
 
 A interface deve priorizar aquilo que ajuda o creator a decidir:
 
-> **“Entendo por que este conteúdo pode ajudar a vender este Produto e consigo executá-lo?”**
+> **“Entendo qual efeito este conteúdo quer provocar, como o Produto participa disso e consigo executar essa ideia de forma natural?”**
 
 ---
 
