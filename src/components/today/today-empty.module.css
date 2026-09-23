@@ -1,0 +1,61 @@
+.empty {
+  border-inline-start: 3px solid var(--color-intelligence);
+  display: grid;
+  gap: 24px;
+  margin: 0 auto;
+  max-width: 640px;
+  padding-inline-start: 24px;
+}
+
+.eyebrow {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  margin: 0;
+}
+
+.empty h2 {
+  align-items: flex-start;
+  display: flex;
+  font-size: 32px;
+  gap: 12px;
+  letter-spacing: -0.035em;
+  line-height: 36px;
+  margin: 0;
+}
+
+/* Logo em coluna fixa, no mesmo eixo do topo da primeira linha do título;
+   nudge óptico de 4px casa o topo da ilustração com a altura-x do texto. */
+.titleLogo {
+  flex: 0 0 32px;
+  height: 32px;
+  margin-top: 4px;
+  object-fit: contain;
+  width: 32px;
+}
+
+.titleText {
+  min-width: 0;
+}
+
+.empty > p {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+  max-width: 460px;
+}
+
+
+@media (max-width: 767px) {
+  .empty {
+    gap: 20px;
+    padding-inline-start: 16px;
+  }
+
+  .empty h2 {
+    font-size: 24px;
+    line-height: 30px;
+  }
+}

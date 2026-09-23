@@ -1,0 +1,33 @@
+# Somente web e worker (ADR-005: worker é segundo processo do mesmo monólito, mesma imagem,
+# comandos distintos). O banco é externo, via DATABASE_URL em .env — sem serviço de DB aqui.
+# Reinício é responsabilidade do Compose (`restart`), não de loop interno no TS.
+services:
+  web:
+    build: .
+    image: commerce-intelligence:local
+    restart: unless-stopped
+    env_file: .env
+    command: npm run start
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    healthcheck:
+      # Liveness local ao processo web: prova que o Next responde HTTP neste container.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/generation').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    image: commerce-intelligence:local
+    restart: unless-stopped
+    env_file: .env
+    command: npm run worker
+    healthcheck:
+      # Liveness local ao processo worker: marker de heartbeat no tmpdir DESTE container
+      # (escrito por src/modules/commerce-intelligence/runtime.ts; /tmp é o tmpdir no container).
+      test: ["CMD", "node", "-e", "try{const s=require('node:fs').statSync('/tmp/commerce-intelligence-worker.heartbeat');const ttl=Number(process.env.GENERATION_HEARTBEAT_TTL_MS||10000);process.exit(Date.now()-s.mtimeMs<=ttl?0:1)}catch{process.exit(1)}"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

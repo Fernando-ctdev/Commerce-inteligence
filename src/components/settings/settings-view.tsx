@@ -1,0 +1,162 @@
+"use client";
+
+import { LogOut, Settings2, SunMoon } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  applyThemePreference,
+  THEME_CHANGE_EVENT,
+} from "@/components/theme/theme-toggle";
+
+import styles from "./settings-view.module.css";
+
+type SettingsViewProps = {
+  email: string;
+};
+
+export function SettingsView({ email }: SettingsViewProps) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    const syncTheme = () => {
+      setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light");
+    };
+    // O script pré-pintura aplica a classe antes da hidratação; este readback
+    // assíncrono alinha o Select após a montagem sem setState síncrono em efeito.
+    const frame = window.requestAnimationFrame(() => {
+      syncTheme();
+    });
+    window.addEventListener(THEME_CHANGE_EVENT, syncTheme);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener(THEME_CHANGE_EVENT, syncTheme);
+    };
+  }, []);
+
+  function changeTheme(next: "light" | "dark") {
+    setTheme(next);
+    applyThemePreference(next);
+  }
+
+
+  async function logout() {
+    setConfirmOpen(false);
+    setPending(true);
+    setError(null);
+    const response = await fetch("/api/access/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    }).catch(() => null);
+    const data: unknown = response
+      ? await response.json().catch(() => null)
+      : null;
+
+    if (
+      response?.ok &&
+      typeof data === "object" &&
+      data !== null &&
+      "redirectTo" in data &&
+      typeof data.redirectTo === "string"
+    ) {
+      window.location.assign(data.redirectTo);
+      return;
+    }
+
+    setError("Não foi possível sair agora. Tente novamente.");
+    setPending(false);
+  }
+
+  return (
+    <div className={styles.surface}>
+      <section aria-labelledby="account-title" className={styles.section}>
+        <p className={styles.eyebrow}>Conta</p>
+        <div className={styles.identity}>
+          <Settings2 aria-hidden="true" className={styles.sectionIcon} />
+          <Avatar size="lg">
+            <AvatarFallback>{email.slice(0, 1).toUpperCase()}</AvatarFallback>
+          </Avatar>
+          <h2 id="account-title">Seu acesso</h2>
+        </div>
+        <dl className={styles.facts}>
+          <div className={styles.fact}>
+            <dt>E-mail</dt>
+            <dd>{email}</dd>
+          </div>
+          <div className={styles.fact}>
+            <dt>Workspace</dt>
+            <dd>Workspace pessoal</dd>
+          </div>
+        </dl>
+        <p>
+          Seu workspace é individual: nenhuma outra pessoa acessa seus produtos
+          e conteúdos.
+        </p>
+      </section>
+
+      <section aria-labelledby="appearance-title" className={styles.section}>
+        <p className={styles.eyebrow}>Preferências</p>
+        <div className={styles.sectionHeading}>
+          <SunMoon aria-hidden="true" className={styles.sectionIcon} />
+          <h2 id="appearance-title">Aparência</h2>
+        </div>
+        <div className={styles.field}>
+          <label htmlFor="appearance-theme">Tema da interface</label>
+          <Select onValueChange={(value) => changeTheme(value as "light" | "dark")} value={theme}>
+            <SelectTrigger className="h-11 w-full" id="appearance-theme">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="light">Claro</SelectItem>
+              <SelectItem value="dark">Escuro</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className={styles.fieldHelp}>A escolha fica neste dispositivo e é aplicada imediatamente.</p>
+        </div>
+      </section>
+
+      <section aria-labelledby="session-title" className={styles.section}>
+        <p className={styles.eyebrow}>Sessão</p>
+        <div className={styles.sectionHeading}>
+          <LogOut aria-hidden="true" className={styles.sectionIcon} />
+          <h2 id="session-title">Encerrar acesso neste dispositivo</h2>
+        </div>
+        <p>
+          Ao sair, a sessão deste navegador é encerrada. Seus dados permanecem
+          preservados no workspace.
+        </p>
+        {error && (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        )}
+        <Button
+          className={styles.logoutAction}
+          disabled={pending}
+          onClick={() => setConfirmOpen(true)}
+          variant="outline"
+        >
+          Sair
+        </Button>
+        <ConfirmationDialog
+          confirmLabel="Sair"
+          destructive
+          description="Isso encerra a sessão deste navegador. Seus dados permanecem preservados no workspace."
+          onConfirm={logout}
+          onOpenChange={setConfirmOpen}
+          open={confirmOpen}
+          pending={pending}
+          pendingLabel="Saindo…"
+          title="Sair da conta?"
+        />
+      </section>
+    </div>
+  );
+}

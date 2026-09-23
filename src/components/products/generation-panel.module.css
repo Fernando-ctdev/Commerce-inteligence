@@ -1,0 +1,1360 @@
+.panel {
+  animation: briefingOpen 160ms ease-out;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  display: grid;
+  gap: 20px;
+  margin-top: 24px;
+  min-width: 0;
+  padding: 24px;
+  width: 100%;
+}
+
+.historyList {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.historyItem {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 20px;
+}
+
+.historyHeader {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.historyHeader h2,
+.historyHeader p,
+.historyCost strong,
+.historyCost span {
+  margin: 0;
+}
+
+.historyHeader h2 {
+  color: var(--color-text);
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.historyHeader p,
+.historyCost span {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.historyCost {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  text-align: right;
+}
+
+.historyCost strong {
+  color: var(--color-text);
+  font-size: 16px;
+  line-height: 22px;
+}
+
+/* Contrato de observabilidade: metadados de execução em dl compacto;
+   identificadores técnicos em Geist Mono (DESIGN.md, type.code). */
+.historyMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0;
+}
+
+.metaItem {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.metaItem dt {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.metaItem dd {
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0;
+}
+
+.monoId {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  word-break: break-all;
+}
+
+.historyContentList {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.historyContentList li {
+  align-items: baseline;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding-top: 8px;
+}
+
+.historyContentList li span:last-child {
+  color: var(--color-text-secondary);
+  text-align: right;
+}
+
+.heading,
+.heading h2,
+.heading p,
+.state h3,
+.state p,
+.result h3,
+.result p,
+.resultSummary h3,
+.resultSummary p,
+.disclosure summary {
+  margin: 0;
+}
+
+.eyebrow {
+  align-items: center;
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 4px;
+  line-height: 16px;
+}
+
+.heading,
+.state,
+.result,
+.disclosure {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Bloco compacto de status/action: uma linha de sinal + ações. */
+.state {
+  gap: 12px;
+}
+
+.contentsActions {
+  margin-bottom: 20px;
+}
+
+.contentsActions > [role="alert"],
+.contentsActions > [role="status"] {
+  align-items: center;
+  column-gap: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 12px;
+}
+
+.contentsActions > [role="alert"] > .actions,
+.contentsActions > [role="status"] > .actions {
+  align-self: center;
+  grid-column: 2;
+  grid-row: 1 / -1;
+  justify-content: flex-end;
+}
+
+.stateLine {
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+  /* Erros/IDs longos (job.error) quebram em vez de estourar o card. */
+  overflow-wrap: anywhere;
+}
+
+.stateLine strong {
+  font-weight: 600;
+}
+
+.heading h2,
+.state h3,
+.result h3 {
+  font-size: 20px;
+  line-height: 26px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Título do card limitado a 2 linhas: não empurra o corpo em mobile. */
+.heading h2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.heading p,
+.state p,
+.result p,
+.disclosure {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.fields {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field label {
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+}
+
+.field input,
+.field textarea {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  font: inherit;
+  min-height: 44px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.field textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.field .error {
+  margin: 0;
+}
+
+.field input[aria-invalid="true"],
+.field textarea[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.field input:focus-visible,
+.field textarea:focus-visible,
+.button:focus-visible,
+.link:focus-visible,
+.disclosure summary:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.error,
+.alert {
+  color: var(--color-danger);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.button,
+.link {
+  align-items: center;
+  border-radius: 8px;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  text-decoration: none;
+}
+
+.button {
+  background: var(--color-action);
+  border: 1px solid var(--color-action);
+  color: var(--color-on-action);
+  cursor: pointer;
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.secondary,
+.link {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.disclosure {
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+}
+
+.disclosure summary {
+  color: var(--color-text);
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 44px;
+  padding-top: 10px;
+}
+
+.detailBlock,
+.distribution,
+.resultSummary {
+  display: grid;
+  gap: 8px;
+}
+
+.detailBlock ul,
+.distribution {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.distribution {
+  list-style: none;
+  padding-left: 0;
+}
+
+.distribution li {
+  border-left: 2px solid var(--color-action);
+  display: grid;
+  gap: 4px;
+  padding-left: 12px;
+}
+
+.distribution span {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.distribution p,
+.detailBlock li {
+  margin: 0;
+}
+
+
+
+/* Leitor ocupa a largura do painel; o texto controla a medida por bloco. */
+.detail {
+  animation: briefingOpen 160ms ease-out;
+  display: grid;
+  gap: 24px;
+  max-width: none;
+}
+
+@keyframes briefingOpen {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.detailHeader {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.detailMeta {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.contentProgress {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.detailTitle {
+  display: -webkit-box;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+  margin: 0;
+  min-width: 0;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* Hook é o conteúdo dominante do Briefing: superfície levemente destacada,
+   assinada pela cor de inteligência (geração) — o início do vídeo. */
+.hookBlock {
+  background: var(--color-text);
+  border: 0;
+  border-radius: 10px;
+  color: var(--color-surface);
+  display: grid;
+  gap: 8px;
+  padding: 20px 24px;
+}
+
+.hookBlock .sectionLabel {
+  color: var(--color-intelligence);
+}
+
+/* type.heading-1: o hook é a frase que abre o vídeo. */
+.briefingHook {
+  color: var(--color-surface);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 30px;
+  margin: 0;
+}
+
+/* Linha de contexto rápida: objetivo do conteúdo, creator-facing. */
+.contextRow {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.contextCell {
+  display: grid;
+  gap: 2px;
+}
+
+.contextValue {
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0;
+}
+
+/* Rótulo de seção do Briefing (Gancho, Desenvolvimento, Roteiro, CTA) com âncora visual.
+   Peso + secundário, sem caixa alta: o DESIGN veta peso+caixa alta+cor juntos. */
+.sectionLabel {
+  align-items: center;
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 4px;
+  line-height: 16px;
+  margin: 0;
+}
+
+.sectionIcon {
+  flex-shrink: 0;
+  height: 16px;
+  width: 16px;
+}
+
+/* Inteligência/generação/explicabilidade: único uso do token, como ícone/borda. */
+.sectionIconIntelligence {
+  color: var(--color-intelligence);
+}
+
+/* Desenvolvimento e CTA no desenho aprovado: ícone em brand; rótulo e texto do
+   CTA em action (texto normal ≥ 4.5:1 — brand só 4.17:1 em Light). */
+.sectionLabelBrand {
+  color: var(--color-action);
+}
+
+.sectionIconBrand {
+  color: var(--color-brand);
+}
+
+/* Texto do CTA em action; os pontos do Desenvolvimento permanecem escuros. */
+.ctaText {
+  color: var(--color-action);
+}
+
+/* Desenvolvimento: bolinha sólida pequena por ponto, sem réguas entre itens. */
+.developmentList {
+  color: var(--color-text);
+  display: grid;
+  font-size: 15px;
+  line-height: 22px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.developmentList li {
+  padding: 10px 0 10px 16px;
+  position: relative;
+}
+
+.developmentList li::before {
+  background: var(--color-text-secondary);
+  border-radius: 50%;
+  content: "";
+  height: 5px;
+  left: 2px;
+  position: absolute;
+  top: 18px;
+  width: 5px;
+}
+
+/* Cabeçalho do Roteiro: rótulo à esquerda, cópia discreta à direita. */
+.scriptHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Ação de cópia: ícone only, cor auxiliar; alvo de toque 44px do Button.
+   Base em text.secondary (5.36:1 em Light — ícone significativo ≥ 3:1). */
+.copyScriptButton {
+  color: var(--color-text-secondary);
+}
+
+.copyScriptButton:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+/* Leitura editorial: ~65–75 caracteres por linha, sem correr o painel todo. */
+/* Roteiro para leitura start-to-end: uma frase completa por parágrafo, com pausa visual entre frases. */
+.scriptParagraphs {
+  display: grid;
+  gap: 12px;
+}
+
+.readingText {
+  margin: 0;
+  max-width: 62ch;
+}
+
+.detailTabs {
+  gap: 16px;
+}
+
+/* Estados da aba Cenas: mensagens de contrato, sem detalhes internos. */
+.scenesNote {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0;
+}
+
+/* Faltantes da entrega parcial (ADR-021): motivo sanitizado por item, texto
+   secundário, sem ação implícita (não clicável, sem cor de ação). */
+.missingList {
+  color: var(--color-text-secondary);
+  display: grid;
+  font-size: 14px;
+  gap: 6px;
+  line-height: 20px;
+  margin: 0;
+  padding: 0;
+}
+
+/* Seções do Briefing: sem réguas genéricas; o ritmo vem do fluxo da aba e o
+   único divisor é o border-top condicional do CTA (.ctaSection). */
+.detailSection {
+  display: grid;
+  gap: 8px;
+}
+
+/* Fluxo da aba Script: espaçamento uniforme entre blocos sem réguas. */
+.scriptFlow {
+  display: grid;
+  gap: 24px;
+}
+
+/* Divisor único e sutil: apenas o CTA, quando há Desenvolvimento antes. */
+.ctaSection {
+  border-top: 1px solid var(--color-border);
+  padding-top: 24px;
+}
+
+.scriptSection {
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-intelligence);
+  border-radius: 0 10px 10px 0;
+  border-top: 0;
+  margin-top: 16px;
+  padding: 18px 16px;
+}
+
+.scriptSection .readingText {
+  font-size: 17px;
+  line-height: 1.58;
+}
+
+/* Cenas como sequência de produção: índice + descrição, não parágrafo. */
+.sceneList {
+  display: grid;
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sceneItem {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 32px minmax(0, 1fr);
+}
+
+.sceneItem p {
+  color: var(--color-text);
+  margin: 0;
+  max-width: 62ch;
+}
+
+.sceneIndex {
+  color: var(--color-brand);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+}
+
+/* Explicabilidade: disclosure assinado pelo token de inteligência. */
+.whySummary {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+/* Navegação linear do leitor: anterior à esquerda, próximo à direita. */
+.contentsNav {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.readerNavButton {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-secondary);
+  min-width: 0;
+  padding-inline: 0;
+  width: 100%;
+}
+
+.readerNavButton:first-child {
+  justify-content: flex-start;
+}
+
+.readerNavButton:last-child {
+  justify-content: flex-end;
+}
+
+.readerNavButton:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-brand);
+}
+
+
+@media (max-width: 767px) {
+  .contentsNav {
+    gap: 8px;
+  }
+}
+
+
+.phaseList {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.phaseItem {
+  align-items: baseline;
+  border-left: 2px solid var(--color-border);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+  padding-left: 10px;
+}
+
+.phaseName {
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 20px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.phaseStatus {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.phaseItem[data-state="done"] .phaseStatus {
+  color: var(--color-success);
+}
+
+.phaseItem[data-state="active"] {
+  border-left-color: var(--color-brand);
+}
+
+.phaseItem[data-state="active"] .phaseStatus {
+  color: var(--color-text);
+}
+
+.phaseItem[data-state="failed"] {
+  border-left-color: var(--color-danger);
+}
+
+.phaseItem[data-state="pending"],
+.phaseItem[data-state="skipped"] {
+  border-left-color: transparent;
+  opacity: 0.5;
+}
+
+.phaseItem[data-state="pending"] .phaseName,
+.phaseItem[data-state="pending"] .phaseStatus,
+.phaseItem[data-state="skipped"] .phaseName,
+.phaseItem[data-state="skipped"] .phaseStatus {
+  color: var(--color-text-muted);
+}
+
+.phaseStatus svg {
+  display: block;
+  height: 16px;
+  width: 16px;
+}
+
+.phaseItem[data-state="failed"] .phaseStatus {
+  color: var(--color-danger);
+}
+
+/* Aba Conteúdos em andamento (Método 3S): mensagem de estado na coluna de
+   leitura (560–640px), hierarquia eyebrow → título → etapa real → continuidade.
+   Assinatura discreta derivada só de intelligence + tokens: tinte de superfície,
+   hairline e halo do ponto; decorativo é aria-hidden e o reduced-motion do
+   .panel desliga o pulso. Etapa vem de status/stage reais — sem percentual/ETA. */
+.runningState {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-intelligence) 7%, var(--color-surface)), var(--color-surface) 72%);
+  border: 1px solid color-mix(in srgb, var(--color-intelligence) 22%, var(--color-border));
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  margin-inline: auto;
+  max-width: 600px;
+  padding: 40px 24px 36px;
+  text-align: center;
+  width: 100%;
+}
+
+.runningEyebrow {
+  justify-content: center;
+}
+
+.runningDot {
+  animation: intelligencePulse 2s ease-in-out infinite;
+  background: var(--color-intelligence);
+  border-radius: 9999px;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-intelligence) 14%, transparent);
+  flex: 0 0 auto;
+  height: 8px;
+  width: 8px;
+}
+
+@keyframes intelligencePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.runningTitle {
+  color: var(--color-text);
+  font-size: 20px;
+  line-height: 26px;
+  margin: 0;
+}
+
+.runningStep {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  margin: 0;
+}
+
+.runningNote {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+  max-width: 46ch;
+}
+
+.dimensions {
+  border-block: 1px solid var(--color-border);
+  display: grid;
+  gap: 8px 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-block: 12px;
+}
+
+.dimensions p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.dimensions span {
+  color: var(--color-text);
+}
+
+.dialogBackdrop {
+  align-items: center;
+  background: rgb(0 0 0 / 35%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 16px;
+  position: fixed;
+  z-index: 10;
+}
+
+.dialog {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  display: grid;
+  gap: 16px;
+  max-width: 420px;
+  padding: 24px;
+  width: 100%;
+}
+
+.dialog h3,
+.dialog p {
+  margin: 0;
+}
+
+/* Aba Estratégia: composição principal + aside contextual, na proporção da Visão geral. */
+.strategyLayout {
+  align-items: start;
+  display: grid;
+  gap: 28px;
+  grid-template-columns: minmax(0, 1.75fr) minmax(280px, 0.75fr);
+  margin-top: 24px;
+  min-width: 0;
+}
+
+.strategyPanel {
+  animation: briefingOpen 160ms ease-out;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  display: grid;
+  gap: 32px;
+  min-width: 0;
+  padding: 24px;
+}
+
+.strategyHeader {
+  display: grid;
+  gap: 6px;
+}
+
+.strategyHeader h2 {
+  font-size: 20px;
+  line-height: 26px;
+  margin: 0;
+}
+
+.strategyHeader p {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+}
+.strategySummary {
+  background: var(--color-surface-secondary);
+  border-left: 2px solid var(--color-intelligence);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 16px 20px;
+}
+
+.strategySummary h3,
+.strategySummary p {
+  margin: 0;
+}
+
+.strategySummary h3 {
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.strategySummary p {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.strategySummary strong {
+  color: var(--color-text);
+}
+
+.strategyDetails {
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+}
+
+.strategyDetails summary {
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  list-style-position: inside;
+}
+
+.strategyDetailsBody {
+  display: grid;
+  gap: 32px;
+  padding-top: 24px;
+}
+
+.positioning {
+  background: var(--color-surface-secondary);
+  border-left: 2px solid var(--color-intelligence);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 20px 24px;
+}
+
+.positioningLabel {
+  align-items: center;
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 4px;
+  line-height: 16px;
+  margin: 0;
+}
+
+.positioningText {
+  color: var(--color-text);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 30px;
+  margin: 0;
+}
+
+.strategySection {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sectionTitle {
+  align-items: center;
+  color: var(--color-text);
+  display: flex;
+  font-size: 17px;
+  font-weight: 600;
+  gap: 8px;
+  line-height: 22px;
+  margin: 0;
+}
+
+.audienceList {
+  display: grid;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.audienceItem {
+  display: grid;
+  gap: 2px;
+  padding: 12px 0;
+}
+
+.audienceItem + .audienceItem {
+  border-top: 1px solid var(--color-border);
+}
+
+.audienceName {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22px;
+  margin: 0;
+}
+
+.audienceSituation {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0;
+}
+
+.triplet {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tripletColumn {
+  align-content: start;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Cabeçalho de coluna ancorado por régua — cada coluna lê como bloco, não como texto corrido. */
+.tripletTitle {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 8px;
+}
+
+/* Itens seguem o ritmo de linhas das demais listas da aba (Públicos, Objeções). */
+.bulletList {
+  color: var(--color-text);
+  display: grid;
+  font-size: 15px;
+  line-height: 22px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bulletList li {
+  margin: 0;
+  padding: 10px 0;
+}
+
+.bulletList li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.objectionList {
+  display: grid;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.objectionItem {
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 22px;
+  padding: 10px 0;
+}
+
+.objectionItem:last-child {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.objectionItem summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-weight: 500;
+  min-height: 44px;
+}
+
+.objectionItem summary:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.objectionItem details[open] summary {
+  padding-bottom: 4px;
+}
+
+.objectionChevron {
+  color: var(--color-text-muted);
+  flex: 0 0 auto;
+  height: 16px;
+  margin-left: auto;
+  transition: transform 160ms ease-out;
+  width: 16px;
+}
+
+.objectionItem details[open] .objectionChevron {
+  transform: rotate(90deg);
+}
+
+.objectionArgument {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+}
+
+.argumentList {
+  display: grid;
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.argumentItem {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+}
+
+.argumentIndex {
+  color: var(--color-brand);
+  flex: 0 0 auto;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 22px;
+}
+
+.argumentText {
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+}
+
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chip {
+  align-items: center;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 9999px;
+  color: var(--color-text);
+  display: inline-flex;
+  font-size: 13px;
+  line-height: 18px;
+  min-height: 32px;
+  padding: 4px 14px;
+}
+
+.signList {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.signItem {
+  align-items: start;
+  color: var(--color-text);
+  display: flex;
+  font-size: 15px;
+  gap: 10px;
+  line-height: 22px;
+}
+
+.signItem svg {
+  flex: 0 0 auto;
+  height: 18px;
+  margin-top: 2px;
+  width: 18px;
+}
+
+.signCheck {
+  color: var(--color-success);
+}
+
+.strategyAside {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* Sticky apenas no desktop (≥1200px), onde o aside fica na segunda coluna. */
+@media (min-width: 1200px) {
+  .strategyAside {
+    position: sticky;
+    top: 32px;
+  }
+}
+
+.asideCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+}
+
+.asideCard h2 {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  margin: 0;
+}
+
+.asideCard p {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0;
+}
+
+/* Ação de recuperação em Conteúdos compacta no desktop e cheia no mobile. */
+.stateAction {
+  justify-content: center;
+  width: 100%;
+}
+
+.contentsActions .stateAction {
+  width: auto;
+}
+
+.asideStatus {
+  align-items: center;
+  color: var(--color-text);
+  display: flex;
+  font-weight: 600;
+  gap: 8px;
+}
+
+/* Indicador não textual: cor carrega significado sem depender de contraste de texto. */
+.asideStatus::before {
+  background: var(--color-success);
+  border-radius: 9999px;
+  content: "";
+  flex: 0 0 auto;
+  height: 8px;
+  width: 8px;
+}
+
+.asideCard button {
+  justify-self: start;
+  min-height: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel * {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    scroll-behavior: auto;
+    transition-duration: 0.01ms;
+  }
+
+  /* SPEC: reduced-motion remove o movimento, não só o reduz. */
+  .detail,
+  .panel,
+  .strategyPanel {
+    animation: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .strategyLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .panel,
+  .strategyPanel,
+  .asideCard {
+    padding: 20px;
+  }
+
+  .runningState {
+    padding: 28px 16px;
+  }
+
+  .contentsActions .stateAction {
+    width: 100%;
+  }
+
+  .contentsActions > [role="alert"],
+  .contentsActions > [role="status"] {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .contentsActions > [role="alert"] > .actions,
+  .contentsActions > [role="status"] > .actions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-content: stretch;
+  }
+
+  .strategyLayout {
+    margin-top: 16px;
+  }
+
+  .strategyPanel {
+    gap: 28px;
+  }
+
+  .triplet {
+    grid-template-columns: 1fr;
+  }
+
+  .fields {
+    grid-template-columns: 1fr;
+  }
+
+  .dimensions {
+    grid-template-columns: 1fr;
+  }
+}

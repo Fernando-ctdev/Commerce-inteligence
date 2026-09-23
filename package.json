@@ -1,0 +1,46 @@
+{
+  "name": "commerce-intelligence",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "diagnose:generation": "tsx scripts/diagnose-generation.mts",
+    "catalog:generate": "tsx scripts/generate-creative-catalog.mts",
+    "worker": "tsx scripts/worker.mts",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/components/products/product-form-model.test.ts src/components/products/generation-api.test.ts src/components/products/generation-ui-model.test.ts src/components/products/generation-views.test.tsx src/modules/env-loader.test.ts src/modules/creator-preferences/service.test.ts src/modules/identity/http.test.ts src/modules/identity/password.test.ts src/modules/identity/service.test.ts src/modules/products/service.test.ts src/modules/commerce-intelligence/adr-025-evaluation.test.ts src/modules/commerce-intelligence/contract.test.ts src/modules/commerce-intelligence/creator-context.test.ts src/modules/commerce-intelligence/current-job-regression.test.ts src/modules/commerce-intelligence/engine.test.ts src/modules/commerce-intelligence/engine-pipeline.test.ts src/modules/commerce-intelligence/gates.test.ts src/modules/commerce-intelligence/regression-verdict.test.ts src/modules/commerce-intelligence/gates-negative.test.ts src/modules/commerce-intelligence/gates-repair.test.ts src/modules/commerce-intelligence/locator-leak.test.ts src/modules/commerce-intelligence/scene-outcome-telemetry.test.ts src/modules/commerce-intelligence/generation-http-errors.test.ts src/modules/commerce-intelligence/http-status.partial.test.ts src/modules/commerce-intelligence/http-status.test.ts src/modules/commerce-intelligence/observability.test.ts src/modules/commerce-intelligence/platform-skill.test.ts src/modules/commerce-intelligence/provider.test.ts src/modules/commerce-intelligence/provider-config.test.ts src/modules/commerce-intelligence/provenance.test.ts src/modules/commerce-intelligence/runtime.test.ts src/modules/commerce-intelligence/semantic-quality.test.ts src/modules/commerce-intelligence/worker.test.ts src/modules/commerce-intelligence/worker-fence.test.ts src/modules/products/showcase.test.ts",
+    "dev": "next dev"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.7.0",
+    "@prisma/client": "6.12.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cn": "^0.3.2",
+    "lucide-react": "^1.34.0",
+    "next": "16.3.2",
+    "next-themes": "^0.4.6",
+    "postcss": "^8.5.26",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "shadcn": "^4.19.0",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.3",
+    "tw-animate-css": "^1.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.36.0",
+    "@types/node": "22.15.3",
+    "@types/react": "19.1.2",
+    "@types/react-dom": "19.1.2",
+    "eslint": "9.36.0",
+    "eslint-config-next": "16.3.2",
+    "prisma": "6.12.0",
+    "tsx": "4.20.3",
+    "typescript": "5.8.3"
+  }
+}

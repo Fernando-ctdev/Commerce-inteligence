@@ -1,0 +1,334 @@
+/* Página dedicada /my-style (SPEC slice-011): experiência de seleção, não
+   formulário técnico. Tokens em globals.css; assinatura .section de settings. */
+
+.surface {
+  /* Coluna lateral direita sticky, mesma assinatura do .overviewLayout
+     de product-detail (minmax 1.75fr/0.75fr + align-items:start). */
+  align-items: start;
+  animation: surfaceOpen 160ms ease-out;
+  display: grid;
+  gap: 28px;
+  grid-template-columns: minmax(0, 1.75fr) minmax(280px, 0.75fr);
+}
+
+.mainColumn {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+/* Empilhado em viewport estreita (tablet/móvel): summary volta para o fluxo. */
+@media (max-width: 991px) {
+  .surface {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@keyframes surfaceOpen {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface {
+    animation: none;
+  }
+}
+
+.hero {
+  /* Respiro de contexto (space.2xl) entre o cabeçalho e o conteúdo. */
+  display: grid;
+  gap: 8px;
+  margin-block-end: 40px;
+  max-width: 640px;
+}
+
+.eyebrow {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  margin: 0;
+}
+
+.heroTitle {
+  align-items: center;
+  color: var(--color-text);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 22px;
+  font-weight: 600;
+  gap: 10px;
+  line-height: 28px;
+  margin: 0;
+}
+
+.heroIcon {
+  color: var(--color-brand);
+  flex: 0 0 auto;
+  height: 20px;
+  width: 20px;
+}
+
+.heroCopy {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+}
+
+.blockTitle {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+
+/* Legend visível por padrão; .srLegend só quando o h2 acima já nomeia o grupo. */
+.group legend {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  margin: 0 0 6px;
+  padding: 0;
+}
+
+.srLegend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Espaço entre grupos empilhados no mesmo bloco (Seu jeito de gravar). */
+.group + .group {
+  margin-block-start: 16px;
+}
+
+.options1,
+.options2,
+.options3 {
+  display: grid;
+  gap: 10px;
+}
+
+.options2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.options3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 767px) {
+  .options2,
+  .options3 {
+    grid-template-columns: 1fr;
+  }
+  .options3 {
+    gap: 8px;
+  }
+}
+
+.choice {
+  align-items: flex-start;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  transition: border-color 80ms ease, background-color 80ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .choice {
+    transition: none;
+  }
+}
+
+.choice:hover {
+  border-color: var(--color-text-secondary);
+}
+
+.choiceSelected {
+  background: color-mix(in srgb, var(--color-brand) 8%, var(--color-surface));
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 1px var(--color-brand);
+}
+
+.choiceInput {
+  accent-color: var(--color-brand);
+  block-size: 18px;
+  flex: 0 0 auto;
+  inline-size: 18px;
+  margin-block-start: 3px;
+}
+
+.choiceLabel {
+  color: var(--color-text);
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+/* Selo do card recomendado: pílula discreta na cor de marca, ao lado do rótulo. */
+.choiceBadge {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-brand) 12%, var(--color-surface));
+  border-radius: 999px;
+  color: var(--color-brand);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 16px;
+  margin-inline-start: 6px;
+  padding: 2px 8px;
+  vertical-align: middle;
+}
+
+.choiceHint {
+  color: var(--color-text-secondary);
+  display: block;
+  font-size: 13px;
+  line-height: 18px;
+  margin-block-start: 2px;
+}
+
+.choice:focus-within {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 14px;
+  gap: 8px;
+  line-height: 20px;
+  min-height: 44px;
+  padding: 10px 16px;
+  transition: border-color 80ms ease, background-color 80ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip {
+    transition: none;
+  }
+}
+
+.chip:hover {
+  border-color: var(--color-text-secondary);
+}
+
+.chipSelected {
+  background: color-mix(in srgb, var(--color-brand) 10%, var(--color-surface));
+  border-color: var(--color-brand);
+}
+
+.chip:focus-within {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.chipInput {
+  accent-color: var(--color-brand);
+  block-size: 16px;
+  flex: 0 0 auto;
+  inline-size: 16px;
+}
+
+.textarea {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  font: inherit;
+  min-height: 44px;
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+.textarea:focus-visible,
+.chipInput:focus-visible,
+.choiceInput:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.hint {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  margin: 6px 0 0;
+}
+
+.summary {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 24px;
+  position: sticky;
+  top: 24px;
+}
+
+.summaryTitle {
+  align-items: center;
+  color: var(--color-text);
+  display: flex;
+  font-size: 17px;
+  font-weight: 600;
+  gap: 8px;
+  line-height: 22px;
+  margin: 0;
+}
+
+.summaryText {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+}
+
+.summaryPlaceholder {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0;
+}

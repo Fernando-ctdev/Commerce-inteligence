@@ -1,0 +1,125 @@
+/* Vitrine — detalhes exclusivos dos cards do showcase no grid unificado
+   (DTO transitório de apresentação); o card shell vive em
+   product-list.module.css. */
+
+.facts {
+  color: var(--color-text-secondary);
+  display: grid;
+  font-size: 13px;
+  gap: 4px;
+  line-height: 18px;
+  margin: 0;
+}
+
+.facts > div {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.facts dt {
+  color: var(--color-text-muted);
+  flex: 0 0 auto;
+}
+
+.facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Campo ausente no DTO (estado parcial): nunca inventar valor. */
+.missing {
+  color: var(--color-text-muted);
+}
+
+/* Rótulos do response (ex.: "31% off") — texto exato, read-only, pills neutras. */
+.labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Badge de origem (TikTok Shop vs Manual) e rótulos do response — fundo
+   surface + borda neutra: contrastam tanto no card normal quanto no hover
+   (que usa surface-secondary). Texto/tamanho preservados; pill read-only. */
+.badge {
+  align-self: start;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 9999px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 9px;
+  width: fit-content;
+}
+
+/* Fallback de capa: neutro e premium, 100% local (sem URL externa).
+   Brilho diagonal sutil sobre surface-secondary; rótulo e ícone em texto
+   muted — decoração que não compete com o próximo passo (DESIGN). */
+.fallback {
+  align-items: center;
+  aspect-ratio: 16 / 9;
+  background:
+    radial-gradient(
+      120% 140% at 18% 0%,
+      color-mix(in srgb, var(--color-surface) 60%, transparent),
+      transparent 58%
+    ),
+    var(--color-surface-secondary);
+  color: var(--color-text-muted);
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+  justify-content: center;
+  letter-spacing: 0.02em;
+  width: 100%;
+}
+
+.fallback svg {
+  height: 20px;
+  opacity: 0.7;
+  width: 20px;
+}
+
+/* Ação compacta ancorada no topo da capa — sem reservar rodapé no card. */
+.cardCta {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 1;
+}
+
+/* Vidro fosco alinhado ao .cardMenuTrigger dos cards manuais; 44px de
+   hit area (min-height do Button) e contraste do texto preservados. */
+.ctaButton {
+  backdrop-filter: blur(4px);
+  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ctaButton:hover {
+  background: color-mix(in srgb, var(--color-surface-secondary) 65%, transparent);
+}
+
+/* CTA fixa: sempre visível em desktop e mobile (aprovado) — sem reveal por
+   hover/focus; :focus-within do card continua válida para teclado pois o
+   botão nunca sai do fluxo de foco. */
+
+.link {
+  text-decoration: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge,
+  .cardCta > * {
+    transition: none;
+  }
+}

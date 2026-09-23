@@ -1,0 +1,2405 @@
+{
+  "version": "1.1.0",
+  "items": [
+    {
+      "id": "hook-viral-1",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui custa barato e parece produto caro."
+    },
+    {
+      "id": "hook-viral-2",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Eu não acredito que isso custa tão pouco."
+    },
+    {
+      "id": "hook-viral-3",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto entrega MUITO pelo preço."
+    },
+    {
+      "id": "hook-viral-4",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Agora eu entendi por que isso viralizou."
+    },
+    {
+      "id": "hook-viral-5",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Você vai querer comprar isso imediatamente."
+    },
+    {
+      "id": "hook-viral-6",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Nunca pensei que algo tão barato fosse tão bom."
+    },
+    {
+      "id": "hook-viral-7",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produtinho virou meu vício."
+    },
+    {
+      "id": "hook-viral-8",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui parece muito mais caro do que é."
+    },
+    {
+      "id": "hook-viral-9",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A qualidade disso me surpreendeu demais."
+    },
+    {
+      "id": "hook-viral-10",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item vale muito mais do que custa."
+    },
+    {
+      "id": "hook-viral-11",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Eu queria ter descoberto isso antes."
+    },
+    {
+      "id": "hook-viral-12",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A internet hypou isso e agora eu entendi."
+    },
+    {
+      "id": "hook-viral-13",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui é literalmente um achado."
+    },
+    {
+      "id": "hook-viral-14",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto faz diferença real no dia a dia."
+    },
+    {
+      "id": "hook-viral-15",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Você vai se perguntar como viveu sem isso."
+    },
+    {
+      "id": "hook-viral-16",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui virou indispensável pra mim."
+    },
+    {
+      "id": "hook-viral-17",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Nunca vi algo tão útil e barato ao mesmo tempo."
+    },
+    {
+      "id": "hook-viral-18",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item parece coisa de rico."
+    },
+    {
+      "id": "hook-viral-19",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui entrega luxo gastando pouco."
+    },
+    {
+      "id": "hook-viral-20",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "O custo-benefício disso é absurdo."
+    },
+    {
+      "id": "hook-viral-21",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto ficou famoso por um motivo."
+    },
+    {
+      "id": "hook-viral-22",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Eu achei que era exagero… até testar."
+    },
+    {
+      "id": "hook-viral-23",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui facilita muito a rotina."
+    },
+    {
+      "id": "hook-viral-24",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produtinho parece importado caro."
+    },
+    {
+      "id": "hook-viral-25",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A qualidade disso aqui parece premium."
+    },
+    {
+      "id": "hook-viral-26",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Você não tem noção do quanto isso ajuda."
+    },
+    {
+      "id": "hook-viral-27",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui virou febre na internet."
+    },
+    {
+      "id": "hook-viral-28",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item entrega muito mais do que promete."
+    },
+    {
+      "id": "hook-viral-29",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Nunca imaginei que isso seria tão útil."
+    },
+    {
+      "id": "hook-viral-30",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui parece compra de milionário."
+    },
+    {
+      "id": "hook-viral-31",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto deixou minha rotina muito mais prática."
+    },
+    {
+      "id": "hook-viral-32",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Agora eu não consigo mais ficar sem isso."
+    },
+    {
+      "id": "hook-viral-33",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui faz diferença já no primeiro uso."
+    },
+    {
+      "id": "hook-viral-34",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item parece simples… até você usar."
+    },
+    {
+      "id": "hook-viral-35",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A praticidade disso aqui é surreal."
+    },
+    {
+      "id": "hook-viral-36",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui virou meu produto favorito do momento."
+    },
+    {
+      "id": "hook-viral-37",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto faz tudo ficar mais fácil."
+    },
+    {
+      "id": "hook-viral-38",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Você precisa testar isso pelo menos uma vez."
+    },
+    {
+      "id": "hook-viral-39",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui parece caro só de olhar."
+    },
+    {
+      "id": "hook-viral-40",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "O nível de utilidade disso é absurdo."
+    },
+    {
+      "id": "hook-viral-41",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto economiza MUITO esforço."
+    },
+    {
+      "id": "hook-viral-42",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui deixa tudo mais organizado."
+    },
+    {
+      "id": "hook-viral-43",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A internet não exagerou sobre esse produto."
+    },
+    {
+      "id": "hook-viral-44",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item mudou totalmente minha rotina."
+    },
+    {
+      "id": "hook-viral-45",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui vale cada centavo."
+    },
+    {
+      "id": "hook-viral-46",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "O acabamento disso parece premium."
+    },
+    {
+      "id": "hook-viral-47",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto entrega experiência de luxo."
+    },
+    {
+      "id": "hook-viral-48",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui parece coisa de Pinterest."
+    },
+    {
+      "id": "hook-viral-49",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A funcionalidade disso aqui é genial."
+    },
+    {
+      "id": "hook-viral-50",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Você vai querer mostrar isso pra todo mundo."
+    },
+    {
+      "id": "hook-viral-51",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui parece muito mais sofisticado do que realmente é."
+    },
+    {
+      "id": "hook-viral-52",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item ficou famoso muito rápido e agora eu entendi."
+    },
+    {
+      "id": "hook-viral-53",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui é o tipo de compra que vale muito."
+    },
+    {
+      "id": "hook-viral-54",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto virou queridinho da internet."
+    },
+    {
+      "id": "hook-viral-55",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Nunca vi algo tão barato entregar tanto."
+    },
+    {
+      "id": "hook-viral-56",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui deixa qualquer rotina mais inteligente."
+    },
+    {
+      "id": "hook-viral-57",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item faz sua vida parecer muito mais prática."
+    },
+    {
+      "id": "hook-viral-58",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A qualidade disso aqui me deixou chocada."
+    },
+    {
+      "id": "hook-viral-59",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui parece invenção do futuro."
+    },
+    {
+      "id": "hook-viral-60",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto deixa tudo muito mais confortável."
+    },
+    {
+      "id": "hook-viral-61",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A praticidade disso aqui é viciante."
+    },
+    {
+      "id": "hook-viral-62",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui transformou completamente meu dia."
+    },
+    {
+      "id": "hook-viral-63",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item parece pequeno, mas entrega MUITO."
+    },
+    {
+      "id": "hook-viral-64",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui ficou viral por um motivo."
+    },
+    {
+      "id": "hook-viral-65",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "O custo-benefício disso aqui é outro nível."
+    },
+    {
+      "id": "hook-viral-66",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto parece coisa de influencer rica."
+    },
+    {
+      "id": "hook-viral-67",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui faz qualquer ambiente parecer mais bonito."
+    },
+    {
+      "id": "hook-viral-68",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A experiência usando isso é surreal."
+    },
+    {
+      "id": "hook-viral-69",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Nunca mais fiquei sem depois que comprei."
+    },
+    {
+      "id": "hook-viral-70",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui virou essencial aqui em casa."
+    },
+    {
+      "id": "hook-viral-71",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item parece produto importado caro."
+    },
+    {
+      "id": "hook-viral-72",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Você vai amar isso já no primeiro uso."
+    },
+    {
+      "id": "hook-viral-73",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui resolve um problema muito chato."
+    },
+    {
+      "id": "hook-viral-74",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto deixa tudo mais moderno."
+    },
+    {
+      "id": "hook-viral-75",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui parece uma compra simples… até você testar."
+    },
+    {
+      "id": "hook-viral-76",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A funcionalidade disso aqui me surpreendeu muito."
+    },
+    {
+      "id": "hook-viral-77",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item faz diferença todos os dias."
+    },
+    {
+      "id": "hook-viral-78",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui elevou totalmente minha rotina."
+    },
+    {
+      "id": "hook-viral-79",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "O resultado usando isso é muito melhor do que eu esperava."
+    },
+    {
+      "id": "hook-viral-80",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto faz você economizar muito tempo."
+    },
+    {
+      "id": "hook-viral-81",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui virou meu vício oficial."
+    },
+    {
+      "id": "hook-viral-82",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Nunca pensei que algo tão pequeno ajudaria tanto."
+    },
+    {
+      "id": "hook-viral-83",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui parece item de loja de luxo."
+    },
+    {
+      "id": "hook-viral-84",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A internet acertou MUITO nesse produto."
+    },
+    {
+      "id": "hook-viral-85",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item deixa qualquer rotina muito mais fácil."
+    },
+    {
+      "id": "hook-viral-86",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui entrega praticidade sem esforço."
+    },
+    {
+      "id": "hook-viral-87",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "O design disso aqui é lindo demais."
+    },
+    {
+      "id": "hook-viral-88",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto faz qualquer espaço parecer mais organizado."
+    },
+    {
+      "id": "hook-viral-89",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui deixa tudo mais bonito e funcional."
+    },
+    {
+      "id": "hook-viral-90",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item me surpreendeu mais do que eu imaginava."
+    },
+    {
+      "id": "hook-viral-91",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui faz sua rotina parecer muito mais chique."
+    },
+    {
+      "id": "hook-viral-92",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto virou febre na internet inteira."
+    },
+    {
+      "id": "hook-viral-93",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A qualidade disso aqui não parece barata."
+    },
+    {
+      "id": "hook-viral-94",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui é o tipo de produto que viraliza fácil."
+    },
+    {
+      "id": "hook-viral-95",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse item faz diferença sem você perceber."
+    },
+    {
+      "id": "hook-viral-96",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui deixa qualquer dia muito mais prático."
+    },
+    {
+      "id": "hook-viral-97",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "A praticidade disso aqui ganhou meu coração."
+    },
+    {
+      "id": "hook-viral-98",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Esse produto parece caro em todos os detalhes."
+    },
+    {
+      "id": "hook-viral-99",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Isso aqui faz você economizar dinheiro e esforço."
+    },
+    {
+      "id": "hook-viral-100",
+      "type": "hook",
+      "category": "general",
+      "categoryScope": "global",
+      "source": "virais-baratinhos.pdf",
+      "text": "Nunca imaginei gostar tanto de um produto assim."
+    },
+    {
+      "id": "hook-hooks-apparel-1",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look faz qualquer mulher se sentir milionária.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-2",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O caimento dessa peça no corpo é surreal.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-3",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Nunca pensei que uma roupa valorizaria tanto assim.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-4",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse vestido parece coisa de marca de luxo.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-5",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O jeito que isso modela o corpo é absurdo.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-6",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Você vai entender o hype quando vestir isso.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-7",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça deixa qualquer produção mais elegante.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-8",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Eu me senti linda instantaneamente usando isso.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-9",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O tecido disso aqui é outro nível.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-10",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa parece muito mais cara do que é.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-11",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O ajuste no corpo ficou simplesmente perfeito.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-12",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça faz diferença REAL no visual.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-13",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O conforto disso aqui me surpreendeu demais.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-14",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Parece roupa de Pinterest na vida real.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-15",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look elevou totalmente minha autoestima.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-16",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Nunca recebi tantos elogios quanto usando isso.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-17",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça combina com literalmente tudo.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-18",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O acabamento disso parece premium.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-19",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa deixa qualquer look mais sofisticado.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-20",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O jeito que isso veste é impecável.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-21",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça virou meu vício do momento.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-22",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "A modelagem disso aqui é perfeita.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-23",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Você vai querer usar isso todos os dias.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-24",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look ficou bonito em TODOS os ângulos.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-25",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa faz você parecer mais arrumada instantaneamente.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-26",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O tecido disso aqui é tão gostoso.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-27",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça transformou completamente meu visual.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-28",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Parece look de influencer gringa.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-29",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa deixou meu corpo muito valorizado.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-30",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Eu não esperava amar tanto essa peça.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-31",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O caimento ficou perfeito até sem esforço.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-32",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça combina beleza e conforto.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-33",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O nível de elegância disso é absurdo.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-34",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa faz qualquer produção parecer cara.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-35",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Você precisa ver isso no corpo.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-36",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O ajuste disso aqui é simplesmente impecável.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-37",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça ficou linda até no básico.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-38",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look deixou minha autoestima lá em cima.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-39",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Parece roupa feita sob medida.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-40",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "A qualidade disso aqui me deixou chocada.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-41",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça é o tipo de compra que vale MUITO.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-42",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O jeito que isso valoriza o corpo é surreal.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-43",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look virou meu favorito do guarda-roupa.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-44",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "A internet hypou e agora eu entendi.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-45",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa entrega luxo sem custar caro.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-46",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O toque desse tecido é maravilhoso.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-47",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça deixa qualquer visual mais estiloso.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-48",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Eu me senti muito mais confiante usando isso.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-49",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look faz você parecer muito mais elegante.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-50",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa virou indispensável pra mim.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-51",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa faz qualquer homem parecer mais elegante.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-52",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O caimento dessa peça é absurdo no corpo.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-53",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look parece muito mais caro do que é.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-54",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Nunca pensei que uma camiseta vestiria tão bem.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-55",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O ajuste disso aqui ficou perfeito.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-56",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça elevou totalmente meu visual.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-57",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Você vai entender o hype quando vestir isso.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-58",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa deixa qualquer homem mais estiloso.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-59",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O tecido disso aqui é outro nível.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-60",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Parece roupa de marca premium.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-61",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça combina com literalmente tudo.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-62",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O jeito que isso veste é impecável.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-63",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa deixou meu visual muito mais arrumado.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-64",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O conforto disso aqui é surreal.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-65",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça faz diferença real no estilo.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-66",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Nunca recebi tantos elogios quanto usando isso.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-67",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look ficou bonito sem esforço nenhum.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-68",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "A qualidade disso aqui impressiona muito.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-69",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa parece feita sob medida.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-70",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O caimento ficou perfeito até no básico.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-71",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça virou essencial no meu guarda-roupa.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-72",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look transmite presença instantaneamente.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-73",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "A modelagem disso aqui é absurda.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-74",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Você vai querer usar isso todos os dias.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-75",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa entrega elegância sem exagero.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-76",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O tecido disso aqui é muito confortável.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-77",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça deixa qualquer visual mais sofisticado.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-78",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look faz você parecer muito mais arrumado.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-79",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O acabamento disso parece roupa importada.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-80",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça valorizou muito meu corpo.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-81",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O ajuste ficou simplesmente impecável.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-82",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa combina conforto e estilo perfeitamente.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-83",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Parece roupa de homem rico.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-84",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça transformou totalmente meu visual.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-85",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Você precisa ver isso vestido.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-86",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look ficou estiloso em qualquer ocasião.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-87",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "A internet hypou essa peça e agora eu entendi.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-88",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa deixa qualquer produção mais bonita.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-89",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O jeito que isso veste é diferente de tudo.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-90",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça faz qualquer homem parecer mais confiante.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-91",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look virou meu favorito do momento.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-92",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "A qualidade disso aqui vale muito o preço.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-93",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa faz diferença até nos detalhes.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-94",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Nunca usei uma peça tão confortável assim.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-95",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse visual ficou elegante sem esforço.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-96",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça deixa qualquer combinação mais bonita.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-97",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "O caimento disso aqui é coisa de outro nível.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-98",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa roupa faz você parecer mais estiloso instantaneamente.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-99",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Esse look ficou perfeito no corpo.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "hook-hooks-apparel-100",
+      "type": "hook",
+      "category": "apparel",
+      "source": "vestuario-feminino-masculino.pdf",
+      "text": "Essa peça virou indispensável no meu estilo.",
+      "categoryScope": "apparel"
+    },
+    {
+      "id": "cta-ctas-1",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e vê qual valor está aparecendo pra você.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-2",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vê aqui se o mesmo valor que apareceu pra mim está aparecendo pra você também.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-3",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho laranja e confere se o frete grátis apareceu aí.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-4",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu não sei se esse preço está aparecendo pra todo mundo, mas confere aqui o seu.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-5",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho pra ver quanto está saindo pra você.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-6",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha aqui embaixo e vê se o valor está igual ao que apareceu no meu celular.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-7",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra no carrinho laranja e confere se apareceu algum desconto.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-8",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vê se pra você também apareceu esse preço, porque aqui eu achei muito bom.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-9",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho e me fala se está aparecendo o mesmo valor.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-10",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Confere aqui a oferta e vê se o mesmo desconto apareceu pra você.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-11",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho laranja só pra conferir se tem cupom disponível.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-12",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu encontrei por esse valor, mas vê quanto aparece pra você.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-13",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e olha o valor final antes de comprar.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-14",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra no produto e confere se essa promoção também está disponível pra sua conta.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-15",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vê se o frete grátis apareceu pra você também.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-16",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho e compara o preço que apareceu pra mim com o seu.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-17",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu não sei se liberou pra todo mundo, então dá uma olhadinha aqui.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-18",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho laranja e vê se essa oferta ainda está aparecendo.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-19",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha o valor que apareceu pra mim… vê se no seu está igual.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-20",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Confere se o cupom está disponível pra você também.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-21",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho e vê se o desconto entra automaticamente.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-22",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra aqui e confere quanto fica com o cupom.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-23",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho laranja e olha se apareceu alguma promoção.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-24",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vê quanto fica pra você depois de selecionar o produto.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-25",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho e confere se o preço mudou pra sua conta.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-26",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha aqui pra descobrir quanto esse produto está saindo hoje.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-27",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Confere se o frete ficou grátis aí também.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-28",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu não sei se o TikTok está mostrando o mesmo valor pra todo mundo, então confere o seu.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-29",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e vê se essa condição também apareceu pra você.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-30",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra aqui e olha se ainda está com esse preço.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-31",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho e confere se tem alguma condição especial pra sua compra.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-32",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e vê qual valor apareceu pra sua conta.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-33",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha aqui antes de sair porque pode estar aparecendo uma condição diferente pra você.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-34",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Confere o valor aí no seu aplicativo e vê se está igual ao meu.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-35",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho laranja e confere quanto fica com o frete pra sua região.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-36",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu achei esse valor aqui, agora vê se você consegue pelo mesmo.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-37",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho e olha se apareceu algum desconto extra.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-38",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra aqui pra conferir o valor final, porque é esse que importa.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-39",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vê se essa promoção também foi liberada pra você.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-40",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho laranja e confere se o cupom está funcionando aí.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-41",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha se a cor que você gostou ainda está disponível nesse valor.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-42",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho e confere se ainda tem estoque da opção que você quer.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-43",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu quero saber se apareceu o mesmo preço pra você, então olha aqui.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-44",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra no carrinho laranja e vê se o TikTok liberou alguma vantagem.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-45",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Confere aqui antes que o valor mude.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-46",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha o preço que está aparecendo pra mim e compara com o seu.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-47",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e vê se essa oferta está aparecendo aí também.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-48",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho e confere se o desconto está aparecendo aí.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-49",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu não sei por quanto está aparecendo aí, então dá uma olhada aqui.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-50",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra aqui e vê se essa condição ainda está valendo.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-51",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e confere o valor final pra sua conta.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-52",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha aqui se o frete está compensando pra você.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-53",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho e vê se apareceu algum cupom que você consegue usar.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-54",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu achei que estaria mais caro, mas olha o valor que apareceu aqui.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-55",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Confere se o TikTok liberou frete grátis pra sua região.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-56",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e vê se você também recebeu essa oferta.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-57",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra aqui e compara o valor que apareceu pra você com o meu.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-58",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha se ainda está com a mesma oferta que apareceu no vídeo.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-59",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho laranja e confere se tem desconto disponível.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-60",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vê quanto está saindo pra você e compara com o valor que eu mostrei.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-61",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho e olha se o preço ficou diferente no seu aplicativo.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-62",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu não sei se esse preço é igual pra todo mundo, então confere o seu aqui.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-63",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra no carrinho laranja e vê se apareceu alguma condição especial.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-64",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Confere se o valor ficou melhor depois que você escolheu a opção.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-65",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha aqui e vê se o frete grátis está disponível no seu endereço.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-66",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e confere se essa promoção ainda está ativa.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-67",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho e vê se o cupom aparece disponível pra sua conta.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-68",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu encontrei essa condição aqui, vê se você também consegue.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-69",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra aqui e olha qual preço o TikTok está mostrando pra você.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-70",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Confere se apareceu a mesma promoção pra você também.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-71",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e vê se o desconto está sendo aplicado.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-72",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha aqui se o valor muda quando você escolhe o tamanho.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-73",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho e confere todas as condições antes de comprar.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-74",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu não consigo ver quanto apareceu pra você, então confere aqui.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-75",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e vê se o preço está igual ao meu depois de selecionar o produto.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-76",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra aqui e confere se apareceu alguma vantagem no seu pedido.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-77",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho laranja e vê se o seu frete ficou grátis.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-78",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha aqui e compara o seu valor com o que apareceu no meu celular.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-79",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho e confere se ainda está com esse preço.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-80",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra no carrinho laranja e vê quanto fica o valor final pra você.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-81",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu achei por esse valor, mas pode ser diferente pra você. Dá uma olhada.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-82",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Confere aqui se tem algum desconto liberado pra sua conta.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-83",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho e vê se essa oferta continua ativa.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-84",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e olha se o preço ficou ainda melhor com o cupom.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-85",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra aqui e confere se ainda tem a opção que você queria.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-86",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vê se você também recebeu essa condição de compra.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-87",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho laranja e olha se apareceu algum benefício.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-88",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho e confere quanto fica no seu endereço.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-89",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Eu não sei qual preço vai aparecer pra você, mas vale conferir aqui.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-90",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha se o TikTok liberou o mesmo desconto pra você.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-91",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra no carrinho laranja e confere se ainda dá pra pegar nessa condição.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-92",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vê se apareceu algum benefício na sua compra antes de finalizar.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-93",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Confere aqui o preço de hoje e vê se está igual ao meu.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-94",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e vê se a condição mudou depois que você escolheu a opção.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-95",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra aqui e vê se o seu valor ficou melhor que o meu.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-96",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vai no carrinho e confere antes de sair porque pode ter uma oferta diferente.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-97",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Olha aqui e vê se ainda tem o produto nessa condição.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-98",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Clica no carrinho laranja e confere se o mesmo frete apareceu pra você.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-99",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Vê quanto fica pra sua região e decide se vale a pena.",
+      "categoryScope": "global"
+    },
+    {
+      "id": "cta-ctas-100",
+      "type": "cta",
+      "category": "commerce",
+      "source": "ctas-tiktok-shop.pdf",
+      "text": "Entra no carrinho e olha se tem cupom ou desconto disponível.",
+      "categoryScope": "global"
+    }
+  ]
+}

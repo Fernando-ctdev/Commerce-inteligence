@@ -1,0 +1,512 @@
+// Slice 001 — Identity/Tenant/sessão server-side (ADR-009).
+// 1 usuário = 1 tenant/workspace pessoal. Sessão guarda apenas hash da referência opaca.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String?
+  email        String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  tenant       Tenant?
+  sessions     Session[]
+
+  @@map("users")
+}
+
+model Tenant {
+  id          String       @id @default(uuid())
+  userId      String       @unique
+  createdAt   DateTime     @default(now())
+  user        User         @relation(fields: [userId], references: [id])
+  sessions    Session[]
+  attempts    ProductImportAttempt[]
+  products    Product[]
+  entitlement TenantEntitlement?
+  preference  TenantPreference?
+  jobs CommerceIntelligenceJob[]
+  reservations GenerationUsageReservation[]
+  runs IntelligenceRun[]
+  understandings ProductUnderstanding[]
+  strategies ProductStrategy[]
+  plans ContentPlan[]
+  opportunities ContentOpportunity[]
+  contents Content[]
+  briefs ContentBriefVersion[]
+  reports BriefValidationReport[]
+  sceneSets ContentSceneSet[]
+  memorySnapshots ProductMemorySnapshot[]
+  @@map("tenants")
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  userId    String
+  tenantId  String
+  tokenHash String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  user      User      @relation(fields: [userId], references: [id])
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// Slice 002 — Importação de Product via Product Importer (SPEC/PLAN §2.5).
+// Attempt carrega candidate/gaps/redirectChain como Json (payload versionado, ADR-003);
+// chaves de tenant, status e timestamps permanecem estruturados.
+model ProductImportAttempt {
+  id                String    @id @default(uuid())
+  tenantId          String
+  status            String    @default("QUEUED")
+  submittedUrl      String
+  sourceUrl         String?
+  redirectChain     Json?
+  candidate         Json?
+  gaps              Json?
+  publicErrorCode   String?
+  internalCauseCode String?
+  candidateReadyAt  DateTime?
+  leaseOwnerId      String?
+  leaseDeadlineAt   DateTime?
+  runSteps          Int       @default(0)
+  runTokens         Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([status, leaseDeadlineAt])
+  @@index([updatedAt])
+  @@map("product_import_attempts")
+}
+
+model Product {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  name               String
+  description        String?
+  category           String?
+  brand              String?
+  priceAmount        Decimal?
+  priceCurrency      String?
+  // Legado isolado (ADR-030): comissão saiu do contrato ativo. Colunas
+  // preservadas como histórico; o service nunca escreve nem lê estes campos.
+  commissionType     String?
+  commissionValue    Decimal?
+  // Legado isolado (ADR-031): desconto saiu do contrato ativo.
+  // Colunas preservadas como histórico; o service nunca escreve nem lê estes campos.
+  discountPercentage Decimal?
+  discountType       String?
+  discountValue      String?
+  // Legado isolado (ADR-030): features saiu do contrato ativo. Coluna preservada
+  // como histórico (não destrutiva); default [] permite criar sem escrever o campo.
+  features           Json  @default("[]")
+  variants           Json?
+  images             Json
+  seller             String?
+  // Nullable: caminho manual (fallback) não tem URL de origem.
+  submittedUrl       String?
+  sourceUrl          String?
+  provenance         Json
+  targetContentCount Int
+  // Slice 002 product gaps captured from the source product analysis.
+  gaps               Json     @default("[]")
+  // Slice 002 — cadastro manual: restrições da primeira geração ({creatorPresence, constraints?}),
+  // versão determinística da resposta e chave de idempotência de criação (nula no caminho legado).
+  generationConstraints Json?
+  createIdempotencyKey  String?
+  // Slice 002 — lifecycle do Product (PRD: ACTIVE/ARCHIVED); arquivar não apaga dados.
+  lifecycle          String   @default("ACTIVE")
+  version            Int @default(1)
+  createdAt          DateTime @default(now())
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  jobs CommerceIntelligenceJob[]
+  runs IntelligenceRun[]
+  understandings ProductUnderstanding[]
+  strategies ProductStrategy[]
+  plans ContentPlan[]
+  opportunities ContentOpportunity[]
+  contents Content[]
+  briefs ContentBriefVersion[]
+  sceneSets ContentSceneSet[]
+  memorySnapshots ProductMemorySnapshot[]
+  reports BriefValidationReport[]
+  @@unique([tenantId, createIdempotencyKey])
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("products")
+}
+
+model TenantEntitlement {
+  tenantId            String @id
+  activeProductsLimit Int?
+  activeProductsUsed  Int    @default(0)
+  tenant              Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("tenant_entitlements")
+}
+
+// Slice 011 — CreatorPreferences (ADR-018): estilo recorrente do creator no mesmo
+// registro one-to-one. targetContentCount permanece GenerationConstraint e não é projetado.
+model TenantPreference {
+  tenantId                 String  @id
+  targetContentCount       Int
+  language                 String  @default("pt-BR")
+  market                   String?
+  appearsOnCamera          Boolean?
+  prefersVoiceOver         Boolean?
+  preferredDurationSeconds Int?
+  tone                     String?
+  executionStyle           String?
+  recordingEquipment       Json?
+  recordingSupport         Json?
+  recordsAlone             Boolean?
+  restrictions             Json?
+  notes                    Json?
+  tenant                   Tenant  @relation(fields: [tenantId], references: [id])
+
+  @@map("tenant_preferences")
+}
+
+enum CommerceIntelligenceJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  SUCCEEDED_PARTIAL
+}
+
+enum CommerceIntelligenceStage {
+  UNDERSTANDING_PRODUCT
+  MAPPING_COMMERCIAL_OPPORTUNITIES
+  BUILDING_STRATEGY
+  BUILDING_CONTENT_PLAN
+  GENERATING_BRIEFS
+  FINALIZING
+}
+
+enum GenerationReservationStatus {
+  RESERVED
+  CONFIRMED
+  RELEASED
+}
+
+model CommerceIntelligenceJob {
+  id String @id @default(uuid())
+  tenantId String
+  userId String
+  productId String
+  idempotencyKey String
+  fingerprint String
+  targetContentCount Int
+  generatedContentsMonth String
+  status CommerceIntelligenceJobStatus @default(QUEUED)
+  stage CommerceIntelligenceStage @default(UNDERSTANDING_PRODUCT)
+  attempt Int @default(0)
+  attemptDeadlineAt DateTime?
+  leaseOwnerId String?
+  leaseDeadlineAt DateTime?
+  nextAttemptAt DateTime @default(now())
+  startedAt DateTime?
+  finishedAt DateTime?
+  publicErrorMessage String?
+  internalErrorCode String?
+  inputSnapshot Json?
+  metadata Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  reservation GenerationUsageReservation?
+  run IntelligenceRun?
+  understandings ProductUnderstanding[]
+  strategies ProductStrategy[]
+  plan ContentPlan?
+  contents Content[]
+  briefs ContentBriefVersion[]
+  reports BriefValidationReport[]
+  sceneSets ContentSceneSet[]
+  memorySnapshots ProductMemorySnapshot[]
+  @@unique([tenantId, idempotencyKey])
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+  @@index([status, nextAttemptAt, leaseDeadlineAt])
+  @@index([tenantId, productId, createdAt])
+  @@map("commerce_intelligence_jobs")
+}
+
+model GenerationUsageReservation {
+  id String @id @default(uuid())
+  tenantId String
+  jobId String @unique
+  generatedContentsMonth String
+  quantity Int
+  status GenerationReservationStatus @default(RESERVED)
+  reason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  job CommerceIntelligenceJob @relation(fields: [tenantId, jobId], references: [tenantId, id])
+  @@index([tenantId, generatedContentsMonth, status])
+  @@unique([tenantId, jobId])
+  @@map("generation_usage_reservations")
+}
+
+model IntelligenceRun {
+  id String @id @default(uuid())
+  tenantId String
+  jobId String @unique
+  productId String
+  engineVersion String
+  platformSkillVersion String
+  metadata Json?
+  inputMemorySnapshot Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  job CommerceIntelligenceJob @relation(fields: [tenantId, jobId], references: [tenantId, id])
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  @@unique([tenantId, jobId])
+  @@map("intelligence_runs")
+}
+
+model ProductUnderstanding {
+  id String @id @default(uuid())
+  tenantId String
+  productId String
+  jobId String
+  version Int @default(1)
+  payload Json
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  job CommerceIntelligenceJob @relation(fields: [tenantId, jobId], references: [tenantId, id])
+  @@unique([tenantId, id])
+  @@index([tenantId, productId, jobId])
+  @@map("product_understandings")
+}
+
+model ProductStrategy {
+  id String @id @default(uuid())
+  tenantId String
+  productId String
+  jobId String
+  version Int @default(1)
+  status String @default("ACTIVE")
+  platformId String
+  platformSkillVersion String
+  payload Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  job CommerceIntelligenceJob @relation(fields: [tenantId, jobId], references: [tenantId, id])
+  plans ContentPlan[]
+  @@unique([tenantId, id])
+  @@index([tenantId, productId])
+  @@unique([tenantId, jobId])
+  @@map("product_strategies")
+}
+
+model ContentPlan {
+  id String @id @default(uuid())
+  tenantId String
+  productId String
+  jobId String @unique
+  strategyId String
+  strategyVersion Int
+  targetContentCount Int
+  platformId String
+  platformSkillVersion String
+  payload Json
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  job CommerceIntelligenceJob @relation(fields: [tenantId, jobId], references: [tenantId, id])
+  strategy ProductStrategy @relation(fields: [tenantId, strategyId], references: [tenantId, id])
+  opportunities ContentOpportunity[]
+  contents Content[]
+  @@unique([tenantId, id])
+  @@unique([tenantId, jobId])
+  @@map("content_plans")
+}
+
+model ContentOpportunity {
+  id String @id @default(uuid())
+  tenantId String
+  productId String
+  planId String
+  jobId String
+  position Int
+  commercialObjective String
+  angle String
+  coreMessage String
+  hookMechanism String
+  noveltyTargets Json
+  payload Json
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  plan ContentPlan @relation(fields: [tenantId, planId], references: [tenantId, id])
+  contents Content[]
+  @@unique([tenantId, id])
+  @@unique([tenantId, planId, position])
+  @@index([tenantId, planId])
+  @@map("content_opportunities")
+}
+
+model Content {
+  id String @id @default(uuid())
+  tenantId String
+  productId String
+  jobId String
+  planId String
+  opportunityId String?
+  position Int
+  status String @default("DRAFT")
+  currentBriefVersionId String?
+  approvedBriefVersionId String?
+  payload Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  job CommerceIntelligenceJob @relation(fields: [tenantId, jobId], references: [tenantId, id])
+  plan ContentPlan @relation(fields: [tenantId, planId], references: [tenantId, id])
+  opportunity ContentOpportunity? @relation(fields: [tenantId, opportunityId], references: [tenantId, id])
+  briefs ContentBriefVersion[]
+  reports BriefValidationReport[]
+  sceneSets ContentSceneSet[]
+  currentBriefVersion ContentBriefVersion? @relation("CurrentBrief", fields: [tenantId, currentBriefVersionId], references: [tenantId, id])
+  @@unique([tenantId, id])
+  @@unique([tenantId, jobId, position])
+  @@index([tenantId, productId])
+  @@map("contents")
+}
+
+model ContentBriefVersion {
+  id String @id @default(uuid())
+  tenantId String
+  productId String
+  jobId String
+  contentId String
+  version Int @default(1)
+  payload Json
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  job CommerceIntelligenceJob @relation(fields: [tenantId, jobId], references: [tenantId, id])
+  content Content @relation(fields: [tenantId, contentId], references: [tenantId, id])
+  reports BriefValidationReport[]
+  sceneSets ContentSceneSet[]
+  currentFor Content[] @relation("CurrentBrief")
+  @@unique([tenantId, id])
+  @@unique([tenantId, contentId, version])
+  @@index([jobId, contentId])
+  @@map("content_brief_versions")
+}
+
+model BriefValidationReport {
+  id String @id @default(uuid())
+  tenantId String
+  jobId String
+  productId String
+  contentId String
+  briefVersionId String
+  // ADR-019: versão da política de gates sob a qual o report foi produzido.
+  // NULL = pré-versionamento (histórico); revalidação sob versão diferente é
+  // GATE-VERSION-MISMATCH, nunca REPAIR falso.
+  gateVersion Int?
+  briefId String @unique
+  factualStatus String
+  claimType String?
+  evidenceRefs Json?
+  structuralStatus String
+  platformStatus String
+  varietyStatus String
+  decision String
+  issues Json
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  job CommerceIntelligenceJob @relation(fields: [tenantId, jobId], references: [tenantId, id])
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  content Content @relation(fields: [tenantId, contentId], references: [tenantId, id])
+  briefVersion ContentBriefVersion @relation(fields: [tenantId, briefVersionId], references: [tenantId, id])
+  @@map("brief_validation_reports")
+}
+
+// ADR-019 — ContentSceneSet: sugestões visuais read-only derivadas do briefing
+// completo, SEPARADAS de ContentBriefVersion (imutabilidade do brief preservada).
+// 1 row por (tenantId, briefVersionId): payload ordenado {scenes[], generated, dropped}.
+// status distingue AVAILABLE (cenas mantidas) / FILTERED (tudo dropado pelo gate) /
+// ERROR (falha da capability) — ausência de row = não-gerado (empty state honesto).
+model ContentSceneSet {
+  id               String   @id @default(uuid())
+  tenantId         String
+  jobId            String
+  productId        String
+  contentId        String
+  briefVersionId   String
+  status           String
+  gatePolicyVersion Int
+  backfilled       Boolean  @default(false)
+  payload          Json
+  createdAt        DateTime @default(now())
+  tenant           Tenant                @relation(fields: [tenantId], references: [id])
+  product          Product               @relation(fields: [tenantId, productId], references: [tenantId, id])
+  job              CommerceIntelligenceJob @relation(fields: [tenantId, jobId], references: [tenantId, id])
+  content          Content               @relation(fields: [tenantId, contentId], references: [tenantId, id])
+  briefVersion     ContentBriefVersion   @relation(fields: [tenantId, briefVersionId], references: [tenantId, id])
+
+  @@unique([tenantId, briefVersionId])
+  @@index([tenantId, productId])
+  @@map("content_scene_sets")
+}
+
+model ProductMemorySnapshot {
+  id String @id @default(uuid())
+  tenantId String
+  productId String
+  sourceJobId String
+  version Int @default(1)
+  signals Json
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+  sourceJob CommerceIntelligenceJob @relation(fields: [tenantId, sourceJobId], references: [tenantId, id])
+  @@unique([tenantId, id])
+  @@unique([tenantId, sourceJobId])
+  @@map("product_memory_snapshots")
+}
+
+// Preço versionado e imutável (append-only) por provider/model/moeda/vigência.
+// Rates em unidades monetárias menores por milhão de tokens; Decimal exato, nunca float.
+// Dimensões não precificadas permanecem nulas; custos históricos nunca usam versão mais nova.
+model ProviderModelPrice {
+  id String @id @default(uuid())
+  provider String
+  model String
+  currency String
+  version Int
+  inputPerMillionMinor Decimal? @db.Decimal(20, 6)
+  outputPerMillionMinor Decimal? @db.Decimal(20, 6)
+  reasoningPerMillionMinor Decimal? @db.Decimal(20, 6)
+  cachedPerMillionMinor Decimal? @db.Decimal(20, 6)
+  effectiveFrom DateTime
+  effectiveTo DateTime?
+  createdAt DateTime @default(now())
+  @@unique([provider, model, currency, version])
+  @@index([provider, model, currency, effectiveFrom, effectiveTo])
+  @@map("provider_model_prices")
+}

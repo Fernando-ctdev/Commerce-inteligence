@@ -1,0 +1,44 @@
+import { createHash } from "node:crypto";
+import { GenerationError } from "./errors";
+export type IntelligenceTier = "LOW" | "MID" | "HIGH";
+export type LogicalTask = "PRODUCT_UNDERSTANDING" | "COMMERCIAL_OPPORTUNITY_MAPPING" | "STRATEGY_SYNTHESIS" | "CONTENT_PLAN_GENERATION" | "CONTENT_BRIEF_GENERATION" | "CONTENT_BRIEF_REPAIR" | "CONTENT_SCENE_IDEAS" | "CONTENT_QUALITY_JUDGE" | "CONTENT_PART_REPAIR";
+export const ROUTER_MAP: Record<LogicalTask, IntelligenceTier> = {
+  // ADR-020 adendo 3: PU é a fronteira factual canônica — 3 incidentes Qwen
+  // (purchaseBarriers) vs nenhum OpenAI observado → roteado direto a QUALITY.
+  PRODUCT_UNDERSTANDING: "HIGH",
+  COMMERCIAL_OPPORTUNITY_MAPPING: "MID",
+  STRATEGY_SYNTHESIS: "HIGH",
+  CONTENT_PLAN_GENERATION: "HIGH",
+  // ADR-013 (decisão Arquiteto): briefs exigem ancoragem factual forte — roteado a QUALITY.
+  CONTENT_BRIEF_GENERATION: "HIGH",
+  CONTENT_BRIEF_REPAIR: "HIGH",
+  CONTENT_SCENE_IDEAS: "HIGH",
+  CONTENT_QUALITY_JUDGE: "HIGH",
+  CONTENT_PART_REPAIR: "HIGH",
+};
+// Envelope de contexto projetado, separando instruções confiáveis de fatos/contexto confirmado
+// e de dados externos não confiáveis. Cada capability recebe apenas a projeção que precisa.
+export type ProjectedContext = { instructions: { task: LogicalTask; tier: IntelligenceTier; instructionHash: string }; confirmedContext: unknown; externalData?: unknown };
+// Fallback MID→HIGH (decisão do Arquiteto): tentativa sacrifada em MID, registrada com retry/custo.
+export type ProviderFallbackInfo = { from: string; reason: "timeout" | "connection" | "http_status"; providerStatus: number | null; requestBytes: number; durationMs: number };
+export type ProviderCallMetrics = { provider?: string; model: string; reasoning: string; providerStatus: number | null; requestBytes: number; trustedContextBytes: number; externalBytes: number; responseBytes: number | null; durationMs: number; usage?: ProviderTokenUsage; reportedCost?: ProviderReportedCost; providerRequestId?: string; providerRequestIdSource?: "header" | "body.id"; retry?: number; fallback?: ProviderFallbackInfo };
+// Uso real normalizado do provider; dimensão sem contador confiável permanece null (nunca 0 inferido).
+export type ProviderTokenUsage = { inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null; cachedTokens: number | null };
+// Custo monetário relatado pelo provider (ex.: OpenRouter usage.cost, USD documentado).
+// amountMinor em unidades menores da moeda; sem moeda explícita/configurada, completa vira PARTIAL.
+export type ProviderReportedCost = {
+  amountMinor: string | null;
+  currency: string | null;
+  completeness: "COMPLETE" | "PARTIAL" | "UNAVAILABLE";
+};
+// Registro sanitizado por capability: nunca prompts/payload bruto/secrets.
+export type CapabilityRecord = { task: LogicalTask; tier: IntelligenceTier; provider: string; model: string; instructionVersion: string; instructionHash: string; durationMs: number; requestBytes: number; contextBytes: number; responseBytes: number; attempt: number; retry: number };
+export type ModelRouter = { complete(task: LogicalTask, input: { trustedContext: unknown; externalData?: unknown }, signal?: AbortSignal, onMetrics?: (metrics: ProviderCallMetrics) => void): Promise<unknown>; describe(): ModelDescription; hash?(task: LogicalTask): string; modelFor?(task: LogicalTask): string };
+export type ModelDescription = { provider: string; model: string; instructionVersion: string };
+export function instructionHash(instruction: string): string { return createHash("sha256").update(instruction).digest("hex").slice(0, 16); }
+export function assertProviderOutput(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new GenerationError("GEN-SCHEMA", "Resposta do provider deve ser um objeto JSON", true, { rootShape: Array.isArray(value) ? "array" : typeof value });
+  const forbidden = ["tenantId", "status", "quota", "provider", "model", "tier", "prompt"];
+  if (forbidden.some((key) => key in (value as Record<string, unknown>))) throw new GenerationError("GEN-SCHEMA", "Resposta inválida");
+  return value as Record<string, unknown>;
+}
