@@ -248,11 +248,15 @@ function EmptyRegion({ children }: { children: React.ReactNode }) {
   return <div className={styles.panel}><p>{children}</p></div>;
 }
 
-/** Aba Conteúdos: bloco de ações contextuais da análise, sem card "Próxima ação". */
-export function GenerationActions({ generationAction, onGenerateMissing, readiness, state }: {
+/** Aba Conteúdos: bloco de ações contextuais da análise, sem card "Próxima ação".
+    showPrimaryAction=false oculta só o botão inicial "Analisar produto" (a ação
+    migra para o cabeçalho do Produto); retry, gerar faltantes e erros inline
+    permanecem. */
+export function GenerationActions({ generationAction, onGenerateMissing, readiness, showPrimaryAction = true, state }: {
   generationAction?: GenerationActionProjection;
   onGenerateMissing: () => void;
   readiness: GenerationRecord["readiness"];
+  showPrimaryAction?: boolean;
   state: GenerationState;
 }) {
   const { job, busy, error, active, failed, blockedByOther, start, retry } = state;
@@ -267,6 +271,17 @@ export function GenerationActions({ generationAction, onGenerateMissing, readine
   const fallbackNote = !generationAction && blockedByOther ? BLOCKED_ACTIVE_MESSAGE : null;
   /* Em andamento o ContentsView já comunica o estado; sucesso pleno não oferece ação. */
   if (active || (!job && readiness !== "PENDING") || (job?.status === "SUCCEEDED" && !degraded.degraded)) return null;
+  /* PENDING sem ação no painel (migrada para o cabeçalho) e sem nota/erro:
+     um wrapper vazio aqui só geraria espaço vertical residual. */
+  if (
+    !job &&
+    readiness === "PENDING" &&
+    !showPrimaryAction &&
+    !projectedNote &&
+    !fallbackNote &&
+    !error
+  )
+    return null;
   return (
     <div aria-busy={busy} className={[styles.state, styles.contentsActions].join(" ")}>
       {failed && job ? (
@@ -317,10 +332,13 @@ export function GenerationActions({ generationAction, onGenerateMissing, readine
       ) : (
         <div className={styles.actions}>
           {/* PENDING sem job: nunca teve análise comprovada em mãos (ou a carga
-              falhou antes) — o backend segue autoritativo no POST. */}
-          <Button disabled={busy || blockedByOther || !!projectedBlocked} onClick={() => void start()} type="button">
-            {busy ? "Iniciando análise…" : "Analisar produto"}
-          </Button>
+              falhou antes) — o backend segue autoritativo no POST. O botão é
+              suprimido quando a ação vive no cabeçalho do Produto. */}
+          {showPrimaryAction && (
+            <Button disabled={busy || blockedByOther || !!projectedBlocked} onClick={() => void start()} type="button">
+              {busy ? "Iniciando análise…" : "Analisar produto"}
+            </Button>
+          )}
           {(projectedNote ?? fallbackNote) && <p className={styles.blockedNote}>{projectedNote ?? fallbackNote}</p>}
         </div>
       )}

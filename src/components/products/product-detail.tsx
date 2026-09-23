@@ -50,7 +50,7 @@ type CycleTab = (typeof cycleTabs)[number];
 
 const tabLabels: Record<ProductTab, string> = {
   contents: "Conteúdos",
-  strategy: "Estratégia",
+  strategy: "Roteiros",
   history: "Histórico",
 };
 
@@ -256,6 +256,15 @@ export function ProductDetail({
       ? `${product.commission} (${(product.commissionRate / 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%)`
       : product.commission
     : null;
+  /* "Gerar roteiro de posts" carrega a ação real de análise (PENDING):
+      bloqueada enquanto busy, job ativo, bloqueio preventivo (projeção
+      ADR-016 ou job ativo em outro Produto) ou readiness ≠ PENDING. */
+  const analysisBlocked =
+    generation.busy ||
+    generation.active ||
+    generation.blockedByOther ||
+    product.generationAction?.state === "BLOCKED" ||
+    generation.readiness !== "PENDING";
 
   return (
     <>
@@ -369,12 +378,21 @@ export function ProductDetail({
                 </div>
               </dl>
             </div>
-            {/* Slice 003: ações de apresentação da referência; live e
-                multiplicador não têm handler por decisão de escopo. */}
+            {/* Ação real de análise no botão primário (PENDING); live e
+                multiplicador permanecem visuais sem handler por decisão de
+                escopo. */}
             <div className={styles.objectActions}>
-              <Button className={styles.objectActionPrimary} type="button">
+              <Button
+                aria-busy={generation.busy}
+                className={styles.objectActionPrimary}
+                disabled={analysisBlocked}
+                onClick={() => void generation.start()}
+                type="button"
+              >
                 <Sparkles aria-hidden="true" />
-                Gerar roteiro de posts
+                {generation.busy
+                  ? "Iniciando análise…"
+                  : "Gerar roteiro de posts"}
               </Button>
               <Button className={styles.objectActionSoft} type="button">
                 <Video aria-hidden="true" />
@@ -400,7 +418,7 @@ export function ProductDetail({
           <div className={styles.tabsScroller}>
             <SectionSwitcherList className={styles.tabsList}>
               <SectionSwitcherTrigger value="contents">Conteúdos</SectionSwitcherTrigger>
-              <SectionSwitcherTrigger value="strategy">Estratégia</SectionSwitcherTrigger>
+              <SectionSwitcherTrigger value="strategy">Roteiros</SectionSwitcherTrigger>
               <SectionSwitcherTrigger value="history">Histórico</SectionSwitcherTrigger>
             </SectionSwitcherList>
           </div>
@@ -427,6 +445,7 @@ export function ProductDetail({
               generationAction={product.generationAction}
               onGenerateMissing={() => void generation.generateMissing()}
               readiness={generation.readiness}
+              showPrimaryAction={false}
               state={generation}
             />
             <ContentsView

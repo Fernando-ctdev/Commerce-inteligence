@@ -1,0 +1,523 @@
+POST: https://api.tikhub.io/api/v1/tiktok/creator/get_video_list_analytics
+
+{
+  "code": 200,
+  "request_id": "c099c11d-67ee-4e6a-a3b1-90dfd9ef9a98",
+  "message": "Request successful. This request will incur a charge.",
+  "message_zh": "请求成功，本次请求将被计费。",
+  "support": "Discord: https://discord.gg/aMEAS8Xsvz",
+  "time": "2026-09-23 07:48:27",
+  "time_stamp": 1790174907,
+  "time_zone": "America/Los_Angeles",
+  "docs": "https://api.tikhub.io/#/TikTok-Creator-API/get_video_list_api_v1_tiktok_creator_get_video_list_analytics_post",
+  "cache_message": "This response is cached and accessible via the URL below for 24 hours at no extra cost. The cache is for request tracing only — it doesn't affect the API's data freshness and won't be returned through the API again.",
+  "cache_message_zh": "本次响应已缓存，可通过下方 URL 直接查看，有效期 24 小时，访问缓存链接无额外费用。缓存仅用于请求溯源，不影响接口数据的时效性，也不会再次通过接口返回。",
+  "cache_url": "https://cache.tikhub.io/api/v1/cache/public/c099c11d-67ee-4e6a-a3b1-90dfd9ef9a98?sign=0a9f4e3779621f5d1bfb8c9ca6536c38482adbe49c3bf72a0ffe6188191b6fd1",
+  "router": "/api/v1/tiktok/creator/get_video_list_analytics",
+  "params": {},
+  "data": {
+    "code": 0,
+    "message": "success",
+    "data": {
+      "segments": [
+        {
+          "time_selector": {
+            "period": 31,
+            "granularity": 30,
+            "timezone_offset": -10800,
+            "start_timestamp": 1789441200,
+            "end_timestamp": 1790046000,
+            "locale": "en-BR"
+          },
+          "filter": {
+            "creator_id": "6813480974501938182"
+          },
+          "list_control": {
+            "rules": [
+              {
+                "direction": 2,
+                "field": "VIDEO_LIST_PUBLISH_TIME"
+              }
+            ],
+            "next_pagination": {
+              "has_more": true,
+              "next_page": 1,
+              "total_page": 3,
+              "total": 21
+            }
+          },
+          "timed_lists": [
+            {
+              "start_timestamp": 1789441200,
+              "end_timestamp": 1790046000,
+              "start": "2026-09-15T00:00:00",
+              "end": "2026-09-22T00:00:00",
+              "stats": [
+                {
+                  "video_meta": {
+                    "item_id": "7687850025174437128",
+                    "name": "O TikTok me influenciou e, look bonito sem esforço, e eu gostei muito. #vestidoindiano #modaindiana #moda #modafeminina #vestido ",
+                    "publish_time": 1789987800,
+                    "duration": 28,
+                    "video_play_info": {
+                      "id": "v1c044g50000daobln7og65v80i12fsg",
+                      "duration": 28.367,
+                      "post_url": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oYfQwgcABDBEURgQfkDPcqIusIZrFuRjLF5ECC~tplv-noop.image?dr=18692&refresh_token=bd991382&x-expires=1790261335&x-signature=HAUyQng%2FKiSRWujp6n8ONbTQ4f8%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000daobln7og65v80i12fsg",
+                      "media_type": "video",
+                      "video_infos": [
+                        {
+                          "main_url": "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/oMwL8DsvEAccQPQEfBuE9RrFlImRgtFQqwBC5f/?a=1180&bti=MzYzNGYxMS86&&bt=1649&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=OmgzNWc8M2Q5NmdmZ2VoZEBpamk0M3k5cnFlZDMzODczNEBeXmJfYDJjXjYxXjAxNjI2YSNwL2Y1MmQ0aWxhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261335&VSignature=R39hXDhz497sFXoQOXOSbA&btag=e000b8000&sp_exp=hash_v0",
+                          "backup_url": "https://v16m.tiktokcdn.com/a27b5da3dd82b206025a1e8ddd3e1f33/6ab53857/video/tos/alisg/tos-alisg-pve-0037c001/oMwL8DsvEAccQPQEfBuE9RrFlImRgtFQqwBC5f/?a=1180&bti=MzYzNGYxMS86&&bt=1649&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=OmgzNWc8M2Q5NmdmZ2VoZEBpamk0M3k5cnFlZDMzODczNEBeXmJfYDJjXjYxXjAxNjI2YSNwL2Y1MmQ0aWxhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e000b8000&sp_exp=hash_v0",
+                          "url_expire": 1790261335,
+                          "width": 576,
+                          "height": 1024,
+                          "file_hash": "88873e788c9e8c86fc07812211f49c78",
+                          "size": 5989446,
+                          "bitrate": 1689130,
+                          "video_quality": "normal"
+                        }
+                      ]
+                    }
+                  },
+                  "new_follower_cnt": 0,
+                  "vv_cnt": 172,
+                  "ctr": "0.0395",
+                  "gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "item_sold_cnt": 0,
+                  "direct_gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "completion_rate": "0.0640"
+                },
+                {
+                  "video_meta": {
+                    "item_id": "7687849047557819655",
+                    "name": "Atenção, essa calça parece muito mais cara… #modafeminina #moda #calcapantalona ",
+                    "publish_time": 1789987500,
+                    "duration": 30,
+                    "video_play_info": {
+                      "id": "v1c044g50000daobjufog65vfn656qcg",
+                      "duration": 30.334,
+                      "post_url": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oIIwICDPjuxYAhGVfLqreaKcZPeIzIbA4TXgCC~tplv-noop.image?dr=18692&refresh_token=3ef7b02b&x-expires=1790261337&x-signature=kg%2B42kTQpZe4hPDJoHWVaedGvRI%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000daobjufog65vfn656qcg",
+                      "media_type": "video",
+                      "video_infos": [
+                        {
+                          "main_url": "https://v16m.tiktokcdn.com/8a307d15c3df54587220caeca824f285/6ab53859/video/tos/alisg/tos-alisg-pve-0037c001/oQAEmIXiVDehu0z9AGCQ2k1YLgPQ4IejiI5ewy/?a=1180&bti=MzYzNGYxMS86&&bt=670&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=ZWVpMzUzZzk7ZjVpNjQzOEBpanQ4cXk5cnhlZDMzODczNEA0Y2IwYzAwNTIxXmBeMy9jYSNgMzNjMmRjZ2xhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e00088000&sp_exp=hash_v0",
+                          "backup_url": "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/oQAEmIXiVDehu0z9AGCQ2k1YLgPQ4IejiI5ewy/?a=1180&bti=MzYzNGYxMS86&&bt=670&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=ZWVpMzUzZzk7ZjVpNjQzOEBpanQ4cXk5cnhlZDMzODczNEA0Y2IwYzAwNTIxXmBeMy9jYSNgMzNjMmRjZ2xhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261337&VSignature=RozF0EN-Mr15uwCzz4tSGA&btag=e00088000&sp_exp=hash_v0",
+                          "url_expire": 1790261337,
+                          "width": 576,
+                          "height": 1024,
+                          "file_hash": "c7761143579cd30cf12982970233091f",
+                          "size": 2602803,
+                          "bitrate": 686438,
+                          "video_quality": "normal"
+                        }
+                      ]
+                    }
+                  },
+                  "new_follower_cnt": 1,
+                  "vv_cnt": 99,
+                  "ctr": "0.0381",
+                  "gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "item_sold_cnt": 0,
+                  "direct_gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "completion_rate": "0.0606"
+                },
+                {
+                  "video_meta": {
+                    "item_id": "7687847602544561426",
+                    "name": "Essa foi a minha melhor compra e eu recomendo. #moda #modafeminina #calcapantalona ",
+                    "publish_time": 1789987200,
+                    "duration": 30,
+                    "video_play_info": {
+                      "id": "v1c044g50000daobhafog65m74vkibcg",
+                      "duration": 29.734,
+                      "post_url": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oE2EuIu4wAxOAO2LIifTF1BAxEWIZiCJLJ9UBw~tplv-noop.image?dr=18692&refresh_token=bd41c245&x-expires=1790261336&x-signature=wNDLbhbI7VhkDeriVALh0AzlhQI%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000daobhafog65m74vkibcg",
+                      "media_type": "video",
+                      "video_infos": [
+                        {
+                          "main_url": "https://v16m.tiktokcdn.com/4be86650d1d047242884be036809c0a7/6ab53858/video/tos/alisg/tos-alisg-pve-0037c001/o4ATC1FAOJxiCuiIsLEQzQAu9uwfZU2wgWWINB/?a=1180&bti=MzYzNGYxMS86&&bt=690&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=NWQ5NTRkNzdnODczOjpkZkBpamVuN3A5cmRlZDMzODczNEBfNWNjXmJeX18xNDQ1XjVjYSNgZnM0MmRjZWxhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e00088000&sp_exp=hash_v0",
+                          "backup_url": "https://v45.tiktokcdn.com/f70a4c3208280bab181478dc1e7aa8ba/6ab53858/video/tos/alisg/tos-alisg-pve-0037c001/o4ATC1FAOJxiCuiIsLEQzQAu9uwfZU2wgWWINB/?a=1180&bti=MzYzNGYxMS86&&bt=690&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=NWQ5NTRkNzdnODczOjpkZkBpamVuN3A5cmRlZDMzODczNEBfNWNjXmJeX18xNDQ1XjVjYSNgZnM0MmRjZWxhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e0008d000&sp_exp=hash_v0",
+                          "url_expire": 1790261336,
+                          "width": 576,
+                          "height": 1024,
+                          "file_hash": "282c9782f80242ff1743ece3c3b13b25",
+                          "size": 2626890,
+                          "bitrate": 706770,
+                          "video_quality": "normal"
+                        }
+                      ]
+                    }
+                  },
+                  "new_follower_cnt": 0,
+                  "vv_cnt": 88,
+                  "ctr": "0.0000",
+                  "gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "item_sold_cnt": 0,
+                  "direct_gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "completion_rate": "0.0114"
+                },
+                {
+                  "video_meta": {
+                    "item_id": "7687802173412936978",
+                    "name": "Sério, o resultado disso me surpreendeu . #maquiagem #automaquiagem #autoestima ",
+                    "publish_time": 1789986900,
+                    "duration": 24,
+                    "video_play_info": {
+                      "id": "v1c044g50000dao8um7og65ucvn5rc20",
+                      "duration": 23.567,
+                      "post_url": "https://p19-common-sign.tiktokcdn.com/tos-alisg-p-0037/okyhYYgsfAQVm91mEDRq9sBIHEBcFE87zI2Qf8~tplv-noop.image?dr=18692&refresh_token=a5ee39ad&x-expires=1790261330&x-signature=r14tyWrxnRLYBOboD8KaDvkGgfs%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000dao8um7og65ucvn5rc20",
+                      "media_type": "video",
+                      "video_infos": [
+                        {
+                          "main_url": "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/oUdtAhXff34x1gkCDAMAi6YzjPVAPCbIVRQL8e/?a=1180&bti=MzYzNGYxMS86&&bt=955&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=ZTw4OjhpNDg1ZGk1ZzpkOUBpM2Y4eXg5cnA7ZDMzODczNEAtNjRhX15eNmIxM180Nl8vYSMvb2tgMmQ0cmxhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261330&VSignature=Neq2UHV1wvy-D4Vf0354eA&btag=e000b8000&sp_exp=hash_v0",
+                          "backup_url": "https://v45.tiktokcdn.com/9fb93eac02536fa683f434b63b271189/6ab53852/video/tos/alisg/tos-alisg-pve-0037c001/oUdtAhXff34x1gkCDAMAi6YzjPVAPCbIVRQL8e/?a=1180&bti=MzYzNGYxMS86&&bt=955&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=ZTw4OjhpNDg1ZGk1ZzpkOUBpM2Y4eXg5cnA7ZDMzODczNEAtNjRhX15eNmIxM180Nl8vYSMvb2tgMmQ0cmxhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e000bd000&sp_exp=hash_v0",
+                          "url_expire": 1790261330,
+                          "width": 576,
+                          "height": 1024,
+                          "file_hash": "f6865ca0be1d2215344fac5612a94509",
+                          "size": 2880832,
+                          "bitrate": 977920,
+                          "video_quality": "normal"
+                        }
+                      ]
+                    }
+                  },
+                  "new_follower_cnt": 0,
+                  "vv_cnt": 105,
+                  "ctr": "0.0265",
+                  "gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "item_sold_cnt": 0,
+                  "direct_gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "completion_rate": "0.0571"
+                },
+                {
+                  "video_meta": {
+                    "item_id": "7687801356639358226",
+                    "name": "Eu testei e, o resultado disso me surpreendeu , e fez diferença. #maquiagem #autocuidado #autoestima ",
+                    "publish_time": 1789986600,
+                    "duration": 24,
+                    "video_play_info": {
+                      "id": "v1c044g50000dao8t7vog65rdm411c1g",
+                      "duration": 24.2,
+                      "post_url": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oEuAWrYA2EgB7b7SCdDIqPfdCsAiwji1wIDIQ9~tplv-noop.image?dr=18692&refresh_token=372b0d6b&x-expires=1790261331&x-signature=8ZK2sOVIjhla2bi51oRLCWC%2BGmU%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000dao8t7vog65rdm411c1g",
+                      "media_type": "video",
+                      "video_infos": [
+                        {
+                          "main_url": "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/o4Vf02gGQEYAeGFDRHVIhDaCYIrx4hofAA2F9j/?a=1180&bti=MzYzNGYxMS86&&bt=954&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=NWU0Ozc8Nzs6MzQzOTlmO0BpamY0cHU5cjo7ZDMzODczNEAzNTEtMjViNTMxLmNgNTJiYSMuLjFhMmRzcWxhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261331&VSignature=gvIu4lkmEc1X22JXBxK8hA&btag=e000b8000&sp_exp=hash_v0",
+                          "backup_url": "https://v16m.tiktokcdn.com/e3ce04f5e9cca5fb34f0669641f3514e/6ab53853/video/tos/alisg/tos-alisg-pve-0037c001/o4Vf02gGQEYAeGFDRHVIhDaCYIrx4hofAA2F9j/?a=1180&bti=MzYzNGYxMS86&&bt=954&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=NWU0Ozc8Nzs6MzQzOTlmO0BpamY0cHU5cjo7ZDMzODczNEAzNTEtMjViNTMxLmNgNTJiYSMuLjFhMmRzcWxhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e000b8000&sp_exp=hash_v0",
+                          "url_expire": 1790261331,
+                          "width": 576,
+                          "height": 1024,
+                          "file_hash": "ec509d14f33d9b59b24fa53db4808c78",
+                          "size": 2956409,
+                          "bitrate": 977325,
+                          "video_quality": "normal"
+                        }
+                      ]
+                    }
+                  },
+                  "new_follower_cnt": 0,
+                  "vv_cnt": 106,
+                  "ctr": "0.0093",
+                  "gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "item_sold_cnt": 0,
+                  "direct_gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "completion_rate": "0.0094"
+                },
+                {
+                  "video_meta": {
+                    "item_id": "7686315937775111431",
+                    "name": "Quem indica amiga é! 😉 #academia #fitness #modafitness ",
+                    "publish_time": 1789609910,
+                    "duration": 25,
+                    "video_play_info": {
+                      "id": "v1c044g50000dalkap7og65ro047h5u0",
+                      "duration": 24.967,
+                      "post_url": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/ocYXPlwIA7jimFt7ERNZqma8i0Z4rAAiBIhDB~tplv-noop.image?dr=18692&refresh_token=05f1deed&x-expires=1790261331&x-signature=4ws666u7SGNgKCSiM%2FOzn9G3Bw0%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000dalkap7og65ro047h5u0",
+                      "media_type": "video",
+                      "video_infos": [
+                        {
+                          "main_url": "https://v16m.tiktokcdn.com/bd96667a9bf3a1e454ad454723a141df/6ab53853/video/tos/alisg/tos-alisg-pve-0037c001/oETfgA1rAWeGAAPzqtiaEeu4REGtwR4HFvAhYf/?a=1180&bti=MzYzNGYxMS86&&bt=1885&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=PDpoNDw6Ozw2OjRpM2QzZUBpMzg6M3U5cnNuZDMzODczNEBfXmJhMF4yXl8xM140LWJeYSNyZTFsMmQ0XmlhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e000b8000&sp_exp=hash_v0",
+                          "backup_url": "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/oETfgA1rAWeGAAPzqtiaEeu4REGtwR4HFvAhYf/?a=1180&bti=MzYzNGYxMS86&&bt=1885&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=PDpoNDw6Ozw2OjRpM2QzZUBpMzg6M3U5cnNuZDMzODczNEBfXmJhMF4yXl8xM140LWJeYSNyZTFsMmQ0XmlhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261331&VSignature=-mMJsui3cAXcUtzPBwGcsA&btag=e000b8000&sp_exp=hash_v0",
+                          "url_expire": 1790261331,
+                          "width": 576,
+                          "height": 1024,
+                          "file_hash": "5d0d8e9c0b96c8659cb5f9403378e1a6",
+                          "size": 6027220,
+                          "bitrate": 1931259,
+                          "video_quality": "normal"
+                        }
+                      ]
+                    }
+                  },
+                  "new_follower_cnt": 0,
+                  "vv_cnt": 116,
+                  "ctr": "0.0000",
+                  "gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "item_sold_cnt": 0,
+                  "direct_gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "completion_rate": "0.0172"
+                },
+                {
+                  "video_meta": {
+                    "item_id": "7685881552953183496",
+                    "name": "Eu ainda não estou acreditando que paguei tão pouco nessas duas leggin 😱 #academia #fitness #modafitness ",
+                    "publish_time": 1789508766,
+                    "duration": 35,
+                    "video_play_info": {
+                      "id": "v1c044g50000dakrp57og65l367eat7g",
+                      "duration": 35.167,
+                      "post_url": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/okpEIYBql77AG8diYvlaPXAYDK9OBmi1PUICN~tplv-noop.image?dr=18692&refresh_token=a5dcdbc8&x-expires=1790261342&x-signature=lexwvwPAgiOp8efkJDZ%2B%2FYXNbrc%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000dakrp57og65l367eat7g",
+                      "media_type": "video",
+                      "video_infos": [
+                        {
+                          "main_url": "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/oseQIUyeILAZDUgAIjcG4puV30vRkUVpSDjeCM/?a=1180&bti=MzYzNGYxMS86&&bt=2018&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=NzQzZjc0Mzw1NDk8OmQ6NkBpandoOW85cjh1ZDMzODczNEAtMS0xYTBjX2AxNDQ0MGBgYSM0XjQwMmQ0bWhhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261342&VSignature=KMN3P5RWIrYcyVKSaWxdAQ&btag=e00088000&sp_exp=hash_v0",
+                          "backup_url": "https://v16m.tiktokcdn.com/5472d77a4a88c3a20d6ef3a17c240b2e/6ab5385e/video/tos/alisg/tos-alisg-pve-0037c001/oseQIUyeILAZDUgAIjcG4puV30vRkUVpSDjeCM/?a=1180&bti=MzYzNGYxMS86&&bt=2018&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=NzQzZjc0Mzw1NDk8OmQ6NkBpandoOW85cjh1ZDMzODczNEAtMS0xYTBjX2AxNDQ0MGBgYSM0XjQwMmQ0bWhhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e00088000&sp_exp=hash_v0",
+                          "url_expire": 1790261342,
+                          "width": 576,
+                          "height": 1024,
+                          "file_hash": "5edb14c07f1f0591cbd1e57f37a3578a",
+                          "size": 9084346,
+                          "bitrate": 2066561,
+                          "video_quality": "normal"
+                        }
+                      ]
+                    }
+                  },
+                  "new_follower_cnt": 0,
+                  "vv_cnt": 148,
+                  "ctr": "0.0392",
+                  "gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "item_sold_cnt": 0,
+                  "direct_gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "completion_rate": "0.0541"
+                },
+                {
+                  "video_meta": {
+                    "item_id": "7685776197527014663",
+                    "name": "Sério, quem treina vai entender 😱😍 #academia #fitness #autoestima  ",
+                    "publish_time": 1789484225,
+                    "duration": 21,
+                    "video_play_info": {
+                      "id": "v1c044g50000daklpenog65h28pqd7fg",
+                      "duration": 20.7,
+                      "post_url": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oEB6yiEfIEOdM1PBVXqEpDMBqIAGcNmfgAJFCR~tplv-noop.image?dr=18692&refresh_token=03b94369&x-expires=1790261327&x-signature=erLZ5BS1zbvti%2ByhynpSzvBO0wk%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000daklpenog65h28pqd7fg",
+                      "media_type": "video",
+                      "video_infos": [
+                        {
+                          "main_url": "https://v16m.tiktokcdn.com/ed5ff742a4053303ace8d65f2677c0ad/6ab5384f/video/tos/alisg/tos-alisg-pve-0037c001/oEOpRVfcqIcEEmBiXBqFhyyEEdDQJjAN6gf1OG/?a=1180&bti=MzYzNGYxMS86&&bt=1822&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=ZTc3Nzs4ZzhlNTdkaGloN0Bpajp0O2s5cmhvZDMzODczNEA1Y2NiNjYwXzUxMS0uLTBjYSNjYW0vMmRrbWhhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e000b8000&sp_exp=hash_v0",
+                          "backup_url": "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/oEOpRVfcqIcEEmBiXBqFhyyEEdDQJjAN6gf1OG/?a=1180&bti=MzYzNGYxMS86&&bt=1822&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=ZTc3Nzs4ZzhlNTdkaGloN0Bpajp0O2s5cmhvZDMzODczNEA1Y2NiNjYwXzUxMS0uLTBjYSNjYW0vMmRrbWhhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261327&VSignature=cXX_s0y79R3Wvnr6EW-uHA&btag=e000b8000&sp_exp=hash_v0",
+                          "url_expire": 1790261327,
+                          "width": 576,
+                          "height": 1024,
+                          "file_hash": "e2031277b550f1b9e94e54150ddc14f4",
+                          "size": 4829710,
+                          "bitrate": 1866554,
+                          "video_quality": "normal"
+                        }
+                      ]
+                    }
+                  },
+                  "new_follower_cnt": 0,
+                  "vv_cnt": 113,
+                  "ctr": "0.0000",
+                  "gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "item_sold_cnt": 0,
+                  "direct_gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "completion_rate": "0.0354"
+                },
+                {
+                  "video_meta": {
+                    "item_id": "7685773833734819090",
+                    "name": "#autoestima #autocuidado #maquiagem ",
+                    "publish_time": 1789483675,
+                    "duration": 15,
+                    "video_play_info": {
+                      "id": "v1c044g50000daklhq7og65na0ep5eo0",
+                      "duration": 15.167,
+                      "post_url": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/osERsVQpuC6DeMDlBgfgFoAcEjQdqrEoBVqqWE~tplv-noop.image?dr=18692&refresh_token=54f4afc3&x-expires=1790261322&x-signature=ZIwNgDKdEnHKX53Fu8rD5FMGKPg%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v1c044g50000daklhq7og65na0ep5eo0",
+                      "media_type": "video",
+                      "video_infos": [
+                        {
+                          "main_url": "https://v58.tiktokcdn.com/video/tos/alisg/tos-alisg-pve-0037c001/o8ChdmEIQBgqowqfDWFcp0elgrjsdEAoDBVRgu/?a=1180&bti=MzYzNGYxMS86&&bt=683&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=aTtpNWhpZDQ1OWdpNTo1aEBpM2hzM3E5cnRvZDMzODczNEA2Y2EtNWAwNmExNTE2LTRgYSNsMmJeMmQ0ZWhhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&VExpiration=1790261322&VSignature=pCrqt0fYiuXGG68QBWUD0g&btag=e000b8000&sp_exp=hash_v0",
+                          "backup_url": "https://v16m.tiktokcdn.com/b852ca8c75198ed2f3d6e1f4a7ae6c34/6ab5384a/video/tos/alisg/tos-alisg-pve-0037c001/o8ChdmEIQBgqowqfDWFcp0elgrjsdEAoDBVRgu/?a=1180&bti=MzYzNGYxMS86&&bt=683&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=aTtpNWhpZDQ1OWdpNTo1aEBpM2hzM3E5cnRvZDMzODczNEA2Y2EtNWAwNmExNTE2LTRgYSNsMmJeMmQ0ZWhhLS1kMWBzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e000b8000&sp_exp=hash_v0",
+                          "url_expire": 1790261322,
+                          "width": 576,
+                          "height": 1024,
+                          "file_hash": "0810c033b91a5d27dc419353e1636e18",
+                          "size": 1326541,
+                          "bitrate": 699698,
+                          "video_quality": "normal"
+                        }
+                      ]
+                    }
+                  },
+                  "new_follower_cnt": 0,
+                  "vv_cnt": 141,
+                  "ctr": "0.0000",
+                  "gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "item_sold_cnt": 0,
+                  "direct_gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "completion_rate": "0.0426"
+                },
+                {
+                  "video_meta": {
+                    "item_id": "7685499159243230472",
+                    "name": "O look que deixa sua princesa ainda mais linda 😍 #modainfantil #roupainfantil #maternidade ",
+                    "publish_time": 1789419729,
+                    "duration": 14,
+                    "video_play_info": {
+                      "id": "v14044g50000dak61hvog65phmlqake0",
+                      "duration": 14.148,
+                      "post_url": "https://p16-common-sign.tiktokcdn.com/tos-alisg-p-0037/oQ1waRn4q9BlfodQBzFEgDDHEqARIi1QQGfKUG~tplv-noop.image?dr=18692&refresh_token=775b320b&x-expires=1790261321&x-signature=mc91NF7yTCPDkNFRWYWGF27vLLQ%3D&t=9276707c&ps=14f1eb3e&shp=9e36835a&shcp=ae5ce464&idc=my2&VideoID=v14044g50000dak61hvog65phmlqake0",
+                      "media_type": "video",
+                      "video_infos": [
+                        {
+                          "main_url": "https://v45.tiktokcdn.com/3eeefecd95f4c65703fe6322ec491e5b/6ab53849/video/tos/alisg/tos-alisg-pve-0037c001/o4ERdcIoz2q1e7DKBgf4FGAUgDQoOGOHBGqqYE/?a=1180&bti=MzYzNGYxMS86&&bt=2016&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=ZDU5ZTc2NzVmZjg2NDs7N0BpM250cHM5cms5ZDMzODczNEBiMmAzMF81X2ExYi0vYF81YSNiXmllMmRzLmhhLS1kMTFzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e000b5000&sp_exp=hash_v0",
+                          "backup_url": "https://v16m.tiktokcdn.com/eafcdea2563a0113e8938a23cc842126/6ab53849/video/tos/alisg/tos-alisg-pve-0037c001/o4ERdcIoz2q1e7DKBgf4FGAUgDQoOGOHBGqqYE/?a=1180&bti=MzYzNGYxMS86&&bt=2016&ft=GcDrcInz7ThCRdhGXq8Zmo&mime_type=video_mp4&rc=ZDU5ZTc2NzVmZjg2NDs7N0BpM250cHM5cms5ZDMzODczNEBiMmAzMF81X2ExYi0vYF81YSNiXmllMmRzLmhhLS1kMTFzcw%3D%3D&vvpl=1&l=2026092322482637F1F4A3773516099B05&btag=e000b0000&sp_exp=hash_v0",
+                          "url_expire": 1790261321,
+                          "width": 576,
+                          "height": 1024,
+                          "file_hash": "b9a6d38220ccfc8719fa0ab281fe00ac",
+                          "size": 3651303,
+                          "bitrate": 2064632,
+                          "video_quality": "normal"
+                        }
+                      ]
+                    }
+                  },
+                  "new_follower_cnt": 0,
+                  "vv_cnt": 51,
+                  "ctr": "0.0000",
+                  "gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "item_sold_cnt": 0,
+                  "direct_gmv": {
+                    "amount_formatted": "R$ 0,00",
+                    "amount_delimited": "0,00",
+                    "amount": "0",
+                    "currency_code": "BRL",
+                    "currency_symbol": "R$"
+                  },
+                  "completion_rate": "0.0784"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
