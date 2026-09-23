@@ -1,0 +1,338 @@
+/* Slice 013 — galeria de conteúdos publicados + detail no drawer.
+   Tokens e padrões conforme DESIGN.md: cards são objetos reais, foco visível,
+   alvos 44px, grid responsivo auto-fill sem carrossel, reduced-motion sem
+   movimento. */
+
+.view {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.count {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  margin: 0;
+}
+
+.cards {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.card {
+  align-items: stretch;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  transition: border-color 160ms ease-out;
+  width: 100%;
+}
+
+.card:hover,
+.card:focus-visible {
+  border-color: var(--color-focus);
+}
+
+.card:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-focus) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.cardSelected,
+.cardSelected:hover {
+  border-color: var(--color-brand);
+}
+
+.cover {
+  aspect-ratio: 16 / 9;
+  display: block;
+  flex: 0 0 auto;
+  object-fit: cover;
+  width: 100%;
+}
+
+.coverFallback {
+  align-items: center;
+  aspect-ratio: 16 / 9;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 13px;
+  justify-content: center;
+  width: 100%;
+}
+
+.cardBody {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.cardTitle {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.cardDate {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.cardMetrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.cardMetric {
+  align-items: center;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  gap: 4px;
+  line-height: 18px;
+}
+
+.cardMetric svg {
+  flex: 0 0 auto;
+  height: 14px;
+  width: 14px;
+}
+
+.loadMore,
+.retry {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  justify-self: start;
+  min-height: 44px;
+  padding: 8px 14px;
+}
+
+.loadMore:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.loadMore:hover:not(:disabled),
+.retry:hover {
+  border-color: var(--color-focus);
+}
+
+.loadMore:focus-visible,
+.retry:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-focus) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.state {
+  color: var(--color-text-secondary);
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.state h3 {
+  color: var(--color-text);
+  font-size: 18px;
+  line-height: 24px;
+  margin: 0;
+}
+
+.state p {
+  margin: 0;
+}
+
+/* Detail dentro do drawer: player + informações lado a lado no espaço largo,
+   empilhados no estreito — sem carrossel nem swipe obrigatório. */
+.drawerContent {
+  display: grid;
+  gap: 0;
+}
+
+.drawerHeader {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.detail {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+}
+
+@media (min-width: 900px) {
+  .detail {
+    grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.playerArea {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.player {
+  background: #000;
+  border-radius: 12px;
+  display: block;
+  max-height: 70vh;
+  width: 100%;
+}
+
+.playerUnavailable,
+.playbackError {
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.playbackError {
+  color: var(--color-danger);
+}
+
+.detailBody {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.detailTitle {
+  font-size: 18px;
+  line-height: 24px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.detailTitle:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-focus) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.detailDate {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  margin: 0;
+}
+
+.metricsSection {
+  display: grid;
+  gap: 8px;
+}
+
+.metricsSection h4 {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.tiles {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  margin: 0;
+}
+
+.tile {
+  background: var(--color-surface-secondary);
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.tile dt {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.tile dd {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 20px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ctaArea {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding-top: 16px;
+}
+
+.cta {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  cursor: default;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 8px 14px;
+}
+
+.ctaNote {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  margin: 0;
+}
+
+.srOnly {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}
