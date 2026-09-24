@@ -326,12 +326,19 @@
   min-width: 0;
 }
 
+/* Player 9:16 (decisão do usuário 2026-09-24): largura de celular vertical
+   (≤360px) centralizada no painel, nunca em tela cheia no desktop; a largura
+   também respeita o teto de altura (62vh, abaixo dos 70vh anteriores) já
+   convertido pela própria razão — a caixa nunca distorce e o contain cobre
+   fontes com proporção incomum. */
 .player {
+  aspect-ratio: 9 / 16;
   background: #000;
   border-radius: 12px;
   display: block;
-  max-height: 70vh;
-  width: 100%;
+  margin-inline: auto;
+  object-fit: contain;
+  width: min(100%, 360px, calc(62vh * 9 / 16));
 }
 
 .playerUnavailable,
