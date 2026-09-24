@@ -5,9 +5,9 @@ import { FileText, ImageOff, Video } from "lucide-react";
 
 import type { ShowcaseItem } from "@/modules/products/showcase";
 import { Button } from "@/components/ui/button";
-import type { ProductManualDraft } from "./product-form-model";
+import type { ProductManualDraft } from "../shared/product-form-model";
 import listStyles from "./product-list.module.css";
-import styles from "./showcase.module.css";
+import styles from "../shared/showcase.module.css";
 
 /* priceLabel chega em pt-BR exato do response ("R$ 1.234,56"); converte para
    o formato do draft ("1234.56") de forma mecânica: remove símbolos, trata

@@ -15,7 +15,7 @@ const nodeRequire = createRequire(import.meta.url);
   ".css"
 ] = () => ({});
 
-import type { LinkedContentsResponse, PublishedVideo } from "../../modules/products/published-content-contract";
+import type { LinkedContentsResponse, PublishedVideo } from "../../../../modules/products/published-content-contract";
 import type { PublishedContentsGallery, PublishedContentDetail } from "./published-contents-view";
 
 const videoBase: PublishedVideo = {

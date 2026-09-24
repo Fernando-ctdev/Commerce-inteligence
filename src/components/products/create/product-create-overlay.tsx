@@ -23,8 +23,8 @@ import {
 } from "@/components/ui/sheet";
 
 import { ProductCreateForm } from "./product-create-form";
-import type { ProductManualDraft } from "./product-form-model";
-import type { ProductRecord } from "./product-api";
+import type { ProductManualDraft } from "../shared/product-form-model";
+import type { ProductRecord } from "../shared/product-api";
 
 type ProductCreateOverlayProps = {
   open: boolean;

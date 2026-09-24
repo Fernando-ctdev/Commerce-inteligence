@@ -10,8 +10,8 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { ProductDetail } from "@/components/products/product-detail";
-import { ProductShell } from "@/components/products/product-shell";
+import { ProductDetail } from "@/components/products/detail/product-detail";
+import { ProductShell } from "@/components/products/shared/product-shell";
 
 type ProductPageProps = {
   params: Promise<{ id: string }>;

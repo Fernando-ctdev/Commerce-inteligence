@@ -189,8 +189,8 @@
 
 .playCue svg {
   filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
-  height: 32px;
-  width: 32px;
+  height: 42px;
+  width: 42px;
 }
 
 /* Badge de curtidas (coração) no canto inferior direito da capa, sobre o

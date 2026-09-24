@@ -12,7 +12,7 @@ import {
   validateProductDraft,
   visibleProductFieldErrors,
 } from "./product-form-model";
-import { productPathForCreatedProduct } from "./product-create-model";
+import { productPathForCreatedProduct } from "../create/product-create-model";
 import { firstProductErrorField } from "./product-ui-model";
 
 test("valida nome e descrição obrigatórios", () => {

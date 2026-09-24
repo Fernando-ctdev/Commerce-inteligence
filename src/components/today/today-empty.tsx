@@ -4,7 +4,7 @@ import Image from "next/image";
 
 import logoMascot from "@/assets/logo/logo_mascot.png";
 
-import { ProductCreateTrigger } from "@/components/products/product-create-overlay";
+import { ProductCreateTrigger } from "@/components/products/create/product-create-overlay";
 import styles from "./today-empty.module.css";
 
 export function TodayEmpty() {

@@ -1,6 +1,6 @@
 import { LogOut, SunMoon } from "lucide-react";
 
-import { ProductShell } from "@/components/products/product-shell";
+import { ProductShell } from "@/components/products/shared/product-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import settingsStyles from "@/components/settings/settings-view.module.css";
 

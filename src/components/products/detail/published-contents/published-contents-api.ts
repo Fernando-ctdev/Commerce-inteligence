@@ -3,8 +3,8 @@
 // na query. O envelope 2xx é validado superficialmente; métricas e campos de
 // negócio cruzam sem normalização — tipos vêm só do contrato compartilhado,
 // sem runtime de servidor no bundle do cliente.
-import type { LinkedContentsResponse } from "../../modules/products/published-content-contract";
-import { ProductApiError } from "./product-api";
+import type { LinkedContentsResponse } from "../../../../modules/products/published-content-contract";
+import { ProductApiError } from "../../shared/product-api";
 
 const NETWORK_MESSAGE = "Não foi possível carregar os conteúdos publicados agora.";
 

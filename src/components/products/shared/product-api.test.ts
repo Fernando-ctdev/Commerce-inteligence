@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { importProduct, ProductApiError } from "./product-api";
-import { URL_IMPORT_ENABLED } from "../../modules/products/import-config";
+import { URL_IMPORT_ENABLED } from "../../../modules/products/import-config";
 
 type FetchCall = { input: RequestInfo | URL; init?: RequestInit };
 

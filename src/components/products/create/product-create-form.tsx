@@ -31,10 +31,10 @@ import {
   ProductApiError,
   type ProductRecord,
   updateProduct,
-} from "./product-api";
-import { createGenerationIdempotencyKey, startGeneration } from "./generation-api";
+} from "../shared/product-api";
+import { createGenerationIdempotencyKey, startGeneration } from "../generation/generation-api";
 import { createIdempotencyKey } from "./product-create-model";
-import { URL_IMPORT_ENABLED } from "../../modules/products/import-config";
+import { URL_IMPORT_ENABLED } from "../../../modules/products/import-config";
 import {
   buildManualProductPayload,
   buildProductPayload,
@@ -46,10 +46,10 @@ import {
   validateProductManualDraft,
   type ProductManualDraft,
   type ProductManualFieldErrors,
-} from "./product-form-model";
+} from "../shared/product-form-model";
 import {
   type ContentPreparationPreferences,
-} from "./product-import-model";
+} from "../shared/product-import-model";
 import styles from "./product-form.module.css";
 
 const emptyDraft: ProductManualDraft = {

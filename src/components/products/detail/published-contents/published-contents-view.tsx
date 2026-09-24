@@ -12,7 +12,7 @@ import { Eye, Heart, Play, Search, ShoppingCart, TrendingUp, XIcon } from "lucid
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 
-import type { LinkedContentsResponse, PublishedVideo } from "../../modules/products/published-content-contract";
+import type { LinkedContentsResponse, PublishedVideo } from "../../../../modules/products/published-content-contract";
 import { loadPublishedContents } from "./published-contents-api";
 import {
   Drawer,
@@ -20,7 +20,7 @@ import {
   DrawerContent,
   DrawerHeader,
   DrawerTitle,
-} from "../ui/drawer";
+} from "../../../ui/drawer";
 import {
   Sheet,
   SheetClose,
@@ -28,7 +28,7 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "../ui/sheet";
+} from "../../../ui/sheet";
 import styles from "./published-contents-view.module.css";
 
 /** Recorte do cliente: 10 itens por página do endpoint (decisão do usuário

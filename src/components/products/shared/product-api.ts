@@ -2,14 +2,14 @@ import type { ProductFieldErrors, ProductPayload } from "./product-form-model";
 import {
   normalizeGenerationAction,
   type GenerationActionProjection,
-} from "./generation-ui-model";
+} from "../generation/generation-ui-model";
 import {
   type CandidateGap,
   type ProductImportCandidate,
   type ProductImportResult,
   type ProductSignals,
 } from "./product-import-model";
-import { URL_IMPORT_ENABLED } from "../../modules/products/import-config";
+import { URL_IMPORT_ENABLED } from "../../../modules/products/import-config";
 
 export type ProductReadiness = "PENDING" | "ANALYZING" | "READY" | "FAILED";
 

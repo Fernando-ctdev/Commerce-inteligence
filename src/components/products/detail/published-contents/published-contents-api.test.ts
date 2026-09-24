@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { loadPublishedContents } from "./published-contents-api";
-import { ProductApiError } from "./product-api";
+import { ProductApiError } from "../../shared/product-api";
 
 type FetchCall = { input: RequestInfo | URL; init?: RequestInit };
 

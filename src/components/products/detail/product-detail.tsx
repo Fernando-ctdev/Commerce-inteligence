@@ -23,21 +23,21 @@ import {
   ProductApiError,
   ProductRecord,
   updateProduct,
-} from "./product-api";
-import { formatPriceWithCurrency } from "./product-form-model";
-import { loadProductHistory, type ProductHistoryResponse } from "./history-api";
+} from "../shared/product-api";
+import { formatPriceWithCurrency } from "../shared/product-form-model";
+import { loadProductHistory, type ProductHistoryResponse } from "../generation/history-api";
 import {
   ContentsView,
   GenerationActions,
   HistoryView,
   StrategyView,
-} from "./generation-views";
-import { PublishedContentsView } from "./published-contents-view";
-import { statusMessage } from "./generation-ui-model";
-import { ProductCreateForm } from "./product-create-form";
-import { useGenerationJob } from "./use-generation-job";
+} from "../generation/generation-views";
+import { PublishedContentsView } from "./published-contents/published-contents-view";
+import { statusMessage } from "../generation/generation-ui-model";
+import { ProductCreateForm } from "../create/product-create-form";
+import { useGenerationJob } from "../generation/use-generation-job";
 import styles from "./product-detail.module.css";
-import showcaseStyles from "./showcase.module.css";
+import showcaseStyles from "../shared/showcase.module.css";
 
 type ProductTab = "strategy" | "contents" | "history";
 

@@ -14,12 +14,12 @@ import {
   Video,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { stageMessage } from "./generation-ui-model";
+import { stageMessage } from "../generation/generation-ui-model";
 import {
   ProductCreateOverlay,
   ProductCreateTrigger,
-} from "./product-create-overlay";
-import showcaseStyles from "./showcase.module.css";
+} from "../create/product-create-overlay";
+import showcaseStyles from "../shared/showcase.module.css";
 
 import {
   DropdownMenu,
@@ -33,15 +33,15 @@ import {
   getCurrentGenerationForProduct,
   isActiveGeneration,
   type GenerationRecord,
-} from "./generation-api";
+} from "../generation/generation-api";
 import {
   deleteProduct,
   listProducts,
   ProductApiError,
   ProductRecord,
   syncProducts,
-} from "./product-api";
-import { formatPriceWithCurrency } from "./product-form-model";
+} from "../shared/product-api";
+import { formatPriceWithCurrency } from "../shared/product-form-model";
 import styles from "./product-list.module.css";
 
 export function ProductList() {
