@@ -147,19 +147,23 @@ test("coverFallbackActive: img só com coverUrl presente e sem erro; erro é ter
   assert.equal(coverFallbackActive(true, "https://cover.example/a.jpg"), true);
 });
 
-test("coverFrame: capa e badges (views/curtidas) dentro do frame, antes do corpo", async () => {
+test("coverFrame: capa, play decorativo e badges dentro do frame, antes do corpo", async () => {
   const markup = await gallery(response);
 
   const cover = markup.indexOf('src="https://cover.example');
+  const play = markup.indexOf("lucide-play");
   const views = markup.indexOf("Visualizações");
   const likes = markup.indexOf("Curtidas");
   const body = markup.indexOf("Esse whey realmente vale a pena");
-  // capa → views → curtidas → corpo: badges pertencem ao frame da thumb
-  assert.ok(cover !== -1 && cover < views, "capa antes do badge de views");
+  // capa → play → views → curtidas → corpo: overlays pertencem ao frame
+  assert.ok(cover !== -1 && cover < play, "capa antes do play");
+  assert.ok(play !== -1 && play < views, "play antes do badge de views");
   assert.ok(views !== -1 && views < likes, "views antes de curtidas no frame");
   assert.ok(likes !== -1 && likes < body, "curtidas antes do corpo do card");
+  // play é decorativo: fora da árvore de acessibilidade
+  assert.ok(!/>Play</.test(markup), "play não expõe nome acessível");
 
-  // card sem capa: fallback dentro do frame, badges junto
+  // card sem capa: fallback dentro do frame, overlays junto
   const fallbackMarkup = await gallery({
     ...response,
     videos: [{ ...videoSemFallback }],

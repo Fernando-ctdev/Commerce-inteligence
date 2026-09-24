@@ -7,7 +7,7 @@
 // false e null preservados, campo conhecido ausente é "—". Sem busca, ordenação
 // client-side, autoplay, fetch de mídia ou geração de roteiro.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, Heart, Search, ShoppingCart, TrendingUp, XIcon } from "lucide-react";
+import { Eye, Heart, Play, Search, ShoppingCart, TrendingUp, XIcon } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -459,6 +459,11 @@ export function PublishedContentsGallery({
                       não no card inteiro. */}
                   <span className={styles.coverFrame}>
                     <CardCover key={video.coverUrl} coverUrl={video.coverUrl} />
+                    {/* Play decorativo: pista visual apenas — o clique segue
+                        no botão do card inteiro. */}
+                    <span aria-hidden="true" className={styles.playCue}>
+                      <Play aria-hidden />
+                    </span>
                     {views === undefined ? null : (
                       <span className={styles.viewsBadge}>
                         <Eye aria-hidden />
