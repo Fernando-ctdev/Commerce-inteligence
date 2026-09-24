@@ -23,6 +23,7 @@ import {
 } from "../ui/drawer";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -684,17 +685,26 @@ export function PublishedContentsView({
         </Drawer>
       ) : (
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-          <SheetContent className="w-full gap-0 overflow-y-auto p-0 data-[side=right]:sm:max-w-xl">
-            {/* Header visível de uma linha: título do produto à esquerda,
-                close nativo do Sheet alinhado à direita (pr-12 reserva o
-                espaço do × absoluto do primitivo). */}
-            <SheetHeader className="flex-row items-center justify-between border-b py-3 pl-4 pr-12">
+          <SheetContent
+            className="w-full gap-0 overflow-y-auto p-0 data-[side=right]:sm:max-w-xl"
+            showCloseButton={false}
+          >
+            {/* Header visível de uma linha: título à esquerda, close dentro
+                do header (sem × absoluto do primitivo). Mesmo padrão do
+                Drawer mobile. */}
+            <SheetHeader className="flex-row items-center justify-between gap-2 border-b py-3 pl-4 pr-2">
               <SheetTitle className="min-w-0 truncate text-base font-semibold">
                 {productTitle}
               </SheetTitle>
               <SheetDescription className="sr-only">
                 Detalhe do conteúdo publicado selecionado.
               </SheetDescription>
+              <SheetClose
+                aria-label="Fechar conteúdo selecionado"
+                render={<Button size="icon-sm" variant="ghost" />}
+              >
+                <XIcon aria-hidden="true" />
+              </SheetClose>
             </SheetHeader>
             {drawerBody}
           </SheetContent>
