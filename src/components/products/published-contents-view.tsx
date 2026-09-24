@@ -31,8 +31,9 @@ import {
 } from "../ui/sheet";
 import styles from "./published-contents-view.module.css";
 
-/** Recorte do cliente: 9 itens por página do endpoint (referência aprovada). */
-export const PAGE_SIZE = 9;
+/** Recorte do cliente: 10 itens por página do endpoint (decisão do usuário
+ *  2026-09-24; antes 9). Só recorte da galeria — nada derivado no cliente. */
+export const PAGE_SIZE = 10;
 
 type GalleryState = {
   response: LinkedContentsResponse | null;

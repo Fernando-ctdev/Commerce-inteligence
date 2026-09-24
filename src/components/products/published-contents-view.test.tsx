@@ -197,9 +197,9 @@ test("visualizações: apenas vvCnt, mesmo com views presente", async () => {
   assert.ok(!soViews.includes("555"));
 });
 
-test("paginação do cliente: 9 itens por página", async () => {
+test("paginação do cliente: 10 itens por página", async () => {
   const { PAGE_SIZE } = await viewModule();
-  assert.equal(PAGE_SIZE, 9);
+  assert.equal(PAGE_SIZE, 10);
 });
 
 test("formatDuration: mm:ss determinístico, ausente é null", async () => {

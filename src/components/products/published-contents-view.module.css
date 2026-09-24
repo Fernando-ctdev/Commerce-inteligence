@@ -36,21 +36,16 @@
   margin: 0;
 }
 
+/* Densidade aprovada (decisão do usuário 2026-09-24): cards estreitos —
+   4 colunas no painel desktop (~1100px), 3/2 nas intermediárias, 1 no mobile;
+   a base 1-coluna do mobile já nasce daqui, sem media query. */
 .cards {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
   list-style: none;
   margin: 0;
   padding: 0;
-}
-
-/* Referência aprovada: 3 colunas no desktop (screenshot 805px mostra 3),
-   1 no mobile; sem minmax largo que crie cards gigantes. */
-@media (min-width: 768px) {
-  .cards {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 /* Controles de busca/ordenação (referência aprovada): busca cresce, select
@@ -146,10 +141,12 @@
   border-color: var(--color-brand);
 }
 
-/* Frame da thumb: ancora os overlays (kebab, duração) e recorta a capa em
-   16/9 — o posicionamento não depende mais do card inteiro. */
+/* Frame da thumb: ancora os overlays (duração) e recorta a capa em 4/3 —
+   card visivelmente mais alto na grade densa (decisão do usuário 2026-09-24,
+   antes 16/9); 9:16 fica exclusivo do player do Drawer. object-fit cover
+   corta sem distorcer; o posicionamento não depende do card inteiro. */
 .coverFrame {
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 4 / 3;
   display: block;
   flex: 0 0 auto;
   overflow: hidden;
