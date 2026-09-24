@@ -453,12 +453,7 @@ export function PublishedContentsGallery({
                   {/* Frame da thumb: capa + badge de duração ancorados aqui,
                       não no card inteiro. */}
                   <span className={styles.coverFrame}>
-                    {video.coverUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- thumbnail do DTO; next/image exige domínios em runtime
-                      <img className={styles.cover} src={video.coverUrl} alt="" loading="lazy" />
-                    ) : (
-                      <span className={styles.coverFallback}>Sem prévia</span>
-                    )}
+                    <CardCover key={video.coverUrl} coverUrl={video.coverUrl} />
                     {duration ? (
                       <span className={styles.durationBadge}>{duration}</span>
                     ) : null}
@@ -501,6 +496,34 @@ export function PublishedContentsGallery({
         </button>
       ) : null}
     </div>
+  );
+}
+
+/** Decisão do fallback da capa, espelho do fallback único do player: img só
+ *  enquanto coverUrl existe E ainda não falhou; erro é terminal (não volta a
+ *  tentar a mesma URL a cada render). Exportado para teste unitário. */
+export function coverFallbackActive(failed: boolean, coverUrl?: string): boolean {
+  return failed || !coverUrl;
+}
+
+/** Capa do card: começa com img quando coverUrl existe; erro de carga troca
+ *  para o fallback visual existente — ícone quebrado/área branca nunca aparecem
+ *  (bug 098773fb). O chamador keya por coverUrl: URL nova remonta e zera o
+ *  estado. Duração/frame/seleção ficam fora e não dependem da capa. */
+function CardCover({ coverUrl }: { coverUrl?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (coverFallbackActive(failed, coverUrl)) {
+    return <span className={styles.coverFallback}>Sem prévia</span>;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- thumbnail do DTO; next/image exige domínios em runtime
+    <img
+      alt=""
+      className={styles.cover}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      src={coverUrl}
+    />
   );
 }
 

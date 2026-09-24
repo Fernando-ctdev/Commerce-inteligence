@@ -138,6 +138,16 @@ test("galeria: duração em badge MM:SS sobre a thumb", async () => {
   assert.ok(!/lucide-(more|ellipsis)-vertical/.test(markup)); // kebab removido a pedido do usuário
 });
 
+test("coverFallbackActive: img só com coverUrl presente e sem erro; erro é terminal", async () => {
+  const { coverFallbackActive } = await viewModule();
+  // capa existe, nada falhou: renderiza img
+  assert.equal(coverFallbackActive(false, "https://cover.example/a.jpg"), false);
+  // URL ausente: fallback direto (regra já existente, agora na decisão única)
+  assert.equal(coverFallbackActive(false, undefined), true);
+  // coverUrl existe mas a carga falhou: fallback, e não retorna a img
+  assert.equal(coverFallbackActive(true, "https://cover.example/a.jpg"), true);
+});
+
 test("coverFrame: capa e duração dentro do frame da thumb, antes do corpo", async () => {
   const markup = await gallery(response);
 
