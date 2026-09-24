@@ -7,7 +7,7 @@
 // false e null preservados, campo conhecido ausente é "—". Sem busca, ordenação
 // client-side, autoplay, fetch de mídia ou geração de roteiro.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, Search, ShoppingCart, TrendingUp, XIcon } from "lucide-react";
+import { Eye, Heart, Search, ShoppingCart, TrendingUp, XIcon } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -167,6 +167,24 @@ export function formatDuration(seconds?: number): string | null {
   const minutes = Math.floor(total / 60);
   const rest = total % 60;
   return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+}
+
+/** Contagem do card compactada a partir de 1000 em k, uma casa decimal
+ *  pt-BR (decisão do usuário 2026-09-24): 1100 → "1,1k", 25600 → "25,6k",
+ *  1000 → "1k" (sem ",0"); abaixo disso e não numérico, valor cru.
+ *  undefined/null preservados para as regras do badge/CardMetric.
+ *  # ponytail: só k foi pedido — milhões seguem em k (ex.: 1500k); trocar
+ *  para M quando houver pedido. */
+export function compactCount(
+  value: PublishedVideo["metrics"][string] | undefined,
+): string | null | undefined {
+  if (value === undefined || value === null) return value;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n < 1000) return String(value);
+  const k = n / 1000;
+  const text =
+    k >= 100 ? String(Math.round(k)) : k.toFixed(1).replace(/\.0$/, "").replace(".", ",");
+  return `${text}k`;
 }
 
 const publishedTime = (video: PublishedVideo): number | null => {
@@ -443,6 +461,8 @@ export function PublishedContentsGallery({
             const selected = video.itemId === selectedItemId;
             const date = formatDate(video.publishedAt);
             const duration = formatDuration(video.duration);
+            const views = compactCount(video.metrics.vvCnt);
+            const likes = compactCount(video.metrics.likes);
             return (
               <li key={video.itemId}>
                 <button
@@ -455,6 +475,13 @@ export function PublishedContentsGallery({
                       não no card inteiro. */}
                   <span className={styles.coverFrame}>
                     <CardCover key={video.coverUrl} coverUrl={video.coverUrl} />
+                    {views === undefined ? null : (
+                      <span className={styles.viewsBadge}>
+                        <Eye aria-hidden />
+                        <span className={styles.srOnly}>Visualizações </span>
+                        {views ?? "—"}
+                      </span>
+                    )}
                     {duration ? (
                       <span className={styles.durationBadge}>{duration}</span>
                     ) : null}
@@ -463,11 +490,7 @@ export function PublishedContentsGallery({
                     <span className={styles.cardTitle}>{video.title ?? video.itemId}</span>
                     {date ? <span className={styles.cardDate}>{date}</span> : null}
                     <span className={styles.cardMetrics}>
-                      <CardMetric
-                        label="Visualizações"
-                        icon={<Eye aria-hidden />}
-                        value={video.metrics.vvCnt}
-                      />
+                      <CardMetric label="Curtidas" icon={<Heart aria-hidden />} value={likes} />
                       <CardMetric label="GMV" icon={<ShoppingCart aria-hidden />} value={video.metrics.gmv} />
                       <CardMetric label="CTR" icon={<TrendingUp aria-hidden />} value={video.metrics.ctr} />
                     </span>

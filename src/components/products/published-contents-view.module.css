@@ -175,6 +175,30 @@
   right: 8px;
 }
 
+/* Badge de visualizações no canto inferior esquerdo da capa — espelho do
+   badge de duração (decisão do usuário 2026-09-24). */
+.viewsBadge {
+  align-items: center;
+  background: color-mix(in srgb, #000 70%, transparent);
+  border-radius: 6px;
+  bottom: 8px;
+  color: #fff;
+  display: flex;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  gap: 4px;
+  left: 8px;
+  line-height: 16px;
+  padding: 2px 6px;
+  position: absolute;
+}
+
+.viewsBadge svg {
+  flex: 0 0 auto;
+  height: 14px;
+  width: 14px;
+}
+
 .coverFallback {
   align-items: center;
   background: var(--color-surface-secondary);

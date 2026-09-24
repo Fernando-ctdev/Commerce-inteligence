@@ -170,7 +170,19 @@ test("coverFrame: capa e duração dentro do frame da thumb, antes do corpo", as
 
 test("visualizações: apenas vvCnt, mesmo com views presente", async () => {
   const markup = await gallery(response);
-  assert.ok(markup.includes("128000")); // vvCnt do payload real
+  assert.ok(markup.includes("128k")); // vvCnt 128000 compactado no badge
+
+  // badge de views sobre a thumb (antes da duração, dentro do frame);
+  // curtidas assumem o lugar na linha de métricas do card
+  const viewsIdx = markup.indexOf("Visualizações");
+  const durationIdx = markup.indexOf("00:28");
+  const titleIdx = markup.indexOf("Esse whey");
+  const likesIdx = markup.indexOf("Curtidas");
+  assert.ok(viewsIdx > -1, "badge de views presente");
+  assert.ok(
+    viewsIdx < durationIdx && durationIdx < titleIdx && titleIdx < likesIdx,
+    "views na thumb, curtidas na linha de métricas",
+  );
 
   // views + vvCnt juntas: vvCnt vence, views nunca é exibida
   const comAmbas = await gallery({
@@ -209,8 +221,25 @@ test("formatDuration: mm:ss determinístico, ausente é null", async () => {
   assert.equal(formatDuration(3599.7), "59:59");
   assert.equal(formatDuration(0), "00:00");
   assert.equal(formatDuration(undefined), null);
-  assert.equal(formatDuration(-5), null);
   assert.equal(formatDuration(Number.NaN), null);
+  assert.equal(formatDuration(-5), null);
+});
+
+test("compactCount: mil+ vira k com vírgula; abaixo disso e ausências, cru", async () => {
+  const { compactCount } = await viewModule();
+  // exemplos do usuário
+  assert.equal(compactCount(1100), "1,1k");
+  assert.equal(compactCount(25600), "25,6k");
+  // mil exato sem vírgula; abaixo de mil cru
+  assert.equal(compactCount(1000), "1k");
+  assert.equal(compactCount(999), "999");
+  assert.equal(compactCount(0), "0");
+  // arredondamento para uma casa; grande vira k inteiro
+  assert.equal(compactCount(1259), "1,3k");
+  assert.equal(compactCount(999950), "1000k");
+  // ausências preservadas para badge/CardMetric
+  assert.equal(compactCount(null), null);
+  assert.equal(compactCount(undefined), undefined);
 });
 
 test("busca filtra por título e assunto (case-insensitive) e estado vazio é honesto", async () => {
