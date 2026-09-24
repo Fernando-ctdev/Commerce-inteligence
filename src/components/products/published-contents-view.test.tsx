@@ -129,12 +129,11 @@ test("galeria: busca e ordenação visíveis com rótulos acessíveis", async ()
   assert.match(markup, /<option[^>]*value="oldest"[^>]*>Mais antigas</);
 });
 
-test("galeria: duração em badge MM:SS sobre a thumb", async () => {
+test("galeria: duração não vira badge no card (removida a pedido do usuário)", async () => {
   const markup = await gallery(response);
 
-  assert.ok(markup.includes("00:28"));
-  assert.ok(markup.includes("01:15"));
-  assert.ok(!markup.includes("00:38")); // vídeo sem duration não inventa badge
+  assert.ok(!markup.includes("00:28"));
+  assert.ok(!markup.includes("01:15"));
   assert.ok(!/lucide-(more|ellipsis)-vertical/.test(markup)); // kebab removido a pedido do usuário
 });
 
@@ -148,41 +147,44 @@ test("coverFallbackActive: img só com coverUrl presente e sem erro; erro é ter
   assert.equal(coverFallbackActive(true, "https://cover.example/a.jpg"), true);
 });
 
-test("coverFrame: capa e duração dentro do frame da thumb, antes do corpo", async () => {
+test("coverFrame: capa e badges (views/curtidas) dentro do frame, antes do corpo", async () => {
   const markup = await gallery(response);
 
   const cover = markup.indexOf('src="https://cover.example');
-  const badge = markup.indexOf("00:28");
+  const views = markup.indexOf("Visualizações");
+  const likes = markup.indexOf("Curtidas");
   const body = markup.indexOf("Esse whey realmente vale a pena");
-  // capa → duração → corpo: o badge pertence ao frame da thumb
-  assert.ok(cover !== -1 && cover < badge, "capa antes da duração");
-  assert.ok(badge !== -1 && badge < body, "duração antes do corpo do card");
+  // capa → views → curtidas → corpo: badges pertencem ao frame da thumb
+  assert.ok(cover !== -1 && cover < views, "capa antes do badge de views");
+  assert.ok(views !== -1 && views < likes, "views antes de curtidas no frame");
+  assert.ok(likes !== -1 && likes < body, "curtidas antes do corpo do card");
 
-  // card sem capa: fallback dentro do frame, duração junto
+  // card sem capa: fallback dentro do frame, badges junto
   const fallbackMarkup = await gallery({
     ...response,
-    videos: [{ ...videoSemFallback, duration: 75 }],
+    videos: [{ ...videoSemFallback }],
   });
   const fallback = fallbackMarkup.indexOf("Sem prévia");
-  const dur = fallbackMarkup.indexOf("01:15");
-  assert.ok(fallback !== -1 && fallback < dur);
+  const frameViews = fallbackMarkup.indexOf("Visualizações");
+  assert.ok(fallback !== -1 && fallback < frameViews);
 });
 
 test("visualizações: apenas vvCnt, mesmo com views presente", async () => {
   const markup = await gallery(response);
   assert.ok(markup.includes("128k")); // vvCnt 128000 compactado no badge
 
-  // badge de views sobre a thumb (antes da duração, dentro do frame);
-  // curtidas assumem o lugar na linha de métricas do card
+  // badge de views sobre a thumb à esquerda; curtidas no lugar da antiga
+  // duração, à direita do frame; GMV/CTR seguem na linha de métricas
   const viewsIdx = markup.indexOf("Visualizações");
-  const durationIdx = markup.indexOf("00:28");
-  const titleIdx = markup.indexOf("Esse whey");
   const likesIdx = markup.indexOf("Curtidas");
+  const titleIdx = markup.indexOf("Esse whey");
+  const ctrIdx = markup.indexOf("CTR");
   assert.ok(viewsIdx > -1, "badge de views presente");
-  assert.ok(
-    viewsIdx < durationIdx && durationIdx < titleIdx && titleIdx < likesIdx,
-    "views na thumb, curtidas na linha de métricas",
-  );
+  assert.ok(likesIdx > -1, "badge de curtidas presente");
+  assert.ok(likesIdx > viewsIdx, "curtidas depois de views no frame");
+  assert.ok(likesIdx < titleIdx, "curtidas na thumb, antes do corpo");
+  assert.ok(ctrIdx > titleIdx, "CTR na linha de métricas do corpo");
+  assert.equal(markup.split("Curtidas").length - 1, 2, "um rótulo Curtidas por card");
 
   // views + vvCnt juntas: vvCnt vence, views nunca é exibida
   const comAmbas = await gallery({
@@ -212,17 +214,6 @@ test("visualizações: apenas vvCnt, mesmo com views presente", async () => {
 test("paginação do cliente: 10 itens por página", async () => {
   const { PAGE_SIZE } = await viewModule();
   assert.equal(PAGE_SIZE, 10);
-});
-
-test("formatDuration: mm:ss determinístico, ausente é null", async () => {
-  const { formatDuration } = await viewModule();
-  assert.equal(formatDuration(28), "00:28");
-  assert.equal(formatDuration(61), "01:01");
-  assert.equal(formatDuration(3599.7), "59:59");
-  assert.equal(formatDuration(0), "00:00");
-  assert.equal(formatDuration(undefined), null);
-  assert.equal(formatDuration(Number.NaN), null);
-  assert.equal(formatDuration(-5), null);
 });
 
 test("compactCount: mil+ vira k com vírgula; abaixo disso e ausências, cru", async () => {

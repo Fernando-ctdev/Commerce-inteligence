@@ -154,21 +154,6 @@ export function focusDetailTitle(
 
 export type PublishedContentsSort = "recent" | "oldest";
 
-/** Duração em MM:SS (minutos não limitados); ausente/inválida → null. */
-export function formatDuration(seconds?: number): string | null {
-  if (
-    seconds === undefined ||
-    !Number.isFinite(seconds) ||
-    seconds < 0
-  ) {
-    return null;
-  }
-  const total = Math.floor(seconds);
-  const minutes = Math.floor(total / 60);
-  const rest = total % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
-}
-
 /** Contagem do card compactada a partir de 1000 em k, uma casa decimal
  *  pt-BR (decisão do usuário 2026-09-24): 1100 → "1,1k", 25600 → "25,6k",
  *  1000 → "1k" (sem ",0"); abaixo disso e não numérico, valor cru.
@@ -460,7 +445,6 @@ export function PublishedContentsGallery({
           {visibleVideos.map((video) => {
             const selected = video.itemId === selectedItemId;
             const date = formatDate(video.publishedAt);
-            const duration = formatDuration(video.duration);
             const views = compactCount(video.metrics.vvCnt);
             const likes = compactCount(video.metrics.likes);
             return (
@@ -482,15 +466,18 @@ export function PublishedContentsGallery({
                         {views ?? "—"}
                       </span>
                     )}
-                    {duration ? (
-                      <span className={styles.durationBadge}>{duration}</span>
-                    ) : null}
+                    {likes === undefined ? null : (
+                      <span className={styles.likesBadge}>
+                        <Heart aria-hidden />
+                        <span className={styles.srOnly}>Curtidas </span>
+                        {likes ?? "—"}
+                      </span>
+                    )}
                   </span>
                   <span className={styles.cardBody}>
                     <span className={styles.cardTitle}>{video.title ?? video.itemId}</span>
                     {date ? <span className={styles.cardDate}>{date}</span> : null}
                     <span className={styles.cardMetrics}>
-                      <CardMetric label="Curtidas" icon={<Heart aria-hidden />} value={likes} />
                       <CardMetric label="GMV" icon={<ShoppingCart aria-hidden />} value={video.metrics.gmv} />
                       <CardMetric label="CTR" icon={<TrendingUp aria-hidden />} value={video.metrics.ctr} />
                     </span>
