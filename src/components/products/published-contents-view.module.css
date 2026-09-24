@@ -141,12 +141,12 @@
   border-color: var(--color-brand);
 }
 
-/* Frame da thumb: ancora os overlays (duração) e recorta a capa em 4/3 —
-   card visivelmente mais alto na grade densa (decisão do usuário 2026-09-24,
-   antes 16/9); 9:16 fica exclusivo do player do Drawer. object-fit cover
+/* Frame da thumb: ancora os overlays (badges) e recorta a capa em 4/5 —
+   card vertical, altura moderadamente acima do quadrado (decisão do usuário
+   2026-09-24); 9:16 fica exclusivo do player do Drawer. object-fit cover
    corta sem distorcer; o posicionamento não depende do card inteiro. */
 .coverFrame {
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 4 / 5;
   display: block;
   flex: 0 0 auto;
   overflow: hidden;
@@ -161,12 +161,22 @@
   width: 100%;
 }
 
-/* Badge de curtidas (coração) no canto inferior direito da capa, sobre a
-   imagem — mesmo lugar do antigo badge de duração (decisão do usuário
-   2026-09-24). */
+/* Faixa inferior da thumb: gradiente escuro suave para dar contraste aos
+   badges sobre a imagem (decisão do usuário 2026-09-24). Atrás dos badges,
+   não bloqueia clique. */
+.coverFrame::after {
+  content: "";
+  height: 45%;
+  inset: auto 0 0 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.55), transparent);
+}
+
+/* Badge de curtidas (coração) no canto inferior direito da capa, sobre o
+   gradiente — sem pill (decisão do usuário 2026-09-24). */
 .likesBadge {
-  background: color-mix(in srgb, #000 70%, transparent);
-  border-radius: 6px;
   bottom: 8px;
   color: #fff;
   display: flex;
@@ -175,9 +185,10 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 16px;
-  padding: 2px 6px;
   position: absolute;
   right: 8px;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+  z-index: 1;
 }
 
 .likesBadge svg {
@@ -187,11 +198,9 @@
 }
 
 /* Badge de visualizações no canto inferior esquerdo da capa; curtidas no
-   direito (decisão do usuário 2026-09-24). */
+   direito (decisão do usuário 2026-09-24). Sem pill: o contraste vem do
+   gradiente do frame. */
 .viewsBadge {
-  align-items: center;
-  background: color-mix(in srgb, #000 70%, transparent);
-  border-radius: 6px;
   bottom: 8px;
   color: #fff;
   display: flex;
@@ -200,8 +209,9 @@
   gap: 4px;
   left: 8px;
   line-height: 16px;
-  padding: 2px 6px;
   position: absolute;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+  z-index: 1;
 }
 
 .viewsBadge svg {
