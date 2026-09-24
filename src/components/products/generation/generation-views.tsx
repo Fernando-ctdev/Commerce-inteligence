@@ -21,10 +21,10 @@ import {
   type BriefingItem,
   scriptParagraphs,
   scenesProjection,
-  type GenerationActionProjection,
   type ScenesProjection,
   executionObservability,
 } from "./generation-ui-model";
+import { type GenerationActionProjection } from "../shared/product-ui-model";
 import type { ProductHistoryResponse } from "./history-api";
 import { historyViewModel } from "./history-ui-model";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

@@ -20,7 +20,6 @@ import {
   isRetryableGeneration,
   isToastDismissed,
   missingReasonLabel,
-  normalizeGenerationAction,
   OBSERVABILITY_UNAVAILABLE,
   partialModel,
   projectionDegradedModel,
@@ -33,6 +32,7 @@ import {
   statusMessage,
   strategyModel,
 } from "./generation-ui-model";
+import { normalizeGenerationAction } from "../shared/product-ui-model";
 
 test("banner terminal distingue CANCELLED de FAILED sem diagnóstico técnico", () => {
   assert.equal(statusMessage("CANCELLED"), "A análise foi cancelada.");

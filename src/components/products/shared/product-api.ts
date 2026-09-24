@@ -1,8 +1,8 @@
 import type { ProductFieldErrors, ProductPayload } from "./product-form-model";
 import {
-  normalizeGenerationAction,
   type GenerationActionProjection,
-} from "../generation/generation-ui-model";
+  normalizeGenerationAction,
+} from "./product-ui-model";
 import {
   type CandidateGap,
   type ProductImportCandidate,
