@@ -686,8 +686,9 @@ export function PublishedContentsView({
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetContent className="w-full gap-0 overflow-y-auto p-0 data-[side=right]:sm:max-w-xl">
             {/* Header visível de uma linha: título do produto à esquerda,
-                close nativo do Sheet alinhado à direita. */}
-            <SheetHeader className="flex-row items-center justify-between border-b px-4 py-3">
+                close nativo do Sheet alinhado à direita (pr-12 reserva o
+                espaço do × absoluto do primitivo). */}
+            <SheetHeader className="flex-row items-center justify-between border-b py-3 pl-4 pr-12">
               <SheetTitle className="min-w-0 truncate text-base font-semibold">
                 {productTitle}
               </SheetTitle>
