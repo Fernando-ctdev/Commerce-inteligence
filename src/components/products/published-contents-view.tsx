@@ -68,15 +68,14 @@ const BUSINESS_LABELS: Record<string, string> = {
   labels: "Etiquetas",
 };
 
+/* Recorte do detail (decisão do usuário 2026-09-24): seis métricas apenas.
+   vvCnt é a ÚNICA visualização (views é inválida/duplicada); ctr e
+   completionRate seguem só no card da galeria; directGmv e newFollowerCnt
+   removidos. Allowlist do contrato inalterada — o filtro é só de exibição. */
 const METRIC_LABELS: Record<string, string> = {
-  views: "Visualizações",
-  vvCnt: "Visualizações válidas",
-  newFollowerCnt: "Novos seguidores",
-  ctr: "CTR",
+  vvCnt: "Visualizações",
   gmv: "GMV",
-  directGmv: "GMV direto",
   itemSoldCnt: "Itens vendidos",
-  completionRate: "Taxa de conclusão",
   likes: "Curtidas",
   comments: "Comentários",
   shares: "Compartilhamentos",
@@ -471,7 +470,7 @@ export function PublishedContentsGallery({
                       <CardMetric
                         label="Visualizações"
                         icon={<Eye aria-hidden />}
-                        value={video.metrics.views ?? video.metrics.vvCnt}
+                        value={video.metrics.vvCnt}
                       />
                       <CardMetric label="GMV" icon={<ShoppingCart aria-hidden />} value={video.metrics.gmv} />
                       <CardMetric label="CTR" icon={<TrendingUp aria-hidden />} value={video.metrics.ctr} />

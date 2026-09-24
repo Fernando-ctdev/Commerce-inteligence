@@ -158,22 +158,33 @@ test("coverFrame: capa e duração dentro do frame da thumb, antes do corpo", as
   assert.ok(fallback !== -1 && fallback < dur);
 });
 
-test("visualizações: views ?? vvCnt com zero preservado", async () => {
+test("visualizações: apenas vvCnt, mesmo com views presente", async () => {
   const markup = await gallery(response);
   assert.ok(markup.includes("128000")); // vvCnt do payload real
 
-  const comViewsZero = await gallery({
+  // views + vvCnt juntas: vvCnt vence, views nunca é exibida
+  const comAmbas = await gallery({
     ...response,
     videos: [{ ...videoBase, metrics: { views: 0, vvCnt: 999 } }],
   });
-  assert.match(comViewsZero, />\s*0\s*</);
-  assert.ok(!comViewsZero.includes("999"));
+  assert.ok(comAmbas.includes("999"));
+  assert.ok(!/>\s*0\s*</.test(comAmbas), "views:0 nunca vira o valor do card");
+  assert.ok(!comAmbas.includes("Visualizações válidas"));
+  assert.equal(comAmbas.split("Visualizações").length - 1, 1, "um único rótulo Visualizações");
 
   const soVvCnt = await gallery({
     ...response,
     videos: [{ ...videoBase, metrics: { vvCnt: 777 } }],
   });
   assert.ok(soVvCnt.includes("777"));
+
+  // só views (inválida): card não mostra bloco de visualizações
+  const soViews = await gallery({
+    ...response,
+    videos: [{ ...videoBase, metrics: { views: 555 } }],
+  });
+  assert.ok(!soViews.includes("Visualizações"));
+  assert.ok(!soViews.includes("555"));
 });
 
 test("paginação do cliente: 9 itens por página", async () => {
@@ -215,14 +226,17 @@ test("busca filtra por título e assunto (case-insensitive) e estado vazio é ho
   assert.ok(!semResultado.includes("Esse whey realmente vale a pena"));
 });
 
-test("detail com metrics vazio: métricas conhecidas viram 0, seções vazias somem", async () => {
+test("detail com metrics vazio: seis métricas do recorte viram 0, removidas somem", async () => {
   const markup = await detail({ ...videoBase, metrics: {} });
 
-  // métricas de vídeo allowlisted renderizam 0 mesmo sem nenhuma chave
-  const itemSold = markup.indexOf("Itens vendidos");
-  assert.ok(itemSold !== -1, "tiles de métricas presentes com record vazio");
-  assert.match(markup, /Itens vendidos<\/dt><dd>0<\/dd>/);
-  assert.match(markup, /Taxa de conclusão<\/dt><dd>0<\/dd>/);
+  // as seis métricas do recorte renderizam 0 mesmo sem nenhuma chave
+  for (const label of ["Visualizações", "GMV", "Itens vendidos", "Curtidas", "Comentários", "Compartilhamentos"]) {
+    assert.ok(markup.includes(`${label}</dt><dd>0</dd>`), `${label} presente com 0`);
+  }
+  // removidas do detail (decisão do usuário 2026-09-24): nem rótulo
+  for (const label of ["Novos seguidores", "Taxa de conclusão", "GMV direto", "CTR"]) {
+    assert.ok(!markup.includes(label), `${label} removida do detail`);
+  }
   // métricas de produto sem dados: seção oculta, nada inventado
   assert.ok(!markup.includes("Cliques no produto"));
   // negócio continua com — para ausentes
@@ -251,7 +265,7 @@ test("galeria: data pt-BR, métrica zero visível e thumbnail com fallback ausen
 
   assert.ok(markup.includes("2026"));
   assert.ok(markup.includes("mar"));
-  assert.ok(/views|Visualizações/.test(markup));
+  assert.ok(markup.includes("Visualizações"));
   // valor zero preservado, nunca trocado por ausência
   const zeroRender = await gallery({
     ...response,
@@ -288,10 +302,19 @@ test("detail: fallback único troca a fonte e erro final aparece em role alert",
 test("detail: métricas com zero, null, ausência como 0 e sem cálculo derivado", async () => {
   const markup = await detail({
     ...videoBase,
-    metrics: { views: 128000, likes: 0, comments: null },
+    metrics: { vvCnt: 128000, views: 42, likes: 0, comments: null },
   });
 
+  // vvCnt é a única visualização; views presente no payload nunca vaza
   assert.ok(markup.includes("128000"));
+  assert.ok(!markup.includes("42"));
+  assert.ok(!markup.includes("Visualizações válidas"));
+  assert.equal(markup.split("Visualizações").length - 1, 1, "um único rótulo Visualizações");
+  // ordem fixa das seis métricas do recorte
+  const order = ["Visualizações", "GMV", "Itens vendidos", "Curtidas", "Comentários", "Compartilhamentos"]
+    .map((label) => markup.indexOf(label));
+  assert.ok(order.every((index) => index !== -1), "seis métricas presentes");
+  assert.ok(order.every((index, i) => i === 0 || index > order[i - 1]), "ordem do recorte preservada");
   assert.ok(markup.includes("Curtidas"));
   assert.ok(markup.includes("0"));
   assert.ok(markup.includes("null"));
