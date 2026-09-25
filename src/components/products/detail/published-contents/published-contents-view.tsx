@@ -69,17 +69,15 @@ const BUSINESS_LABELS: Record<string, string> = {
   labels: "Etiquetas",
 };
 
-/* Recorte do detail (decisão do usuário 2026-09-24): seis métricas apenas.
-   vvCnt é a ÚNICA visualização (views é inválida/duplicada); ctr e
+/* Recorte do detail (decisão do usuário 2026-09-24): três métricas apenas.
+   vvCnt é a ÚNICA visualização (views é inválida/duplicada); curtidas,
+   comentários e compartilhamentos vivem no overlay do player; ctr e
    completionRate seguem só no card da galeria; directGmv e newFollowerCnt
    removidos. Allowlist do contrato inalterada — o filtro é só de exibição. */
 const METRIC_LABELS: Record<string, string> = {
   vvCnt: "Visualizações",
   gmv: "GMV",
   itemSoldCnt: "Itens vendidos",
-  likes: "Curtidas",
-  comments: "Comentários",
-  shares: "Compartilhamentos",
 };
 
 const PRODUCT_METRIC_LABELS: Record<string, string> = {

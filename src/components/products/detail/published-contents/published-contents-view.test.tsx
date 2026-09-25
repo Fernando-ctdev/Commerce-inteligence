@@ -260,21 +260,26 @@ test("busca filtra por título e assunto (case-insensitive) e estado vazio é ho
   assert.ok(!semResultado.includes("Esse whey realmente vale a pena"));
 });
 
-test("detail com metrics vazio: seis métricas do recorte viram 0, removidas somem", async () => {
+test("detail com metrics vazio: três métricas viram 0, social só no overlay", async () => {
   const markup = await detail({ ...videoBase, metrics: {} });
+  const afterTitle = markup.slice(markup.indexOf("Esse whey realmente vale a pena"));
 
-  // as seis métricas do recorte renderizam 0 mesmo sem nenhuma chave
-  for (const label of ["Visualizações", "GMV", "Itens vendidos", "Curtidas", "Comentários", "Compartilhamentos"]) {
-    assert.ok(markup.includes(`${label}</dt><dd>0</dd>`), `${label} presente com 0`);
+  // as três métricas restantes renderizam 0 mesmo sem nenhuma chave
+  for (const label of ["Visualizações", "GMV", "Itens vendidos"]) {
+    assert.ok(afterTitle.includes(`${label}</dt><dd>0</dd>`), `${label} presente com 0`);
   }
-  // removidas do detail (decisão do usuário 2026-09-24): nem rótulo
-  for (const label of ["Novos seguidores", "Taxa de conclusão", "GMV direto", "CTR"]) {
-    assert.ok(!markup.includes(label), `${label} removida do detail`);
+  // removidas do detail (social virou overlay do player): nem rótulo após o título
+  for (const label of ["Novos seguidores", "Taxa de conclusão", "GMV direto", "CTR", "Curtidas", "Comentários", "Compartilhamentos"]) {
+    assert.ok(!afterTitle.includes(label), `${label} removida do detail`);
+  }
+  // o social continua acessível no overlay do player, antes do título
+  for (const label of ["Curtidas:", "Comentários:", "Compartilhamentos:"]) {
+    assert.ok(markup.indexOf(label) !== -1 && markup.indexOf(label) < markup.indexOf("Esse whey"), `${label} no overlay do player`);
   }
   // métricas de produto sem dados: seção oculta, nada inventado
-  assert.ok(!markup.includes("Cliques no produto"));
+  assert.ok(!afterTitle.includes("Cliques no produto"));
   // negócio continua com — para ausentes
-  assert.ok(markup.includes("Categoria"));
+  assert.ok(afterTitle.includes("Categoria"));
 });
 
 test("filterAndSortVideos: recent/oldest determinísticos e sem data por último", async () => {
@@ -408,19 +413,27 @@ test("detail: métricas com zero, null, ausência como 0 e sem cálculo derivado
   assert.ok(!markup.includes("<dd>42</dd>"), "views nunca vira tile renderizado");
   assert.ok(!markup.includes("Visualizações válidas"));
   assert.equal(markup.split("Visualizações").length - 1, 1, "um único rótulo Visualizações");
-  // ordem fixa das seis métricas do recorte, na seção Métricas (após o título;
+  // ordem fixa das três métricas restantes, na seção Métricas (após o título;
   // o rail do player tem seus próprios rótulos e vem antes)
   const titleIdxOrder = markup.indexOf("Esse whey realmente vale a pena");
-  const order = ["Visualizações", "GMV", "Itens vendidos", "Curtidas", "Comentários", "Compartilhamentos"]
-    .map((label) => markup.indexOf(label, titleIdxOrder));
-  assert.ok(order.every((index) => index !== -1), "seis métricas presentes");
+  const afterTitle = markup.slice(titleIdxOrder);
+  const order = ["Visualizações", "GMV", "Itens vendidos"].map((label) => afterTitle.indexOf(label));
+  assert.ok(order.every((index) => index !== -1), "três métricas presentes");
   assert.ok(order.every((index, i) => i === 0 || index > order[i - 1]), "ordem do recorte preservada");
-  assert.ok(markup.includes("Curtidas"));
-  assert.ok(markup.includes("0"));
-  assert.ok(markup.includes("null"));
+  // social saiu da seção: existe só no overlay, antes do título
+  for (const label of ["Curtidas", "Comentários", "Compartilhamentos"]) {
+    assert.ok(!afterTitle.includes(label), `${label} só no overlay`);
+  }
+  for (const label of ["Curtidas:", "Comentários:", "Compartilhamentos:"]) {
+    assert.ok(markup.indexOf(label) !== -1 && markup.indexOf(label) < titleIdxOrder, `${label} no overlay`);
+  }
+  assert.ok(afterTitle.includes("0"));
+  // null real do DTO continua literal "null" no tile (nunca 0 nem —)
+  const nulo = await detail({ ...videoBase, metrics: { vvCnt: null } });
+  assert.ok(nulo.includes("<dd>null</dd>"), "null preservado como literal");
   // campo de MÉTRICA conhecido ausente no DTO mostra 0 (pedido do usuário),
   // não traço; dados de negócio ausentes continuam com —
-  const itemSold = markup.indexOf("Itens vendidos");
+  const itemSold = afterTitle.indexOf("Itens vendidos");
   assert.ok(itemSold !== -1, "tile de métrica conhecida presente");
   assert.match(markup, /Itens vendidos<\/dt><dd>0<\/dd>/);
   const categoria = markup.indexOf("Categoria");
