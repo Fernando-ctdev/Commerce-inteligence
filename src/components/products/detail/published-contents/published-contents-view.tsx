@@ -793,7 +793,7 @@ export function PublishedContentsView({
       ) : (
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetContent
-            className="w-full gap-0 overflow-y-auto p-0 data-[side=right]:sm:max-w-4xl"
+            className="w-full gap-0 overflow-y-auto p-0 data-[side=right]:sm:max-w-3xl"
             showCloseButton={false}
           >
             {/* Header visível de uma linha: título à esquerda, close dentro

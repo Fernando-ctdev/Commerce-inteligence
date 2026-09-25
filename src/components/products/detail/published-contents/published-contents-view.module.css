@@ -405,12 +405,12 @@
   width: 16px;
 }
 
-/* Lado-a-lado só quando o drawer tem ≥720px reais (container query):
-   player à esquerda, métricas em coluna à direita com cards confortáveis;
-   título, dados restantes e CTA em largura total abaixo. Abaixo do limiar,
-   volta ao fluxo em pilha. Mobile mantém o fluxo em pilha: player →
-   título/data → métricas → demais. */
-@container (min-width: 720px) {
+/* Lado-a-lado só quando o drawer tem ≥640px reais de content box (o sheet
+   max-w-3xl entrega 736). Player à esquerda, métricas em coluna à direita
+   com cards confortáveis; título, dados restantes e CTA em largura total
+   abaixo. Abaixo do limiar, volta ao fluxo em pilha. Mobile mantém o fluxo
+   em pilha: player → título/data → métricas → demais. */
+@container (min-width: 640px) {
   .detail {
     align-items: start;
     gap: 24px;
