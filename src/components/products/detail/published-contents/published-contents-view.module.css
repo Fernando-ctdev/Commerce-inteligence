@@ -387,19 +387,84 @@
   min-width: 0;
 }
 
-/* Player 9:16 (decisão do usuário 2026-09-24): largura de celular vertical
-   (≤360px) centralizada no painel, nunca em tela cheia no desktop; a largura
-   também respeita o teto de altura (62vh, abaixo dos 70vh anteriores) já
-   convertido pela própria razão — a caixa nunca distorce e o contain cobre
-   fontes com proporção incomum. */
-.player {
+/* Frame do player 9:16: ÚNICA caixa dimensionada (largura de celular vertical
+   + ratio), ancora o overlay exatamente sobre o vídeo. A largura também
+   respeita o teto de altura (62vh) já convertido pela própria razão — a caixa
+   nunca distorce e o contain cobre fontes com proporção incomum. O overlay é
+   decorativo (pointer-events none) — controles continuam exclusivos do
+   <video controls> nativo. */
+.playerFrame {
   aspect-ratio: 9 / 16;
   background: #000;
   border-radius: 12px;
   display: block;
   margin-inline: auto;
-  object-fit: contain;
+  overflow: hidden;
+  position: relative;
   width: min(100%, 360px, calc(62vh * 9 / 16));
+}
+
+.player {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+/* Sombra discreta só nas bordas do vídeo: legibilidade da marca e do rail
+   sem caixa escura sobre a imagem. */
+.playerOverlay {
+  background: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 0.35),
+    transparent 20%,
+    transparent 70%,
+    rgb(0 0 0 / 0.5)
+  );
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.tiktokMark {
+  height: 22px;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 22px;
+}
+
+/* Rail vertical de contadores, acima da faixa de controles nativos (~15%). */
+.playerRail {
+  align-items: center;
+  bottom: 15%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: absolute;
+  right: 10px;
+}
+
+.railItem {
+  align-items: center;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.railItem svg {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
+  height: 22px;
+  width: 22px;
+}
+
+.railCount {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
 }
 
 .playerUnavailable,

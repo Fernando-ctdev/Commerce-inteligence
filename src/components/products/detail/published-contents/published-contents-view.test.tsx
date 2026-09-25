@@ -311,6 +311,58 @@ test("galeria: data pt-BR, métrica zero visível e thumbnail com fallback ausen
   assert.ok(zeroRender.includes("Sem prévia"));
 });
 
+test("detail: overlay TikTok local, rail de métricas reais e ausência como —", async () => {
+  const markup = await detail({
+    ...videoBase,
+    metrics: { vvCnt: 128000, likes: 1100, comments: 25600, shares: 42 },
+  });
+
+  // asset LOCAL do TikTok: nada de CDN em runtime
+  assert.match(markup, /src="\/icons\/tiktok\.svg"/);
+  assert.ok(!markup.includes("simpleicons"));
+
+  // ordem: vídeo → tiktok (img no overlay, ignorando o preload link do React)
+  // → rail (curtidas, comentários, compartilhamentos) → título
+  const videoIdx = markup.indexOf("<video");
+  const tiktokIdx = markup.indexOf("/icons/tiktok.svg", videoIdx);
+  const curtidasIdx = markup.indexOf("Curtidas");
+  const comentariosIdx = markup.indexOf("Comentários");
+  const compartilhamentosIdx = markup.indexOf("Compartilhamentos");
+  const titleIdx = markup.indexOf("Esse whey realmente vale a pena");
+  assert.ok(videoIdx !== -1 && videoIdx < tiktokIdx, "vídeo antes do overlay");
+  assert.ok(tiktokIdx !== -1 && tiktokIdx < curtidasIdx, "tiktok antes do rail");
+  assert.ok(curtidasIdx < comentariosIdx && comentariosIdx < compartilhamentosIdx, "ordem do rail");
+  assert.ok(compartilhamentosIdx < titleIdx, "rail dentro do player, antes do corpo");
+
+  // contadores reais compactados (compactCount pt-BR)
+  assert.ok(markup.includes("1,1k"), "likes compactado");
+  assert.ok(markup.includes("25,6k"), "comentários compactado");
+  assert.ok(markup.includes("42"), "shares cru");
+  // nomes acessíveis com rótulo e valor (sr-only)
+  assert.ok(markup.includes("Curtidas: 1,1k"), "label acessível de curtidas");
+  assert.ok(markup.includes("Comentários: 25,6k"), "label acessível de comentários");
+  assert.ok(markup.includes("Compartilhamentos: 42"), "label acessível de compartilhamentos");
+  // overlay não é aria-hidden: a tag logo após </video> abre o container limpo
+  const afterVideo = markup.slice(markup.indexOf("</video>"), markup.indexOf("</video>") + 40);
+  assert.match(afterVideo, /^<\/video><div(>|\s)/, "container do overlay presente");
+  assert.ok(!afterVideo.slice(0, 30).includes("aria-hidden"), "rail acessível sem aria-hidden no container");
+
+  // sem controles customizados: nada clicável no overlay; vídeo segue nativo
+  const playerSlice = markup.slice(videoIdx, titleIdx);
+  assert.ok(!playerSlice.includes("<button"), "overlay sem botão customizado");
+  assert.ok(!/tabIndex|role="button"/.test(playerSlice), "overlay sem interação própria");
+});
+
+test("detail: overlay mostra — para likes/comments/shares ausentes ou null", async () => {
+  const markup = await detail({
+    ...videoBase,
+    metrics: { vvCnt: 128000, likes: null, comments: null },
+  });
+  const playerSlice = markup.slice(markup.indexOf("<video"), markup.indexOf("Esse whey"));
+  // cada ausência aparece uma vez no sr-only (label: —) e uma no valor visível
+  assert.equal(playerSlice.split(": —").length - 1, 3, "três ausências explícitas no rail");
+});
+
 test("detail: player sem autoplay com controls, preload none e playsInline", async () => {
   const markup = await detail(videoBase);
 
@@ -341,12 +393,14 @@ test("detail: métricas com zero, null, ausência como 0 e sem cálculo derivado
 
   // vvCnt é a única visualização; views presente no payload nunca vaza
   assert.ok(markup.includes("128000"));
-  assert.ok(!markup.includes("42"));
+  assert.ok(!markup.includes("<dd>42</dd>"), "views nunca vira tile renderizado");
   assert.ok(!markup.includes("Visualizações válidas"));
   assert.equal(markup.split("Visualizações").length - 1, 1, "um único rótulo Visualizações");
-  // ordem fixa das seis métricas do recorte
+  // ordem fixa das seis métricas do recorte, na seção Métricas (após o título;
+  // o rail do player tem seus próprios rótulos e vem antes)
+  const titleIdxOrder = markup.indexOf("Esse whey realmente vale a pena");
   const order = ["Visualizações", "GMV", "Itens vendidos", "Curtidas", "Comentários", "Compartilhamentos"]
-    .map((label) => markup.indexOf(label));
+    .map((label) => markup.indexOf(label, titleIdxOrder));
   assert.ok(order.every((index) => index !== -1), "seis métricas presentes");
   assert.ok(order.every((index, i) => i === 0 || index > order[i - 1]), "ordem do recorte preservada");
   assert.ok(markup.includes("Curtidas"));

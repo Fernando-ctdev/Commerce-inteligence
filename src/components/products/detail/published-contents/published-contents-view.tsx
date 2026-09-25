@@ -7,7 +7,7 @@
 // false e null preservados, campo conhecido ausente é "—". Sem busca, ordenação
 // client-side, autoplay, fetch de mídia ou geração de roteiro.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, Heart, Play, Search, ShoppingCart, TrendingUp, XIcon } from "lucide-react";
+import { Eye, Heart, MessageCircle, Play, Search, Share2, ShoppingCart, TrendingUp, XIcon } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -271,19 +271,48 @@ export function PublishedContentDetail({
     fallbackUsed && video.fallbackPlaybackUrl
       ? video.fallbackPlaybackUrl
       : video.playbackUrl;
+  const railLikes = compactCount(video.metrics.likes) ?? "—";
+  const railComments = compactCount(video.metrics.comments) ?? "—";
+  const railShares = compactCount(video.metrics.shares) ?? "—";
   return (
     <div className={styles.detail}>
       <div className={styles.playerArea}>
         {src ? (
-          <video
-            className={styles.player}
-            src={src}
-            poster={video.coverUrl}
-            controls
-            preload="none"
-            playsInline
-            onError={onPlaybackError}
-          />
+          <div className={styles.playerFrame}>
+            <video
+              className={styles.player}
+              src={src}
+              poster={video.coverUrl}
+              controls
+              preload="none"
+              playsInline
+              onError={onPlaybackError}
+            />
+            {/* Overlay decorativo (pointer-events none): marca TikTok + rail de
+                contadores reais com nomes acessíveis. Play/seek/fullscreen/
+                teclado seguem exclusivos do <video controls> nativo. */}
+            <div className={styles.playerOverlay}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- asset local estático; next/image exige domínios em runtime */}
+              <img alt="" aria-hidden="true" className={styles.tiktokMark} src="/icons/tiktok.svg" />
+              <div className={styles.playerRail}>
+                <span className={styles.railItem}>
+                  <Heart aria-hidden />
+                  <span className={styles.srOnly}>Curtidas: {railLikes}</span>
+                  <span aria-hidden="true" className={styles.railCount}>{railLikes}</span>
+                </span>
+                <span className={styles.railItem}>
+                  <MessageCircle aria-hidden />
+                  <span className={styles.srOnly}>Comentários: {railComments}</span>
+                  <span aria-hidden="true" className={styles.railCount}>{railComments}</span>
+                </span>
+                <span className={styles.railItem}>
+                  <Share2 aria-hidden />
+                  <span className={styles.srOnly}>Compartilhamentos: {railShares}</span>
+                  <span aria-hidden="true" className={styles.railCount}>{railShares}</span>
+                </span>
+              </div>
+            </div>
+          </div>
         ) : (
           <p className={styles.playerUnavailable}>Reprodução indisponível para este conteúdo.</p>
         )}
