@@ -334,6 +334,18 @@ test("detail: overlay TikTok local, rail de métricas reais e ausência como —
   assert.ok(curtidasIdx < comentariosIdx && comentariosIdx < compartilhamentosIdx, "ordem do rail");
   assert.ok(compartilhamentosIdx < titleIdx, "rail dentro do player, antes do corpo");
 
+  // ícones do rail conforme desenho: coração, comentários (more), compartilhar
+  const heartIdx = markup.indexOf("lucide-heart");
+  const commentIconIdx = markup.indexOf("lucide-message-circle-more");
+  const shareIconIdx = markup.indexOf("lucide-corner-up-right");
+  assert.ok(commentIconIdx > -1, "ícone de comentários é message-circle-more");
+  assert.ok(shareIconIdx > -1, "ícone de compartilhamentos é corner-up-right");
+  assert.ok(heartIdx !== -1 && heartIdx < commentIconIdx && commentIconIdx < shareIconIdx, "ordem dos ícones do rail");
+  // os antigos MessageCircle/Share2 não sobram no rail (match exato de classe)
+  const railSlice = markup.slice(heartIdx, markup.indexOf("Esse whey realmente vale a pena"));
+  assert.ok(!railSlice.includes('lucide-message-circle"'), "sem lucide-message-circle antigo");
+  assert.ok(!railSlice.includes('lucide-share-2"'), "sem lucide-share-2 antigo");
+
   // contadores reais compactados (compactCount pt-BR)
   assert.ok(markup.includes("1,1k"), "likes compactado");
   assert.ok(markup.includes("25,6k"), "comentários compactado");

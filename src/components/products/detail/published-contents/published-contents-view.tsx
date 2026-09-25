@@ -7,7 +7,7 @@
 // false e null preservados, campo conhecido ausente é "—". Sem busca, ordenação
 // client-side, autoplay, fetch de mídia ou geração de roteiro.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, Heart, MessageCircle, Play, Search, Share2, ShoppingCart, TrendingUp, XIcon } from "lucide-react";
+import { CornerUpRight, Eye, Heart, MessageCircleMore, Play, Search, ShoppingCart, TrendingUp, XIcon } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -301,12 +301,12 @@ export function PublishedContentDetail({
                   <span aria-hidden="true" className={styles.railCount}>{railLikes}</span>
                 </span>
                 <span className={styles.railItem}>
-                  <MessageCircle aria-hidden />
+                  <MessageCircleMore aria-hidden />
                   <span className={styles.srOnly}>Comentários: {railComments}</span>
                   <span aria-hidden="true" className={styles.railCount}>{railComments}</span>
                 </span>
                 <span className={styles.railItem}>
-                  <Share2 aria-hidden />
+                  <CornerUpRight aria-hidden />
                   <span className={styles.srOnly}>Compartilhamentos: {railShares}</span>
                   <span aria-hidden="true" className={styles.railCount}>{railShares}</span>
                 </span>
