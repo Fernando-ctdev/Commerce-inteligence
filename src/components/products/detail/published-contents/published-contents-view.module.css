@@ -352,6 +352,9 @@
 /* Corpo rolável dos overlays (Sheet desktop e Drawer mobile): o conteúdo do
    primitivo é overflow-hidden, então o detail rola no wrapper interno. */
 .drawerScroll {
+  /* Container query do layout desktop do detail: o lado-a-lado depende da
+     largura REAL disponível no drawer, não do viewport. */
+  container-type: inline-size;
   min-height: 0;
   overscroll-behavior: contain;
   overflow-y: auto;
@@ -398,10 +401,12 @@
   width: 16px;
 }
 
-/* Desktop: player à esquerda, métricas em coluna à direita; título, dados
-   restantes e CTA em largura total abaixo (decisão do usuário 2026-09-24).
-   Mobile mantém o fluxo em pilha: player → título/data → métricas → demais. */
-@media (min-width: 768px) {
+/* Lado-a-lado só quando o drawer tem ≥720px reais (container query):
+   player à esquerda, métricas em coluna à direita com cards confortáveis;
+   título, dados restantes e CTA em largura total abaixo. Abaixo do limiar,
+   volta ao fluxo em pilha. Mobile mantém o fluxo em pilha: player →
+   título/data → métricas → demais. */
+@container (min-width: 720px) {
   .detail {
     align-items: start;
     gap: 24px;
@@ -409,7 +414,7 @@
       "player metrics"
       "header header"
       "body body";
-    grid-template-columns: minmax(0, 25rem) minmax(0, 1fr);
+    grid-template-columns: minmax(320px, 360px) minmax(280px, 1fr);
   }
 
   .playerArea {
