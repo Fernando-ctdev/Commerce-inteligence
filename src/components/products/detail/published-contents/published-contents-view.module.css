@@ -381,6 +381,59 @@
   padding: 16px;
 }
 
+.detailHeader {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.detailMetrics {
+  min-width: 0;
+}
+
+.tileIcon {
+  color: var(--color-brand);
+  display: block;
+  height: 16px;
+  width: 16px;
+}
+
+/* Desktop: player à esquerda, métricas em coluna à direita; título, dados
+   restantes e CTA em largura total abaixo (decisão do usuário 2026-09-24).
+   Mobile mantém o fluxo em pilha: player → título/data → métricas → demais. */
+@media (min-width: 768px) {
+  .detail {
+    align-items: start;
+    gap: 24px;
+    grid-template-areas:
+      "player metrics"
+      "header header"
+      "body body";
+    grid-template-columns: minmax(0, 25rem) minmax(0, 1fr);
+  }
+
+  .playerArea {
+    grid-area: player;
+  }
+
+  .detailHeader {
+    grid-area: header;
+  }
+
+  .detailMetrics {
+    grid-area: metrics;
+  }
+
+  /* três tiles empilhados cabem na coluna ao lado do player */
+  .detailMetrics .tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detailBody {
+    grid-area: body;
+  }
+}
+
 .playerArea {
   display: grid;
   gap: 8px;

@@ -7,7 +7,19 @@
 // false e null preservados, campo conhecido ausente é "—". Sem busca, ordenação
 // client-side, autoplay, fetch de mídia ou geração de roteiro.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CornerUpRight, Eye, Heart, MessageCircleMore, Play, Search, ShoppingCart, TrendingUp, XIcon } from "lucide-react";
+import {
+  CornerUpRight,
+  DollarSign,
+  Eye,
+  Heart,
+  MessageCircleMore,
+  Package,
+  Play,
+  Search,
+  ShoppingCart,
+  TrendingUp,
+  XIcon,
+} from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -78,6 +90,14 @@ const METRIC_LABELS: Record<string, string> = {
   vvCnt: "Visualizações",
   gmv: "GMV",
   itemSoldCnt: "Itens vendidos",
+};
+
+/** Ícones decorativos dos tiles (lucide); Eye=view, DollarSign=GMV,
+ *  Package=itens vendidos. Sem valores/semântica novos. */
+const METRIC_ICONS: Record<string, React.ReactNode> = {
+  vvCnt: <Eye aria-hidden />,
+  gmv: <DollarSign aria-hidden />,
+  itemSoldCnt: <Package aria-hidden />,
 };
 
 const PRODUCT_METRIC_LABELS: Record<string, string> = {
@@ -202,9 +222,22 @@ export function filterAndSortVideos(
   return [...dated, ...undated];
 }
 
-function MetricTile({ label, value }: { label: string; value: string }) {
+function MetricTile({
+  icon,
+  label,
+  value,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: string;
+}) {
   return (
     <div className={styles.tile}>
+      {icon ? (
+        <span aria-hidden="true" className={styles.tileIcon}>
+          {icon}
+        </span>
+      ) : null}
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>
@@ -217,6 +250,7 @@ function MetricSection({
   record,
   absentValue = "—",
   renderWhenEmpty = false,
+  icons,
 }: {
   title: string;
   labels: Record<string, string>;
@@ -227,6 +261,8 @@ function MetricSection({
   /** Renderiza os tiles mesmo sem nenhuma chave presente (usado só pela
    *  seção de métricas de vídeo, que vira 0 com record vazio). */
   renderWhenEmpty?: boolean;
+  /** Ícones decorativos por chave (só a seção de métricas de vídeo usa). */
+  icons?: Record<string, React.ReactNode>;
 }) {
   /* Só rótulos estáticos allowlisted: chave fora do mapa nunca aparece, nem
      com rótulo cru. */
@@ -238,9 +274,9 @@ function MetricSection({
       <dl className={styles.tiles}>
         {Object.keys(labels).map((key) =>
           key in record ? (
-            <MetricTile key={key} label={labels[key]} value={scalar(record[key])} />
+            <MetricTile key={key} icon={icons?.[key]} label={labels[key]} value={scalar(record[key])} />
           ) : (
-            <MetricTile key={key} label={labels[key]} value={absentValue} />
+            <MetricTile key={key} icon={icons?.[key]} label={labels[key]} value={absentValue} />
           ),
         )}
       </dl>
@@ -320,23 +356,27 @@ export function PublishedContentDetail({
           </p>
         ) : null}
       </div>
-      <div className={styles.detailBody}>
+      <header className={styles.detailHeader}>
         <h3 ref={headingRef} className={styles.detailTitle} tabIndex={-1}>
           {video.title ?? video.itemId}
         </h3>
         {date ? <p className={styles.detailDate}>{date}</p> : null}
-
-        <MetricSection
-          title="Dados do conteúdo"
-          labels={BUSINESS_LABELS}
-          record={video.business}
-        />
+      </header>
+      <div className={styles.detailMetrics}>
         <MetricSection
           title="Métricas"
           labels={METRIC_LABELS}
           record={video.metrics}
           absentValue="0"
           renderWhenEmpty
+          icons={METRIC_ICONS}
+        />
+      </div>
+      <div className={styles.detailBody}>
+        <MetricSection
+          title="Dados do conteúdo"
+          labels={BUSINESS_LABELS}
+          record={video.business}
         />
         <MetricSection
           title="Métricas do produto neste conteúdo"

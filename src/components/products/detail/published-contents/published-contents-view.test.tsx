@@ -380,6 +380,22 @@ test("detail: overlay mostra — para likes/comments/shares ausentes ou null", a
   assert.equal(playerSlice.split(": —").length - 1, 3, "três ausências explícitas no rail");
 });
 
+test("detail: ícones decorativos Eye/DollarSign/Package nas três métricas", async () => {
+  const markup = await detail(videoBase);
+
+  const eye = markup.indexOf("lucide-eye");
+  const dollar = markup.indexOf("lucide-dollar-sign");
+  const pack = markup.indexOf("lucide-package");
+  assert.ok(eye !== -1, "ícone Eye para Visualizações");
+  assert.ok(dollar !== -1, "ícone DollarSign para GMV");
+  assert.ok(pack !== -1, "ícone Package para Itens vendidos");
+  // ordem dos tiles: Visualizações → GMV → Itens vendidos
+  assert.ok(eye < dollar && dollar < pack, "ícones na ordem das métricas");
+  // decorativos: fora da árvore de acessibilidade
+  const eyeTag = markup.slice(eye - 120, eye + 40);
+  assert.match(eyeTag, /aria-hidden="true"/, "ícone é decorativo");
+});
+
 test("detail: player sem autoplay com controls, preload none e playsInline", async () => {
   const markup = await detail(videoBase);
 
