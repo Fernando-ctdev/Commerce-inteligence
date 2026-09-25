@@ -4,8 +4,10 @@
 // DTO público do read model (published-content-contract) e drawer do conteúdo
 // selecionado (src/components/ui/drawer.tsx). Nenhuma normalização de
 // métricas/negócio no cliente: valores escalam como chegam do endpoint, zero,
-// false e null preservados, campo conhecido ausente é "—". Sem busca, ordenação
-// client-side, autoplay, fetch de mídia ou geração de roteiro.
+// false e null preservados, campo conhecido ausente é "—". Única exceção
+// aprovada pelo usuário: Engajamento (engagementRate), taxa derivada exibida
+// no detail. Sem busca, ordenação client-side, autoplay, fetch de mídia ou
+// geração de roteiro.
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CornerUpRight,
@@ -99,6 +101,26 @@ const METRIC_ICONS: Record<string, React.ReactNode> = {
   gmv: <DollarSign aria-hidden />,
   itemSoldCnt: <Package aria-hidden />,
 };
+
+/** ÚNICA taxa derivada exibida no cliente (aprovada pelo usuário):
+ *  (likes+comments+shares)/vvCnt em porcentagem pt-BR com até 1 casa
+ *  ("7,2%", "6%", "0%"). Retorna "—" quando vvCnt não é número finito >0
+ *  ou quando qualquer contador social é ausente/null/não numérico —
+ *  ausência nunca é inventada como 0. */
+export function engagementRate(metrics: PublishedVideo["metrics"]): string {
+  const views =
+    typeof metrics.vvCnt === "number" && Number.isFinite(metrics.vvCnt)
+      ? metrics.vvCnt
+      : null;
+  if (views === null || views <= 0) return "—";
+  const parts = [metrics.likes, metrics.comments, metrics.shares].map((v) =>
+    typeof v === "number" && Number.isFinite(v) ? v : Number.NaN,
+  );
+  if (parts.some((n) => Number.isNaN(n))) return "—";
+  const pct = ((parts[0] + parts[1] + parts[2]) / views) * 100;
+  const rounded = Math.round(pct * 10) / 10;
+  return `${rounded.toFixed(1).replace(/\.0$/, "").replace(".", ",")}%`;
+}
 
 const PRODUCT_METRIC_LABELS: Record<string, string> = {
   productClicks: "Cliques no produto",
@@ -253,6 +275,7 @@ function MetricSection({
   absentValue = "—",
   renderWhenEmpty = false,
   icons,
+  derivedTiles = [],
 }: {
   title: string;
   labels: Record<string, string>;
@@ -265,6 +288,14 @@ function MetricSection({
   renderWhenEmpty?: boolean;
   /** Ícones decorativos por chave (só a seção de métricas de vídeo usa). */
   icons?: Record<string, React.ReactNode>;
+  /** Tiles derivados (ex.: Engajamento) anexados após os tiles allowlisted —
+   *  nunca entram no record nem no allowlist do endpoint. */
+  derivedTiles?: Array<{
+    key: string;
+    label: string;
+    value: string;
+    icon?: React.ReactNode;
+  }>;
 }) {
   /* Só rótulos estáticos allowlisted: chave fora do mapa nunca aparece, nem
      com rótulo cru. */
@@ -281,14 +312,18 @@ function MetricSection({
             <MetricTile key={key} icon={icons?.[key]} label={labels[key]} value={absentValue} />
           ),
         )}
+        {derivedTiles?.map((tile) => (
+          <MetricTile key={tile.key} icon={tile.icon} label={tile.label} value={tile.value} />
+        ))}
       </dl>
     </section>
   );
 }
 
 /** Detail do conteúdo selecionado: player sem autoplay com fallback único,
- *  todas as entradas allowlisted presentes, ausência explícita e CTA de
- *  roteiro derivado desabilitado. Exportado para teste de markup direto. */
+ *  todas as entradas allowlisted presentes, ausência explícita, CTA de
+ *  roteiro derivado desabilitado e Engajamento como única taxa derivada
+ *  exibida (engagementRate). Exportado para teste de markup direto. */
 export function PublishedContentDetail({
   video,
   fallbackUsed,
@@ -372,6 +407,14 @@ export function PublishedContentDetail({
           absentValue="0"
           renderWhenEmpty
           icons={METRIC_ICONS}
+          derivedTiles={[
+            {
+              key: "engagementRate",
+              label: "Engajamento",
+              value: engagementRate(video.metrics),
+              icon: <TrendingUp aria-hidden />,
+            },
+          ]}
         />
       </div>
       <div className={styles.detailBody}>

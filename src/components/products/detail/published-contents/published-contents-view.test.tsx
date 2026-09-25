@@ -400,6 +400,43 @@ test("detail: ícones decorativos Eye/DollarSign/Package nas três métricas", a
   assert.match(firstDt, /Visualizações<\/dt><dd>/, "valor após a label");
 });
 
+test("detail: Engajamento é a única taxa derivada do recorte", async () => {
+  const markup = await detail({
+    ...videoBase,
+    metrics: { vvCnt: 10000, likes: 600, comments: 80, shares: 40 },
+  });
+  // (600+80+40)/10000 = 7,2% pt-BR com uma casa
+  assert.match(markup, /Engajamento<\/dt><dd>7,2%<\/dd>/);
+  // quarta métrica do bloco: após Itens vendidos
+  assert.ok(markup.indexOf("Itens vendidos</dt>") < markup.indexOf("Engajamento"));
+  // ícone decorativo coerente sem dependência nova
+  assert.ok(markup.indexOf("lucide-trending-up") > markup.indexOf("lucide-package"));
+
+  // 0%: vvCnt>0 com os três sociais zerados (zeros reais contam)
+  const zeros = await detail({
+    ...videoBase,
+    metrics: { vvCnt: 500, likes: 0, comments: 0, shares: 0 },
+  });
+  assert.match(zeros, /Engajamento<\/dt><dd>0%<\/dd>/);
+
+  // — quando vvCnt não é número >0 ou qualquer social é ausente/null
+  // (vvCnt ausente da chave = ausente, mesmo contrato de undefined)
+  for (const metrics of [
+    { vvCnt: 0, likes: 10, comments: 0, shares: 0 },
+    { likes: 1, comments: 1, shares: 1 },
+    { vvCnt: 100, likes: null, comments: 0, shares: 0 },
+    { vvCnt: 100, comments: null },
+    { vvCnt: "abc", likes: 1, comments: 0, shares: 0 },
+  ] as PublishedVideo["metrics"][]) {
+    const dash = await detail({ ...videoBase, metrics });
+    assert.match(
+      dash,
+      /Engajamento<\/dt><dd>—<\/dd>/,
+      `— para ${JSON.stringify(metrics)}`,
+    );
+  }
+});
+
 test("detail: player sem autoplay com controls, preload none e playsInline", async () => {
   const markup = await detail(videoBase);
 
@@ -422,7 +459,7 @@ test("detail: fallback único troca a fonte e erro final aparece em role alert",
   assert.ok(!semFallback.includes("backup.mp4"));
 });
 
-test("detail: métricas com zero, null, ausência como 0 e sem cálculo derivado", async () => {
+test("detail: métricas com zero, null, ausência como 0 e Engajamento como única taxa derivada", async () => {
   const markup = await detail({
     ...videoBase,
     metrics: { vvCnt: 128000, views: 42, likes: 0, comments: null },
@@ -458,7 +495,8 @@ test("detail: métricas com zero, null, ausência como 0 e sem cálculo derivado
   assert.match(markup, /Itens vendidos<\/dt><dd>0<\/dd>/);
   const categoria = markup.indexOf("Categoria");
   assert.match(markup.slice(categoria, categoria + 40), /—/);
-  // sem CTR/ROAS/total calculado no cliente
+  // sem CTR/ROAS/total calculado no cliente — Engajamento é a ÚNICA taxa
+  // derivada exibida (engagementRate, aprovada pelo usuário)
   assert.ok(!markup.includes("% calculado"));
 });
 
