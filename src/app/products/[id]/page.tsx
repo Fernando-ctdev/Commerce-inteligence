@@ -10,8 +10,8 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { ProductDetail } from "@/components/products/product-detail";
-import { ProductShell } from "@/components/products/product-shell";
+import { ProductDetail } from "@/components/products/detail/product-detail";
+import { ProductShell } from "@/components/products/shared/product-shell";
 
 type ProductPageProps = {
   params: Promise<{ id: string }>;
@@ -27,7 +27,7 @@ export default async function ProductPage({
   const archived = product?.lifecycle === "ARCHIVED";
   return (
     <ProductShell
-      title={archived ? "Produto arquivado" : "Revisar produto"}
+      title={archived ? "Produto arquivado" : "Vitrine"}
       user={{ email: session.email }}
     >
       <Breadcrumb className="mb-6">
@@ -40,7 +40,7 @@ export default async function ProductPage({
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <BreadcrumbPage>
-              {archived ? "Produto arquivado" : "Revisar produto"}
+              {archived ? "Produto arquivado" : "Produto"}
             </BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>

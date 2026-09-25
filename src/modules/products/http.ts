@@ -2,9 +2,13 @@
 // e POST /api/products/:id/archive (arquivar, idempotente, sem apagar dados).
 // Sessão/Tenant resolvidos server-side (RI-005); POST exige Idempotency-Key válida (RI-007);
 // PATCH edita fatos com controle otimista de versão; erros sanitizados, sem detalhes internos.
-import type { Product } from "@prisma/client";
+import type { Prisma, Product } from "@prisma/client";
 import { prisma } from "../db";
 import { projectGenerationAction, type GenerationAction } from "../commerce-intelligence/service";
+import {
+  PublishedContentFixtureError,
+  buildLinkedContents,
+} from "./published-content";
 
 import {
   SESSION_COOKIE,
@@ -27,6 +31,7 @@ import {
   reactivateTenantProduct,
   updateTenantProduct,
 } from "./service";
+import { syncShowcaseProducts } from "./sync";
 
 // ADR-016 (nota canônica): ActiveProductView sempre carrega generationAction completo
 // (state AVAILABLE|BLOCKED; reason/nextAction tokens do servidor, nunca texto pt-BR, nunca
@@ -47,6 +52,11 @@ export type ProductView = {
   creatorPresence: "on_camera" | "hands_only_product" | "either";
   active: boolean;
   readiness: "PENDING" | "ANALYZING" | "READY" | "FAILED";
+  origin: "showcase" | "manual";
+  commission: string | null;
+  commissionRate: number | null;
+  stockCount: number | null;
+  labels: string[];
 };
 
 export type ArchivedProductView = ProductView;
@@ -109,7 +119,17 @@ async function productReadiness(tenantId: string, productId: string): Promise<Pr
 function toProductView(product: Product, readiness: ProductView["readiness"] = "PENDING"): ProductView {
   // Comissão/features/desconto (ADR-030): fora do contrato ativo — nunca
   // projetados, mesmo em registros históricos que ainda os carregam.
-  return { id: product.id, version: product.version, name: product.name, description: product.description ?? "", category: product.category ?? "", price: product.priceAmount ? product.priceAmount.toString() : "", priceCurrency: product.priceCurrency ?? "", imageRefs: stringList(product.images), notes: constraintsNotes(product.generationConstraints), url: product.sourceUrl ?? product.submittedUrl ?? "", targetContentCount: product.targetContentCount, creatorPresence: constraintsCreatorPresence(product.generationConstraints), active: product.lifecycle === "ACTIVE", readiness };
+  // Metadados da Vitrine vivem em provenance (Json): leitura defensiva por
+  // campo; Products manuais/legados ficam nos defaults vazios/null.
+  const provenance = typeof product.provenance === "object" && product.provenance !== null
+    ? (product.provenance as Record<string, unknown>)
+    : {};
+  return { id: product.id, version: product.version, name: product.name, description: product.description ?? "", category: product.category ?? "", price: product.priceAmount ? product.priceAmount.toString() : "", priceCurrency: product.priceCurrency ?? "", imageRefs: stringList(product.images), notes: constraintsNotes(product.generationConstraints), url: product.sourceUrl ?? product.submittedUrl ?? "", targetContentCount: product.targetContentCount, creatorPresence: constraintsCreatorPresence(product.generationConstraints), active: product.lifecycle === "ACTIVE", readiness,
+    origin: provenance.origin === "showcase" ? "showcase" : "manual",
+    commission: typeof provenance.commissionWithCurrency === "string" ? provenance.commissionWithCurrency : null,
+    commissionRate: typeof provenance.commissionRate === "number" ? provenance.commissionRate : null,
+    stockCount: typeof provenance.stockCount === "number" ? provenance.stockCount : null,
+    labels: stringList(provenance.labels) };
 }
 
 export async function handleListProducts(req: Request): Promise<Response> {
@@ -335,6 +355,119 @@ export async function handleCreateProduct(req: Request): Promise<Response> {
     return json(500, {
       error: "Não foi possível salvar o Product agora. Tente novamente.",
       code: "SAVE-FAILED",
+    });
+  }
+}
+
+// POST /api/products/sync — Sincronização da Vitrine: upsert idempotente dos fixtures
+// showcase no Tenant (fonte temporária até a API real existir). Mutação same-origin
+// com sessão; sem Idempotency-Key no cabeçalho porque a chave é determinística por
+// item (createIdempotencyKey showcase-<id>). Não cria CommerceIntelligenceJob nem
+// consulta limite de geração; resposta é a projeção dos Products sincronizados.
+export async function handleSyncShowcaseProducts(req: Request): Promise<Response> {
+  if (!sameOriginRequest(req))
+    return json(403, { error: "Origem não permitida." });
+  const session = await sessionOf(req);
+  if (!session)
+    return json(401, {
+      error: "Sessão necessária para sincronizar a Vitrine.",
+      code: "AUTH-SESSION",
+    });
+  try {
+    const products = await syncShowcaseProducts(session.tenantId);
+    return jsonBody(200, {
+      products: await Promise.all(
+        products.map(async (product) =>
+          toProductView(product, await productReadiness(session.tenantId, product.id)),
+        ),
+      ),
+    });
+  } catch (error) {
+    console.error("[products] falha ao sincronizar a Vitrine", error);
+    return json(500, {
+      error: "Não foi possível sincronizar a Vitrine agora. Tente novamente.",
+      code: "SYNC-FAILED",
+    });
+  }
+}
+
+// GET /api/products/:id/linked-contents — conteúdos publicados do Product na fonte
+// externa (fixtures sanitizadas da Vitrine; API real chega depois pelo mesmo join).
+// Leitura autenticada por sessão (sem same-origin, como os demais GET); Product
+// resolvido com tenantId da sessão e 404 sem vazar existência; paginação validada
+// com parsing seguro antes de qualquer consulta; fixture inválida vira 500 sanitizado
+// LINKED-CONTENTS-UNAVAILABLE sem stack, fixture, URL ou objeto Prisma no corpo.
+
+const LINKED_CONTENTS_MAX_PAGE = 10_000;
+const LINKED_CONTENTS_MAX_PAGE_SIZE = 50;
+
+/** Parsing seguro: ausência usa o default; aceita somente dígitos decimais que
+ *  representem inteiro positivo dentro do limite. Zero, sinal, decimal, texto,
+ *  repetição ambígua ou valor além de Number.MAX_SAFE_INTEGER devolvem null. */
+function linkedContentsParam(
+  searchParams: URLSearchParams,
+  name: string,
+  fallback: number,
+  max: number,
+): number | null {
+  const values = searchParams.getAll(name);
+  if (values.length === 0) return fallback;
+  if (values.length > 1) return null;
+  const raw = values[0]!;
+  if (!/^\d+$/.test(raw)) return null;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > max) return null;
+  return parsed;
+}
+
+export async function handleGetLinkedContents(
+  req: Request,
+  id: string,
+): Promise<Response> {
+  const session = await sessionOf(req);
+  if (!session)
+    return json(401, {
+      error: "Sessão necessária para acessar conteúdos publicados.",
+      code: "AUTH-SESSION",
+    });
+
+  const searchParams = new URL(req.url).searchParams;
+  const page = linkedContentsParam(searchParams, "page", 1, LINKED_CONTENTS_MAX_PAGE);
+  const pageSize = linkedContentsParam(
+    searchParams,
+    "pageSize",
+    20,
+    LINKED_CONTENTS_MAX_PAGE_SIZE,
+  );
+  if (page === null || pageSize === null)
+    return json(400, {
+      error: "Parâmetros de paginação inválidos.",
+      code: "LINKED-CONTENTS-PAGINATION",
+    });
+
+  // Somente id/provenance cruzam o join: fatos do Product ficam fora da consulta.
+  const product = await prisma.product.findFirst({
+    where: { id, tenantId: session.tenantId },
+    select: { id: true, provenance: true },
+  });
+  if (!product)
+    return json(404, {
+      error: "Product não encontrado.",
+      code: "PRODUCT-NOT-FOUND",
+    });
+
+  try {
+    const response = buildLinkedContents(product, page, pageSize);
+    return jsonBody(200, response);
+  } catch (error) {
+    console.error(
+      "[products] falha ao projetar conteúdos publicados",
+      error instanceof Error ? error.name : "unknown",
+    );
+    return json(500, {
+      error:
+        "Não foi possível carregar os conteúdos publicados agora. Tente novamente.",
+      code: "LINKED-CONTENTS-UNAVAILABLE",
     });
   }
 }

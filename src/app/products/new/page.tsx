@@ -10,8 +10,8 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { ProductCreateForm } from "@/components/products/product-create-form";
-import { ProductShell } from "@/components/products/product-shell";
+import { ProductCreateForm } from "@/components/products/create/product-create-form";
+import { ProductShell } from "@/components/products/shared/product-shell";
 
 export default async function NewProductPage() {
   const session = await requireSession();

@@ -1,6 +1,6 @@
 import { requireSession } from "@/modules/identity/application/require-session";
 import { MyStyleExperience } from "@/components/settings/my-style-experience";
-import { ProductShell } from "@/components/products/product-shell";
+import { ProductShell } from "@/components/products/shared/product-shell";
 
 // Página dedicada Meu estilo (SPEC slice-011): acessada pelo botão da sidebar.
 export default async function MyStylePage() {

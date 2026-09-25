@@ -1,0 +1,657 @@
+/* Slice 013 — galeria de conteúdos publicados + detail no drawer.
+   Tokens e padrões conforme DESIGN.md: cards são objetos reais, foco visível,
+   alvos 44px, grid responsivo auto-fill sem carrossel, reduced-motion sem
+   movimento. */
+
+/* Contêiner alinhado ao .panel (generation-panel.module.css): mesma Surface,
+   Border, radius.card e padding das abas Roteiros/Histórico. */
+.view {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+  min-width: 0;
+  padding: 24px;
+  width: 100%;
+}
+
+@media (max-width: 767px) {
+  .view {
+    padding: 20px;
+  }
+}
+
+.gallery {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.count {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  margin: 0;
+}
+
+/* Densidade aprovada (decisão do usuário 2026-09-24): cards estreitos —
+   4 colunas no painel desktop (~1100px), 3/2 nas intermediárias, 1 no mobile;
+   a base 1-coluna do mobile já nasce daqui, sem media query. */
+.cards {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Controles de busca/ordenação (referência aprovada): busca cresce, select
+   fixo; empilham no mobile. Rótulos acessíveis ficam sr-only. */
+.controls {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+@media (max-width: 767px) {
+  .controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.searchField {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+  position: relative;
+}
+
+.searchIcon {
+  color: var(--color-text-secondary);
+  height: 16px;
+  left: 12px;
+  pointer-events: none;
+  position: absolute;
+  width: 16px;
+}
+
+.searchInput,
+.sortSelect {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  font: inherit;
+  min-height: 44px;
+  min-width: 0;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.searchInput {
+  padding-left: 36px;
+}
+
+.sortSelect {
+  cursor: pointer;
+  width: auto;
+}
+
+.searchInput:focus-visible,
+.sortSelect:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-focus) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.card {
+  align-items: stretch;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  /* Âncora dos overlays posicionados (viewsBadge, likesBadge). */
+  position: relative;
+  text-align: left;
+  transition: border-color 160ms ease-out;
+  width: 100%;
+}
+
+.card:hover,
+.card:focus-visible {
+  border-color: var(--color-focus);
+}
+
+.card:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-focus) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.cardSelected,
+.cardSelected:hover {
+  border-color: var(--color-brand);
+}
+
+/* Frame da thumb: ancora os overlays (badges) e recorta a capa em 4/5 —
+   card vertical, altura moderadamente acima do quadrado (decisão do usuário
+   2026-09-24); 9:16 fica exclusivo do player do Drawer. object-fit cover
+   corta sem distorcer; o posicionamento não depende do card inteiro. */
+.coverFrame {
+  aspect-ratio: 4 / 5;
+  display: block;
+  flex: 0 0 auto;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.cover {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+/* Faixa inferior da thumb: gradiente escuro suave para dar contraste aos
+   badges sobre a imagem (decisão do usuário 2026-09-24). Atrás dos badges,
+   não bloqueia clique. */
+.coverFrame::after {
+  content: "";
+  height: 45%;
+  inset: auto 0 0 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.55), transparent);
+}
+
+/* Play decorativo no centro da thumb: pista visual apenas — o clique segue
+   no botão do card inteiro; não ocupa layout nem bloqueia interação. */
+.playCue {
+  align-items: center;
+  color: #fff;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.playCue svg {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
+  height: 32px;
+  width: 32px;
+}
+
+/* Badge de curtidas (coração) no canto inferior direito da capa, sobre o
+   gradiente — sem pill (decisão do usuário 2026-09-24). */
+.likesBadge {
+  bottom: 8px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  position: absolute;
+  right: 8px;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+  z-index: 1;
+}
+
+.likesBadge svg {
+  flex: 0 0 auto;
+  height: 14px;
+  width: 14px;
+}
+
+/* Badge de visualizações no canto inferior esquerdo da capa; curtidas no
+   direito (decisão do usuário 2026-09-24). Sem pill: o contraste vem do
+   gradiente do frame. */
+.viewsBadge {
+  bottom: 8px;
+  color: #fff;
+  display: flex;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  gap: 4px;
+  left: 8px;
+  line-height: 16px;
+  position: absolute;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+  z-index: 1;
+}
+
+.viewsBadge svg {
+  flex: 0 0 auto;
+  height: 14px;
+  width: 14px;
+}
+
+.coverFallback {
+  align-items: center;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 13px;
+  height: 100%;
+  justify-content: center;
+  width: 100%;
+}
+
+.cardBody {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.cardTitle {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.cardDate {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.cardMetrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.cardMetric {
+  align-items: center;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  gap: 4px;
+  line-height: 18px;
+}
+
+.cardMetric svg {
+  color: var(--color-brand-accent, var(--color-brand));
+  flex: 0 0 auto;
+  height: 14px;
+  width: 14px;
+}
+
+.loadMore,
+.retry {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  justify-self: start;
+  min-height: 44px;
+  padding: 8px 14px;
+}
+
+.loadMore:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.loadMore:hover:not(:disabled),
+.retry:hover {
+  border-color: var(--color-focus);
+}
+
+.loadMore:focus-visible,
+.retry:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-focus) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.state {
+  color: var(--color-text-secondary);
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.state h3 {
+  color: var(--color-text);
+  font-size: 18px;
+  line-height: 24px;
+  margin: 0;
+}
+
+.state p {
+  margin: 0;
+}
+
+/* Corpo rolável dos overlays (Sheet desktop e Drawer mobile): o conteúdo do
+   primitivo é overflow-hidden, então o detail rola no wrapper interno. */
+.drawerScroll {
+  /* Container query do layout desktop do detail: o lado-a-lado depende da
+     largura REAL disponível no drawer, não do viewport. */
+  container-type: inline-size;
+  min-height: 0;
+  overscroll-behavior: contain;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+}
+
+.inlineError {
+  align-items: start;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-danger);
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 12px;
+}
+
+.inlineError p {
+  margin: 0;
+}
+
+.detail {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.detailHeader {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.detailMetrics {
+  min-width: 0;
+}
+
+.tileIcon {
+  color: var(--color-brand);
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.tileIcon svg {
+  height: 16px;
+  width: 16px;
+}
+
+/* Lado-a-lado só quando o drawer tem ≥640px reais de content box (o sheet
+   max-w-3xl entrega 736). Player à esquerda, métricas em coluna à direita
+   com cards confortáveis; título, dados restantes e CTA em largura total
+   abaixo. Abaixo do limiar, volta ao fluxo em pilha. Mobile mantém o fluxo
+   em pilha: player → título/data → métricas → demais. */
+@container (min-width: 640px) {
+  .detail {
+    align-items: start;
+    gap: 24px;
+    grid-template-areas:
+      "player metrics"
+      "header header"
+      "body body";
+    grid-template-columns: minmax(320px, 360px) minmax(280px, 1fr);
+  }
+
+  .playerArea {
+    grid-area: player;
+  }
+
+  .detailHeader {
+    grid-area: header;
+  }
+
+  .detailMetrics {
+    grid-area: metrics;
+  }
+
+  /* três tiles empilhados cabem na coluna ao lado do player */
+  .detailMetrics .tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detailBody {
+    grid-area: body;
+  }
+}
+
+.playerArea {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Frame do player 9:16: ÚNICA caixa dimensionada (largura de celular vertical
+   + ratio), ancora o overlay exatamente sobre o vídeo. A largura também
+   respeita o teto de altura (62vh) já convertido pela própria razão — a caixa
+   nunca distorce e o contain cobre fontes com proporção incomum. O overlay é
+   decorativo (pointer-events none) — controles continuam exclusivos do
+   <video controls> nativo. */
+.playerFrame {
+  aspect-ratio: 9 / 16;
+  background: #000;
+  border-radius: 12px;
+  display: block;
+  margin-inline: auto;
+  overflow: hidden;
+  position: relative;
+  width: min(100%, 360px, calc(62vh * 9 / 16));
+}
+
+.player {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+/* Sombra discreta só nas bordas do vídeo: legibilidade da marca e do rail
+   sem caixa escura sobre a imagem. */
+.playerOverlay {
+  background: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 0.35),
+    transparent 20%,
+    transparent 70%,
+    rgb(0 0 0 / 0.5)
+  );
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.tiktokMark {
+  height: 22px;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 22px;
+}
+
+/* Rail vertical de contadores, acima da faixa de controles nativos (~15%). */
+.playerRail {
+  align-items: center;
+  bottom: 15%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: absolute;
+  right: 10px;
+}
+
+.railItem {
+  align-items: center;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.railItem svg {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
+  height: 22px;
+  width: 22px;
+}
+
+.railCount {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+}
+
+.playerUnavailable,
+.playbackError {
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.playbackError {
+  color: var(--color-danger);
+}
+
+.detailBody {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.detailTitle {
+  font-size: 18px;
+  line-height: 24px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.detailTitle:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-focus) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.detailDate {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  margin: 0;
+}
+
+.metricsSection {
+  display: grid;
+  gap: 8px;
+}
+
+.metricsSection h4 {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.tiles {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr));
+  margin: 0;
+}
+
+.tile {
+  background: var(--color-surface-secondary);
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.tile dt {
+  align-items: center;
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+  line-height: 16px;
+}
+
+.tile dd {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 20px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ctaArea {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding-top: 16px;
+}
+
+.cta {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  cursor: default;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 8px 14px;
+}
+
+.ctaNote {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  margin: 0;
+}
+
+.srOnly {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}

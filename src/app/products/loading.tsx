@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
-import { ProductShell } from "@/components/products/product-shell";
+import { ProductShell } from "@/components/products/shared/product-shell";
 import { Skeleton } from "@/components/ui/skeleton";
-import listStyles from "@/components/products/product-list.module.css";
+import listStyles from "@/components/products/list/product-list.module.css";
 
 /* Toolbar e header são estáticos (render real); skeleton apenas no grid
    combinado da Vitrine (showcase + produtos manuais), que é dinâmico. */
