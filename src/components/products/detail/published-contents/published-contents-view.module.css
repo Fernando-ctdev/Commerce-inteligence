@@ -396,7 +396,11 @@
 
 .tileIcon {
   color: var(--color-brand);
-  display: block;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.tileIcon svg {
   height: 16px;
   width: 16px;
 }
@@ -591,8 +595,11 @@
 }
 
 .tile dt {
+  align-items: center;
   color: var(--color-text-secondary);
+  display: flex;
   font-size: 12px;
+  gap: 6px;
   line-height: 16px;
 }
 

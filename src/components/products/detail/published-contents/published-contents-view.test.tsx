@@ -391,9 +391,13 @@ test("detail: ícones decorativos Eye/DollarSign/Package nas três métricas", a
   assert.ok(pack !== -1, "ícone Package para Itens vendidos");
   // ordem dos tiles: Visualizações → GMV → Itens vendidos
   assert.ok(eye < dollar && dollar < pack, "ícones na ordem das métricas");
-  // decorativos: fora da árvore de acessibilidade
-  const eyeTag = markup.slice(eye - 120, eye + 40);
-  assert.match(eyeTag, /aria-hidden="true"/, "ícone é decorativo");
+  // decorativos: fora da árvore de acessibilidade (span que envolve o svg do Eye)
+  const spanStart = markup.lastIndexOf("<span", eye);
+  assert.match(markup.slice(spanStart, spanStart + 40), /aria-hidden="true"/, "ícone é decorativo");
+  // ícone DENTRO do primeiro <dt> (mesma linha da label), valor no <dd> abaixo
+  const firstDt = markup.slice(markup.indexOf("<dt"), markup.indexOf("</dd>") + 5);
+  assert.match(firstDt, /<dt><span[^>]*aria-hidden[^>]*>[\s\S]*lucide-eye/, "ícone dentro do dt");
+  assert.match(firstDt, /Visualizações<\/dt><dd>/, "valor após a label");
 });
 
 test("detail: player sem autoplay com controls, preload none e playsInline", async () => {

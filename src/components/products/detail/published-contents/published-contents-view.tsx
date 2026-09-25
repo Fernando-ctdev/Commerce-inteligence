@@ -233,12 +233,14 @@ function MetricTile({
 }) {
   return (
     <div className={styles.tile}>
-      {icon ? (
-        <span aria-hidden="true" className={styles.tileIcon}>
-          {icon}
-        </span>
-      ) : null}
-      <dt>{label}</dt>
+      <dt className={icon ? styles.tileLabel : undefined}>
+        {icon ? (
+          <span aria-hidden="true" className={styles.tileIcon}>
+            {icon}
+          </span>
+        ) : null}
+        {label}
+      </dt>
       <dd>{value}</dd>
     </div>
   );
