@@ -1,0 +1,186 @@
+{
+  "attentionMechanisms": [
+    "failure",
+    "visual_hook",
+    "result_first",
+    "reaction",
+    "curiosity",
+    "pattern_interrupt",
+    "contrast",
+    "reveal",
+    "movement",
+    "surprise"
+  ],
+  "psychologicalEffects": [
+    "identification",
+    "desire",
+    "curiosity",
+    "humor",
+    "trust",
+    "aspiration",
+    "impulse",
+    "value_perception",
+    "self_projection",
+    "objection_reduction"
+  ],
+  "formats": [
+    "pov",
+    "demonstration",
+    "try_on",
+    "unboxing",
+    "comparison",
+    "review",
+    "storytelling",
+    "sketch",
+    "showcase",
+    "visual_first",
+    "talk_first"
+  ],
+  "narrativeMoves": [
+    "setup",
+    "failure",
+    "reaction",
+    "reveal",
+    "test",
+    "comparison",
+    "transformation",
+    "product_entry",
+    "resolution",
+    "payoff",
+    "verdict"
+  ],
+  "productRoles": [
+    "solution",
+    "object_of_desire",
+    "reveal",
+    "tool",
+    "proof",
+    "transformer",
+    "facilitator",
+    "routine_element",
+    "aspirational_object",
+    "surprise",
+    "contrast",
+    "payoff",
+    "discovery_object",
+    "review_subject",
+    "co_protagonist"
+  ],
+  "compatibility": {
+    "formatsByProductRole": {
+      "solution": ["pov", "demonstration", "storytelling", "sketch", "visual_first", "talk_first", "showcase", "comparison"],
+      "object_of_desire": ["pov", "visual_first", "storytelling", "showcase", "try_on"],
+      "reveal": ["unboxing", "visual_first", "demonstration", "showcase"],
+      "tool": ["demonstration", "comparison", "review", "storytelling"],
+      "proof": ["demonstration", "comparison", "review", "visual_first", "talk_first"],
+      "transformer": ["demonstration", "try_on", "comparison", "visual_first"],
+      "facilitator": ["demonstration", "storytelling", "pov", "showcase"],
+      "routine_element": ["pov", "storytelling", "showcase", "visual_first", "talk_first", "try_on"],
+      "aspirational_object": ["visual_first", "try_on", "showcase", "storytelling", "pov"],
+      "surprise": ["unboxing", "visual_first", "pov"],
+      "contrast": ["comparison", "visual_first", "demonstration"],
+      "payoff": ["demonstration", "visual_first", "try_on", "storytelling", "pov", "sketch"],
+      "discovery_object": ["unboxing", "visual_first", "review", "showcase"],
+      "review_subject": ["review", "comparison", "demonstration", "unboxing", "talk_first", "showcase"],
+      "co_protagonist": ["pov", "storytelling", "sketch", "try_on"]
+    }
+  },
+  "recipes": [
+    {
+      "id": "pov-identification-payoff",
+      "attentionMechanisms": ["curiosity"],
+      "psychologicalEffects": ["identification", "desire"],
+      "formats": ["pov"],
+      "narrativeMoves": ["setup", "product_entry", "payoff"],
+      "productRoles": ["solution", "object_of_desire"]
+    },
+    {
+      "id": "failure-humor-resolution",
+      "attentionMechanisms": ["failure", "pattern_interrupt"],
+      "psychologicalEffects": ["humor", "curiosity", "identification"],
+      "formats": ["pov", "sketch", "visual_first"],
+      "narrativeMoves": ["setup", "failure", "reaction", "product_entry", "resolution", "payoff"],
+      "productRoles": ["solution", "payoff"]
+    },
+    {
+      "id": "result-first-curiosity",
+      "attentionMechanisms": ["result_first", "curiosity"],
+      "psychologicalEffects": ["curiosity", "desire"],
+      "formats": ["demonstration", "visual_first"],
+      "narrativeMoves": ["reveal", "test", "product_entry", "payoff"],
+      "productRoles": ["proof", "solution"]
+    },
+    {
+      "id": "visual-hook-reveal-demonstration",
+      "attentionMechanisms": ["visual_hook", "curiosity", "reveal"],
+      "psychologicalEffects": ["curiosity", "trust", "desire"],
+      "formats": ["visual_first", "demonstration"],
+      "narrativeMoves": ["reveal", "product_entry", "payoff"],
+      "productRoles": ["reveal", "proof"]
+    },
+    {
+      "id": "everyday-situation-payoff",
+      "attentionMechanisms": ["curiosity", "reaction"],
+      "psychologicalEffects": ["identification", "desire"],
+      "formats": ["pov", "storytelling"],
+      "narrativeMoves": ["setup", "product_entry", "resolution", "payoff"],
+      "productRoles": ["solution", "routine_element"]
+    },
+    {
+      "id": "reaction-discovery-test",
+      "attentionMechanisms": ["reaction", "curiosity"],
+      "psychologicalEffects": ["curiosity", "trust"],
+      "formats": ["demonstration", "review"],
+      "narrativeMoves": ["setup", "test", "resolution"],
+      "productRoles": ["review_subject", "proof"]
+    },
+    {
+      "id": "challenge-test-verdict",
+      "attentionMechanisms": ["contrast", "movement"],
+      "psychologicalEffects": ["curiosity", "trust"],
+      "formats": ["demonstration", "comparison"],
+      "narrativeMoves": ["setup", "test", "verdict"],
+      "productRoles": ["proof", "transformer"]
+    },
+    {
+      "id": "comparison-contrast-choice",
+      "attentionMechanisms": ["contrast"],
+      "psychologicalEffects": ["trust", "value_perception"],
+      "formats": ["comparison", "showcase"],
+      "narrativeMoves": ["comparison", "product_entry", "resolution"],
+      "productRoles": ["solution", "review_subject"]
+    },
+    {
+      "id": "unboxing-first-impression",
+      "attentionMechanisms": ["reveal", "curiosity"],
+      "psychologicalEffects": ["curiosity", "desire"],
+      "formats": ["unboxing", "showcase"],
+      "narrativeMoves": ["reveal", "product_entry", "reaction"],
+      "productRoles": ["discovery_object"]
+    },
+    {
+      "id": "tryon-transformation-desire",
+      "attentionMechanisms": ["reveal", "movement"],
+      "psychologicalEffects": ["desire", "aspiration", "self_projection"],
+      "formats": ["try_on", "visual_first"],
+      "narrativeMoves": ["setup", "transformation", "product_entry", "payoff"],
+      "productRoles": ["transformer", "aspirational_object"]
+    },
+    {
+      "id": "visual-problem-resolution",
+      "attentionMechanisms": ["failure", "contrast"],
+      "psychologicalEffects": ["trust", "desire"],
+      "formats": ["demonstration"],
+      "narrativeMoves": ["failure", "product_entry", "resolution"],
+      "productRoles": ["solution"]
+    },
+    {
+      "id": "comment-question-proof",
+      "attentionMechanisms": ["curiosity", "pattern_interrupt"],
+      "psychologicalEffects": ["trust", "objection_reduction"],
+      "formats": ["talk_first", "demonstration"],
+      "narrativeMoves": ["setup", "test", "resolution", "payoff"],
+      "productRoles": ["proof"]
+    }
+  ]
+}
