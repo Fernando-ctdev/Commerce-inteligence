@@ -1,7 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { validateTargetContentCount, validateContentBrief, validateContentOpportunity, validateProductStrategy, validateProductUnderstanding, validateCommercialOpportunityDraft, structureHash, normalizeForVariety, validateCommercialOpportunityMappingEnvelope, CARDINALITY_POLICY, CARDINALITY_POLICY_VERSION } from "./contract";
-test("accepts only integer quantity from 1 through 10", () => { assert.equal(validateTargetContentCount(1), 1); assert.equal(validateTargetContentCount(10), 10); for (const value of [0, 11, 1.5, "2", null]) assert.throws(() => validateTargetContentCount(value)); });
+test("accepts only integer quantity from 1 through 10", () => { assert.equal(validateTargetContentCount(1), 1); assert.equal(validateTargetContentCount(10), 10); for (const value of [0, 11, 16, 30, 1.5, "2", null]) assert.throws(() => validateTargetContentCount(value)); });
+// AC Etapa 2 15: hipótese de desejo/curiosidade é oportunidade válida SEM pain
+// e SEM objection — nenhum campo racional é pré-condição artificial. A fixture
+// mantém proofOptions e evidenceRefs porque são dados obrigatórios do contrato
+// (não são "prova" no sentido comercial); o que está ausente é só pain/objection.
+test("accepts a desire-first opportunity without pain and objection (proofOptions/evidenceRefs permanecem como dados obrigatórios)", () => {
+  const envelope = validateCommercialOpportunityMappingEnvelope({ audiences: [], situations: [], pains: [], desires: ["querer praticidade"], objections: [], opportunities: [{ relevantCapabilities: ["compacto"], benefits: ["praticidade no dia a dia"], proofOptions: ["product:description"], sellingArgument: "o próprio conteúdo cria curiosidade e desejo", confidence: 0.8, evidenceRefs: ["product:name"] }] }, { facts: ["Produto"], refs: ["product:name"] });
+  const opportunity = envelope.opportunities[0]!;
+  assert.equal(opportunity.pain, undefined);
+  assert.equal(opportunity.objection, undefined);
+  assert.equal(opportunity.audience, undefined);
+  assert.equal(opportunity.situation, undefined);
+  assert.deepEqual(envelope.pains, []);
+  assert.deepEqual(envelope.objections, []);
+});
 test("requires a complete brief, keeps strategic development as string[] and drops legacy scene data", () => { const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: ["Destaque Fone Space S1", "Reforce drivers de 40 mm"], script: "s", scenes: ["legado"], cta: "c" }; const brief = validateContentBrief(base); assert.equal(brief.version, 1); assert.deepEqual(brief.development, base.development); assert.equal("scenes" in brief, false); assert.equal(structureHash(brief), structureHash({ structure: undefined, development: base.development, cta: base.cta })); assert.throws(() => validateContentBrief({ ...base, development: undefined })); assert.throws(() => validateContentBrief({ ...base, development: "ponto" })); assert.throws(() => validateContentBrief({ ...base, development: [] })); assert.throws(() => validateContentBrief({ ...base, development: ["a", "b", "c", "d", "e", "f", "g"] })); });
 test("normalizes equivalent variety text", () => assert.equal(normalizeForVariety("  Hook  Forte "), "hook forte"));
 test("mapping envelope missing opportunities yields typed GEN-SCHEMA, not generic failure", () => { const envelope = { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], analysis: "longo texto sem oportunidades" }; assert.throws(() => validateCommercialOpportunityMappingEnvelope(envelope), (error: unknown) => { const e = error as { name?: string; code?: string; message?: string }; return e.name === "ContractError" && e.code === "GEN-SCHEMA" && /sem oportunidades/.test(e.message ?? ""); }); });

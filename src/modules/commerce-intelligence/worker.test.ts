@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { Prisma } from "@prisma/client";
 import { attemptDeadlineMsFor, briefPayloadForPersistence, callBudget, fallbackCallBudget, fenceMatches, heartbeatAction, internalFailureMetadata, mergeMemorySignals, projectEngineFacts, projectFailureDiagnostics, runMetadata, sceneBackfillLimitFor, sceneCallBudget, semanticQualityCallBudget } from "./worker";
 import { ENGINE_VERSION } from "./engine";
 import { GATE_POLICY_VERSION } from "./gates";
@@ -53,6 +54,48 @@ test("engineFacts não projeta comissão/features/desconto de linhas históricas
   }
   assert.equal(JSON.stringify(facts).includes("50 aulas"), false);
   assert.equal(JSON.stringify(facts).includes("15.5"), false);
+});
+
+// AC Etapa 2 3–4: priceAmount presente é serializado Decimal.toString() como
+// string; variants/images/seller/sourceUrl atravessam sem normalização.
+test("engineFacts serializa priceAmount Decimal como string e preserva valores declarados", () => {
+  const variants = [{ name: "Preto" }];
+  const images = ["https://cdn.example/a.jpg"];
+  const facts = projectEngineFacts({
+    id: "p3",
+    name: "Produto com preço",
+    description: "Descrição",
+    category: "Categoria",
+    brand: "Marca",
+    priceAmount: new Prisma.Decimal("89.9"),
+    priceCurrency: "BRL",
+    variants,
+    images,
+    seller: "loja oficial",
+    sourceUrl: "https://shop.tiktok.com/product/x",
+  });
+  assert.equal(typeof facts.priceAmount, "string");
+  assert.equal(facts.priceAmount, "89.9");
+  assert.deepEqual(facts.variants, variants);
+  assert.deepEqual(facts.images, images);
+  assert.equal(facts.seller, "loja oficial");
+  assert.equal(facts.sourceUrl, "https://shop.tiktok.com/product/x");
+  // Ausência permanece ausência: null nunca vira outro campo ou "0".
+  const semPreco = projectEngineFacts({
+    id: "p4",
+    name: "Sem preço",
+    description: null,
+    category: null,
+    brand: null,
+    priceAmount: null,
+    priceCurrency: null,
+    variants: null,
+    images: null,
+    seller: null,
+    sourceUrl: null,
+  });
+  assert.equal(semPreco.priceAmount, undefined);
+  assert.equal(semPreco.sourceUrl, null);
 });
 
 // Review: IntelligenceRun.metadata registra gateVersion junto do engineVersion.

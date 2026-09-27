@@ -90,6 +90,68 @@ test("repairs mapping envelope without opportunities via a second contract-true 
   assert.equal(mappingCalls, 2, "mapping retried once when envelope lacked opportunities");
   assert.equal((result.strategy as { opportunities: unknown[] }).opportunities.length, 1);
 });
+// AC Etapa 2 14 (Tarefa 5): retry dos faltantes com reuseStrategy pula
+// STRATEGY_SYNTHESIS, re-canonicaliza a Strategy ACTIVE para o novo jobId e
+// planeja apenas os faltantes (memória exclui mecanismos já entregues).
+test("reuseStrategy skips STRATEGY_SYNTHESIS, re-canonicalizes the strategy and plans only missing items", async () => {
+  const taskCalls: string[] = [];
+  let planContext: Record<string, unknown> | undefined;
+  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+    taskCalls.push(task);
+    if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["b"], emotionalBenefits: ["e"], desiredOutcomes: ["d"], purchaseTriggers: ["t"], purchaseBarriers: ["b"], evidenceRefs: ["product:name"] };
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }] };
+    if (task === "CONTENT_PLAN_GENERATION") {
+      planContext = recordOf(input?.trustedContext);
+      return { opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "discovery", noveltyTargets: ["n"] }] };
+    }
+    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "h", development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "Mostre o Produto", cta: "c" }] };
+    return {};
+  } };
+  const result = await runFirstGeneration({
+    productId: "p",
+    jobId: "j-reuse",
+    name: "Produto",
+    description: "Tecido respirável",
+    targetContentCount: 1,
+    memory: { deliveredHookMechanisms: ["demonstration"] },
+    reuseStrategy: {
+      id: "old-job-strategy",
+      productId: "p",
+      jobId: "old-job",
+      version: 1,
+      status: "ACTIVE",
+      platformId: "tiktok-commerce",
+      platformSkillVersion: "tiktok-commerce@1.2",
+      primaryPositioning: "posicionamento reutilizado",
+      audiences: ["a"],
+      priorityBenefits: ["b"],
+      priorityObjections: ["o"],
+      priorityArguments: ["arg"],
+      priorityAngles: ["an"],
+      communicationPrinciples: ["cp"],
+      opportunities: [],
+    },
+    router: withInternalCuration(router),
+  });
+  assert.equal(taskCalls.filter((task) => task === "STRATEGY_SYNTHESIS").length, 0, "STRATEGY_SYNTHESIS não executa no reuso");
+  const strategy = result.strategy as Record<string, unknown>;
+  assert.equal(strategy.primaryPositioning, "posicionamento reutilizado", "decisões da Strategy ACTIVE são preservadas");
+  assert.equal(strategy.id, "j-reuse-strategy", "vínculo canônico re-carimbado com o novo jobId");
+  assert.equal(strategy.jobId, "j-reuse");
+  assert.equal(strategy.version, 1);
+  assert.equal(strategy.status, "ACTIVE");
+  assert.equal(strategy.platformSkillVersion, "tiktok-commerce@1.2");
+  assert.equal((strategy.opportunities as unknown[]).length, 1, "oportunidades comerciais frescas da Mapping substituem o payload antigo");
+  const slots = (planContext?.planSlots ?? []) as Array<Record<string, unknown>>;
+  assert.equal(slots.length, 1);
+  assert.equal(
+    (slots[0]!.eligibleHookMechanisms as string[]).includes("demonstration"),
+    false,
+    "mecanismo já entregue não volta ao allowlist do planner (apenas faltantes)",
+  );
+  assert.equal(result.briefs.length, 1);
+  assert.equal(result.briefs[0]!.contentId, "j-reuse-content-1", "IDs derivados do novo job");
+});
 test("repairs content plan array root via one contract-true retry, then fail-closed", async () => {
   let planCalls = 0;
   const router = { describe, complete: async (task: string) => {
