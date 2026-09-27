@@ -1,6 +1,9 @@
 # SPEC — Slice 003: Primeira geração — CommerceIntelligenceJob até Briefings
 
-**Status:** APPROVED
+**Status:** ETAPA_2_APPROVED — documentação canônica da Etapa 2 aprovada; implementação, runtime e cutover continuam bloqueados pelos gates ADR-029/033.
+
+**Etapa 2 documental:** APPROVED pelo Arquiteto e pelo Review; implementação, runtime e cutover continuam bloqueados pelos gates ADR-029/033.
+
 **Dependência:** Slice 002 — Cadastro manual de Product
 **Domain Areas:** Commerce Intelligence (engine + job), Model Router, Entitlements, Content (criação), App Shell
 
@@ -15,6 +18,14 @@ O Slice 002 deixa o Product e as restrições de preparação disponíveis para 
 O job executa a primeira análise completa: entendimento do Product, mapeamento de oportunidades comerciais, construção da Strategy, planejamento do portfólio e geração dos Briefings. O resultado inicial materializa `ProductStrategy`, `ContentPlan`, `ContentOpportunity`, `Content` e `ContentBriefVersion` compatíveis com Content Operations. Os Contents começam em `DRAFT`; revisão, edição, regeneração, aprovação, descarte, lotes, Agenda e Estúdio pertencem a slices posteriores.
 
 A experiência expõe somente o estado necessário para confiança e continuidade. A complexidade da engine, dos tiers, do provider, da Skill, dos gates e dos repairs permanece fora da UI.
+
+## Pré-condição transversal — Etapa 0 (ADR-033)
+
+A Etapa 0 é uma pré-condição documental transversal para esta SPEC e para qualquer cutover posterior da Commerce Intelligence. Ela não cria `slice-000`, `stage-0` ou uma nova capacidade de produto. O Slice 003 continua começando na ação explícita `Analisar produto` sobre um Product salvo.
+
+O [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md) registra a arquitetura-alvo e preserva explicitamente o runtime vigente do [ADR-029](../../architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md) até que exista protocolo A/B pareado, relatório versionado e aprovação formal. Portanto, esta revisão não remove, reclassifica ou altera chamadas, tiers, cenas, gates, repairs ou o `ROUTER_MAP` atuais.
+
+O contrato-alvo documentado nesta Etapa 0 separa descoberta e realização criativas do trabalho determinístico de organização, combinação, seleção, restrição, distribuição, memória e validação. A adoção operacional depende do gate de cutover desta SPEC e do PLAN; antes dele, o runtime continua sendo o baseline ADR-029.
 
 Fontes de autoridade:
 
@@ -37,7 +48,9 @@ Fontes de autoridade:
 - `docs/architecture/adr-013-model-router-e-intelligence-tier.md`;
 - `docs/architecture/adr-014-platform-skill-versionada.md`;
 - `docs/architecture/adr-015-content-operations-e-recording-batch.md`;
+- `docs/architecture/adr-019-gate-versionada-e-cenas.md` (ContentSceneSet separado e contrato de cenas);
 - `docs/architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md`;
+- `docs/architecture/adr-033-determinismo-llm-e-creative-system.md` (Etapa 0; arquitetura-alvo condicionada a eval e cutover);
 - `docs/engineering/PRINCIPLES.md`;
 - `DESIGN.md`, §§ 1–3, 7–11.
 
@@ -63,7 +76,7 @@ A ação explícita `Analisar produto` sobre um Product salvo precisa levar dire
 ## 3. In Scope
 
 - Ação explícita `Analisar produto` sobre um Product salvo (entrada vigente: cadastro manual, ADR-022; ProductCandidate é direção futura) e resolução server-side da `targetContentCount` antes da criação do job.
-- Criação transacional do `CommerceIntelligenceJob` a partir de um Product salvo, com validação do limite de `active_products` e reserva de Entitlement mensal.
+- Criação transacional do `CommerceIntelligenceJob` a partir de um Product salvo, com reconciliação server-side de `active_products` e reserva de Entitlement mensal; a unidade de Product ativo é aplicada somente no cadastro e nas transições de lifecycle.
 - Job persistente em fila PostgreSQL, worker com lease/timeout, reentrada e retry idempotente.
 - Estados do job `QUEUED`, `RUNNING`, `SUCCEEDED`, `SUCCEEDED_PARTIAL`, `FAILED` e `CANCELLED` (ADR-021).
 - Stages públicos `UNDERSTANDING_PRODUCT`, `MAPPING_COMMERCIAL_OPPORTUNITIES`, `BUILDING_STRATEGY`, `BUILDING_CONTENT_PLAN`, `GENERATING_BRIEFS` e `FINALIZING`, com mensagens humanas correspondentes e atualização antes do trabalho correspondente.
@@ -71,13 +84,50 @@ A ação explícita `Analisar produto` sobre um Product salvo precisa levar dire
 - Indicador global no App Shell para job ativo, concluído com ação pendente e falha recuperável.
 - Readiness operacional do Product como `PENDING`, `ANALYZING`, `READY` ou `FAILED`, derivada do job e dos resultados.
 - Execução da primeira pipeline da Commerce Intelligence: `Product Understanding → Commercial Opportunity Mapping → ProductStrategy v1 → ContentPlan → ContentOpportunity → Brief Generator → Fact/Quality/Variety Gates → Repair → persistência final`.
+- `Commercial Opportunity Mapping` no envelope `COMMERCIAL_OPPORTUNITY_MAPPING` pode representar hipóteses semânticas de contexto, desejo, identificação, curiosidade, aspiração, humor e potencial visual. Essas hipóteses são válidas mesmo sem dor, objeção ou necessidade prévia; a ausência desses campos não invalida a oportunidade por si só.
+
 - Carregamento da TikTok Commerce Creative Skill versionada e registro da versão usada.
+- Creative System declarativo e versionado dentro da `PlatformSkill`, com `CreativePrimitive`, `CreativeRecipe`, resolvedor de compatibilidade e `CreativeBlueprint` especificados sem criar domínio, serviço, agente, workflow ou repositório separado.
+- Contrato de carregamento `load → validate → freeze → expose`, compatibilidade versionada fail-closed, histórico preservado e memória versionada; o `creativeDirection` futuro pertence ao `ContentOpportunity`, sem agregado paralelo.
 - Roteamento de tarefas lógicas por `IntelligenceTier` através do Model Router, sem seleção direta de provider por capability.
 - Validação estrutural, factual, de cenas e de variedade; `BriefValidationReport` por briefing; Judge semântico em lote `PASS|REVIEW`, repair seletivo único e revalidação final dos hard gates, sem completar quantidade com conteúdo inválido.
 - Persistência de `ProductStrategy`, `ContentPlan`, `ContentOpportunity`, `Content` e `ContentBriefVersion` inicial em `DRAFT`, com proveniência suficiente para rastrear o job, Product, Strategy e Skill.
 - Confirmação ou liberação transacional da reserva mensal de conteúdos no mês UTC de origem.
 - Preservação do Product e dos fatos confirmados em falhas, com recuperação explícita.
 - Exclusão Big Bang de Product por mutação autenticada: remoção transacional, tenant-scoped e completa do Product e de todos os dados relacionados.
+
+### 3.3B Etapa 2 — fronteiras de fatos, Mapping e Strategy
+
+O payload factual produzido pelo worker é o contrato `WorkerEngineFactsPayload` observado no runtime:
+
+```ts
+type WorkerEngineFactsPayload = {
+  productId: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  brand: string | null;
+  priceAmount: string | undefined;
+  priceCurrency: string | null;
+  variants: unknown;
+  images: unknown;
+  seller: string | null;
+  sourceUrl: string | null;
+};
+```
+`priceAmount` é serializado por `Decimal.toString()` quando existe. `variants`, `images`, `seller` e `sourceUrl` permanecem com os valores produzidos pelo worker; não há normalização documental adicional. Conforme ADR-030, o payload não contém `features`, `characteristics`, `commission`, `discount`, `evidenceRefsCatalog` ou `creatorConstraints`.
+
+`EngineInput.facts?: Record<string, unknown>` é um campo genérico da engine. Uma entrada direta pode fornecer fatos genéricos próprios, mas este contrato não promete que `features` sejam projetadas, removidas ou transformadas. No caminho do worker, `facts` recebe o `WorkerEngineFactsPayload` acima e não contém `creatorConstraints`; `creatorContext` continua sendo uma entrada separada.
+
+`evidenceRefsCatalog` não pertence a `projectEngineFacts`. Depois de receber `EngineInput`, a engine deriva um snapshot `{ facts: string[]; refs: string[] }` em `buildEvidenceCatalog`: inclui `name`/`description` e valores string ou arrays de strings em `facts`, usando `fact:<chave>` e `fact:<chave>:<n>` para valores posteriores. Esse catálogo derivado é encaminhado às capabilities que precisam de evidência; não é parte do payload factual do worker.
+
+`Discovery` é o pool/role semântico do envelope/capability `COMMERCIAL_OPPORTUNITY_MAPPING`; não cria capability, call ou stage adicional. PU valida a forma, cardinalidade e pertencimento de suas `evidenceRefs`, e Mapping valida as referências do próprio envelope contra a projeção de evidências autorizada. Strategy consome essa projeção já validada e não promete validação direta de `evidenceRefs`; a factualidade de Briefings e seus repairs continua nos gates determinísticos da baseline ADR-029.
+
+
+
+A redução de cardinalidade de Product Understanding é uma exceção explícita à regra geral de não truncamento: o provider aplica first-N antes de `assertProviderOutput`, e a engine aplica first-N antes do validador, tanto na primeira tentativa quanto no retry. A redução do provider não entra em `understandingReductions`; a redução da engine é observável. Não há truncamento silencioso genérico em outros contratos.
+
+Schemas estritos rejeitam os campos explicitamente proibidos; na canonicalização, campos desconhecidos fora do shape suportado — inclusive comandos, workflow e instruções — são descartados. Transformar esse descarte em rejeição é mudança de runtime e exige decisão própria. O limite ativo de `targetContentCount` é `1–10`; referências legadas de migração ou contratos históricos `1–30` não ampliam quota nem o contrato ativo.
 
 ## Out of Scope
 
@@ -92,7 +142,8 @@ A ação explícita `Analisar produto` sobre um Product salvo precisa levar dire
 - Geração ou edição de vídeo, imagem, áudio ou voice-over.
 - Embeddings, banco vetorial, similaridade semântica, deduplicação semântica e judge LLM de variedade ou memória ficam fora do Slice 003; a variedade usa dimensões estruturadas e normalização determinística. `CONTENT_QUALITY_JUDGE` é a exceção interna após hard gates e cobre hook, development, script, CTA e cenas em batch por `contentId`; retorna somente `PASS|REVIEW`. Cada parte `REVIEW` recebe um único `CONTENT_PART_REPAIR`; `PASS` permanece intacto, repair inválido preserva a parte original e não há re-Judge, `REJECT` semântico ou `QUALITY_PENDING`.
 - Alteração de Strategy durante o job, mudança automática de Strategy por performance e edição de fatos além do cadastro inicial.
-- Alteração de PRD, ADR, `SYSTEM-DESIGN.md`, `DESIGN.md`, `PRINCIPLES.md` ou `SLICES.md`.
+- Alteração de PRD, ADR, `SYSTEM-DESIGN.md`, `DESIGN.md` ou `PRINCIPLES.md`; esta revisão altera somente a documentação operacional desta SPEC, do PLAN e do mapa de Slices para registrar a Etapa 0.
+- Cutover do runtime, escrita de `creativeDirection`, remoção ou reclassificação de chamadas, tiers, cenas, gates, repairs ou `ROUTER_MAP` antes do protocolo A/B e das aprovações exigidas pelo ADR-033.
 - Criação de PLAN ou implementação de código nesta etapa de especificação.
 
 ## Assumptions & Open Questions
@@ -103,31 +154,38 @@ A ação explícita `Analisar produto` sobre um Product salvo precisa levar dire
 | Autoridade da quantidade inicial | Usar `Product.targetContentCount` validado e as restrições persistidas pelo Slice 002; ausência, não inteiro ou fora do limite é rejeitada server-side | Evita segunda tela e impede que o cliente altere a quantidade depois do salvamento | Sim, por Slice 002 e PRD de análise |
 | Limite numérico da quantidade | `1–10`, sujeito à capacidade do Entitlement | Slice 002 define esse intervalo; a capacidade comercial continua server-side | Sim, por Slice 002/ADR-006 |
 | Mensagens de stage | Usar uma mensagem humana estável por stage, em `pt-BR`, refletindo a etapa real; detalhes de copy podem ser refinados sem mudar o contrato | DESIGN e PRDs proíbem simulação por animação e percentual inventado | Não; contrato comportamental |
-| Repairs | `Hard Gate Repair` é objetivo, anterior ao Judge, usa `CONTENT_BRIEF_REPAIR` por item e pode usar até `GENERATION_MAX_REPAIRS`; `Semantic Part Repair` é uma única passagem por parte `REVIEW`, sem re-Judge | Hard gates são autoridade de entrega; repair semântico preserva o original inválido e não cria faltante | Sim, ADR-029 |
+| Repairs | `Hard Gate Repair` é objetivo, anterior ao Judge, usa `CONTENT_BRIEF_REPAIR` por item e pode usar até `GENERATION_MAX_REPAIRS`; `GENERATION_MAX_REPAIRS` não limita repair semântico. Após hard gate `PASS`, `CONTENT_QUALITY_JUDGE` retorna `PASS|REVIEW` por parte; cada parte `REVIEW` recebe no máximo um `Semantic Part Repair`, sem re-Judge. Falha ou schema inválido preserva a parte original e não cria faltante | Hard gates são autoridade de entrega; repair semântico preserva o original inválido e não cria faltante | Sim, ADR-029 |
 | Cancelamento pelo creator | Manter `CANCELLED` no contrato; oferecer ação somente se a infraestrutura suportar cancelamento seguro, em progressive disclosure | PRD suporta o estado, mas não exige cancelamento como ação primária no MVP | Não; configuração em aberto |
-| Conflito sobre gates | Hard gates e Variety Gate permanecem determinísticos e fora do LLM. `Hard Gate Repair` objetivo é anterior ao Judge e limitado por `GENERATION_MAX_REPAIRS`; após hard gate `PASS`, `CONTENT_QUALITY_JUDGE` retorna `PASS|REVIEW` e cada `REVIEW` pode receber um único `Semantic Part Repair`. Repair semântico inválido preserva a parte original; hard gates finais decidem entrega `DRAFT` ou ADR-021. | Separa segurança/factualidade de qualidade editorial sem transferir regra de sistema ao LLM e sem criar estado público semântico. | Sim, ADR-029 |
+| Conflito sobre gates | Hard gates, schema e Variety Gate permanecem determinísticos e fora do LLM. O `BriefValidationReport` registra somente resultado objetivo `PASS|REPAIR|REJECT`; `Hard Gate Repair` é anterior ao Judge e limitado por `GENERATION_MAX_REPAIRS`. Após hard gate `PASS`, `CONTENT_QUALITY_JUDGE` retorna somente `PASS|REVIEW` por parte; uma parte `REVIEW` recebe um único `Semantic Part Repair`, sem re-Judge. Repair semântico inválido ou com schema inválido preserva a parte original e não cria faltante; falha objetiva segue ADR-021. | Separa autoridade objetiva de qualidade semântica sem transferir regra de sistema ao LLM e sem criar estado público semântico | Sim, ADR-029 |
 | Memória na primeira geração | Usar `ProductMemorySnapshot` vazio, sem consultar histórico/recorrência; após sucesso persistir sinais estruturados de todo Content entregue em `DRAFT`; falha/cancelamento não atualizam memória. | Conteúdo entregue é sinal `gerado`; qualidade semântica não cria estado alternativo. | Sim, ADR-021/025/029 |
 | Retry técnico | Reconnect, reentrada e worker recuperado reutilizam o mesmo `job.id`, a mesma chave lógica e a mesma reserva; não criam novo job | Mantém idempotência durante a execução e evita cobrança/resultado duplicado | Sim, decisão desta SPEC |
 | Retry acionado pelo creator | `Tentar novamente` após `FAILED` ou `CANCELLED` cria novo job com nova chave idempotente e nova reserva; preserva o job terminal anterior e reutiliza Product/fatos confirmados | Distingue nova execução de reentrada técnica e preserva histórico de tentativas | Sim, decisão desta SPEC |
 | Mês da reserva | Registrar o período `generated_contents_month` em UTC no momento da criação; liberar/confirmar no mesmo período de origem, mesmo se o job terminar em outro mês | ADR-006 fixa a origem temporal da reserva no mês UTC da criação | Sim, ADR-006 |
 | Versão ativa da Skill | Carregar a versão default server-side da `TikTok Commerce Creative Skill`, registrar a versão e falhar fechado se ausente ou inválida | Skill é dependência versionada e não pode ser escolhida pelo cliente | Sim, ADR-014 |
 | Falha após resultados intermediários | Resultados intermediários podem ser persistidos para recuperação/auditoria; a publicação para o creator ocorre na conclusão consistente — `SUCCEEDED` com N itens ou `SUCCEEDED_PARTIAL` declarado com D itens aprovados e revalidados (ADR-021) | Evita sucesso parcial silencioso e preserva diagnóstico | Sim, ADR-012 + ADR-021 |
+| Etapa 0 e runtime vigente | Registrar ADR-033 como arquitetura-alvo, mantendo ADR-029 integralmente vigente até relatório A/B aprovado e cutover formal | Evita que uma hipótese de redução de chamadas ou mudança de autoridade altere o baseline sem evidência | Sim, ADR-033 |
+| Creative System | `CreativePrimitive`, `CreativeRecipe` e compatibilidade são dados declarativos versionados da `PlatformSkill`; o contrato é `load → validate → freeze → expose` e falha fechado | Mantém conhecimento criativo dentro da Skill sem criar nova fronteira arquitetural | Sim, ADR-033 |
+| CreativeBlueprint | Futuramente persistido como `creativeDirection` dentro de `ContentOpportunity`, sem aggregate/tabela/entidade paralela; nenhuma escrita antes do cutover aprovado | Evita duplicação de domínio e preserva leitores/histórico v1 | Sim, ADR-033 |
+| Catálogo literal | Permanece corpus de referência/benchmark/eval; não entra no prompt normal de caminhos novos e o runtime ADR-029, incluindo `selectBriefPatterns`, permanece intacto até eval | Remove ancoragem somente quando houver enforcement e evidência | Sim, ADR-033 |
+| Gate de supersede | Toda migração LLM → código ou mudança de runtime exige A/B pareado, thresholds versionados, relatório reproduzível e aprovação formal antes de qualquer remoção | Economia isolada não autoriza cutover | Sim, ADR-033 |
 
 
 | Decisão | Padrão adotado | Racional | Confirmada? |
 | --- | --- | --- | --- |
-| Composição de chamadas | Uma chamada para Product Understanding, uma para Commercial Opportunity Mapping, uma para Strategy, uma para Content Plan e briefings em lotes de 4–8 itens; cenas por Content e Judge até três Contents | A linha de base é comparável; somam-se somente os retries limitados por capability, inclusive `Hard Gate Repair` objetivo | Sim, ADR-029 |
-| Limite de chamadas | Para `targetContentCount = N`, a linha de base é `4 + ceil(N / batchSize)` chamadas, sem contar cenas, Judge e retries limitados por capability | Torna custo e latência observáveis sem ocultar os limites de retry | Sim, ADR-029 |
+| Runtime atual e arquitetura-alvo | No runtime vigente, uma chamada de Product Understanding, uma de Commercial Opportunity Mapping, uma de Strategy, uma de Content Plan, Briefings em lotes de 4–8, cenas por Content e Judge em batches de até três, conforme ADR-029. A arquitetura-alvo do ADR-033 é hipótese a ser avaliada; nenhuma quantidade, tier ou composição futura é contrato desta SPEC | Mantém o baseline comparável sem congelar números da arquitetura-alvo | Sim, ADR-029 + ADR-033 |
 | Concorrência de provider | Um batch de briefing por vez no MVP; paralelismo interno só pode ser usado dentro de limite configurado e observado | Evita disparar `N` requests simultâneos contra provider externo | Sim, por esta revisão |
 | Deadline e lease | Cada tentativa possui deadline global menor que o lease renovável; heartbeat mantém o lease durante trabalho legítimo e aborta a tentativa quando o fencing for perdido | Evita reclaim concorrente, chamadas órfãs e duplicação operacional desnecessária | Sim, por esta revisão |
 | Projeção de contexto | Cada capability recebe uma projeção allowlisted e limitada do contexto; Strategy e Brief Generator não recebem o agregado completo por padrão | Reduz crescimento de payload e mantém a separação entre fatos, inferências e instruções | Sim, por esta revisão |
-**Decisões em aberto:** permanece configurável somente a oferta de cancelamento seguro. O limite semântico está fixado em uma tentativa por parte `REVIEW`, sem segundo repair ou re-Judge; o limite objetivo permanece `GENERATION_MAX_REPAIRS`.
+**Decisões em aberto:** permanece configurável somente a oferta de cancelamento seguro. O limite semântico é uma tentativa por parte `REVIEW`, sem segundo repair ou re-Judge; `GENERATION_MAX_REPAIRS` aplica-se somente ao `Hard Gate Repair`.
+
 
 ## 5. Comportamentos
 
 ### B-003-01 — `Analisar produto` e criação atômica do job
+O contrato público não recebe `tenantId`, `userId`, quantidade, `mode`, plano, quota, provider, tier ou snapshot no body: `POST /api/generations` recebe somente `productId` no corpo e `Idempotency-Key` no header, enquanto identidade e escopo vêm da sessão. Internamente, `startCommerceIntelligence` recebe `{ tenantId, userId, productId, idempotencyKey, targetContentCount?, mode?: "standard" | "retry" | "complete" }`; sem `targetContentCount`, usa a quantidade persistida no Product. `retry`/`complete` podem sobrescrever a quantidade server-side para recuperação dos faltantes, preservando fingerprint, autorização e quota derivados pelo servidor.
 
-Ao acionar `Analisar produto` sobre um Product válido já salvo, o sistema resolve a quantidade inicial no servidor, verifica o limite transacional de `active_products` e a capacidade mensal de conteúdos, registra o mês UTC da reserva, reserva a capacidade e cria um `CommerceIntelligenceJob` `QUEUED` de forma atômica. Não existe etapa obrigatória entre acionar e enfileirar.
+
+Ao acionar `Analisar produto` sobre um Product válido já salvo, o sistema confirma/reconcilia server-side o contador `activeProductsUsed` sob lock do Entitlement, sem aplicar novamente a quota de `active_products`; verifica somente a capacidade mensal de conteúdos e a regra de job ativo, registra o mês UTC da reserva, reserva a capacidade e cria um `CommerceIntelligenceJob` `QUEUED` de forma atômica. Não existe etapa obrigatória entre acionar e enfileirar.
 
 A ação que somente salva o Product no Slice 002 continua sem iniciar geração: o salvamento entrega um Product salvo e é pré-condição da análise, não uma etapa dela. A criação do job deste slice ocorre apenas na ação explícita `Analisar produto`.
 
@@ -151,11 +209,12 @@ Quando o lease expira, o sistema torna o job reivindicável novamente, increment
 
 A execução carrega somente o contexto autorizado e necessário: fatos confirmados do Product, Creator Context aplicável, Skill versionada e um `ProductMemorySnapshot` vazio. Não consulta histórico nem implementa recorrência neste slice. Cada capability recebe uma projeção allowlisted, com limite configurável de tamanho, e não o agregado completo do Product, Strategy, Memory ou Skill.
 
-Executa as capabilities na ordem conceitual de entendimento, mapeamento de oportunidades, Strategy, skeleton determinístico + campos criativos do plano, Brief Generator, hard gates e `Hard Gate Repair` objetivo limitado, cenas criativas, Judge, `Semantic Part Repair` único e hard gates/variedade finais. A linha de base do provider é uma chamada para Product Understanding, uma para Commercial Opportunity Mapping, uma para Strategy, uma para Content Plan e `ceil(targetContentCount / batchSize)` chamadas de Brief Generator, com `batchSize` inteiro entre 4 e 8; cenas são LLM-owned por Content e Judge usa batches homogêneos de até três. Não existe chamada LLM individual obrigatória por briefing.
+Executa as capabilities na ordem conceitual de entendimento, mapeamento de oportunidades, Strategy, skeleton determinístico + campos criativos do plano, Brief Generator, hard gates e `Hard Gate Repair` objetivo limitado, cenas criativas, Judge, `Semantic Part Repair` único e hard gates/variedade finais. Até o cutover aprovado, esta ordem e sua composição de chamadas permanecem as do runtime ADR-029: uma chamada para Product Understanding, uma para Commercial Opportunity Mapping, uma para Strategy, uma para Content Plan e `ceil(targetContentCount / batchSize)` chamadas de Brief Generator, com `batchSize` inteiro entre 4 e 8; cenas continuam LLM-owned por Content e Judge usa batches homogêneos de até três. A arquitetura-alvo do ADR-033 pode substituir somente etapas comprovadas pelo protocolo A/B; este texto não autoriza remoção, integração, rebaixamento de tier ou reclassificação de cena.
 
 Commercial Opportunity Mapping recebe somente uma projeção compacta: `productId`, fatos essenciais do Product, referências do catálogo de evidências e os campos do `ProductUnderstanding` necessários para relacionar público, situação, dor, desejo, objeção, capability, benefício, prova e argumento. Não recebe Strategy, ContentPlan, memória histórica, Skill completa, imagens/variantes não necessárias ou o agregado bruto de contexto.
 
-Commercial Opportunity Mapping pode retornar, em um envelope único, os dados de público, situação, dor/desejo, objeção e as `CommercialOpportunity`s relacionadas. A engine separa e valida cada contrato deterministicamente antes de construir a Strategy. Brief Generator recebe batches de oportunidades e devolve um item estruturado por oportunidade; IDs persistentes, posições, versões e ownership são sempre atribuídos pelo servidor.
+Commercial Opportunity Mapping pode retornar, em um envelope único, dados de público, situação e as hipóteses semânticas de contexto, desejo, identificação, curiosidade, aspiração, humor e potencial visual, além de dor, objeção, necessidade e as `CommercialOpportunity`s relacionadas quando existirem. Dor, objeção ou necessidade prévia não são pré-condições para uma hipótese válida. A engine separa e valida cada contrato deterministicamente antes de construir a Strategy. Brief Generator recebe batches de oportunidades e devolve um item estruturado por oportunidade; IDs persistentes, posições, versões e ownership são sempre atribuídos pelo servidor.
+
 
 Um batch de briefing é processado por vez no MVP, salvo limite explícito de concorrência configurado e observado. O servidor monta o skeleton do plano — quantidade, IDs, posições, slots, buckets elegíveis e tetos — e o LLM preenche os campos comerciais/criativos dentro desses slots. Cenas continuam LLM-owned por Content; o servidor valida a execução visual sem gerar staging por template. A Strategy inicial é a `ProductStrategy` v1 `ACTIVE` e contém, no mínimo, `id`, `productId`, `version`, `status`, `primaryPositioning`, `audiences`, `opportunities`, `priorityBenefits`, `priorityObjections`, `priorityArguments`, `priorityAngles`, `communicationPrinciples`, `platformId` e `platformSkillVersion`.
 
@@ -163,11 +222,11 @@ Stages públicos são emitidos imediatamente antes da chamada ou processamento c
 
 ### B-003-05 — Roteamento interno
 
-Capabilities que exigem interpretação solicitam tarefas lógicas ao Model Router. A tabela canônica de capability, tier runtime, retries/fallback e autoridade é ADR-029; o `ROUTER_MAP` atual é configuração operacional evolutiva por evals, não regra de produto. Schema validation, hard gate factual/estrutural, Variety Gate, contagens, orquestração, persistência, idempotência, quota e estados são determinísticos, fora do Router.
+Capabilities que exigem interpretação solicitam tarefas lógicas ao Model Router. A tabela canônica de capability, tier runtime, retries/fallback e autoridade vigente é o ADR-029; o `ROUTER_MAP` atual não muda por esta revisão. O ADR-033 define a matriz de autoridade-alvo e só pode superseder o runtime após eval A/B aprovado. Schema validation, hard gate factual/estrutural, Variety Gate, contagens, orquestração, persistência, idempotência, quota e estados são determinísticos, fora do Router.
 
 `reasoning.effort` é configuração server-side por tarefa, registrada junto da task/tier/modelo; não é equivalente ao tier e não substitui limites de contexto, schema ou exact-N.
 
-O Router resolve e registra o `IntelligenceTier`, provider lógico, modelo lógico, reasoning efetivo e versão das instruções, mesmo quando o MVP usa um único provider. Provider e modelo não são escolhidos pela capability nem variam por plano comercial. Após hard gate `PASS`, `CONTENT_QUALITY_JUDGE` avalia internamente hook, development, script, CTA e cenas em batch homogêneo de até três Contents, retorna `PASS|REVIEW` e aciona no máximo um `Semantic Part Repair` por parte `REVIEW`. `Hard Gate Repair` é anterior ao Judge e permanece limitado por `GENERATION_MAX_REPAIRS`. Repair inválido preserva a parte original; não há re-Judge, `REJECT` semântico ou `QUALITY_PENDING`. `SUCCEEDED` preserva exact-N de Contents `DRAFT`; Variety Gate e memória não usam judge LLM.
+O Router resolve e registra o `IntelligenceTier`, provider lógico, modelo lógico, reasoning efetivo e versão das instruções, mesmo quando o MVP usa um único provider. Provider e modelo não são escolhidos pela capability nem variam por plano comercial. Após hard gate `PASS`, `CONTENT_QUALITY_JUDGE` avalia internamente hook, development, script, CTA e cenas em batch homogêneo de até três Contents e retorna somente `PASS|REVIEW` por parte. Cada parte `REVIEW` recebe no máximo um `Semantic Part Repair`; não há re-Judge, `REJECT` semântico ou `QUALITY_PENDING`. `Hard Gate Repair` ocorre antes do Judge e é o único repair limitado por `GENERATION_MAX_REPAIRS`. Falha, schema inválido ou repair inválido preserva a parte original e não cria faltante. `SUCCEEDED` preserva exact-N de Contents `DRAFT`; Variety Gate e memória não usam judge LLM…
 
 
 ### B-003-06 — Skill de plataforma
@@ -175,6 +234,18 @@ O Router resolve e registra o `IntelligenceTier`, provider lógico, modelo lógi
 A geração usa a `TikTok Commerce Creative Skill` carregada por versão. Ela influencia como uma oportunidade comercial é transformada em conteúdo rápido, natural, direto, visual, demonstrável e gravável por creator comum.
 
 A Skill não decide fatos, não inventa benefícios técnicos, não escolhe Strategy, não controla job, persistência, quota ou retry. `platformSkillVersion` é registrada na Strategy, no `ContentPlan` e no `IntelligenceRun`.
+
+O Creative System alvo vive dentro da `PlatformSkill` e é composto por `CreativePrimitive`, `CreativeRecipe` e resolvedor de compatibilidade versionados. Primitives são dimensões semânticas, não frases; recipes são conjuntos coerentes de restrições, não scripts. O carregamento segue `load → validate → freeze → expose`, com schema de compatibilidade versionado e falhas `GEN-CS-*` fail-closed. A Skill não acessa Job, persistência, quota, retry ou dados de Tenant.
+
+Taxonomia mínima, conforme as decisões 4–7 do ADR-033, sem regras adicionais nesta SPEC:
+
+- `CreativePrimitive`: unidade semântica combinável por dimensões como attention mechanism, psychological effect, format, narrative move e product role; nunca contém frases ou copy.
+- `CreativeRecipe`: conjunto coerente de restrições que combina primitives; não é script nem conteúdo final.
+- `CreativeBlueprint`: decisão estruturada por `ContentOpportunity`, com `recipeId?`, `attentionMechanisms[]`, `psychologicalEffects[]`, `format`, `narrativeMoves[]` e `productRole`; no futuro, fica em `creativeDirection`, sem aggregate paralelo.
+
+Essa taxonomia é especificada e validada como fundação aditiva da `PlatformSkill`, mas não é ativada operacionalmente nem escrita nesta SPEC antes de SPEC/PLAN de cutover e eval aprovados.
+
+Esta especificação registra o contrato-alvo sem ativá-lo no runtime vigente. A versão da Skill e os contratos históricos devem permanecer reproduzíveis; memória e snapshots são aditivos e versionados, sem fabricação retroativa.
 
 ### B-003-07 — Contratos e factualidade
 
@@ -184,11 +255,14 @@ Toda saída de capability deve obedecer ao schema canônico correspondente antes
 
 O provider não pode atribuir IDs persistentes de Content, Brief, Plan, Strategy ou ownership. IDs recebidos são referências não confiáveis; a engine gera IDs server-side e rejeita colisões, cardinalidade incompatível e relações fora do contexto do job.
 
-A cardinalidade dos arrays canônicos segue política centralizada e versionada por campo (`CARDINALITY_POLICY` / `CARDINALITY_POLICY_VERSION`, conforme ADR-012): máximos rígidos incondicionais — excedente é `GEN-SCHEMA` fail-closed, sem truncamento silencioso — e mínimos condicionais à evidência — o mínimo estrutural só se aplica com evidência autorizada; sem evidência, arrays estratégicos podem chegar vazios. Violações alimentam os retries de contrato existentes e, persistindo, falham fechado sem inventar, preencher ou aparar conteúdo. A versão da política vigente é registrada na execução (eventos de capability e sinais persistidos), preservando a compatibilidade de gerações históricas. O catálogo de evidências mantém relação 1:1 entre fatos e `evidenceRefs`: cada valor de fato recebe uma ref própria e estável (`fact:<chave>`; do segundo valor em diante, `fact:<chave>:<n>`), de modo que a citação por índice na proveniência aponte sempre para o fato correto.
+A cardinalidade dos arrays canônicos segue política centralizada e versionada por campo (`CARDINALITY_POLICY` / `CARDINALITY_POLICY_VERSION`, conforme ADR-012): máximos rígidos incondicionais — excedente é `GEN-SCHEMA` fail-closed, sem truncamento silencioso — e mínimos condicionais à evidência — o mínimo estrutural só se aplica com evidência autorizada; sem evidência, arrays estratégicos podem chegar vazios. Product Understanding é a exceção first-N documentada na seção 3.3B: o provider reduz antes de `assertProviderOutput` e a engine reduz antes do validador, na primeira tentativa e no retry, registrando somente a redução da engine. Fora dessa exceção, violações alimentam os retries de contrato existentes e, persistindo, falham fechado sem inventar, preencher ou aparar conteúdo. A versão da política vigente é registrada na execução (eventos de capability e sinais persistidos), preservando a compatibilidade de gerações históricas. O catálogo de evidências mantém relação 1:1 entre fatos e `evidenceRefs`: cada valor de fato recebe uma ref própria e estável (`fact:<chave>`; do segundo valor em diante, `fact:<chave>:<n>`), de modo que a citação por índice na proveniência aponte sempre para o fato correto.
 
 Fatos confirmados são separados de inferências estratégicas; a engine pode inferir por que alguém compraria, mas não pode inventar o que o Product é ou faz.
 
-O Fact Validator deve avaliar claims contra fatos/evidências estruturados, não somente por correspondência literal de texto. Classifica claims como `SUPPORTED`, `INFERRED_BUT_SAFE`, `UNSUPPORTED` ou `CONTRADICTED`. Claims `UNSUPPORTED` devem ser removidos/corrigidos; claims `CONTRADICTED` rejeitam o briefing e enviam a causa ao repair ou à falha final.
+Na fronteira de Mapping e Strategy, o Mapping pode manter hipóteses de contexto, desejo, identificação, curiosidade, aspiração, humor e potencial visual sem dor, objeção ou necessidade prévia. PU e Mapping validam forma, cardinalidade e pertencimento das `evidenceRefs`; Strategy consome a projeção validada e não promete validação direta. Não há filtragem claim-level de `UNSUPPORTED`/`CONTRADICTED` nessa fronteira. A classificação factual continua aplicável ao Briefing nos hard gates: claims `UNSUPPORTED` devem ser removidos/corrigidos; claims `CONTRADICTED` rejeitam o briefing e enviam a causa ao repair ou à falha final.
+
+
+
 
 O Brief Generator produz `developmentSchemaVersion: 2` e `development: DevelopmentBullet[]`. Provider envia `text`, `factRefs` propostos e `cta`; o servidor deriva `action` apenas do stem validado e `rationale` apenas do sufixo com connector presente no `text`. `factRefs` é não vazio, contém somente referências autorizadas do catálogo de evidências e nunca `product:name`; item malformado é rejeitado, sem filtragem silenciosa. A `cta` é obrigatória em **todo** bullet desde a primeira geração e em todo repair, orientada à ação e persuasiva sem criar urgência, preço, disponibilidade ou benefício não suportado. A CTA raiz do briefing continua sendo o fechamento geral e não substitui a CTA de nenhum bullet.
 
@@ -198,20 +272,36 @@ Primeira pessoa é totalmente permitida como técnica persuasiva, inclusive afir
 
 ### B-003-08 — Plano, oportunidade, conteúdo e briefing
 
-O `ContentPlan` é criado antes dos Briefings e contém `id`, `productId`, `strategyVersion`, `targetContentCount`, `platformId`, `platformSkillVersion` e suas `ContentOpportunity`s. O servidor deriva esses campos e o skeleton de slots; o provider retorna somente `commercialObjective`, `angle`, `coreMessage`, `hookMechanism` dentro do allowlist do slot e `noveltyTargets`.
+O `ContentPlan` é criado antes dos Briefings e contém `id`, `productId`, `strategyVersion`, `targetContentCount`, `platformId` e `platformSkillVersion`. No runtime vigente ADR-029, o servidor deriva esses campos e o skeleton de slots; o provider retorna os campos comerciais/criativos autorizados, incluindo `hookMechanism` dentro do allowlist do slot e `noveltyTargets`.
 
-Cada `ContentOpportunity` exige `id`, `commercialObjective`, `angle`, `coreMessage`, `hookMechanism` e `noveltyTargets`. `audience`, `pain`, `desire`, `objection`, `benefit`, `proof`, `narrativePattern`, `desiredViewerResponse` e `sourceOpportunityId` são opcionais e permanecem ausentes quando não houver evidência ou relação válida. A engine verifica que cada oportunidade está relacionada a uma oportunidade comercial ou decisão estratégica válida.
+Cada `ContentOpportunity` exige, no runtime vigente, `id`, `commercialObjective`, `angle`, `coreMessage`, `hookMechanism` e `noveltyTargets`. No contrato-alvo do ADR-033, a decisão criativa estruturada será um `CreativeBlueprint` em `creativeDirection` dentro do próprio `ContentOpportunity`, sem aggregate, tabela ou entidade paralela:
+
+```ts
+type CreativeBlueprint = {
+  recipeId?: string;
+  attentionMechanisms: string[];
+  psychologicalEffects: string[];
+  format: string;
+  narrativeMoves: string[];
+  productRole: string;
+};
+```
+
+A construção do Blueprint a partir do pool comercial/criativo, Creative System e memória é determinística somente após SPEC/PLAN de cutover e eval aprovados. A LLM não propõe seus campos, não os persiste e não recebe autoridade sobre IDs, ownership ou compatibilidade. Até lá, `hookMechanism` e `narrativePattern` continuam no contrato histórico do ADR-029; qualquer derivação legada futura será versionada e não duplicará a persistência.
 
 O resultado final possui `targetContentCount` Contents `DRAFT` no `SUCCEEDED`. Quando 0 < D < N itens forem objetivamente publicáveis e F = N−D ≤ `PARTIAL_FAILURE_CAP`, o job conclui `SUCCEEDED_PARTIAL`: publica os D Contents `DRAFT`, revalida o Variety Gate sobre o subconjunto com teto recomputado `ceil(D/K)`, registra `expectedCount`/`deliveredCount`/`failedCount` e assinatura residual por item, e confirma quota pelos D entregues liberando N−D (ADR-021). D=0, F>CAP ou falha anterior aos briefs → `FAILED`. Cada Content mantém identidade estável, `productId`, `planId` e `opportunityId`.
 
-- Na v1, `angle`, `hook`, `development`, `script`, `scenes` e `cta` são obrigatórios; `development` é `DevelopmentBullet[]` conforme B-003-07 e cada bullet tem sua própria CTA obrigatória. O Briefing distingue decisão estratégica de fala sugerida, mantém cenas simples para creator comum, usa linguagem oral e não exige leitura literal do script. Aprovação ou descarte pertencem a Content Operations.
+- Na geração nova, `ContentBriefVersion` v1 exige `angle`, `hook`, `development`, `script` e `cta`; `scenes` não é campo obrigatório nem pertence ao payload novo do Briefing. Cenas são persistidas no `ContentSceneSet` separado por `briefVersionId`, conforme ADR-019, com payload ordenado `{ scenes[], generated, dropped }` e status próprio. Payloads e versões legados que contenham `scenes` permanecem read-only para leitura histórica; não são reescritos, migrados ou promovidos. O runtime ADR-029, incluindo a capability `CONTENT_SCENE_IDEAS`, permanece vigente até eval aprovado. O Briefing distingue decisão estratégica de fala sugerida, mantém cenas simples para creator comum, usa linguagem oral e não exige leitura literal do script. Aprovação ou descarte pertencem a Content Operations.
 ### B-003-09 — Quality Gate, Variety Gate e repair
 
-Antes da publicação, cada briefing passa pelos hard gates de schema, estrutura, factualidade, plataforma e cenas, e o conjunto pelo Variety Gate determinístico. Candidate objetivo reprovado pode receber `Hard Gate Repair` por item, até `GENERATION_MAX_REPAIRS`, seguido de revalidação objetiva do conjunto. Só então `CONTENT_QUALITY_JUDGE` avalia hook, development, script, CTA e cenas por parte em batch homogêneo e retorna somente `PASS|REVIEW`. Apenas parte `REVIEW` recebe um único `Semantic Part Repair`; parte `PASS` não muda e repair inválido preserva o original. Não há re-Judge ou decisão semântica terminal. Após a composição, hard gates e Variety Gate são reexecutados: item objetivamente válido publica em `DRAFT`; falha objetiva aplica ADR-021.
+Antes da publicação, cada briefing passa pelos hard gates de schema, estrutura, factualidade, plataforma e cenas, e o conjunto pelo Variety Gate determinístico. O `BriefValidationReport` registra somente o resultado objetivo `PASS|REPAIR|REJECT`. Candidate objetivo reprovado pode receber `Hard Gate Repair` por item, até `GENERATION_MAX_REPAIRS`, seguido de revalidação objetiva do conjunto. Só então `CONTENT_QUALITY_JUDGE` avalia hook, development, script, CTA e cenas por parte em batch homogêneo e retorna somente `PASS|REVIEW`. Apenas parte `REVIEW` recebe no máximo um `Semantic Part Repair`; `GENERATION_MAX_REPAIRS` não se aplica a esse repair, não há re-Judge, e parte `PASS` não muda. Falha, schema inválido ou repair inválido preserva a parte original e não cria faltante. Após a composição, hard gates e Variety Gate são reexecutados: item objetivamente válido publica em `DRAFT`; falha objetiva aplica ADR-021.
+
+O ADR-033 não altera os gates preservados nesta SPEC: Blueprint inválido, quando ativado, falha antes da persistência; hard gates e Variety Gate permanecem determinísticos; `Hard Gate Repair`, Judge `PASS|REVIEW` e `Semantic Part Repair` continuam com as regras do ADR-029/ADR-021. Cenas permanecem em `ContentSceneSet` separado, e a anotação semântica nunca cria faltante nem muda `SUCCEEDED_PARTIAL`.
+- `REVIEW` semântico não bloqueia `DRAFT`; somente hard gates objetivos, schema, factualidade, cenas e variedade decidem elegibilidade e entrega.
 
 Devem ser detectáveis campos obrigatórios ausentes, relações/IDs inválidos, quantidade incorreta, claims sem suporte ou contraditos, CTAs ausentes ou com claim factual inválido, quantidade de cenas válida para o formato, duplicatas exatas/normalizadas, duplicata por hash de estrutura e concentração objetiva. Persuasão e clareza da CTA são avaliadas semanticamente, sem reclassificar factualidade. O Judge cobre somente coerência com Produto, estilo/configuração declarados do creator e plataforma; não reavalia factualidade e não transforma preferência subjetiva em bloqueio.
 
-O `BriefValidationReport` registra os resultados objetivos (`factualStatus`, `structuralStatus`, `platformStatus`, `varietyStatus`, `issues`) e diagnósticos sanitizados por bullet separados da auditoria semântica. O diagnóstico por bullet contém somente índice, códigos/flags allowlisted, contagens e partes de claim allowlisted; nunca texto bruto, fatos, prompt ou resposta do provider. Sua chave canônica é `briefId`, derivada de `contentId + briefVersionId`. A auditoria semântica registra `contentId`, cinco partes, índice de bullet quando a parte for `development`, criterion e reason allowlisted; seus status são apenas `PASS|REVIEW`.
+O `BriefValidationReport` registra somente os resultados objetivos (`factualStatus`, `structuralStatus`, `platformStatus`, `varietyStatus`, `issues`) e a decisão objetiva `PASS|REPAIR|REJECT`, com diagnósticos sanitizados por bullet separados da auditoria semântica. O diagnóstico por bullet contém somente índice, códigos/flags allowlisted, contagens e partes de claim allowlisted; nunca texto bruto, fatos, prompt ou resposta do provider. Sua chave canônica é `briefId`, derivada de `contentId + briefVersionId`. A auditoria semântica registra `contentId`, cinco partes, índice de bullet quando a parte for `development`, criterion e reason allowlisted; seus status são apenas `PASS|REVIEW`. Falha ou schema inválido no Judge/repair preserva a parte original e não cria faltante.
 
 O sistema não cria conteúdo irrelevante apenas para atingir a quantidade. Item objetivamente não publicável após a composição conta como F: sem item publicável, F acima de `PARTIAL_FAILURE_CAP` ou conjunto incapaz de fechar com consistência, o job fica `FAILED`; dentro do teto, o job conclui `SUCCEEDED_PARTIAL` e o creator completa somente os F faltantes com `Gerar faltantes`.
 ### B-003-10 — Persistência, idempotência e observabilidade
@@ -305,7 +395,7 @@ Toda leitura, mutação, job, resultado e uso deve ser escopado ao Tenant resolv
 Para cada usuário, pode existir no máximo um `CommerceIntelligenceJob` em `QUEUED` ou `RUNNING`. A proteção é concreta no servidor: a transação de `Analisar produto` adquire um advisory lock de transação do PostgreSQL pelo usuário (`pg_advisory_xact_lock` por `tenantId`+`userId`) — além do lock tenant-wide da quota (RI-003-05) — antes de qualquer leitura, e a checagem de job ativo, a agregação de capacidade e a criação da reserva ocorrem após a aquisição — requests concorrentes com chaves distintas são serializadas e apenas uma cria job. O lease do worker impede execução duplicada do mesmo job; o estado visual desabilitado do botão não é proteção.
 
 ### RI-003-04 — Quantidade resolvida e exata
-`targetContentCount` é um inteiro validado entre `1` e `30` e permanece estável durante o job. Um job `SUCCEEDED` materializa exatamente essa quantidade de Contents `DRAFT`. Um `SUCCEEDED_PARTIAL` materializa somente os D Contents `DRAFT`, dentro do teto de falhas do ADR-021.
+`targetContentCount` é um inteiro validado entre `1` e `10` e permanece estável durante o job. Referências históricas ou de migration que ainda usem `1–30` não ampliam o contrato ativo nem a quota. Um job `SUCCEEDED` materializa exatamente essa quantidade de Contents `DRAFT`. Um `SUCCEEDED_PARTIAL` materializa somente os D Contents `DRAFT`, dentro do teto de falhas do ADR-021.
 
 ### RI-003-05 — Entitlement transacional, active_products e mês UTC
 
@@ -481,11 +571,24 @@ Requisitos de responsividade e acessibilidade:
 - Erros públicos são sanitizados; códigos internos permanecem para diagnóstico operacional.
 - Chamadas externas ficam fora de transações longas; o domínio não acessa Prisma, provider ou fila diretamente.
 
+## Etapa 0 documental — gates de aprovação e critérios verificáveis
+
+1. **Gate de autoridade:** esta SPEC referencia explicitamente o ADR-033 e mantém o ADR-029 como baseline integral até relatório A/B aprovado; nenhuma chamada, tier, cena, gate, repair ou regra do `ROUTER_MAP` é removida ou reclassificada antes disso.
+2. **Gate de contrato:** `PlatformSkill` contém o Creative System declarativo/versionado (`CreativePrimitive`, `CreativeRecipe`, compatibilidade e `CreativeBlueprint`) com `load → validate → freeze → expose`, sem domínio, serviço, agente, workflow ou repositório separado.
+3. **Gate fail-closed:** schema, referências, compatibilidade e elegibilidade incompatíveis rejeitam sem fallback criativo, reescrita silenciosa ou fabricação; códigos `GEN-CS-*` são estáveis e versionados.
+4. **Gate de persistência futura:** o Blueprint, quando autorizado pelo cutover, pertence a `ContentOpportunity.creativeDirection`, sem aggregate paralelo; contratos v1 históricos permanecem legíveis e não são reescritos ou promovidos automaticamente.
+5. **Gate de contexto:** o catálogo literal permanece fora do prompt normal dos caminhos novos. Um contract test executável deve falhar se qualquer texto literal de hook/CTA atravessar o contexto do caminho Blueprint-driven; o caminho ADR-029 atual, inclusive `selectBriefPatterns`, permanece explicitamente como exceção até cutover aprovado. Qualquer experimento de exemplos precisa de harness, flag, dataset e resultado próprios.
+6. **Gate de memória e entrega:** memória é versionada e aditiva; gates, repairs, Judge, `BriefValidationReport`, cenas separadas, `SUCCEEDED_PARTIAL`, idempotência, quota e factualidade permanecem preservados.
+7. **Gate de cutover:** antes de qualquer ativação operacional, escrita de `creativeDirection`, remoção ou reclassificação, SPEC e PLAN de cutover devem estar aprovados e o protocolo A/B do ADR-033 deve fixar baseline ADR-029, candidato, inputs, Skill, modelo/tier, seed, thresholds e Golden Dataset; o relatório deve ser reproduzível, analisado por categoria e aprovado explicitamente pelo Software Architect, pelo Review e pelo usuário quando exigido pelo ADR.
+
+Estes gates são documentais e verificáveis por inspeção de referências, contratos versionados, contract tests, relatório A/B e aprovação registrada. Não autorizam implementação ou escrita de `creativeDirection` nesta revisão.
+
 ## Acceptance Criteria
 **Acceptance Criteria**
 
 1. **WHEN** a ação explícita `Analisar produto` for acionada sobre um Product salvo com `targetContentCount` válida, **o sistema SHALL** validar o Product, reservar capacidade e criar atomicamente um `CommerceIntelligenceJob` `QUEUED`.
-2. **IF** o Product não tiver `targetContentCount` inteira entre `1` e `30`, **o sistema SHALL** rejeitar a operação sem criar job ou reserva.
+2. **IF** o Product não tiver `targetContentCount` inteira entre `1` e `10`, **o sistema SHALL** rejeitar a operação sem criar job ou reserva.
+
 3. **IF** o Entitlement não tiver capacidade mensal para a quantidade solicitada, **o sistema SHALL** rejeitar a operação sem criar job ou consumo confirmado.
 4. **WHEN** uma reserva de conteúdo for criada, **o sistema SHALL** registrar o mês UTC de sua criação para confirmar ou liberar a reserva nesse mesmo período de origem.
 5. **IF** o limite de `active_products` for atingido ao ativar um Product novo, **o sistema SHALL** rejeitar atomicamente a ativação, a reserva mensal e a criação do job, sem persistir Product novo.
@@ -507,10 +610,10 @@ Requisitos de responsividade e acessibilidade:
 21. **WHEN** um job terminar em `SUCCEEDED`, **o sistema SHALL** persistir exatamente `targetContentCount` Contents `DRAFT` que passaram os hard gates finais. **WHEN** terminar em `SUCCEEDED_PARTIAL`, **o sistema SHALL** persistir somente os D Contents `DRAFT`, revalidar variedade com `ceil(D/K)`, registrar `expectedCount`/`deliveredCount`/`failedCount`, confirmar quota pelos D entregues e liberar o restante (ADR-021).
 22. **WHEN** cada Content inicial for persistido, **o sistema SHALL** manter identidade, `productId`, `planId`, `opportunityId` quando aplicável, `currentBriefVersionId` e status `DRAFT`.
 23. **WHEN** cada Content inicial for persistido, **o sistema SHALL** deixar `approvedBriefVersionId` ausente e criar uma `ContentBriefVersion` v1 imutável.
-24. **WHEN** uma versão inicial de Briefing for persistida, **o sistema SHALL** exigir `angle`, `hook`, `script`, `scenes` e `cta`, mantendo `structure`, `objective`, `targetAudience`, `pain`, `desire`, `objection`, `benefit` e `notes` opcionais.
+24. **WHEN** uma versão inicial de Briefing for persistida, **o sistema SHALL** exigir `angle`, `hook`, `script` e `cta`, além de `development` conforme o schema vigente, sem exigir `scenes` em `ContentBriefVersion`; **WHEN** houver cenas para a geração nova, **o sistema SHALL** persistir o `ContentSceneSet` separado conforme ADR-019. `structure`, `objective`, `targetAudience`, `pain`, `desire`, `objection`, `benefit` e `notes` permanecem opcionais.
 25. **WHEN** uma capability baseada em LLM for executada, **o sistema SHALL** solicitar tarefa lógica ao Model Router conforme a tabela canônica do ADR-029, sem exigir uma chamada individual por briefing.
 26. **WHEN** `targetContentCount` for maior que um batch, **o sistema SHALL** gerar Briefings em batches de 4–8 oportunidades, processando um batch por vez salvo limite explícito de concorrência.
-27. **WHEN** schema validation, hard gates ou Variety Gate forem executados, **o sistema SHALL** tratá-los como determinísticos fora do Model Router. Candidate objetivo reprovado SHALL seguir `Hard Gate Repair` limitado por `GENERATION_MAX_REPAIRS`; após hard gate `PASS`, `CONTENT_QUALITY_JUDGE` avalia hook, development, script, CTA e cenas em batches homogêneos e retorna somente `PASS|REVIEW`. Uma parte `REVIEW` recebe `Semantic Part Repair` seletivo único; `PASS` permanece intacto, repair inválido preserva o original e não há re-Judge. `ContentSceneSet` disponível e válido é pré-condição antes da publicação.
+27. **WHEN** schema validation, hard gates ou Variety Gate forem executados, **o sistema SHALL** tratá-los como determinísticos fora do Model Router e o `BriefValidationReport` SHALL registrar somente `PASS|REPAIR|REJECT` objetivo. Candidate objetivo reprovado SHALL seguir `Hard Gate Repair` limitado por `GENERATION_MAX_REPAIRS`; após hard gate `PASS`, `CONTENT_QUALITY_JUDGE` avalia hook, development, script, CTA e cenas em batches homogêneos e retorna somente `PASS|REVIEW` por parte. Uma parte `REVIEW` recebe no máximo um `Semantic Part Repair`, sem re-Judge; `GENERATION_MAX_REPAIRS` não se aplica ao repair semântico. `PASS`, falha ou schema inválido no repair preservam o original; não se cria faltante. `REVIEW` semântico não bloqueia `DRAFT`; somente os gates objetivos decidem elegibilidade e entrega. Falha objetiva segue ADR-021.
 28. **WHEN** o Router resolver uma tarefa, **o sistema SHALL** registrar task, tier, provider/modelo lógico e versão ou hash das instruções, sem expor esses dados na UI.
 29. **WHEN** um briefing contiver claim `UNSUPPORTED` ou `CONTRADICTED`, **o sistema SHALL** avaliá-lo contra fatos/evidências estruturados, remover/corrigir o não suportado, rejeitar o contradito e impedir resultado factual inválido.
 30. **WHEN** o conjunto contiver duplicata exata/normalizada ou repetição estrutural indevida, **o sistema SHALL** aplicar `Hard Gate Repair` com as causas, preservar candidatos `PASS` e não inventar oportunidade irrelevante; sem Variety Gate válido, não poderá publicar.
@@ -536,7 +639,28 @@ Requisitos de responsividade e acessibilidade:
 53. **WHEN** a lista de Produtos for exibida, **o sistema SHALL** usar a readiness para badges dos Product cards e para o filtro `Pendente`.
 54. **WHEN** o creator iniciar uma ação intencional, **o sistema SHALL** gerar uma `Idempotency-Key`, validar seu fingerprint server-side e rejeitar fingerprint divergente sem criar nova linha.
 55. **WHEN** um `BriefValidationReport` for persistido, **o sistema SHALL** identificar `briefId` pelo par estável `contentId + briefVersionId`.
+56. **WHEN** o contexto de uma geração Blueprint-driven for montado, **o contract test SHALL** falhar se texto literal de hook/CTA do catálogo atravessar o contexto do provider; o caminho ADR-029/catalog atual, incluindo `selectBriefPatterns`, permanece exceção explícita até o cutover aprovado.
+## Etapa 2 — critérios de aceite documentais
+
+1. **WHEN** a etapa for implementada, **o sistema SHALL** preservar ADR-029 como baseline operacional e ADR-033 como arquitetura-alvo condicionada a eval/cutover aprovado.
+2. **WHEN** o worker projetar fatos, **o payload SHALL** conter exatamente `productId`, `name`, `description`, `category`, `brand`, `priceAmount`, `priceCurrency`, `variants`, `images`, `seller` e `sourceUrl`.
+3. **WHEN** `priceAmount` existir no payload do worker, **o valor SHALL** ser uma string serializada; valores nulos não SHALL ser convertidos em outro campo.
+4. **WHEN** o worker montar o payload factual, **o sistema SHALL** preservar os valores de `variants`, `images`, `seller` e `sourceUrl` sem inventar ou normalizar campos.
+5. **WHEN** o worker chamar a engine, **o payload factual SHALL NOT** conter `features`, `characteristics`, `commission`, `discount` ou `evidenceRefsCatalog`.
+6. **WHEN** uma entrada direta usar `EngineInput.facts`, **o campo SHALL** permanecer um `Record<string, unknown>` genérico, sem prometer projeção, remoção ou transformação de `features`.
+7. **WHEN** a engine construir evidências, **o sistema SHALL** derivar `evidenceRefsCatalog` depois de receber `EngineInput`, usando somente as regras documentadas de `buildEvidenceCatalog`.
+8. **WHEN** PU ou Mapping validar evidências, **o sistema SHALL** exigir referências pertencentes ao catálogo/projeção autorizada; Strategy SHALL consumir essa projeção validada e não prometer validação direta de `evidenceRefs`, sem introduzir filtragem claim-level nessa fronteira.
+9. **WHEN** o worker invocar a engine, **o `WorkerEngineFactsPayload` e o `EngineInput.facts` SHALL NOT** conter `creatorConstraints`; `creatorContext` SHALL permanecer separado, e entradas diretas genéricas não SHALL ser tratadas como projeção do worker.
+10. **WHEN** Product Understanding for reduzido, **o sistema SHALL** aplicar first-N no provider antes de `assertProviderOutput` e na engine antes do validador, na primeira tentativa e no retry.
+11. **WHEN** uma redução de entendimento ocorrer, **o sistema SHALL** distinguir observabilidade da redução do provider e da redução da engine, sem registrar a primeira como `understandingReductions`.
+12. **WHEN** um provider devolver campos desconhecidos, **o sistema SHALL** aplicar a regra da fronteira: chaves explicitamente proibidas são rejeitadas; campos fora do shape suportado são descartados pela canonicalização.
+13. **WHEN** a quantidade ativa for validada, **o sistema SHALL** aceitar somente `1–10`; referências históricas ou de migration `1–30`, inclusive `N=16`, não SHALL ampliar quota nem o contrato ativo.
+14. **WHEN** um retry de faltantes receber `reuseStrategy`, **o sistema SHALL** não executar `STRATEGY_SYNTHESIS`, preservar/recanonicalizar a Strategy com o novo `jobId` e gerar somente os faltantes. O baseline atual ainda não contém o contract test desse caminho; a implementação futura da Tarefa 5 SHALL adicionar esse teste, verificando a ausência de `STRATEGY_SYNTHESIS`, a Strategy preservada/recanonicalizada, o novo `jobId` e a geração exclusiva dos faltantes.
+15. **WHEN** `COMMERCIAL_OPPORTUNITY_MAPPING` produzir uma oportunidade, **o sistema SHALL** aceitar hipóteses válidas de contexto, desejo, identificação, curiosidade, aspiração, humor e potencial visual mesmo sem dor, objeção ou necessidade prévia; esses campos não SHALL ser exigidos como pré-condição artificial da oportunidade.
+
+
 ## Edge Cases
+
 
 - `Analisar produto` duplicado por duplo clique ou timeout deve reutilizar o mesmo job lógico; `Tentar novamente` após estado terminal deve criar novo job.
 - Reconnect, reentrada e worker que perde lease devem reutilizar `job.id`, chave e reserva; reclaim aplica tentativa, backoff e limite sem duplicar resultado.
@@ -554,11 +678,12 @@ Requisitos de responsividade e acessibilidade:
 - Conteúdo externo com prompt injection deve permanecer no contexto de dados, nunca no contexto de instruções.
 - Product, job ou resultado de outro Tenant deve parecer inexistente para a sessão não autorizada, sem vazamento de identificador.
 
-- `count=16` deve produzir no máximo quatro chamadas fundacionais mais `ceil(16 / batchSize)` chamadas de briefing na linha de base; repair adicional precisa ser registrado separadamente.
+- `N=16` deve ser rejeitado pelo contrato ativo `N=1–10`; qualquer fixture/migração legada `1–30` é somente compatibilidade e não representa cenário de sucesso. O smoke de sucesso usa somente `N=1` e `N=10`.
+
 - Um batch de briefing nunca pode publicar parcialmente; seus itens aguardam os gates e a finalização atômica.
 - Provider lento que retorna HTTP 200 após o deadline deve ser tratado como timeout, abortado quando possível e não pode permitir publicação pelo owner vencido.
 - Reclaim durante chamada externa pode repetir a chamada, mas deve preservar fencing, registrar a repetição e impedir duplicação de resultado, uso ou memória.
-- Saída de provider com IDs persistentes, ownership, status, quota ou comandos de workflow deve ser rejeitada como `GEN-SCHEMA`.
+- Saída de provider com IDs persistentes, ownership, status ou quota em campos explicitamente proibidos deve ser rejeitada como `GEN-SCHEMA`; comandos de workflow e outros campos fora do shape suportado são descartados pela canonicalização e nunca recebem autoridade.
 ## Requirement Traceability
 
 | Requirement ID | Fonte/tema | Seção desta SPEC | Status |
@@ -602,7 +727,7 @@ Requisitos de responsividade e acessibilidade:
 - [ ] Um job bem-sucedido entrega Strategy, Plan e a quantidade solicitada de Contents/Briefings `DRAFT`; `SUCCEEDED_PARTIAL` entrega D e oferece `Gerar faltantes` apenas para F objetivamente não publicados.
 - [ ] Strategy e Plan ficam consultáveis no contexto do Product sem bloquear a chegada aos Briefings.
 - [ ] Um job falho preserva Product/fatos, não expõe conteúdo parcial e oferece `Tentar novamente` como novo job, mantendo o terminal anterior.
-- [ ] A linha de base para `count=16` usa no máximo quatro chamadas fundacionais mais quatro batches de briefing quando `batchSize=4`, sem chamadas individuais obrigatórias.
+- [ ] O contrato ativo rejeita `N=16` (e demais valores acima de `10`); fixtures/migrações legadas `1–30` permanecem isoladas e nenhum cenário de sucesso usa `count=16`.
 - [ ] Commercial Opportunity Mapping e todos os contratos intermediários são validados antes de Strategy, Plan e publicação.
 - [ ] Hard gates inválidos, cenas inválidas e schema/provider falho nunca publicam; `REVIEW` semântico recebe repair seletivo único e repair inválido preserva a parte original sem chamada extra.
 - [ ] Stages persistidos correspondem ao trabalho atual e são atualizados antes da etapa.
@@ -628,12 +753,16 @@ Requisitos de responsividade e acessibilidade:
 - A primeira geração usa snapshot de memória vazio, não consulta histórico/recorrência, persiste sinais estruturados de todos os Contents `DRAFT` entregues após sucesso pleno ou parcial (ADR-021) e não atualiza memória em falha/cancelamento.
 - A primeira geração cria Strategy v1, ContentPlan, oportunidades e a quantidade solicitada de Contents com BriefVersions v1 iniciais em `DRAFT`; `approvedBriefVersionId` permanece ausente.
 - Stages públicos são persistidos antes do trabalho correspondente e refletem a pipeline efetivamente executada, sem simular subetapas agrupadas.
-- Model Router recebe tarefas lógicas conforme a tabela canônica do ADR-029; validações determinísticas ficam fora do Router.
-- O Router registra task, tier, provider/modelo lógico e versão/hash das instruções; o MVP continua com um provider/modelo configurável e fallback de disponibilidade somente conforme a tabela do ADR-029.
+- O Model Router recebe tarefas lógicas conforme a tabela canônica do ADR-029 enquanto o runtime vigente estiver ativo; a matriz de autoridade-alvo do ADR-033 não reclassifica tier ou capability sem eval A/B aprovado.
+- O Router registra task, tier, provider/modelo lógico e versão/hash das instruções; qualquer mudança futura de runtime é aditiva até o cutover formal e mantém a baseline reproduzível.
 - IDs persistentes, posições, versões e ownership são derivados pelo servidor; o provider devolve somente dados não confiáveis da capability/batch.
 - Hard gate factual/estrutural, Fact Validator e Variety Gate são determinísticos; `Hard Gate Repair` é objetivo e limitado por `GENERATION_MAX_REPAIRS`.
 - Após hard gate `PASS`, `CONTENT_QUALITY_JUDGE` retorna somente `PASS|REVIEW`; `Semantic Part Repair` é único por parte `REVIEW`, preserva o original inválido e não há re-Judge. Falha objetiva após a composição segue ADR-021. Embeddings, similaridade semântica e judge LLM de variedade/memória permanecem fora do Slice 003.
 - A TikTok Commerce Creative Skill é carregada por versão e registrada na proveniência, sem controlar workflow ou persistência.
+- O Creative System é conhecimento declarativo/versionado da `PlatformSkill`, com `CreativePrimitive`, `CreativeRecipe`, `CreativeBlueprint`, compatibilidade fail-closed e fluxo `load → validate → freeze → expose`; não controla workflow, persistência ou quota.
+- `creativeDirection` não é escrito por esta SPEC; a fundação pode ser especificada e validada de forma aditiva, mas ativação, escrita do Blueprint e qualquer cutover dependem de SPEC/PLAN de cutover e eval aprovados. O Blueprint será interno ao `ContentOpportunity`, com leitura versionada, histórico preservado e nenhuma entidade paralela.
+- O catálogo literal permanece corpus de referência/benchmark/eval e fora do prompt normal de novos caminhos; gates, repairs, Judge, cenas separadas e memória versionada permanecem preservados.
+- Nenhuma remoção ou reclassificação de chamada, tier ou cena ocorre sem protocolo A/B, relatório versionado e aprovação formal conforme ADR-033.
 - O App Shell usa Global Activity Indicator persistente entre navegação e reentrada, sem página permanente de Análise.
 - Strategy e Plan são consultáveis na página/contexto do Product depois de `SUCCEEDED`, mas não são gate intermediário para Briefings.
 - Product, job, resultados e Entitlements são escopados ao Tenant da sessão; mutações exigem proteção CSRF e erros públicos são sanitizados.
@@ -642,8 +771,10 @@ Requisitos de responsividade e acessibilidade:
 - DELETE Big Bang remove transacionalmente o Product e todo o grafo relacionado, com isolamento por Tenant, quebra explícita do ciclo Content/BriefVersion, rollback integral em falha e resposta `204` após commit; Product inexistente ou fora do Tenant retorna `404 PRODUCT-NOT-FOUND`.
 - `Idempotency-Key` nasce em cada ação intencional do creator, tem fingerprint validado server-side e não pode ser reutilizada com contexto divergente.
 - `structure` é campo opcional canônico da `ContentBriefVersion` v1; cenas válidas e hash estrutural fazem parte das validações determinísticas.
+- Para geração nova, `ContentSceneSet` é separado e versionado conforme ADR-019; `ContentBriefVersion` não exige nem reescreve `scenes`, e payload legado permanece read-only.
 - `briefId` do `BriefValidationReport` é o identificador canônico derivado de `contentId + briefVersionId`.
 - Esta revisão atualiza a SPEC aprovada para refletir a exclusão Big Bang; a implementação foi validada pelos gates reportados: service 33/33, suíte npm 216/216 sem skips, typecheck, eslint, isolamento de Tenant, rollback e concorrência worker/delete.
+- Esta documentação registra a aprovação da Etapa 2; a implementação e qualquer cutover continuam condicionados aos gates ADR-029/033 e não são autorizados por esta revisão.
 ## 12. Especificação visual integral — Products e Product detail
 
 ### 12.1 Objetivo e fronteira
