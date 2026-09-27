@@ -1,5 +1,6 @@
 import { GenerationError } from "./errors";
 import catalogData from "../../../resources/system-knowledge/catalog/catalog.json";
+import { CREATIVE_SYSTEM_SKILL_VERSION, loadCreativeSystem } from "./creative-system";
 
 type CreativePattern = {
   id: string;
@@ -102,8 +103,18 @@ const TIKTOK_COMMERCE_SKILL_V1_2 = deepFreeze({
   },
 });
 
+// ADR-033 (decisão 3): o Creative System entra na Skill como versão aditiva.
+// @1.2 permanece byte-a-byte igual — histórico carregável e runtime ADR-029 —
+// e segue sendo o default; nenhuma projeção/slice muda com @1.3.
+const TIKTOK_COMMERCE_SKILL_V1_3 = deepFreeze({
+  ...TIKTOK_COMMERCE_SKILL_V1_2,
+  version: CREATIVE_SYSTEM_SKILL_VERSION,
+  creativeSystem: loadCreativeSystem(CREATIVE_SYSTEM_SKILL_VERSION),
+});
+
 export const PLATFORM_SKILLS = deepFreeze({
   "tiktok-commerce@1.2": TIKTOK_COMMERCE_SKILL_V1_2,
+  [CREATIVE_SYSTEM_SKILL_VERSION]: TIKTOK_COMMERCE_SKILL_V1_3,
 });
 export const TIKTOK_COMMERCE_SKILL = PLATFORM_SKILLS["tiktok-commerce@1.2"];
 export type PlatformSkill = typeof TIKTOK_COMMERCE_SKILL;
