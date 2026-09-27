@@ -261,6 +261,7 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 **User Outcome:** Depois de acionar `Analisar produto` sobre o Produto salvo, o creator recebe, sem etapas intermediárias, uma Strategy comercial e um conjunto consistente de Briefings em `DRAFT` prontos para revisão — podendo continuar usando a aplicação enquanto a análise trabalha.
 
 **Depends On:** Slice 002
+**Pré-condição documental adicional:** a [Etapa 4 — Skill e Brief Generation](../specs/etapa-4-skill-brief/SPEC.md), com [PLAN](../plans/etapa-4-skill-brief/PLAN.md), deve estar aprovada antes de qualquer mudança de contrato relacionada à fundação Creative System como contrato-alvo versionado da `PlatformSkill`; é `DOCUMENTATION_ONLY`, documentação técnica transversal do Slice 003, não cria, renumera ou reutiliza um Slice 004. ADR-029, `@1.2` e os gates atuais permanecem vigentes até relatório reproduzível e aprovação formal.
 **Pré-condição documental adicional:** a [Etapa 5 — Gates de risco e qualidade](../specs/etapa-5-risk-quality/SPEC.md), com [PLAN](../plans/etapa-5-risk-quality/PLAN.md), deve estar aprovada antes de qualquer mudança de contrato ou cutover de `RiskAssessment`, `Judge reduction` ou validação `Blueprint/recipe`; é `DOCUMENTATION_ONLY`, documentação técnica transversal do Slice 003, não cria, renumera ou reutiliza um Slice 004. ADR-029, `@1.2` e os gates atuais permanecem vigentes até relatório reproduzível e aprovação formal.
 
 **Domain Areas:** Commerce Intelligence (engine + job), Model Router, Entitlements, Content (criação), App Shell
