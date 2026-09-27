@@ -50,7 +50,7 @@ Ficam fora desta SPEC:
 5. [SLICES](../../delivery/SLICES.md), especialmente Slice 003 e Slice 004.
 6. [SPEC da Etapa 4](../etapa-4-skill-brief/SPEC.md) e [PLAN da Etapa 4](../../plans/etapa-4-skill-brief/PLAN.md).
 7. [SPEC da Etapa 5](../etapa-5-risk-quality/SPEC.md) e [PLAN da Etapa 5](../../plans/etapa-5-risk-quality/PLAN.md).
-8. [requisitos da Etapa 6](../../../.gstack/etapa6-requisitos.md) e [decisões da Etapa 6](../../../.gstack/etapa6-decisoes.md).
+8. Registros locais de requisitos e decisões da Etapa 6 (`.gstack/etapa6-requisitos.md` e `.gstack/etapa6-decisoes.md`), preservados fora da árvore versionada.
 
 A precedência operacional continua sendo: nota imutável → PRDs → SYSTEM-DESIGN → ADRs → PRINCIPLES → DESIGN → SLICES → SPEC/PLAN. Esta SPEC não altera fontes superiores.
 

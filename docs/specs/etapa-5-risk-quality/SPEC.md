@@ -37,7 +37,7 @@ Fontes vinculantes e referências:
 6. [SYSTEM-DESIGN](../../architecture/SYSTEM-DESIGN.md) — fronteiras de Tenant, Job, Engine, Entitlements, Content e Model Router.
 7. [SLICES](../../delivery/SLICES.md) — Slice 003 de primeira geração e Slice 004 de revisão/controle.
 8. [SPEC da Etapa 4](../etapa-4-skill-brief/SPEC.md) e [PLAN da Etapa 4](../../plans/etapa-4-skill-brief/PLAN.md) — precondição documental anterior e preservação do runtime.
-9. [Decisões da Etapa 5](../../../.gstack/etapa5-decisoes.md) — registro de análise desta mudança.
+9. Registro local de análise da Etapa 5 (`.gstack/etapa5-decisoes.md`), preservado fora da árvore versionada.
 
 A precedência operacional permanece: nota imutável → PRDs → SYSTEM-DESIGN → ADRs → PRINCIPLES → DESIGN → SLICES → SPEC/PLAN. Esta SPEC não altera fontes superiores.
 

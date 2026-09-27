@@ -59,8 +59,7 @@ Fontes documentais:
 - [`PRD Model Router`](../../product/PRD-model-router-inteligence.md);
 - [`SYSTEM-DESIGN`](../../architecture/SYSTEM-DESIGN.md);
 - [`PRINCIPLES`](../../engineering/PRINCIPLES.md);
-- [`.gstack/etapa4-requisitos.md`](../../../.gstack/etapa4-requisitos.md);
-- [`.gstack/etapa4-decisoes.md`](../../../.gstack/etapa4-decisoes.md).
+- Registros locais de análise da Etapa 4 (`.gstack/etapa4-requisitos.md` e `.gstack/etapa4-decisoes.md`), preservados fora da árvore versionada.
 
 ## 3. In scope documental
 
