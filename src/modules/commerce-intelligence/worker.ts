@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { GenerationError } from "./errors";
-import { CARDINALITY_POLICY, ContractError } from "./contract";
+import { CARDINALITY_POLICY, CARDINALITY_POLICY_VERSION, ContractError } from "./contract";
 import { emitJobEvent, projectSceneOutcomes, sanitizeGateReports, type JobEventFields, type SanitizedGateReport, type SanitizedSceneOutcome } from "./observability";
 import { prisma } from "../db";
 import { extractJobCreatorContext } from "../creator-preferences/service";
@@ -9,7 +9,6 @@ import {
   buildEvidenceCatalog,
   createCapabilityTracker,
   ENGINE_VERSION,
-  generateSceneSetsForBriefs,
   runFirstGeneration,
   type EngineResult,
   type SceneSetOutcome,
@@ -19,6 +18,12 @@ import { loadPlatformSkill } from "./platform-skill";
 import { GATE_POLICY_VERSION } from "./gates";
 import type { ContentBriefVersion, DevelopmentBullet } from "./contract";
 import { createHttpProvider } from "./provider";
+import type { ModelRouter } from "./model-router";
+import { briefPayloadSchemaOf, buildSceneSkeletonSets, readBriefPayload } from "./engine-v2";
+import { buildRiskAssessment, validateRiskAssessment, type JudgeExecutionRecord } from "./risk-assessment";
+import { buildCategoryMetricsV1, buildDeliveryMetricsV1 } from "./observability";
+import { instructionDigests } from "./provider";
+import type { RunPolicySnapshotV1, DeliveryMetricsV1, CategoryMetricsV1 } from "./observability";
 import { attachCapabilityCosts, type PriceSnapshot } from "./cost-observability";
 import { resolveProviderModelPrice, type PriceReader } from "./pricing";
 import type { ModelDescription } from "./model-router";
@@ -531,7 +536,27 @@ export function runMetadata(
   qualityRepairs: Array<{ contentId: string; part: QualityPart; round: number; criterion: string; outcome: "REPAIRED" }> = [],
   understandingReductions: UnderstandingCardinalityReduction[] = [],
   planPolicyVersion?: number,
+  // Etapa 4 V2: handoff allowlisted (ordem/source/evidence/blueprint resolvido)
+  // persistido no metadata do run — rastreabilidade sem provider IDs/catálogo.
+  plannedV2?: unknown,
+  // E5: snapshots sanitizados de política/métricas/cobertura do Judge/risk.
+  snapshots?: {
+    policySnapshot: RunPolicySnapshotV1;
+    delivery: DeliveryMetricsV1;
+    categories: CategoryMetricsV1[];
+    judgeCoverage: readonly JudgeExecutionRecord[];
+    riskAssessments: readonly unknown[];
+  },
 ): Record<string, unknown> {
+  const snapshotBlock = snapshots
+    ? {
+        policySnapshot: snapshots.policySnapshot,
+        delivery: snapshots.delivery,
+        categories: snapshots.categories,
+        judgeCoverage: snapshots.judgeCoverage,
+        riskAssessments: snapshots.riskAssessments,
+      }
+    : {};
   const scenes = {
     sets: sceneSets.length,
     available: sceneSets.filter((set) => set.status === "AVAILABLE").length,
@@ -552,6 +577,8 @@ export function runMetadata(
       engineVersion: ENGINE_VERSION,
       gateVersion: GATE_POLICY_VERSION,
       ...(planPolicyVersion === undefined ? {} : { planPolicyVersion }),
+      ...(plannedV2 ? { plannedV2 } : {}),
+      ...snapshotBlock,
       capabilities,
       repairs,
       repairCauses: repairCauses.map(({ briefId }) => ({ briefId, causes: ["deterministic_gate_repair"] })),
@@ -563,7 +590,7 @@ export function runMetadata(
       qualityRepairs,
     };
   } catch {
-    return { attempt, engineVersion: ENGINE_VERSION, gateVersion: GATE_POLICY_VERSION, ...(planPolicyVersion === undefined ? {} : { planPolicyVersion }), capabilities, repairs, repairCauses: repairCauses.map(({ briefId }) => ({ briefId, causes: ["deterministic_gate_repair"] })), validated, scenes, patternReplacements, understandingReductions, qualityAudits: qualityAudits.map(({ contentId, round, parts }) => ({ contentId, round, parts: parts.map(({ part, status, criterion, reason }) => ({ part, status, criterion, reason: reasonText(reason) })) })), qualityRepairs };
+    return { attempt, engineVersion: ENGINE_VERSION, gateVersion: GATE_POLICY_VERSION, ...(planPolicyVersion === undefined ? {} : { planPolicyVersion }), ...(plannedV2 ? { plannedV2 } : {}), ...snapshotBlock, capabilities, repairs, repairCauses: repairCauses.map(({ briefId }) => ({ briefId, causes: ["deterministic_gate_repair"] })), validated, scenes, patternReplacements, understandingReductions, qualityAudits: qualityAudits.map(({ contentId, round, parts }) => ({ contentId, round, parts: parts.map(({ part, status, criterion, reason }) => ({ part, status, criterion, reason: reasonText(reason) })) })), qualityRepairs };
   }
 }
 
@@ -876,7 +903,7 @@ export async function finalizeGeneration(
   });
 }
 
-export async function processGeneration(jobId: string, ownerId: string) {
+export async function processGeneration(jobId: string, ownerId: string, deps?: { router?: ModelRouter }) {
   const job = await prisma.commerceIntelligenceJob.findFirst({
     where: { id: jobId, status: "RUNNING", leaseOwnerId: ownerId },
   });
@@ -994,7 +1021,9 @@ export async function processGeneration(jobId: string, ownerId: string) {
   heartbeatTimer.unref?.();
   try {
     const engineFacts = projectEngineFacts(product);
-    const router = createHttpProvider();
+    // Seam interno de teste: injeção de router (stub) nos e2e V2; produção
+    // permanece createHttpProvider inalterado.
+    const router = deps?.router ?? createHttpProvider();
     // ADR-021: modo "complete" reutiliza a Strategy ACTIVE e o último snapshot
     // de memória (itens entregues) — o planner não repete o já publicado.
     const partialMode = (job.metadata as Record<string, unknown> | null)?.mode === "complete";
@@ -1073,45 +1102,73 @@ export async function processGeneration(jobId: string, ownerId: string) {
       const payload = content.briefs[0]?.payload as
         | Record<string, unknown>
         | undefined;
-      if (
-        !payload ||
-        !Array.isArray(payload.development) ||
-        typeof payload.angle !== "string" ||
-        typeof payload.hook !== "string" ||
-        typeof payload.script !== "string" ||
-        typeof payload.cta !== "string"
-      )
+      if (!payload) return [];
+      // Etapa 4 V2: leitura VERSIONADA — bullets v2 são validados estritamente
+      // (nunca cast object[] → string[]) e projetados para texto; V1/legacy
+      // mantêm a projeção histórica. IDs da linha (server-owned) sobrepõem o
+      // payload quando ausentes, para não descartar backfill válido; linha
+      // inválida é pulada (backfill é best-effort e não-bloqueante).
+      try {
+        const schema = briefPayloadSchemaOf(payload);
+        if (schema === "v2") {
+          const { brief } = readBriefPayload({
+            ...payload,
+            contentId: content.id,
+            briefVersionId: content.currentBriefVersionId,
+          });
+          return [{
+            version: 1 as const,
+            contentId: content.id,
+            briefVersionId: content.currentBriefVersionId as string,
+            angle: brief.angle,
+            hook: brief.hook,
+            development: brief.development,
+            script: brief.script,
+            cta: brief.cta,
+          }];
+        }
+        const development = Array.isArray(payload.development)
+          ? payload.development.filter((point): point is string => typeof point === "string" && point.trim().length > 0)
+          : [];
+        if (
+          development.length < CARDINALITY_POLICY.development.min ||
+          development.length > CARDINALITY_POLICY.development.max ||
+          typeof payload.angle !== "string" ||
+          typeof payload.hook !== "string" ||
+          typeof payload.script !== "string" ||
+          typeof payload.cta !== "string"
+        )
+          return [];
+        return [
+          {
+            version: 1 as const,
+            contentId: content.id,
+            briefVersionId: content.currentBriefVersionId as string,
+            angle: payload.angle,
+            hook: payload.hook,
+            development,
+            script: payload.script,
+            cta: payload.cta,
+          },
+        ];
+      } catch {
         return [];
-      return [
-        {
-          contentId: content.id,
-          briefVersionId: content.currentBriefVersionId as string,
-          angle: payload.angle,
-          hook: payload.hook,
-          development: payload.development as string[],
-          script: payload.script,
-          cta: payload.cta,
-        },
-      ];
+      }
     });
+    // ADR-019/Etapa 4 V2: backfill determinístico via Scene Skeleton quando
+    // ENGINE_V2 ativo (nenhuma chamada de provider); V1 mantém o LLM por
+    // Content com binding explícito do capability tracker.
+    // Cutover E6: backfill determinístico (Scene Skeleton) — único caminho.
     const backfillScenes = backfillBriefs.length
-      ? await generateSceneSetsForBriefs({
-          jobId: job.id,
-          productId: job.productId,
-          briefs: backfillBriefs,
-          evidence: buildEvidenceCatalog({
+      ? buildSceneSkeletonSets(
+          backfillBriefs,
+          buildEvidenceCatalog({
             name: product.name,
             description: product.description ?? undefined,
             facts: engineFacts,
           }),
-          creatorContext: extractJobCreatorContext(job.inputSnapshot),
-          router,
-          skill: loadPlatformSkill(),
-          signal: controller.signal,
-          attempt,
-          track: backfillTracker.track,
-          backfilled: true,
-        })
+          extractJobCreatorContext(job.inputSnapshot),
+        ).map((set) => ({ ...set, backfilled: true }))
       : [];
     if (!(await checkFence()))
       throw new GenerationError(
@@ -1122,6 +1179,64 @@ export async function processGeneration(jobId: string, ownerId: string) {
     // Custo anexado por tentativa efetiva ANTES do metadata (fonte canônica: capabilities[]).
     // Mutation in place nos eventos — o mesmo objeto entra no metadata com pricing/cost.
     await attachCapabilityCosts([...output.capabilities, ...backfillTracker.capabilities], costPriceResolver(priceReader(prisma)));
+    // E5: snapshots sanitizados de política/métricas/cobertura + risk advisory
+    // (falha de assessment NUNCA altera o job — advisory-only).
+    const policySnapshot: RunPolicySnapshotV1 = {
+      platformSkillVersion: String(output.strategy.platformSkillVersion),
+      ...(output.v2Policy
+        ? {
+            creativeSystemVersion: output.v2Policy.creativeSystemVersion,
+            plannerPolicyVersion: output.v2Policy.plannerPolicyVersion,
+            briefPolicyVersion: output.v2Policy.briefPolicyVersion,
+          }
+        : {}),
+      gatePolicyVersion: GATE_POLICY_VERSION,
+      cardinalityPolicyVersion: CARDINALITY_POLICY_VERSION,
+      instructionHashes: instructionDigests(
+        [...new Set(output.capabilities.map((capability) => String((capability as { task?: unknown }).task ?? "")))].filter(Boolean) as never,
+      ),
+    };
+    const delivery = buildDeliveryMetricsV1(
+      job.targetContentCount,
+      output.validated,
+      output.validated === job.targetContentCount ? "SUCCEEDED" : "SUCCEEDED_PARTIAL",
+    );
+    const categories = [
+      buildCategoryMetricsV1({
+        category: String((engineFacts as Record<string, unknown>).category ?? "sem-categoria").slice(0, 100),
+        expectedCount: job.targetContentCount,
+        deliveredCount: output.validated,
+        judgeRecords: output.judgeExecutionRecords,
+        reports: output.reports,
+        sceneSets: output.sceneSets,
+      }),
+    ];
+    const riskAssessments: unknown[] = [];
+    for (const [index, brief] of output.briefs.entries()) {
+      const judgeRecord = output.judgeExecutionRecords.find((record) => record.contentId === brief.contentId);
+      const sceneSet = output.sceneSets.find((set) => set.contentId === brief.contentId);
+      try {
+        riskAssessments.push(
+          validateRiskAssessment(
+            buildRiskAssessment({
+              policyVersion: "risk-policy.v1",
+              subject: { jobId: job.id, contentId: brief.contentId },
+              evidenceRefs: output.evidenceRefs,
+              hardGate: {
+                status: output.reports[index] ? "AVAILABLE" : "NOT_EXECUTED",
+                reports: output.reports[index] ? [output.reports[index]] : [],
+              },
+              judge: { execution: judgeRecord?.execution ?? "NOT_APPLICABLE", records: judgeRecord ? [judgeRecord] : [] },
+              blueprintFixture: "NOT_APPLICABLE",
+              scenes: sceneSet ? [{ status: sceneSet.status, causes: sceneSet.causes ?? [] }] : [],
+            }),
+            output.evidenceRefs,
+          ),
+        );
+      } catch {
+        // advisory-only: sem assessment o run segue; nunca altera D/N/status.
+      }
+    }
     const runData = runMetadata(
       attempt,
       () => router.describe(),
@@ -1135,6 +1250,8 @@ export async function processGeneration(jobId: string, ownerId: string) {
       output.qualityRepairs,
       output.understandingReductions,
       output.planPolicyVersion,
+      output.plannedV2,
+      { policySnapshot, delivery, categories, judgeCoverage: output.judgeExecutionRecords, riskAssessments },
     );
     emitJobEvent("job.finalizing", {
       jobId: job.id,

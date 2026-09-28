@@ -26,7 +26,20 @@ import { ContractError } from "./contract";
 // CARDINALITY_POLICY_VERSION). Reports persistidos carregam a versão sob a qual
 // foram produzidos; revalidação sob versão diferente é GATE-VERSION-MISMATCH,
 // nunca REPAIR falso. 1 = pré-versionamento implícito (histórico).
-export const GATE_POLICY_VERSION = 3; // ADR-021: revalidação de variedade do subconjunto (ceil(D/K))
+export const GATE_POLICY_VERSION = 4; // E5: diagnósticos de estilo (ação/conector/ancoragem) viram advisory; hard retém factualidade/variety/scenes/CTA factual
+
+// E5: matriz declarativa para consumidores internos (risk assessment e engine).
+// A versão não muda aqui: qualquer alteração de decisão exige matriz aprovada e
+// bump explícito; este export não altera o comportamento do gate vigente.
+export const GATE_POLICY_MATRIX = Object.freeze({
+  hard: Object.freeze(["factRefAllowed", "unverifiedClaim", "factualCta", "shotList", "schema", "variety", "scenes"] as const),
+  advisory: Object.freeze(["actionPresent", "connectorPresent", "textGrounding", "rationaleGrounding", "factTermsInRationale", "style"] as const),
+});
+export type GatePolicyCheck = (typeof GATE_POLICY_MATRIX.hard)[number] | (typeof GATE_POLICY_MATRIX.advisory)[number];
+export type GatePolicyAuthority = "HARD" | "ADVISORY";
+export function gatePolicyAuthority(check: GatePolicyCheck): GatePolicyAuthority {
+  return (GATE_POLICY_MATRIX.hard as readonly string[]).includes(check) ? "HARD" : "ADVISORY";
+}
 
 // Revalidação forense: recusa reclassificar payload validado sob outra política.
 // NULL/ausente = gerado antes do versionamento — também é incompatível.
@@ -48,6 +61,9 @@ export type GateReport = {
   platformStatus: "PASS" | "FAIL";
   varietyStatus: "PASS" | "FAIL";
   issues: string[];
+  // E5: diagnósticos advisory (ação/conector/ancoragem factRef) — fora da
+  // autoridade de decisão; nunca alteram REPAIR/REJECT/checkCodes.
+  advisoryIssues?: string[];
   decision: "PASS" | "REPAIR" | "REJECT";
 };
 
@@ -905,7 +921,11 @@ export function validateBriefSet(
   selectedPatterns: SelectedBriefPatterns = [],
   creatorContext: CreatorRecordingContext = {},
   structuredDevelopment?: ReadonlyMap<string, readonly DevelopmentBullet[]>,
+  // Etapa 4 V2: proxies de estilo (hook-pergunta/função de CTA) saem da
+  // autoridade e viram telemetria; factualidade/duplicatas seguem intocadas.
+  options?: { styleAuthority?: boolean },
 ): GateReport[] {
+  const styleAuthority = options?.styleAuthority !== false;
   const seenBriefs = new Set<string>();
   const seenHooks = new Set<string>();
   const seenCtas = new Set<string>();
@@ -931,6 +951,7 @@ export function validateBriefSet(
   let hookQuestionOrdinal = 0;
   const reports = briefs.map((value, index): GateReport => {
     const issues: string[] = [];
+    const advisoryIssues: string[] = [];
     let brief: ContentBriefVersion;
     try {
       brief = validateContentBrief(value);
@@ -965,7 +986,7 @@ export function validateBriefSet(
     const structuralHash = structureHash(brief);
     // Teto de hooks em pergunta: só o excesso (além do cap proporcional) é
     // marcado, e apenas quando existem alternativas elegíveis no lote.
-    if (hookQuestionEligible && hookQuestionFlags[index]) {
+    if (styleAuthority && hookQuestionEligible && hookQuestionFlags[index]) {
       hookQuestionOrdinal += 1;
       if (hookQuestionOrdinal > hookQuestionCap) issues.push("excesso de hooks em pergunta no lote");
     }
@@ -976,7 +997,7 @@ export function validateBriefSet(
     // Teto de função só vale para função realmente identificada no texto;
     // fallback sem regra não é evidência de concentração funcional.
     const ctaFunction = classifyCtaFunction(brief.cta);
-    if (ctaFunction !== UNCLASSIFIED_CTA_FUNCTION) {
+    if (styleAuthority && ctaFunction !== UNCLASSIFIED_CTA_FUNCTION) {
       const ctaFunctionCount = (ctaFunctionCounts.get(ctaFunction) ?? 0) + 1;
       ctaFunctionCounts.set(ctaFunction, ctaFunctionCount);
       if (ctaFunctionCap > 0 && ctaFunctionCount > ctaFunctionCap)
@@ -1005,13 +1026,20 @@ export function validateBriefSet(
     if (hasStructuredDevelopment) {
       if (structuredChecks.some(({ point }) => point.unverifiedParts.length > 0))
         issues.push("development contém claim sem evidência verificável");
-      if (structuredChecks.some(({ diagnostic }) => developmentDiagnosticNeedsRepair(diagnostic)))
-        issues.push("development deve orientar comunicação com ação e razão/fato, sem lista de features ou planos de gravação");
+      for (const { diagnostic } of structuredChecks) {
+        if (!developmentDiagnosticNeedsRepair(diagnostic)) continue;
+        // E5: shotList permanece HARD (matriz); ação/conector viram advisory.
+        const target = diagnostic.shotList ? issues : advisoryIssues;
+        target.push("development deve orientar comunicação com ação e razão/fato, sem lista de features ou planos de gravação");
+      }
     } else {
       const developmentUnverified = brief.development.some((point) => unverifiedObjectiveClaims(point, evidence));
       if (developmentUnverified) issues.push("development contém claim sem evidência verificável");
-      if (brief.development.some((point) => !validDevelopmentPoint(point, evidence)))
-        issues.push("development deve orientar comunicação com ação e razão/fato, sem lista de features ou planos de gravação");
+      if (brief.development.some((point) => !validDevelopmentPoint(point, evidence))) {
+        // E5: shotList HARD; ação/conector advisory.
+        const shotListHard = brief.development.some((point) => DEVELOPMENT_SHOT_LIST.test(normalizeForVariety(point)));
+        (shotListHard ? issues : advisoryIssues).push("development deve orientar comunicação com ação e razão/fato, sem lista de features ou planos de gravação");
+      }
     }
     // v2 — ancoragem factRefs + CTA por bullet (hard gate; judge permanece advisory):
     // com os bullets estruturados do próprio item disponíveis (mesma ordem/
@@ -1029,7 +1057,7 @@ export function validateBriefSet(
         if (!check.ctaValid) anyCtaInvalid = true;
       });
       if (anyFactRefDrift)
-        issues.push("development não repete termos do fato apontado por factRef no trecho após o conector");
+        advisoryIssues.push("development não repete termos do fato apontado por factRef no trecho após o conector");
       if (anyCtaInvalid)
         issues.push("development contém bullets com cta sem suporte em evidência");
     }
@@ -1090,6 +1118,7 @@ export function validateBriefSet(
       platformStatus,
       varietyStatus,
       issues,
+      ...(advisoryIssues.length > 0 ? { advisoryIssues } : {}),
       decision,
     };
   });
