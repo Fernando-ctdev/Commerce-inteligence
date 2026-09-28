@@ -1,0 +1,176 @@
+{
+  "case": {
+    "caseId": "golden-005",
+    "datasetVersion": "golden-dataset.v1",
+    "category": "TEMPLATING",
+    "scenario": "ADVERSARIAL",
+    "request": {
+      "targetContentCount": 2,
+      "briefBatchSize": 4,
+      "productId": "golden-product-005",
+      "jobId": "golden-job-005"
+    },
+    "policyRefs": {
+      "gatePolicy": "GATE_POLICY_VERSION:4",
+      "riskAssessment": "risk-assessment.v1"
+    },
+    "expected": {
+      "deliveredContentIds": [
+        "golden-005-content-1"
+      ]
+    },
+    "fixtureRefs": {
+      "evidence": {
+        "fixtureId": "evidence",
+        "fixtureVersion": "1",
+        "contentHash": "5efc9dc8d45fb064828e282028734d494af97d9dfa491ceca4436b725b19d278",
+        "encoding": "canonical-json-utf8"
+      },
+      "creatorContext": {
+        "fixtureId": "creatorContext",
+        "fixtureVersion": "1",
+        "contentHash": "51d865c4d0211f7540b0b6bbd76c09de62cf66b70ec13707b1c783257bc4d927",
+        "encoding": "canonical-json-utf8"
+      },
+      "providerResponses": [
+        {
+          "fixtureId": "judgePool",
+          "fixtureVersion": "1",
+          "contentHash": "21d42764c01837e3dc7ea30e4fd6130d09cc7055a25c9dff59b77f21e68e97b0",
+          "encoding": "canonical-json-utf8"
+        }
+      ]
+    }
+  },
+  "fixture": {
+    "evidence": {
+      "facts": [
+        "Produto Golden",
+        "fato autorizado um"
+      ],
+      "refs": [
+        "product:name",
+        "fact:um"
+      ]
+    },
+    "creatorContext": {},
+    "contents": [
+      {
+        "contentId": "golden-005-content-1",
+        "brief": {
+          "angle": "Template perceptível ângulo 1",
+          "hook": "Template perceptível gancho 1 direto ao ponto",
+          "development": [
+            "Mostre Template perceptível item 1 com o produto em uso",
+            "Feche mostrando Template perceptível detalhe 1 sem fala"
+          ],
+          "script": "Demonstre Template perceptível passo 1 e conclua sem enrolar.",
+          "cta": "Confira Template perceptível 1 na página."
+        },
+        "gate": {
+          "briefId": "golden-005-content-1:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Template cena 1",
+            "Template cena 2"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-005-content-2",
+        "brief": {
+          "angle": "Repetição literal ângulo 2",
+          "hook": "Repetição literal gancho 2 direto ao ponto",
+          "development": [
+            "Mostre Repetição literal item 2 com o produto em uso",
+            "Feche mostrando Repetição literal detalhe 2 sem fala"
+          ],
+          "script": "Demonstre Repetição literal passo 2 e conclua sem enrolar.",
+          "cta": "Confira Repetição literal 2 na página."
+        },
+        "gate": {
+          "briefId": "golden-005-content-2:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "FAIL",
+          "issues": [
+            "duplicata normalizada de hook"
+          ],
+          "decision": "REJECT"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Repetição cena 1",
+            "Repetição cena 2"
+          ]
+        }
+      }
+    ],
+    "judgePool": [
+      {
+        "contentId": "golden-005-content-1",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      }
+    ],
+    "judgeCallCostMinor": 900,
+    "judgeLatencyMs": 1100
+  },
+  "inputHash": "e9c0de3ec83103def00cdc246e816360c7e274ccf882a992975e835bef284978",
+  "caseHash": "a27183ba6c41583e6e21b4f82fd54c31754661e4273a8e0a44d3eba1860f2660"
+}

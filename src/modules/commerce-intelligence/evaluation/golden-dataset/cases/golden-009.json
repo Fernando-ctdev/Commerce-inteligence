@@ -1,0 +1,320 @@
+{
+  "case": {
+    "caseId": "golden-009",
+    "datasetVersion": "golden-dataset.v1",
+    "category": "PARTIAL_RETRY",
+    "scenario": "PARTIAL",
+    "request": {
+      "targetContentCount": 4,
+      "briefBatchSize": 4,
+      "productId": "golden-product-009",
+      "jobId": "golden-job-009"
+    },
+    "policyRefs": {
+      "gatePolicy": "GATE_POLICY_VERSION:4",
+      "riskAssessment": "risk-assessment.v1"
+    },
+    "expected": {
+      "deliveredContentIds": [
+        "golden-009-content-1",
+        "golden-009-content-2"
+      ]
+    },
+    "fixtureRefs": {
+      "evidence": {
+        "fixtureId": "evidence",
+        "fixtureVersion": "1",
+        "contentHash": "5efc9dc8d45fb064828e282028734d494af97d9dfa491ceca4436b725b19d278",
+        "encoding": "canonical-json-utf8"
+      },
+      "creatorContext": {
+        "fixtureId": "creatorContext",
+        "fixtureVersion": "1",
+        "contentHash": "51d865c4d0211f7540b0b6bbd76c09de62cf66b70ec13707b1c783257bc4d927",
+        "encoding": "canonical-json-utf8"
+      },
+      "providerResponses": [
+        {
+          "fixtureId": "judgePool",
+          "fixtureVersion": "1",
+          "contentHash": "1bc6b926320f36ac344c501ae2423aefc72b2595b2709f1b9cbfb98085f2db1d",
+          "encoding": "canonical-json-utf8"
+        }
+      ]
+    }
+  },
+  "fixture": {
+    "evidence": {
+      "facts": [
+        "Produto Golden",
+        "fato autorizado um"
+      ],
+      "refs": [
+        "product:name",
+        "fact:um"
+      ]
+    },
+    "creatorContext": {},
+    "contents": [
+      {
+        "contentId": "golden-009-content-1",
+        "brief": {
+          "angle": "Parcial um ângulo 1",
+          "hook": "Parcial um gancho 1 direto ao ponto",
+          "development": [
+            "Mostre Parcial um item 1 com o produto em uso",
+            "Feche mostrando Parcial um detalhe 1 sem fala"
+          ],
+          "script": "Demonstre Parcial um passo 1 e conclua sem enrolar.",
+          "cta": "Confira Parcial um 1 na página."
+        },
+        "gate": {
+          "briefId": "golden-009-content-1:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Parcial 1 cena A",
+            "Parcial 1 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-009-content-2",
+        "brief": {
+          "angle": "Parcial dois ângulo 2",
+          "hook": "Parcial dois gancho 2 direto ao ponto",
+          "development": [
+            "Mostre Parcial dois item 2 com o produto em uso",
+            "Feche mostrando Parcial dois detalhe 2 sem fala"
+          ],
+          "script": "Demonstre Parcial dois passo 2 e conclua sem enrolar.",
+          "cta": "Confira Parcial dois 2 na página."
+        },
+        "gate": {
+          "briefId": "golden-009-content-2:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Parcial 2 cena A",
+            "Parcial 2 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-009-content-3",
+        "brief": {
+          "angle": "Falta factual ângulo 3",
+          "hook": "Falta factual gancho 3 direto ao ponto",
+          "development": [
+            "Mostre Falta factual item 3 com o produto em uso",
+            "Feche mostrando Falta factual detalhe 3 sem fala"
+          ],
+          "script": "Demonstre Falta factual passo 3 e conclua sem enrolar.",
+          "cta": "Confira Falta factual 3 na página."
+        },
+        "gate": {
+          "briefId": "golden-009-content-3:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "UNSUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [
+            "claim objetivo sem suporte"
+          ],
+          "decision": "REJECT"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Falta 3 cena A",
+            "Falta 3 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-009-content-4",
+        "brief": {
+          "angle": "Falta de cenas ângulo 4",
+          "hook": "Falta de cenas gancho 4 direto ao ponto",
+          "development": [
+            "Mostre Falta de cenas item 4 com o produto em uso",
+            "Feche mostrando Falta de cenas detalhe 4 sem fala"
+          ],
+          "script": "Demonstre Falta de cenas passo 4 e conclua sem enrolar.",
+          "cta": "Confira Falta de cenas 4 na página."
+        },
+        "gate": {
+          "briefId": "golden-009-content-4:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "FILTERED",
+          "kept": 1,
+          "dropped": 1,
+          "descriptions": [
+            "Única cena"
+          ]
+        }
+      }
+    ],
+    "judgePool": [
+      {
+        "contentId": "golden-009-content-1",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-009-content-2",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-009-content-4",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      }
+    ],
+    "judgeCallCostMinor": 900,
+    "judgeLatencyMs": 1400
+  },
+  "inputHash": "9d8db0540a65a0bc1d27e1a9f1f8584be8c722ef7b72ae69c913c9c161e7cc5a",
+  "caseHash": "db89b347ea4a90884420aea3874f185ba895167de3124a1697bd9742011acf6e"
+}

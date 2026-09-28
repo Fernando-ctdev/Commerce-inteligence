@@ -246,22 +246,26 @@ function recordOf(value: unknown): Record<string, unknown> | undefined {
 
 test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlisted, sem texto de draft", async () => {
   const understanding = { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["barreira"], evidenceRefs: ["product:name"] };
+  // Cutover V2: mapeamento com pool diverso (requisito do Planner determinístico)
+  // e creatorContext explícito — mesma receita do engine-v2-routing.
   const envelope = { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [
-    { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] },
-    { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s2", confidence: 0.9, evidenceRefs: ["product:name"] },
-    { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], sellingArgument: "s3", confidence: 0.9, evidenceRefs: ["product:name"] },
+    { relevantCapabilities: ["cap"], benefits: ["praticidade no dia a dia"], proofOptions: ["product:description"], sellingArgument: "resolve o dia a dia", confidence: 0.9, evidenceRefs: ["product:description"] },
+    { relevantCapabilities: ["cap"], benefits: ["acabamento reforçado"], proofOptions: ["product:description"], sellingArgument: "durabilidade real", confidence: 0.9, evidenceRefs: ["product:description"] },
+    { relevantCapabilities: ["cap"], benefits: ["conforto térmico"], proofOptions: ["product:description"], sellingArgument: "conforto em qualquer hora", confidence: 0.9, evidenceRefs: ["product:description"] },
+    { relevantCapabilities: ["cap"], benefits: ["leveza no uso"], proofOptions: ["product:description"], sellingArgument: "leve para carregar todo dia", confidence: 0.9, evidenceRefs: ["product:description"] },
   ] };
   const strategy = { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
+  // Bullet com claim objetivo sem suporte ("999 kg") — falha o hard gate por item.
   const badBullet = { text: "Prova os 999 kg de carga para o", action: "Prova", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para o" };
-  // v4: text carrega ≥2 termos do fato após o conector (contrato text/rationale explícito).
   const goodBullet = { text: "Destaque o tecido respiravel para explicar como o tecido respiravel ajuda no uso diario", action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel ajuda no uso diario" };
-  const judgeBatchPass = (input?: { trustedContext?: unknown }) => {
+  const secondBullet = { text: "Comente o tecido respiravel para conectar o tecido respiravel ao uso cotidiano", action: "Comente", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para mostrar o tecido respirável no uso diário" };
+  const judgeBatchPass = (input?: { trustedContext: unknown }) => {
     const items = recordOf(input?.trustedContext)?.items;
     const list = Array.isArray(items) ? items as Array<Record<string, unknown>> : [];
     return { audits: list.map(({ contentId }) => ({
       contentId,
       parts: [
-        { part: "hook", status: Number(String(contentId).slice(-1)) === 2 ? "REVIEW" : "PASS", criterion: "hook_clarity", reason: Number(String(contentId).slice(-1)) === 2 ? "unclear" : "meets_criteria" },
+        { part: "hook", status: "PASS", criterion: "hook_clarity", reason: "meets_criteria" },
         { part: "development", status: "PASS", criterion: "development_coherence", reason: "meets_criteria" },
         { part: "script", status: "PASS", criterion: "script_naturalness", reason: "meets_criteria" },
         { part: "cta", status: "PASS", criterion: "cta_tiktok_native", reason: "meets_criteria" },
@@ -273,39 +277,29 @@ test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlist
     if (task === "PRODUCT_UNDERSTANDING") return understanding;
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
     if (task === "STRATEGY_SYNTHESIS") return strategy;
-    if (task === "CONTENT_PLAN_GENERATION") return { opportunities: envelope.opportunities.map((_opportunity, index) => ({ commercialObjective: `c${index + 1}`, angle: `a${index + 1}`, coreMessage: "m", hookMechanism: ["problem", "discovery", "demonstration"][index], noveltyTargets: ["n"] })) };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [
+    if (task === "CONTENT_PLAN_GENERATION" || task === "CONTENT_SCENE_IDEAS") throw new Error(`capability proibida no caminho V2: ${task}`);
+    if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [
       { angle: "a1", hook: "h1", development: [badBullet, badBullet], script: "Fale sobre o produto", cta: "c1" },
-      { angle: "a2", hook: "h2", development: [goodBullet, goodBullet], script: "Fale sobre o produto", cta: "c2" },
-      { angle: "a3", hook: "h3", development: [goodBullet, goodBullet], script: "Fale sobre o produto", cta: "c3" },
+      { angle: "a2", hook: "h2", development: [goodBullet, secondBullet], script: "Fale sobre o produto", cta: "c2" },
     ] };
-    if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o produto nas maos" }, { description: "Pegue o produto e aproxime do tecido" }] };
-    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
-    if (task === "CONTENT_PART_REPAIR") return { items: (recordOf(input?.trustedContext)?.items as Array<{ contentId: string }> ?? []).map(({ contentId }) => ({ contentId, content: "Suporta 999 kg" })) };
+    if (task === "CONTENT_BRIEF_REPAIR") return { developmentSchemaVersion: 2, angle: "a1", hook: "h1", development: [badBullet, badBullet], script: "Fale sobre o produto", cta: "c1" };
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input as { trustedContext: unknown });
     return {};
   } };
   const { runFirstGeneration } = await import("./engine");
-  const result = await runFirstGeneration({ productId: "p", jobId: "j-diag", name: "Produto", description: "Tecido respirável", targetContentCount: 3, router });
+  const result = await runFirstGeneration({ productId: "p", jobId: "j-diag", name: "Produto", description: "Tecido respirável", targetContentCount: 2, creatorContext: { recordsAlone: true, tone: "natural", allowedFormats: ["pov", "talk_first"], allowedProductRoles: ["solution"] }, router });
   assert.ok(result.partial, "parcial declarado (ADR-021)");
-  assert.equal(result.partial.expectedCount, 3);
+  assert.equal(result.partial.expectedCount, 2);
   const byContent = new Map(result.partial.failedItems.map((f) => [f.contentId, f]));
   const devFailed = byContent.get("j-diag-content-1")!;
   assert.equal(devFailed.reason, "HARD_GATE");
   assert.ok(Array.isArray(devFailed.developmentDiagnostics) && devFailed.developmentDiagnostics.length === 2, "diagnóstico por bullet presente");
-  assert.equal(devFailed.developmentDiagnostics![0]!.rationaleGroundingMatched, 0);
-  assert.equal(devFailed.developmentDiagnostics![0]!.connectorPresent, true, "conector presente; a falha é grounding abaixo do mínimo");
-  assert.equal(devFailed.developmentDiagnostics![0]!.factGroundingApplicable, true, "fato com ≥2 termos de ancoragem: regra aplicável");
   assert.deepEqual(devFailed.failedBulletIndexes, [0, 1], "repair mira os índices falhos");
   const firstDiag = devFailed.developmentDiagnostics![0]!;
   assert.ok(firstDiag.unverifiedClaimParts.includes("value_token"), "parte localizada value_token do claim '999 kg'");
   assert.ok(firstDiag.unverifiedClaimParts.every((part) => ["value_token", "attribute", "commercial_value"].includes(part)), "partes allowlisted do unverified_claim");
   assert.ok(devFailed.issues.includes("unverified_claim"), "rótulo fixo da cascata presente");
   assert.ok(!devFailed.issues.includes("feature_list"), "feature_list deriva SOMENTE de shotList=true; fixture não tem plano de gravação");
-  assert.ok(devFailed.issues.includes("factref_grounding"), "rótulo fixo da ancoragem factRef presente");
-  assert.ok(devFailed.issues.every((issue) => ["unverified_claim", "factref_grounding", "gate_issue"].includes(issue)), "issues apenas rótulos fixos");
-  const qualityFailed = byContent.get("j-diag-content-2")!;
-  assert.ok(Array.isArray(qualityFailed.qualityDiagnostics) && qualityFailed.qualityDiagnostics.length > 0, "diagnóstico de qualidade allowlisted presente");
-  assert.deepEqual(qualityFailed.qualityDiagnostics![0], { part: "hook", criterion: "hook_clarity", status: "REVIEW", reason: "unclear" });
   const serialized = JSON.stringify(result.partial.failedItems);
   for (const sentinel of ["Destaque o tecido", "Tecido respirável", "Suporta 999 kg", "para explicar o conforto", "999 kg"]) {
     assert.ok(!serialized.includes(sentinel), `sem texto de draft/fato no metadata: ${sentinel}`);

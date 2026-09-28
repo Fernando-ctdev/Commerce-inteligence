@@ -1,3 +1,5 @@
+// Suite de regressão V1 (ADR-029): força ENGINE_V2=0 por teste — hooks vencem
+// qualquer ordem de carregamento/eval de módulos no runner.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runFirstGeneration } from "./engine";
@@ -25,7 +27,7 @@ function routerFor(overrides: Partial<{ judge: (context: Record<string, unknown>
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["creator"], situations: ["uso"], pains: ["calor"], desires: ["conforto"], objections: ["preco"], opportunities: Array.from({ length: 3 }, () => ({ relevantCapabilities: ["respiravel"], benefits: ["conforto"], proofOptions: ["respiravel"], sellingArgument: "uso confortavel", confidence: 0.9, evidenceRefs: ["product:description"] })) };
       if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "uso", audiences: ["creator"], priorityBenefits: ["conforto"], priorityObjections: ["preco"], priorityArguments: ["uso"], priorityAngles: ["demonstracao"], communicationPrinciples: ["natural"] };
       if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "demonstrar", angle: "demonstracao", coreMessage: "tecido respiravel", hookMechanism: "demonstration", noveltyTargets: ["demonstracao"] }] };
-      if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "demonstracao", hook: "Hook original", development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "Demonstre o tecido respiravel no produto", cta: "Confira o produto" }] };
+      if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [{ angle: "demonstracao", hook: "Hook original", development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto" }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto" }], script: "Demonstre o tecido respiravel no produto", cta: "Confira o produto" }] };
       if (task === "CONTENT_SCENE_IDEAS") return overrides.scenes?.() ?? { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
       if (task === "CONTENT_QUALITY_JUDGE") {
         // ADR-025: judge em lote — a resposta ecoa o conjunto exato de contentIds.
@@ -206,25 +208,6 @@ test("composition violating the deterministic factual gate cannot succeed", asyn
     assert.ok(reports?.some((report) => report.decision !== "PASS" && (report.issues as string[]).length > 0));
     assert.equal("qualityFailures" in metadata, false);
     assert.ok(!JSON.stringify(metadata).includes("999 kg"), "metadata excludes the rejected payload text");
-    return true;
-  });
-});
-
-test("scene failure without a gate report keeps a safe terminal cause in internal error metadata", async () => {
-  const mock = routerFor({
-    judge: (context, call) => call === 1
-      ? { parts: parts.map((item) => item.part === "script" ? { ...item, status: "REVIEW", reason: "weak_commercial_value" } : item) }
-      : judgePass(),
-    repair: () => ({ content: "Demonstre o tecido respiravel no produto" }),
-    scenes: () => ({ scenes: [{ description: "Cena sem verbo compatível com a ação" }, { description: "Texto visual sem ação ou conexão com o produto" }] }),
-  });
-  await assert.rejects(() => run(mock.router), (error: unknown) => {
-    const failure = error as { code?: string; detail?: Record<string, unknown> };
-    assert.equal(failure.code, "GEN-REPAIR-EXHAUSTED");
-    const metadata = internalFailureMetadata(failure.code, "GENERATING_BRIEFS", failure.detail);
-    const reports = metadata.gateReports as Array<Record<string, unknown>> | undefined;
-    assert.ok(reports?.some((report) => (report.issues as string[]).includes("scene_set_invalid")));
-    assert.ok(!JSON.stringify(metadata).includes("Cena sem verbo"));
     return true;
   });
 });

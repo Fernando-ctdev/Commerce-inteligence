@@ -1,0 +1,95 @@
+{
+  "annotations": [
+    {
+      "annotationId": "golden-006:85f10195c88ac529@annotator-1",
+      "caseId": "golden-006",
+      "opaqueArmId": "85f10195c88ac529",
+      "assignmentHash": "9a18f5efbfdba35e46febef628a3e6d6f2455ce2dbe798852a5f24736f725cf3",
+      "rubricVersion": "golden-rubric.v1",
+      "opaqueAnnotatorId": "annotator-1",
+      "labels": [
+        {
+          "contentId": "golden-006-content-1",
+          "label": "NATURAL"
+        },
+        {
+          "contentId": "golden-006-content-2",
+          "label": "NATURAL"
+        }
+      ],
+      "annotationHash": "eea45e5f72a60a1820ba780641c6512f1ebd02d8b83066b20ac37d42a7575b9a"
+    },
+    {
+      "annotationId": "golden-006:17645d1afe0b33ae@annotator-1",
+      "caseId": "golden-006",
+      "opaqueArmId": "17645d1afe0b33ae",
+      "assignmentHash": "ace78b4da4c1f8de90e79921e591e0e55514bec96689118ae6baf7364ad9b993",
+      "rubricVersion": "golden-rubric.v1",
+      "opaqueAnnotatorId": "annotator-1",
+      "labels": [
+        {
+          "contentId": "golden-006-content-1",
+          "label": "NATURAL"
+        },
+        {
+          "contentId": "golden-006-content-2",
+          "label": "NATURAL"
+        }
+      ],
+      "annotationHash": "c66b4319554770c521591f40f2e7b4359beac563918fe3c1454f2f21c5f1f2a9"
+    },
+    {
+      "annotationId": "golden-006:85f10195c88ac529@annotator-2",
+      "caseId": "golden-006",
+      "opaqueArmId": "85f10195c88ac529",
+      "assignmentHash": "9a18f5efbfdba35e46febef628a3e6d6f2455ce2dbe798852a5f24736f725cf3",
+      "rubricVersion": "golden-rubric.v1",
+      "opaqueAnnotatorId": "annotator-2",
+      "labels": [
+        {
+          "contentId": "golden-006-content-1",
+          "label": "FORCED"
+        },
+        {
+          "contentId": "golden-006-content-2",
+          "label": "NATURAL"
+        }
+      ],
+      "annotationHash": "b933e472c1eb29e05a90c06f59ca6a0e7a642ba0bb30f2619608b84dc2c97e77"
+    },
+    {
+      "annotationId": "golden-006:17645d1afe0b33ae@annotator-2",
+      "caseId": "golden-006",
+      "opaqueArmId": "17645d1afe0b33ae",
+      "assignmentHash": "ace78b4da4c1f8de90e79921e591e0e55514bec96689118ae6baf7364ad9b993",
+      "rubricVersion": "golden-rubric.v1",
+      "opaqueAnnotatorId": "annotator-2",
+      "labels": [
+        {
+          "contentId": "golden-006-content-1",
+          "label": "NATURAL"
+        },
+        {
+          "contentId": "golden-006-content-2",
+          "label": "NATURAL"
+        }
+      ],
+      "annotationHash": "99d44e3c38cc125538eb8d7a83b284b04212785ff8e789a3c5245312c4417dd2"
+    }
+  ],
+  "adjudications": [
+    {
+      "caseId": "golden-006",
+      "opaqueArmId": "85f10195c88ac529",
+      "assignmentHash": "9a18f5efbfdba35e46febef628a3e6d6f2455ce2dbe798852a5f24736f725cf3",
+      "label": "NATURAL",
+      "adjudicator": "arquiteto",
+      "reason": "gancho c1 atende definição operacional da rubric",
+      "conflictBetween": [
+        "golden-006:85f10195c88ac529@annotator-1",
+        "golden-006:85f10195c88ac529@annotator-2"
+      ],
+      "adjudicationHash": "99310ee85a0f34e3a1f71f3b05d4ef15c9cfe233b43c58bb1469bb9efaccf0b5"
+    }
+  ]
+}

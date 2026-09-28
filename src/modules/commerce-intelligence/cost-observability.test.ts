@@ -159,7 +159,7 @@ test("misto REPORTED(USD) + ESTIMATED(BRL): job não soma — UNAVAILABLE", () =
 test("contentId só aparece quando atribuído", async () => {
   const records = await buildCapabilityUsageCosts(
     [
-      { task: "CONTENT_SCENE_IDEAS", contentId: "j-content-1", attempt: 1, retry: 0, usage: usage({ inputTokens: 100 }) },
+      { task: "CONTENT_BRIEF_GENERATION", contentId: "j-content-1", attempt: 1, retry: 0, usage: usage({ inputTokens: 100 }) },
       { task: "CONTENT_BRIEF_GENERATION", attempt: 1, retry: 0, usage: usage({ inputTokens: 100 }) },
     ],
     resolverByCurrency("BRL").resolve,

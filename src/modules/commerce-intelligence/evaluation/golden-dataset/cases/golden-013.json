@@ -1,0 +1,215 @@
+{
+  "case": {
+    "caseId": "golden-013",
+    "datasetVersion": "golden-dataset.v1",
+    "category": "TENANT_IDEMPOTENCY",
+    "scenario": "HAPPY_PATH",
+    "request": {
+      "targetContentCount": 2,
+      "briefBatchSize": 4,
+      "productId": "golden-product-013",
+      "jobId": "golden-job-013"
+    },
+    "policyRefs": {
+      "gatePolicy": "GATE_POLICY_VERSION:4",
+      "riskAssessment": "risk-assessment.v1"
+    },
+    "expected": {
+      "deliveredContentIds": [
+        "golden-013-content-1",
+        "golden-013-content-2"
+      ]
+    },
+    "fixtureRefs": {
+      "evidence": {
+        "fixtureId": "evidence",
+        "fixtureVersion": "1",
+        "contentHash": "5efc9dc8d45fb064828e282028734d494af97d9dfa491ceca4436b725b19d278",
+        "encoding": "canonical-json-utf8"
+      },
+      "creatorContext": {
+        "fixtureId": "creatorContext",
+        "fixtureVersion": "1",
+        "contentHash": "51d865c4d0211f7540b0b6bbd76c09de62cf66b70ec13707b1c783257bc4d927",
+        "encoding": "canonical-json-utf8"
+      },
+      "providerResponses": [
+        {
+          "fixtureId": "judgePool",
+          "fixtureVersion": "1",
+          "contentHash": "bc4465a23005d9ee9c0a8ffd5bb1d17c44402b66adcfa524a8f3ed2a54d469ee",
+          "encoding": "canonical-json-utf8"
+        }
+      ]
+    }
+  },
+  "fixture": {
+    "evidence": {
+      "facts": [
+        "Produto Golden",
+        "fato autorizado um"
+      ],
+      "refs": [
+        "product:name",
+        "fact:um"
+      ]
+    },
+    "creatorContext": {},
+    "platform": {
+      "tenantRef": "fixture-tenant-alpha",
+      "idempotencyRef": "fixture-idem-013"
+    },
+    "contents": [
+      {
+        "contentId": "golden-013-content-1",
+        "brief": {
+          "angle": "Idempotência A ângulo 1",
+          "hook": "Idempotência A gancho 1 direto ao ponto",
+          "development": [
+            "Mostre Idempotência A item 1 com o produto em uso",
+            "Feche mostrando Idempotência A detalhe 1 sem fala"
+          ],
+          "script": "Demonstre Idempotência A passo 1 e conclua sem enrolar.",
+          "cta": "Confira Idempotência A 1 na página."
+        },
+        "gate": {
+          "briefId": "golden-013-content-1:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Idem 1 cena A",
+            "Idem 1 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-013-content-2",
+        "brief": {
+          "angle": "Idempotência B ângulo 2",
+          "hook": "Idempotência B gancho 2 direto ao ponto",
+          "development": [
+            "Mostre Idempotência B item 2 com o produto em uso",
+            "Feche mostrando Idempotência B detalhe 2 sem fala"
+          ],
+          "script": "Demonstre Idempotência B passo 2 e conclua sem enrolar.",
+          "cta": "Confira Idempotência B 2 na página."
+        },
+        "gate": {
+          "briefId": "golden-013-content-2:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Idem 2 cena A",
+            "Idem 2 cena B"
+          ]
+        }
+      }
+    ],
+    "judgePool": [
+      {
+        "contentId": "golden-013-content-1",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-013-content-2",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      }
+    ],
+    "judgeCallCostMinor": 900,
+    "judgeLatencyMs": 1000
+  },
+  "inputHash": "6e851e13e4d2c182a374fced40f7fef5e565d63f7a1fc926904d6ea53747915a",
+  "caseHash": "c14a6e1d5bafff8720434fbb7863a2306c51d9975d4f72b834c3e76c73a3ceea"
+}

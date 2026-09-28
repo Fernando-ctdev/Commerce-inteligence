@@ -1,0 +1,14 @@
+{
+  "rubrics": [
+    {
+      "rubricId": "golden-naturalness-blind",
+      "rubricVersion": "golden-rubric.v1",
+      "dimension": "NATURALNESS",
+      "unit": "CONTENT",
+      "labels": ["NATURAL", "FORCED", "UNCLEAR"],
+      "evidenceRequired": false,
+      "blind": true,
+      "adjudicationPolicyVersion": "adjudication.v1"
+    }
+  ]
+}

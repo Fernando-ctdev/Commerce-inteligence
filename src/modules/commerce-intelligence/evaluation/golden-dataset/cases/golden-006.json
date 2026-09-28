@@ -1,0 +1,211 @@
+{
+  "case": {
+    "caseId": "golden-006",
+    "datasetVersion": "golden-dataset.v1",
+    "category": "NATURALNESS",
+    "scenario": "HAPPY_PATH",
+    "request": {
+      "targetContentCount": 2,
+      "briefBatchSize": 4,
+      "productId": "golden-product-006",
+      "jobId": "golden-job-006"
+    },
+    "policyRefs": {
+      "gatePolicy": "GATE_POLICY_VERSION:4",
+      "riskAssessment": "risk-assessment.v1"
+    },
+    "expected": {
+      "deliveredContentIds": [
+        "golden-006-content-1",
+        "golden-006-content-2"
+      ]
+    },
+    "fixtureRefs": {
+      "evidence": {
+        "fixtureId": "evidence",
+        "fixtureVersion": "1",
+        "contentHash": "5efc9dc8d45fb064828e282028734d494af97d9dfa491ceca4436b725b19d278",
+        "encoding": "canonical-json-utf8"
+      },
+      "creatorContext": {
+        "fixtureId": "creatorContext",
+        "fixtureVersion": "1",
+        "contentHash": "51d865c4d0211f7540b0b6bbd76c09de62cf66b70ec13707b1c783257bc4d927",
+        "encoding": "canonical-json-utf8"
+      },
+      "providerResponses": [
+        {
+          "fixtureId": "judgePool",
+          "fixtureVersion": "1",
+          "contentHash": "550466671a9db9c8d02e26e5ee5594f774e8cd75dc3e528fcde14ceec376077b",
+          "encoding": "canonical-json-utf8"
+        }
+      ]
+    }
+  },
+  "fixture": {
+    "evidence": {
+      "facts": [
+        "Produto Golden",
+        "fato autorizado um"
+      ],
+      "refs": [
+        "product:name",
+        "fact:um"
+      ]
+    },
+    "creatorContext": {},
+    "contents": [
+      {
+        "contentId": "golden-006-content-1",
+        "brief": {
+          "angle": "Naturalidade A ângulo 1",
+          "hook": "Naturalidade A gancho 1 direto ao ponto",
+          "development": [
+            "Mostre Naturalidade A item 1 com o produto em uso",
+            "Feche mostrando Naturalidade A detalhe 1 sem fala"
+          ],
+          "script": "Demonstre Naturalidade A passo 1 e conclua sem enrolar.",
+          "cta": "Confira Naturalidade A 1 na página."
+        },
+        "gate": {
+          "briefId": "golden-006-content-1:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Natural A cena 1",
+            "Natural A cena 2"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-006-content-2",
+        "brief": {
+          "angle": "Naturalidade B ângulo 2",
+          "hook": "Naturalidade B gancho 2 direto ao ponto",
+          "development": [
+            "Mostre Naturalidade B item 2 com o produto em uso",
+            "Feche mostrando Naturalidade B detalhe 2 sem fala"
+          ],
+          "script": "Demonstre Naturalidade B passo 2 e conclua sem enrolar.",
+          "cta": "Confira Naturalidade B 2 na página."
+        },
+        "gate": {
+          "briefId": "golden-006-content-2:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Natural B cena 1",
+            "Natural B cena 2"
+          ]
+        }
+      }
+    ],
+    "judgePool": [
+      {
+        "contentId": "golden-006-content-1",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-006-content-2",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      }
+    ],
+    "judgeCallCostMinor": 900,
+    "judgeLatencyMs": 1000
+  },
+  "inputHash": "b1c6d32c400c985c90719574b4c4706150c1ef1a8f0f110f05a6db166551f0a8",
+  "caseHash": "b47b35071af4c0ad3de9db2a325f6419fd39cbb08aeecfcd8ec7239008087b21"
+}

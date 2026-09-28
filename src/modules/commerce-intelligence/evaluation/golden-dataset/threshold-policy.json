@@ -1,0 +1,10 @@
+{
+  "thresholdPolicyVersion": "THRESHOLD_POLICY_GOLDEN_V1",
+  "datasetVersion": "golden-dataset.v1",
+  "baselineRef": "adr-029@tiktok-commerce@1.2",
+  "candidateJudgeRule": { "source": "risk-assessment.v1", "judgeIfRiskBandAtLeast": "MEDIUM" },
+  "thresholds": { "minDeliveredAgreement": 1.0, "maxMissedReviewShare": 0.34, "minJudgeCallReductionShare": 0.2 },
+  "denominators": { "quality": "JUDGE_EXECUTED_CONTENTS", "delivery": "CASE_TARGET_CONTENT_COUNT" },
+  "annotationPolicy": { "category": "NATURALNESS", "rubricDimension": "NATURALNESS", "annotators": 2, "mode": "ADJUDICATED" },
+  "missingRule": "custo_ou_latencia_ausente_sao_UNAVAILABLE_nunca_zero; NOT_EXECUTED_excludedo_denominador_de_qualidade_e_registrado_na_cobertura"
+}

@@ -6,6 +6,9 @@
 // únicas chamadas extras são o CONTENT_BRIEF_REPAIR já previsto), o artefato
 // não publica (reparado ou, persistindo, item fora do entregue — fail-closed)
 // e fala creator-first legítima continua passando.
+// Suite de regressão V1 (ADR-029): roteamento fixado em ENGINE_V2=0 — o
+// caminho V2 tem suíte própria (engine-v2-routing / engine-v2-contract).
+
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runFirstGeneration } from "./engine";
@@ -33,16 +36,19 @@ function bumped(calls: Record<string, number>, task: string): void {
 }
 // Fixtures canônicas de 1 conteúdo (mesma família factual da suíte).
 function oneContentCalls(): Record<string, number> {
+  // Cutover V2: sem CONTENT_PLAN_GENERATION (Planner determinístico) e sem
+  // CONTENT_SCENE_IDEAS (Scene Skeleton); judge continua no fluxo.
   return {
     PRODUCT_UNDERSTANDING: 1,
     COMMERCIAL_OPPORTUNITY_MAPPING: 1,
     STRATEGY_SYNTHESIS: 1,
-    CONTENT_PLAN_GENERATION: 1,
     CONTENT_BRIEF_GENERATION: 1,
-    CONTENT_SCENE_IDEAS: 1,
     CONTENT_QUALITY_JUDGE: 1,
   };
 }
+
+test.beforeEach(() => { process.env.ENGINE_V2 = "0"; });
+test.afterEach(() => { process.env.ENGINE_V2 = "0"; });
 
 test("ADR-026: internalLocator casa só colchete namespace:token sem espaço", () => {
   assert.equal(internalLocator("texto [fact:features] fim"), "[fact:features]");
@@ -87,10 +93,10 @@ test("ADR-026 caso real 1: [fact:features] no script não publica e repara sem c
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:description"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:description"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "Gancho", development: developmentOk, script: "[fact:features] Tecido respiravel", cta: "cta" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [{ angle: "a", hook: "Gancho", development: developmentOk, script: "[fact:features] Tecido respiravel", cta: "cta" }] };
     if (task === "CONTENT_BRIEF_REPAIR") {
       repairContexts.push(recordOf(input?.trustedContext) ?? {});
-      return { angle: "a", hook: "Gancho", development: [{ text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso" }, { text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso" }], script: "Tecido respiravel", cta: "cta" };
+      return { developmentSchemaVersion: 2, angle: "a", hook: "Gancho", development: [{ text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso" }, { text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso" }], script: "Tecido respiravel", cta: "cta" };
     }
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
     if (task === "CONTENT_QUALITY_JUDGE")
@@ -121,10 +127,10 @@ test("ADR-026 caso real 2: inserção editorial no script não publica e repara 
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:description"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:description"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [{ angle: "a", hook: "Gancho", development: developmentOk, script: "Eu colocaria aqui um objeto pequeno que mostra o tecido respiravel", cta: "cta" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [{ angle: "a", hook: "Gancho", development: developmentOk, script: "Eu colocaria aqui um objeto pequeno que mostra o tecido respiravel", cta: "cta" }] };
     if (task === "CONTENT_BRIEF_REPAIR") {
       repairContexts.push(recordOf(input?.trustedContext) ?? {});
-      return { angle: "a", hook: "Gancho", development: [{ text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso" }, { text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso" }], script: "Tecido respiravel", cta: "cta" };
+      return { developmentSchemaVersion: 2, angle: "a", hook: "Gancho", development: [{ text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso" }, { text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso" }], script: "Tecido respiravel", cta: "cta" };
     }
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
     if (task === "CONTENT_QUALITY_JUDGE")
@@ -150,7 +156,7 @@ test("ADR-026: locator persistente após repair falha o item, nunca publica", as
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [{ relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:description"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:description"] }] };
     if (task === "STRATEGY_SYNTHESIS") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
     if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 1, opportunities: [{ commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "demonstration", noveltyTargets: ["n"] }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { items: [leakyBrief] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [leakyBrief] };
     if (task === "CONTENT_BRIEF_REPAIR")
       return { ...leakyBrief, development: [{ text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso" }, { text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso" }] };
     if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };

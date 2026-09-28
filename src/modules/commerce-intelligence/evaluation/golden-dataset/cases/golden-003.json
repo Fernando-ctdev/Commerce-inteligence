@@ -1,0 +1,282 @@
+{
+  "case": {
+    "caseId": "golden-003",
+    "datasetVersion": "golden-dataset.v1",
+    "category": "SCENES",
+    "scenario": "SCENE_FAILURE",
+    "request": {
+      "targetContentCount": 3,
+      "briefBatchSize": 4,
+      "productId": "golden-product-003",
+      "jobId": "golden-job-003"
+    },
+    "policyRefs": {
+      "gatePolicy": "GATE_POLICY_VERSION:4",
+      "riskAssessment": "risk-assessment.v1"
+    },
+    "expected": {
+      "deliveredContentIds": [
+        "golden-003-content-1",
+        "golden-003-content-2"
+      ]
+    },
+    "fixtureRefs": {
+      "evidence": {
+        "fixtureId": "evidence",
+        "fixtureVersion": "1",
+        "contentHash": "5efc9dc8d45fb064828e282028734d494af97d9dfa491ceca4436b725b19d278",
+        "encoding": "canonical-json-utf8"
+      },
+      "creatorContext": {
+        "fixtureId": "creatorContext",
+        "fixtureVersion": "1",
+        "contentHash": "51d865c4d0211f7540b0b6bbd76c09de62cf66b70ec13707b1c783257bc4d927",
+        "encoding": "canonical-json-utf8"
+      },
+      "providerResponses": [
+        {
+          "fixtureId": "judgePool",
+          "fixtureVersion": "1",
+          "contentHash": "596aafaf4c873fd2163d6263922ff3f9e57446a6112c867a3371beaa44ed011a",
+          "encoding": "canonical-json-utf8"
+        }
+      ]
+    }
+  },
+  "fixture": {
+    "evidence": {
+      "facts": [
+        "Produto Golden",
+        "fato autorizado um"
+      ],
+      "refs": [
+        "product:name",
+        "fact:um"
+      ]
+    },
+    "creatorContext": {},
+    "contents": [
+      {
+        "contentId": "golden-003-content-1",
+        "brief": {
+          "angle": "Cena ok ângulo 1",
+          "hook": "Cena ok gancho 1 direto ao ponto",
+          "development": [
+            "Mostre Cena ok item 1 com o produto em uso",
+            "Feche mostrando Cena ok detalhe 1 sem fala"
+          ],
+          "script": "Demonstre Cena ok passo 1 e conclua sem enrolar.",
+          "cta": "Confira Cena ok 1 na página."
+        },
+        "gate": {
+          "briefId": "golden-003-content-1:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Mostre a cena 1",
+            "Mostre a cena 2"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-003-content-2",
+        "brief": {
+          "angle": "Cena ok dois ângulo 2",
+          "hook": "Cena ok dois gancho 2 direto ao ponto",
+          "development": [
+            "Mostre Cena ok dois item 2 com o produto em uso",
+            "Feche mostrando Cena ok dois detalhe 2 sem fala"
+          ],
+          "script": "Demonstre Cena ok dois passo 2 e conclua sem enrolar.",
+          "cta": "Confira Cena ok dois 2 na página."
+        },
+        "gate": {
+          "briefId": "golden-003-content-2:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Mostre a cena 3",
+            "Mostre a cena 4"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-003-content-3",
+        "brief": {
+          "angle": "Cena filtrada ângulo 3",
+          "hook": "Cena filtrada gancho 3 direto ao ponto",
+          "development": [
+            "Mostre Cena filtrada item 3 com o produto em uso",
+            "Feche mostrando Cena filtrada detalhe 3 sem fala"
+          ],
+          "script": "Demonstre Cena filtrada passo 3 e conclua sem enrolar.",
+          "cta": "Confira Cena filtrada 3 na página."
+        },
+        "gate": {
+          "briefId": "golden-003-content-3:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "FILTERED",
+          "kept": 1,
+          "dropped": 1,
+          "descriptions": [
+            "Única cena válida"
+          ]
+        }
+      }
+    ],
+    "judgePool": [
+      {
+        "contentId": "golden-003-content-1",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-003-content-2",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-003-content-3",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      }
+    ],
+    "judgeCallCostMinor": 900,
+    "judgeLatencyMs": 800
+  },
+  "inputHash": "b640e6629832a43e7ebd54ee3530bccb3304d5b5ffe03e89283697801e1295de",
+  "caseHash": "833397ab5f6afbbcfb5ee79d5343dbd451750303fc5d88b4c9e5073a28309a1d"
+}

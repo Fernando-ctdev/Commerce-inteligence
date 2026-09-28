@@ -1,0 +1,211 @@
+{
+  "case": {
+    "caseId": "golden-001",
+    "datasetVersion": "golden-dataset.v1",
+    "category": "FACTUALITY",
+    "scenario": "HAPPY_PATH",
+    "request": {
+      "targetContentCount": 2,
+      "briefBatchSize": 4,
+      "productId": "golden-product-001",
+      "jobId": "golden-job-001"
+    },
+    "policyRefs": {
+      "gatePolicy": "GATE_POLICY_VERSION:4",
+      "riskAssessment": "risk-assessment.v1"
+    },
+    "expected": {
+      "deliveredContentIds": [
+        "golden-001-content-1",
+        "golden-001-content-2"
+      ]
+    },
+    "fixtureRefs": {
+      "evidence": {
+        "fixtureId": "evidence",
+        "fixtureVersion": "1",
+        "contentHash": "5efc9dc8d45fb064828e282028734d494af97d9dfa491ceca4436b725b19d278",
+        "encoding": "canonical-json-utf8"
+      },
+      "creatorContext": {
+        "fixtureId": "creatorContext",
+        "fixtureVersion": "1",
+        "contentHash": "51d865c4d0211f7540b0b6bbd76c09de62cf66b70ec13707b1c783257bc4d927",
+        "encoding": "canonical-json-utf8"
+      },
+      "providerResponses": [
+        {
+          "fixtureId": "judgePool",
+          "fixtureVersion": "1",
+          "contentHash": "ea4b72dca89b64199397ac7bab1df5bd029b7c914eccbed1252f91e3f9e76922",
+          "encoding": "canonical-json-utf8"
+        }
+      ]
+    }
+  },
+  "fixture": {
+    "evidence": {
+      "facts": [
+        "Produto Golden",
+        "fato autorizado um"
+      ],
+      "refs": [
+        "product:name",
+        "fact:um"
+      ]
+    },
+    "creatorContext": {},
+    "contents": [
+      {
+        "contentId": "golden-001-content-1",
+        "brief": {
+          "angle": "Fato suportado ângulo 1",
+          "hook": "Fato suportado gancho 1 direto ao ponto",
+          "development": [
+            "Mostre Fato suportado item 1 com o produto em uso",
+            "Feche mostrando Fato suportado detalhe 1 sem fala"
+          ],
+          "script": "Demonstre Fato suportado passo 1 e conclua sem enrolar.",
+          "cta": "Confira Fato suportado 1 na página."
+        },
+        "gate": {
+          "briefId": "golden-001-content-1:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Mostre o fato 1 no produto",
+            "Feche com o produto parado"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-001-content-2",
+        "brief": {
+          "angle": "Inferência segura ângulo 2",
+          "hook": "Inferência segura gancho 2 direto ao ponto",
+          "development": [
+            "Mostre Inferência segura item 2 com o produto em uso",
+            "Feche mostrando Inferência segura detalhe 2 sem fala"
+          ],
+          "script": "Demonstre Inferência segura passo 2 e conclua sem enrolar.",
+          "cta": "Confira Inferência segura 2 na página."
+        },
+        "gate": {
+          "briefId": "golden-001-content-2:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "INFERRED_BUT_SAFE",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Mostre a inferência 2 aplicada",
+            "Detalhe sem fala"
+          ]
+        }
+      }
+    ],
+    "judgePool": [
+      {
+        "contentId": "golden-001-content-1",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-001-content-2",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      }
+    ],
+    "judgeCallCostMinor": 900,
+    "judgeLatencyMs": 1200
+  },
+  "inputHash": "a48b2215ee118ea03854eaa71f53cca3f00bfc4275288e12f4ee3cd97014d536",
+  "caseHash": "31a839c27df49a0d2a9977c08008b5041117783e1e7064938c0080c6788604e9"
+}

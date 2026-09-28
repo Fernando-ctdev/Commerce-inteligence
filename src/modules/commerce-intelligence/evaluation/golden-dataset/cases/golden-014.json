@@ -1,0 +1,795 @@
+{
+  "case": {
+    "caseId": "golden-014",
+    "datasetVersion": "golden-dataset.v1",
+    "category": "FACTUALITY",
+    "scenario": "HAPPY_PATH",
+    "request": {
+      "targetContentCount": 10,
+      "briefBatchSize": 8,
+      "productId": "golden-product-014",
+      "jobId": "golden-job-014"
+    },
+    "policyRefs": {
+      "gatePolicy": "GATE_POLICY_VERSION:4",
+      "riskAssessment": "risk-assessment.v1"
+    },
+    "expected": {
+      "deliveredContentIds": [
+        "golden-014-content-1",
+        "golden-014-content-2",
+        "golden-014-content-3",
+        "golden-014-content-4",
+        "golden-014-content-5",
+        "golden-014-content-6",
+        "golden-014-content-7",
+        "golden-014-content-8",
+        "golden-014-content-9",
+        "golden-014-content-10"
+      ]
+    },
+    "fixtureRefs": {
+      "evidence": {
+        "fixtureId": "evidence",
+        "fixtureVersion": "1",
+        "contentHash": "5efc9dc8d45fb064828e282028734d494af97d9dfa491ceca4436b725b19d278",
+        "encoding": "canonical-json-utf8"
+      },
+      "creatorContext": {
+        "fixtureId": "creatorContext",
+        "fixtureVersion": "1",
+        "contentHash": "51d865c4d0211f7540b0b6bbd76c09de62cf66b70ec13707b1c783257bc4d927",
+        "encoding": "canonical-json-utf8"
+      },
+      "providerResponses": [
+        {
+          "fixtureId": "judgePool",
+          "fixtureVersion": "1",
+          "contentHash": "653b6542b27f96efe966c2a2f414068720ad2a7979ee0f6723e8310396a98429",
+          "encoding": "canonical-json-utf8"
+        }
+      ]
+    }
+  },
+  "fixture": {
+    "evidence": {
+      "facts": [
+        "Produto Golden",
+        "fato autorizado um"
+      ],
+      "refs": [
+        "product:name",
+        "fact:um"
+      ]
+    },
+    "creatorContext": {},
+    "contents": [
+      {
+        "contentId": "golden-014-content-1",
+        "brief": {
+          "angle": "Escala dez ângulo 1",
+          "hook": "Escala dez gancho 1 direto ao ponto",
+          "development": [
+            "Mostre Escala dez item 1 com o produto em uso",
+            "Feche mostrando Escala dez detalhe 1 sem fala"
+          ],
+          "script": "Demonstre Escala dez passo 1 e conclua sem enrolar.",
+          "cta": "Confira Escala dez 1 na página."
+        },
+        "gate": {
+          "briefId": "golden-014-content-1:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Escala 1 cena A",
+            "Escala 1 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-014-content-2",
+        "brief": {
+          "angle": "Escala dez ângulo 2",
+          "hook": "Escala dez gancho 2 direto ao ponto",
+          "development": [
+            "Mostre Escala dez item 2 com o produto em uso",
+            "Feche mostrando Escala dez detalhe 2 sem fala"
+          ],
+          "script": "Demonstre Escala dez passo 2 e conclua sem enrolar.",
+          "cta": "Confira Escala dez 2 na página."
+        },
+        "gate": {
+          "briefId": "golden-014-content-2:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Escala 2 cena A",
+            "Escala 2 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-014-content-3",
+        "brief": {
+          "angle": "Escala dez ângulo 3",
+          "hook": "Escala dez gancho 3 direto ao ponto",
+          "development": [
+            "Mostre Escala dez item 3 com o produto em uso",
+            "Feche mostrando Escala dez detalhe 3 sem fala"
+          ],
+          "script": "Demonstre Escala dez passo 3 e conclua sem enrolar.",
+          "cta": "Confira Escala dez 3 na página."
+        },
+        "gate": {
+          "briefId": "golden-014-content-3:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Escala 3 cena A",
+            "Escala 3 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-014-content-4",
+        "brief": {
+          "angle": "Escala dez ângulo 4",
+          "hook": "Escala dez gancho 4 direto ao ponto",
+          "development": [
+            "Mostre Escala dez item 4 com o produto em uso",
+            "Feche mostrando Escala dez detalhe 4 sem fala"
+          ],
+          "script": "Demonstre Escala dez passo 4 e conclua sem enrolar.",
+          "cta": "Confira Escala dez 4 na página."
+        },
+        "gate": {
+          "briefId": "golden-014-content-4:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Escala 4 cena A",
+            "Escala 4 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-014-content-5",
+        "brief": {
+          "angle": "Escala dez ângulo 5",
+          "hook": "Escala dez gancho 5 direto ao ponto",
+          "development": [
+            "Mostre Escala dez item 5 com o produto em uso",
+            "Feche mostrando Escala dez detalhe 5 sem fala"
+          ],
+          "script": "Demonstre Escala dez passo 5 e conclua sem enrolar.",
+          "cta": "Confira Escala dez 5 na página."
+        },
+        "gate": {
+          "briefId": "golden-014-content-5:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Escala 5 cena A",
+            "Escala 5 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-014-content-6",
+        "brief": {
+          "angle": "Escala dez ângulo 6",
+          "hook": "Escala dez gancho 6 direto ao ponto",
+          "development": [
+            "Mostre Escala dez item 6 com o produto em uso",
+            "Feche mostrando Escala dez detalhe 6 sem fala"
+          ],
+          "script": "Demonstre Escala dez passo 6 e conclua sem enrolar.",
+          "cta": "Confira Escala dez 6 na página."
+        },
+        "gate": {
+          "briefId": "golden-014-content-6:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Escala 6 cena A",
+            "Escala 6 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-014-content-7",
+        "brief": {
+          "angle": "Escala dez ângulo 7",
+          "hook": "Escala dez gancho 7 direto ao ponto",
+          "development": [
+            "Mostre Escala dez item 7 com o produto em uso",
+            "Feche mostrando Escala dez detalhe 7 sem fala"
+          ],
+          "script": "Demonstre Escala dez passo 7 e conclua sem enrolar.",
+          "cta": "Confira Escala dez 7 na página."
+        },
+        "gate": {
+          "briefId": "golden-014-content-7:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Escala 7 cena A",
+            "Escala 7 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-014-content-8",
+        "brief": {
+          "angle": "Escala dez ângulo 8",
+          "hook": "Escala dez gancho 8 direto ao ponto",
+          "development": [
+            "Mostre Escala dez item 8 com o produto em uso",
+            "Feche mostrando Escala dez detalhe 8 sem fala"
+          ],
+          "script": "Demonstre Escala dez passo 8 e conclua sem enrolar.",
+          "cta": "Confira Escala dez 8 na página."
+        },
+        "gate": {
+          "briefId": "golden-014-content-8:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Escala 8 cena A",
+            "Escala 8 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-014-content-9",
+        "brief": {
+          "angle": "Escala dez ângulo 9",
+          "hook": "Escala dez gancho 9 direto ao ponto",
+          "development": [
+            "Mostre Escala dez item 9 com o produto em uso",
+            "Feche mostrando Escala dez detalhe 9 sem fala"
+          ],
+          "script": "Demonstre Escala dez passo 9 e conclua sem enrolar.",
+          "cta": "Confira Escala dez 9 na página."
+        },
+        "gate": {
+          "briefId": "golden-014-content-9:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Escala 9 cena A",
+            "Escala 9 cena B"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-014-content-10",
+        "brief": {
+          "angle": "Escala dez ângulo 10",
+          "hook": "Escala dez gancho 10 direto ao ponto",
+          "development": [
+            "Mostre Escala dez item 10 com o produto em uso",
+            "Feche mostrando Escala dez detalhe 10 sem fala"
+          ],
+          "script": "Demonstre Escala dez passo 10 e conclua sem enrolar.",
+          "cta": "Confira Escala dez 10 na página."
+        },
+        "gate": {
+          "briefId": "golden-014-content-10:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Escala 10 cena A",
+            "Escala 10 cena B"
+          ]
+        }
+      }
+    ],
+    "judgePool": [
+      {
+        "contentId": "golden-014-content-1",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-014-content-2",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-014-content-3",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-014-content-4",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-014-content-5",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-014-content-6",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-014-content-7",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-014-content-8",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-014-content-9",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-014-content-10",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      }
+    ],
+    "judgeCallCostMinor": 900,
+    "judgeLatencyMs": 3200
+  },
+  "inputHash": "26e7ddd26e47f20a75a30e4c204e1fafc655aa50e0d3a1dd02797da5e8ce324b",
+  "caseHash": "d3b2e761284b8d1ac2692bafcdfccdf57a42b074c90aac6940074bf8422d18a8"
+}

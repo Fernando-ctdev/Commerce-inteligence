@@ -1,0 +1,39 @@
+{
+  "datasetId": "commerce-intelligence-golden",
+  "datasetVersion": "golden-dataset.v1",
+  "schemaVersion": "golden-case.v1",
+  "rubricVersion": "golden-rubric.v1",
+  "thresholdPolicyVersion": "THRESHOLD_POLICY_GOLDEN_V1",
+  "hashAlgorithm": "SHA-256",
+  "caseIds": [
+    "golden-001",
+    "golden-002",
+    "golden-003",
+    "golden-004",
+    "golden-005",
+    "golden-006",
+    "golden-007",
+    "golden-008",
+    "golden-009",
+    "golden-010",
+    "golden-011",
+    "golden-012",
+    "golden-013",
+    "golden-014"
+  ],
+  "categories": [
+    "COST_LATENCY",
+    "FACTUALITY",
+    "HARD_GATES",
+    "NATURALNESS",
+    "PARTIAL_RETRY",
+    "RISK",
+    "SCENES",
+    "SEMANTIC_COHERENCE",
+    "TEMPLATING",
+    "TENANT_IDEMPOTENCY",
+    "VARIETY"
+  ],
+  "status": "FROZEN",
+  "manifestHash": "531e207f0f66c834aeccb3a3be6eac5b2984fb882ea529ad70eff1bec3d0d1ba"
+}

@@ -76,7 +76,6 @@ import {
   buildRealizationInput,
   buildSceneSkeletonSets,
   contentOpportunitiesFromPortfolio,
-  isV1FallbackPlannerError,
   parseBriefBatchEnvelopeV2,
   parseBriefRepairDraftV2,
   parseStructuredBriefDraftV2,
@@ -414,13 +413,6 @@ const CREATOR_CONTEXT_ALLOWLIST: Record<LogicalTask, readonly string[]> = {
     "restrictions",
     "notes",
   ],
-  CONTENT_PLAN_GENERATION: [
-    "language",
-    "market",
-    "preferredDurationSeconds",
-    "executionStyle",
-    "restrictions",
-  ],
   CONTENT_BRIEF_GENERATION: [
     "language",
     "market",
@@ -436,20 +428,6 @@ const CREATOR_CONTEXT_ALLOWLIST: Record<LogicalTask, readonly string[]> = {
     "notes",
   ],
   CONTENT_BRIEF_REPAIR: [
-    "language",
-    "market",
-    "appearsOnCamera",
-    "prefersVoiceOver",
-    "preferredDurationSeconds",
-    "tone",
-    "executionStyle",
-    "recordingEquipment",
-    "recordingSupport",
-    "recordsAlone",
-    "restrictions",
-    "notes",
-  ],
-  CONTENT_SCENE_IDEAS: [
     "language",
     "market",
     "appearsOnCamera",
@@ -1506,24 +1484,10 @@ export async function runFirstGeneration(
   // Etapa 4 V2: Scene Skeleton determinístico cobre a mesma função de
   // CONTENT_SCENE_IDEAS por Content — nenhuma chamada de provider no caminho V2;
   // o set continua separado do brief e persiste somente em ContentSceneSet.
-  // E5: JudgeExecutionRecords — cobertura por Content, nunca resultado semântico.
-  // Contrato risk: round inteiro >= 1 para TODOS os records; round do audit é
-  // 0-based interno → convertido (+1). Semântica EXECUTED/FAILED preservada.
-  const judgeExecutionRecords: JudgeExecutionRecord[] = candidates.map((candidate, index) => {
-    const contentId = candidate.brief.contentId;
-    if (!input.router) return { contentId, round: 1, execution: "NOT_APPLICABLE", parts: [] };
-    if (!hardIdx.includes(index)) return { contentId, round: 1, execution: "NOT_EXECUTED", parts: [] };
-    if (judgeBatchFailed.has(index))
-      return { contentId, round: 1, execution: "FAILED", parts: [], errorCode: judgeFailureCodes.get(index) ?? "GEN-PROVIDER" };
-    const audit = currentQualityAudits[index];
-    return audit
-      ? { contentId, round: audit.round + 1, execution: "EXECUTED", parts: audit.parts.map(({ part }) => part) }
-      : { contentId, round: 1, execution: "NOT_EXECUTED", parts: [] };
-  });
   const sceneSets = buildSceneSkeletonSets(
     hard.map(({ brief }) => brief),
     evidence,
-    projectCreatorContext("CONTENT_SCENE_IDEAS", input.creatorContext),
+    input.creatorContext ?? {},
   );
     const qualityAudits: QualityAudit[] = [];
   const qualityRepairs: Array<{ contentId: string; part: QualityPart; round: number; criterion: string; outcome: "REPAIRED" }> = [];
@@ -1617,7 +1581,7 @@ export async function runFirstGeneration(
         scene.scenes,
         current,
         evidence,
-        projectCreatorContext("CONTENT_SCENE_IDEAS", input.creatorContext),
+        input.creatorContext ?? {},
       );
       const compositionReport = hardReports[updatedIndex];
       const rejectedReports = compositionReport && compositionReport.decision !== "PASS"
@@ -1770,6 +1734,21 @@ export async function runFirstGeneration(
       if (pending.length) await repairPartBatch(pending, part, 0, modified);
     }
   }
+  // E5: JudgeExecutionRecords derivados APÓS o judge (blocker do Review:
+  // derivação antecida registrava NOT_EXECUTED para itens julgados).
+  // Semântica preservada: judge não executado/falho nunca vira PASS; itens
+  // fora do hard subset ficam NOT_EXECUTED; sem router, NOT_APPLICABLE.
+  const judgeExecutionRecords: JudgeExecutionRecord[] = candidates.map((candidate, index) => {
+    const contentId = candidate.brief.contentId;
+    if (!input.router) return { contentId, round: 1, execution: "NOT_APPLICABLE", parts: [] };
+    if (!hardIdx.includes(index)) return { contentId, round: 1, execution: "NOT_EXECUTED", parts: [] };
+    if (judgeBatchFailed.has(index))
+      return { contentId, round: 1, execution: "FAILED", parts: [], errorCode: judgeFailureCodes.get(index) ?? "GEN-PROVIDER" };
+    const audit = currentQualityAudits[index];
+    return audit
+      ? { contentId, round: audit.round + 1, execution: "EXECUTED", parts: audit.parts.map(({ part }) => part) }
+      : { contentId, round: 1, execution: "NOT_EXECUTED", parts: [] };
+  });
   sceneSets.forEach((set, index) => {
     if (set.status !== "AVAILABLE" || set.scenes.length < 2) {
       objectiveFailureIdx.add(index);

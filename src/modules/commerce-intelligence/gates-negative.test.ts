@@ -78,17 +78,21 @@ test("development shape requires communication action tied to evidence and rejec
   const goodFact = validateBriefSet([{ ...base, development: ["Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso", "Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso"] }], ev)[0];
   assert.equal(goodFact.decision, "PASS");
   const unrelatedRationale = validateBriefSet([{ ...base, development: ["Destaque o tecido duna leve e macio porque tecido valoriza a marca", "Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso"] }], ev)[0];
+  // E5: forma do development é advisory, mas o claim objetivo não suportado
+  // ("valoriza a marca") permanece HARD — REPAIR com diagnóstico advisory junto.
   assert.equal(unrelatedRationale.decision, "REPAIR");
-  assert.ok(unrelatedRationale.issues.some((issue) => issue.startsWith("development deve orientar comunicação")));
+  assert.ok(unrelatedRationale.issues.some((issue) => issue.includes("claim sem evidência")));
+  assert.ok(unrelatedRationale.advisoryIssues?.some((issue) => issue.startsWith("development deve orientar comunicação")));
   const genericFiller = validateBriefSet([{ ...base, development: ["Destaque o uso para contextualizar a escolha", "Destaque o produto para mostrar o produto no dia a dia"] }], { facts: ["Produto"], refs: ["product:name"] })[0];
   assert.equal(genericFiller.factualStatus, "INFERRED_BUT_SAFE");
-  assert.equal(genericFiller.decision, "REPAIR");
-  assert.ok(genericFiller.issues.some((issue) => issue.startsWith("development deve orientar comunicação")));
+  assert.equal(genericFiller.decision, "PASS");
+  assert.ok(genericFiller.advisoryIssues?.some((issue) => issue.startsWith("development deve orientar comunicação")));
   const imperativeFeature = validateBriefSet([{ ...base, development: ["Destaque o tecido duna leve e macio", "Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso"] }], ev)[0];
-  assert.equal(imperativeFeature.decision, "REPAIR");
+  assert.equal(imperativeFeature.decision, "PASS");
   const featureList = validateBriefSet([{ ...base, development: ["Tecido duna leve e macio", "Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso"] }], ev)[0];
-  assert.equal(featureList.decision, "REPAIR");
+  assert.equal(featureList.decision, "PASS");
   const shotList = validateBriefSet([{ ...base, development: ["Close no tecido; enquadramento de corpo inteiro", "Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso"] }], ev)[0];
+  // shotList permanece HARD (matriz E5).
   assert.equal(shotList.decision, "REPAIR");
   assert.ok(shotList.issues.some((issue) => issue.startsWith("development deve orientar comunicação")));
 });
@@ -99,8 +103,9 @@ test("development needs a communication action somewhere, not necessarily leadin
     ["A peca possui dois bolsos", ["A peca possui dois bolsos"]],
   ] as const) {
     const report = validateBriefSet([{ ...base, development: [development, `Destaque ${facts[0]} para mostrar ${facts[0]} no uso`] }], { facts: [...facts], refs: ["fact:product"] })[0];
-    assert.equal(report.decision, "REPAIR", development);
-    assert.ok(report.issues.some((issue) => issue.startsWith("development deve orientar comunicação")));
+    // E5: ação/conector são advisory — diagnóstico presente, decisão PASS.
+    assert.equal(report.decision, "PASS", development);
+    assert.ok(report.advisoryIssues?.some((issue) => issue.startsWith("development deve orientar comunicação")));
   }
   const nonInitialRationale = validateBriefSet([{ ...base, development: ["A leveza do tecido duna leve e macio aparece no uso: destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso", "Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso"] }], { facts: ["Tecido duna leve e macio"], refs: ["fact:features"] })[0];
   assert.equal(nonInitialRationale.decision, "PASS", nonInitialRationale.issues.join("; "));
@@ -142,13 +147,16 @@ test("clean subjective development is inferred safe without evidence", () => {
   const report = validateBriefSet([{ ...base, development: ["Destaque a escolha inteligente para contextualizar o uso", "Destaque a escolha inteligente para contextualizar o uso"], script: "Eu usaria assim no dia a dia", cta: "Confira no carrinho" }], ev)[0];
   assert.equal(report.factualStatus, "INFERRED_BUT_SAFE");
   assert.ok(!report.issues.includes("development contém claim sem evidência verificável"));
-  assert.equal(report.decision, "REPAIR", "creator rationale without a relevant fact fails the development shape gate");
+  // E5: forma do development é advisory — decisão PASS com diagnóstico.
+  assert.equal(report.decision, "PASS", "creator rationale sem fato relevante é advisory no E5");
+  assert.ok(report.advisoryIssues?.some((issue) => issue.startsWith("development deve orientar comunicação")));
 });
 test("unsupported strategic development is repaired and neutral factual framing passes", () => {
-  const unsupported = validateBriefSet([{ ...base, development: ["Destaque a escolha inteligente para contextualizar o uso", "Destaque a escolha inteligente para contextualizar o uso"], script: "Eu usaria assim no dia a dia" }], evidence)[0];
-  assert.equal(unsupported.factualStatus, "INFERRED_BUT_SAFE");
-  assert.equal(unsupported.decision, "REPAIR", "generic filler is not a grounded development point");
   const ev = { facts: ["Produto", "Bateria de 4000 mAh"], refs: ["product:name", "fact:bateria"] };
+  const unsupported = validateBriefSet([{ ...base, development: ["Destaque a escolha inteligente para contextualizar o uso", "Destaque a escolha inteligente para contextualizar o uso"], script: "Eu usaria assim no dia a dia" }], ev)[0];
+  // E5: generic filler é advisory — PASS com diagnóstico, sem reprovação.
+  assert.equal(unsupported.decision, "PASS", "generic filler is advisory after E5");
+  assert.ok(unsupported.advisoryIssues?.some((issue) => issue.startsWith("development deve orientar comunicação")));
   const framed = validateBriefSet([{ ...base, development: ["Destaque a bateria de 4000 mAh para relacionar 4000 mAh a bateria informada", "Destaque a bateria de 4000 mAh para relacionar 4000 mAh a bateria informada"], script: "Tem bateria de 4000 mAh" }], ev)[0];
   assert.equal(framed.factualStatus, "SUPPORTED");
   assert.equal(framed.decision, "PASS");

@@ -1155,9 +1155,8 @@ export async function processGeneration(jobId: string, ownerId: string, deps?: {
         return [];
       }
     });
-    // ADR-019/Etapa 4 V2: backfill determinístico via Scene Skeleton quando
-    // ENGINE_V2 ativo (nenhuma chamada de provider); V1 mantém o LLM por
-    // Content com binding explícito do capability tracker.
+    // Cutover E6: backfill determinístico via Scene Skeleton — nenhuma
+    // chamada de provider de cenas no backfill.
     // Cutover E6: backfill determinístico (Scene Skeleton) — único caminho.
     const backfillScenes = backfillBriefs.length
       ? buildSceneSkeletonSets(

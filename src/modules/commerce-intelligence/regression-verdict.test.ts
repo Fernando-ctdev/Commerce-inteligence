@@ -32,17 +32,31 @@ const DBAA5552_DEVELOPMENTS = [
   "Versátil para combinar com diferentes looks",
 ];
 
-test("regressão dbaa5552: developments declarativos reais são REPAIR (gate creator-first)", () => {
+test("regressão dbaa5552: developments declarativos reais viram ADVISORY no E5 (gate creator-first)", () => {
   const evidence = {
     facts: ["Calça Feminina Pantalona Duna Wide Leg Cintura Alta", "Tecido Duna leve e macio", "dois bolsos frontais funcionais", "cós elástico com cordão"],
     refs: ["product:name", "fact:features", "fact:features:2", "fact:features:3"],
   };
   for (const point of DBAA5552_DEVELOPMENTS) {
     const report = validateBriefSet([brief(`d-${point.length}`, { development: [point, point] })], evidence)[0];
-    assert.equal(report.decision, "REPAIR", point);
+    // E5: forma declarativa é ADVISORY — diagnóstico presente em todos.
     assert.ok(
-      report.issues.some((issue) => issue.includes("development deve orientar comunicação")),
+      report.advisoryIssues?.some((issue) => issue.includes("development deve orientar comunicação")),
+      point,
     );
+    if (point.startsWith("Modelagem wide leg")) console.info("[probe-dbaa]", JSON.stringify({ decision: report.decision, issues: report.issues, advisory: report.advisoryIssues ?? null }));
+    // Decisão canônica: issue HARD restante (claim não suportado, ex. "caimento
+    // fluido") → REPAIR; apenas advisory → PASS.
+    const hardIssues = report.issues.filter((issue) => !report.advisoryIssues?.includes(issue));
+    if (hardIssues.length > 0) {
+      assert.equal(report.decision, "REPAIR", `${point} → ${JSON.stringify(hardIssues)}`);
+      assert.ok(
+        hardIssues.every((issue) => issue.includes("sem evidência") || issue.includes("claim factual ausente")),
+        point,
+      );
+    } else {
+      assert.equal(report.decision, "PASS", point);
+    }
     assert.equal(report.gateVersion, GATE_POLICY_VERSION);
   }
 });

@@ -44,12 +44,6 @@ export const ENGINE_V2_SKILL_BINDING = {
   source: "frozen-harness-fixture",
 } as const;
 
-// Etapa 4: default é V1 (ADR-029, tiktok-commerce@1.2). V2 só roteia com
-// ENGINE_V2=1 explícito; flip de default pertence ao cutover pós-E6 avaliado.
-export function isEngineV2Enabled(): boolean {
-  return process.env.ENGINE_V2 === "1";
-}
-
 // ─── Evidência: refs tipadas do harness ─────────────────────────────────────
 // valueHash é derivado do valor do fato com o MESMO sha256Hex do harness;
 // igualdade exata (id, field, valueHash) é o único vínculo aceito.
@@ -225,33 +219,6 @@ export type PortfolioResultV2 = {
   outputHash: string;
 };
 
-// Fallback V1 SOMENTE por incompatibilidade de pré-condição/shape entre os
-// dados de produção e o contrato do Planner V2 (override do usuário). Falhas
-// de seleção/execução V2 (enumeração, diversidade, CS-*) permanecem fail-closed.
-export const PLANNER_V1_FALLBACK_CODES: ReadonlySet<string> = new Set([
-  "GEN-PLANNER-INPUT",
-  "GEN-PLANNER-CANONICAL",
-  "GEN-PLANNER-EVIDENCE",
-  "GEN-PLANNER-SOURCE",
-  "GEN-PLANNER-MEMORY",
-  "GEN-PLANNER-POLICY",
-  // Outcomes de seleção refletem ajuste dos dados de produção ao contrato V2
-  // (pré-condição), não falha de provider/gate/quality: roteiam V1 com
-  // telemetria; GEN-CS-* (integridade do bundle) permanece fail-closed.
-  "GEN-PLANNER-ENUMERATION-LIMIT",
-  "GEN-PLANNER-NO-CANDIDATES",
-  "GEN-PLANNER-INSUFFICIENT-CANDIDATES",
-  "GEN-PLANNER-DIVERSITY",
-  "GEN-PLANNER-HOOK-PROJECTION",
-]);
-
-export function isV1FallbackPlannerError(error: unknown): boolean {
-  return error instanceof GenerationError && PLANNER_V1_FALLBACK_CODES.has(error.code);
-}
-
-// Falha do harness é fail-closed e tipada (código GEN-PLANNER-*/GEN-CS-*
-// preservado para decisão de fallback/telemetria); registry de erros de
-// produção permanece intacto.
 export function runPlannerV2(source: PlannerV2Source): PortfolioResultV2 {
   const result = planPortfolio(buildPlannerInputV2(source));
   if (!result.ok)
@@ -539,15 +506,17 @@ export function buildSceneSkeletonSets(
 ): SceneSetOutcomeV2[] {
   const recordsAlone = creatorContext["recordsAlone"] === true ? { recordsAlone: true } : {};
   return briefs.map((brief) => {
-    const gated = gateSceneSet(buildSceneSkeleton(brief, evidence), brief, evidence, recordsAlone);
+    const raw = buildSceneSkeleton(brief, evidence);
+    const gated = gateSceneSet(raw, brief, evidence, recordsAlone);
     const status = gated.kept.length >= 2 ? "AVAILABLE" : gated.kept.length > 0 ? "FILTERED" : "ERROR";
     return {
       contentId: brief.contentId,
       briefVersionId: brief.briefVersionId,
       status,
       scenes: gated.kept,
-      generated: gated.kept.length,
-      dropped: gated.dropped,
+      // generated = tamanho do skeleton ANTES do gate; dropped = removidas pelo gate.
+      generated: raw.length,
+      dropped: raw.length - gated.kept.length,
       backfilled: false,
       gatePolicyVersion: GATE_POLICY_VERSION,
       ...(gated.causes.length > 0 ? { causes: gated.causes } : {}),

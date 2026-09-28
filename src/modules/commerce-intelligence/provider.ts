@@ -101,48 +101,8 @@ export const PRODUCT_UNDERSTANDING_JSON_SCHEMA_FORMAT = {
   },
 } as const;
 
-// Job 149034bc: o plano era o único ponto crítico sem enforcement estrutural —
-// o contrato (noveltyTargets 1–4) vivia só na prosa do prompt e a violação no
-// retry único virou falha terminal (GEN-SCHEMA). Mesmo padrão do ADR-020 adendo 4:
-// json_schema estrito deriva de CARDINALITY_POLICY (fonte única com o validador);
-// validador inalterado — qualquer violação que escape permanece fail-closed.
 // Campos opcionais do ContentOpportunity ficam de fora (additionalProperties:false
 // os impede; ausência é aceita pelo validador), como category em PU.
-export const CONTENT_PLAN_JSON_SCHEMA_FORMAT = {
-  type: "json_schema",
-  json_schema: {
-    name: "content_plan",
-    strict: true,
-    schema: {
-      type: "object",
-      properties: {
-        opportunities: {
-          type: "array",
-          minItems: 1,
-          items: {
-            type: "object",
-            properties: {
-              commercialObjective: { type: "string" },
-              angle: { type: "string" },
-              coreMessage: { type: "string" },
-              hookMechanism: { type: "string" },
-              noveltyTargets: {
-                type: "array",
-                items: { type: "string" },
-                minItems: CARDINALITY_POLICY.noveltyTargets.min,
-                maxItems: CARDINALITY_POLICY.noveltyTargets.max,
-              },
-            },
-            required: ["commercialObjective", "angle", "coreMessage", "hookMechanism", "noveltyTargets"],
-            additionalProperties: false,
-          },
-        },
-      },
-      required: ["opportunities"],
-      additionalProperties: false,
-    },
-  },
-} as const;
 
 const UNDERSTANDING_LIMITS = UNDERSTANDING_FIELDS.map(
   (field) => `${field}: ≤ ${CARDINALITY_POLICY[field].max}`,
@@ -151,8 +111,6 @@ export const PRODUCT_UNDERSTANDING_INSTRUCTION =
   `Inclua productId e os arrays coreUseCases, capabilities, functionalBenefits, emotionalBenefits, desiredOutcomes, purchaseTriggers, purchaseBarriers e evidenceRefs. Limites rígidos por campo, validados sem tolerância: ${UNDERSTANDING_LIMITS} — evidenceRefs apenas com refs do evidenceRefsCatalog. functionalBenefits, emotionalBenefits, desiredOutcomes, purchaseTriggers e purchaseBarriers aceitam [] quando a evidência autorizada pertinente não sustentar nenhum item; retorne [] em vez de inventar. Antes de responder, selecione por campo no máximo o limite declarado: se a evidência autorizada sustentar mais itens, mantenha somente os itens mais sustentados até o limite; resposta acima do limite é rejeitada por completo. Use somente evidência autorizada: cada item deve estar ancorado em um fato do contexto; nunca inclua hipóteses nem barreiras, gatilhos ou benefícios genéricos inferidos do senso comum; sem evidência para um campo, retorne [] em vez de inventar; com evidência, retorne ao menos um item quando aplicável. Não inclua status, tenantId, userId, quota, provider, model, tier ou comandos de workflow.`;
 export const CONTENT_BRIEF_GENERATION_INSTRUCTION =
   "Retorne um objeto JSON raiz com items contendo EXATAMENTE a mesma quantidade de briefings que oportunidades recebidas, um por oportunidade e na mesma ordem. Retorne somente angle, hook, development, script e cta; não retorne scenes nem qualquer campo de cena. development é uma lista de 2 a 6 OBJETOS estruturados, cada um com exatamente: text (o bullet completo em português; é o único campo projetado ao texto final; primeira pessoa e persuasão são permitidas como técnica de creator copy, inclusive experiência própria como 'Eu comecei...' ou 'Eu adorei...' — o limite é factualidade: claim objetivo sobre o produto exige fato autorizado; nada de exagero absoluto ou absurdo material), factRefs (array NÃO VAZIO de refs de developmentRequirements.factRefs que sustentam o bullet; CADA fato citado deve ter ao menos dois termos próprios repetidos no trecho de text após o conector; factRefs existem apenas como campos estruturados e NUNCA aparecem escritos em hook, development.text, script ou cta), cta (micro-CTA do bullet em português, curto, sem claim objetivo não ancorado; cta NUNCA aparece escrito dentro de text). Use selectedPatterns[index].hook.text como hook; se adaptar, faça uma variação curta de até 12 palavras. Use categoria no hook somente se explícita em relevantFacts. Development contém 2 a 6 bullets estruturados conforme definido acima; cada bullet precisa combinar ação de comunicação, razão significativa ligada ao fato e o fato específico de relevantFacts, seguindo developmentRequirements quando presente no contexto (repertório de ações, conectores, fatos autorizados e ancoragem mínima). A razão deve explicar por que ou como comunicar aquele fato nomeando os termos do próprio fato dentro da razão; 'para contextualizar', 'para explicar esse detalhe' e outras frases sem ligação concreta não contam. Bom: com o fato 'cintura elástica com cordão', 'Destaque a cintura elástica com cordão para conectar o cordão ao ajuste na cintura'. Ruim: 'Destaque a cintura elástica com cordão'. Ruim: 'Destaque o uso para contextualizar a escolha.' Ruim: 'Tecido leve, bolsos frontais.' Ruim: 'Close no tecido; enquadramento de corpo inteiro.' Não faça lista de features nem instrução de câmera/gravação. Fronteira script×cenas (ADR-025): script é fala/ação performável pelo creator e não contém metacomentário de montagem, direção de câmera/enquadramento, instrução de objeto ou orientação visual destinada a cenas — nada de 'corte para', 'plano detalhe', 'texto na tela' ou direção entre colchetes; instrução visual pertence às cenas. Use relevantFacts como única fonte de fatos técnicos em development e script; angle e mecanismo da oportunidade orientam o recorte, mas não são fonte de fatos. Escreva script desenvolvendo development; todo fato técnico no script deve estar em relevantFacts e representado em development. Use selectedPatterns[index].cta.text como guidance criativa: adapte o wording quando necessário, preservando a mesma função e bucket, sem misturar a mensagem com hook, development ou script. Mantenha cta separado de hook, development e script. Se causes[index] não estiver vazio, use repairContrast[index] como exemplo de formato: transforme a feature list em acao de comunicacao cuja razao repete os termos do mesmo fato e o liga ao angulo da oportunidade; 'para explicar por que esse fato importa' sem nomear o fato na razao nao conta. repairContrast e apenas demonstrativo; use apenas fatos de relevantFacts, nao copie nem adicione claims do exemplo. Corrija somente os problemas listados para esse briefing. A quantidade de items deve ser exatamente igual à quantidade de oportunidades recebidas; nunca omita, adicione ou duplique. Não inclua contentId, briefVersionId, ownership, status, quota, provider, model, tier ou comandos de workflow. Todo claim objetivo precisa ser sustentado por um fato de relevantFacts e nomear os termos desse fato no texto; refs/locators internos (fact:features, [fact:features], product:name) são metadados e NUNCA aparecem escritos em hook, development, script ou cta — locator em texto é problema corrigível. Se não houver fato que sustente, reformule como recomendação subjetiva segura sem números ou atributos, ou omita a frase. Cada briefing deve ter ângulo e hook distintos dos demais; nunca repita o mesmo hook entre briefings. Cada development deve apresentar o que o script e o CTA comunicam: preço/valor só pode ser tema de CTA quando o corpo apresenta esse preço/valor; o par development×script×cta deve manter coerência interna com a oportunidade."
-export const CONTENT_SCENE_IDEAS_INSTRUCTION =
-  "Retorne um objeto JSON raiz com scenes: array de 2 a 6 itens, cada um um objeto com apenas description (string de 10 a 500 caracteres). Cada cena é uma instrução visual gravável por um creator sozinho: comece com um verbo de ação observável (mostre, pegue, vire, abra, calce, teste, compare) e cite nominalmente o produto ou uma parte/objeto citado no briefing — cena sem menção ao produto ou a parte dele é descartada; a primeira cena deve mostrar algo acontecendo nos primeiros segundos. Cena NUNCA contém fala ou diálogo (aspas, 'diga:', 'fale:'): o que dizer é exclusivo do script, fonte canônica do roteiro. Prefira fala para câmera, POV, mãos + produto, câmera fixa e close simples com o próprio celular; cortes simples; ambiente que o creator já tem. Nunca exija operador de câmera, órbita ou 360 graus, travelling, montagem complexa, múltiplas locações, atores, animação, VFX ou motion graphics. Derive as cenas do briefing completo recebido (angle, hook, development, script, cta); não invente claims, fatos, preços, promoções, frete, descontos, experiências pessoais ou resultados que não estejam na evidência autorizada de relevantFacts. Não inclua campos além de description; sem id, ownership, status, quota, provider, model, tier ou comandos de workflow. Retorne SOMENTE esse JSON, sempre com no mínimo 2 e no máximo 6 cenas; jamais null, objetos aninhados, números ou strings vazias/curtas demais."
 export const CONTENT_BRIEF_REPAIR_INSTRUCTION =
   "Retorne um objeto JSON raiz com EXATAMENTE UM briefing: angle, hook, development, script e cta — nenhum campo além desses, nenhum array items. development é um array de 2 a 6 OBJETOS estruturados, cada um com: text (o bullet completo em português; é o único campo persistido; primeira pessoa e persuasão são permitidas como técnica de creator copy, inclusive experiência própria como 'Eu comecei...' ou 'Eu adorei...' — o limite é factualidade: claim objetivo sobre o produto exige fato autorizado; nada de exagero absoluto ou absurdo material), factRefs (array NÃO VAZIO de refs de developmentRequirements.factRefs que sustentam o bullet; CADA fato citado deve ter ao menos dois termos próprios repetidos no trecho de text após o conector; factRefs existem apenas como campos estruturados e nunca aparecem escritos no texto), cta (micro-CTA do bullet em português, curto, sem claim objetivo não ancorado; cta NUNCA aparece escrito dentro de text). Nunca devolva development com menos de 2 nem mais de 6 objetos; se o briefing atual tiver menos de 2 bullets, derive os que faltam somente dos fatos autorizados e do objetivo informado. failedBulletIndexes lista os índices que falharam: corrija esses bullets e mantenha os demais inalterados. Para cada índice, failedBullets traz os TERMS autorizados do próprio fato: reescreva o text do bullet para conter ao menos dois desses termos no trecho após o conector (copie os termos literalmente); não invente termos fora de relevantFacts. Use developmentDiagnostics do próprio item para corrigir cada bullet: ajuste o text de modo que, ao revalidar, cada diagnóstico fique com actionPresent=true, factRefAllowed=true, connectorPresent=true, textGroundingMatched≥2, rationaleGroundingMatched≥2, factTermsInRationale≥2 quando factGroundingApplicable=true, ctaValid=true, shotList=false e unverifiedClaim=false. O CTA de selectedPatterns[index] é guidance criativa: adapte o wording quando necessário, preservando a mesma função e bucket, sem misturar a mensagem com hook, development ou script. Use apenas evidência autorizada; sem id, ownership, status, quota, provider, model, tier ou comandos de workflow. Retorne SOMENTE esse JSON; nunca null ou campos extras."
 export const CONTENT_QUALITY_JUDGE_INSTRUCTION =
@@ -168,17 +126,16 @@ export const JUDGE_EDITORIAL_GUIDANCE =
 // comercial e a coerência; perguntas como formato de hook permanecem válidas.
 export const PART_REPAIR_EDITORIAL_GUIDANCE =
   "Escopo editorial: substitua hook/ângulo banal de categoria sem relevância comercial diferenciada (ex.: bolso de calça como promessa central) por um ângulo com valor comercial claro apoiado nos fatos autorizados; mantenha coerência intra-brief — hook, development, script e CTA comunicam o mesmo objetivo, e CTA de preço/valor só aparece quando o corpo já apresenta esse preço/valor; em scenes, devolva apenas instrução visual sem fala ou diálogo (o que dizer é do script); perguntas como formato de hook permanecem válidas — apenas não concentre o lote quando houver alternativas elegíveis.";
+import { createHash } from "node:crypto";
+
 const INSTRUCTION: Record<LogicalTask, string> = {
   PRODUCT_UNDERSTANDING: PRODUCT_UNDERSTANDING_INSTRUCTION,
   COMMERCIAL_OPPORTUNITY_MAPPING:
     "Objetivo único: mapear oportunidades comerciais. Retorne APENAS um envelope JSON com as chaves audiences, situations, pains, desires, objections (arrays de strings, que podem ser [] quando não houver evidência autorizada) e opportunities: array NÃO VAZIO com NO MÍNIMO 1 e NO MÁXIMO maxOpportunities itens (valor recebido no contexto); quando a evidência autorizada for suficiente, prefira 3 ou mais oportunidades — nunca invente oportunidades ou preencha cardinalidade sem suporte. Cada opportunity tem audience, situation, pain, desire, desiredOutcome, objection (quando houver evidência), relevantCapabilities, benefits, proofOptions (cada um com NO MÁXIMO 6 itens), sellingArgument, confidence (0 a 1) e evidenceRefs (refs apenas do evidenceRefsCatalog). Campos opcionais audience, situation, pain, desire, desiredOutcome e objection, quando presentes, são strings não vazias; sem conteúdo real, omita o campo — nunca objeto, null, número ou string vazia. Arraste apenas refs existentes no catálogo recebido; nenhuma ref inventada. Não inclua texto fora do JSON, ownership, status, quota, provider, model, tier ou comandos de workflow.",
   STRATEGY_SYNTHESIS:
     "Retorne um objeto JSON raiz com as chaves canônicas da Strategy: primaryPositioning (string não vazia), audiences, priorityBenefits, priorityObjections, priorityArguments, priorityAngles, communicationPrinciples. Use somente evidência autorizada: arrays podem ser [] quando não houver evidência suficiente; com evidência, inclua apenas itens suportados. Não inclua objective, positioning, audience ou contentPillars; não inclua status, tenantId, userId, quota, provider, model, tier ou comandos de workflow.",
-  CONTENT_PLAN_GENERATION:
-    "Retorne um objeto JSON raiz (NUNCA array) com a chave opportunities: array com quantidade EXATA igual a planSlots recebidos (um opportunity por slot, na MESMA ordem). Cada opportunity tem SOMENTE os campos criativos: commercialObjective, angle, coreMessage, hookMechanism e noveltyTargets (array de 1 a 4 strings; nunca vazio, nunca mais que 4). Use hookMechanism APENAS de eligibleHookMechanisms do slot correspondente (mesma posição); mecanismo fora do allowlist do slot é rejeitado; distribua entre mecanismos distintos e não repita o mesmo enquanto houver outro deliverable relevante para a estratégia; o bucket genérico 'other' é ÚLTIMO recurso: use no máximo 1 opportunity com 'other' e somente quando nenhum mecanismo específico for deliverable. angle e coreMessage preservam o valor comercial da oportunidade. NÃO retorne id, productId, strategyVersion, targetContentCount, platformId, platformSkillVersion nem qualquer campo além dos cinco criativos; não coloque texto fora do JSON.",
-  CONTENT_BRIEF_GENERATION: CONTENT_BRIEF_GENERATION_INSTRUCTION,
-  CONTENT_SCENE_IDEAS: CONTENT_SCENE_IDEAS_INSTRUCTION,
-  CONTENT_BRIEF_REPAIR: CONTENT_BRIEF_REPAIR_INSTRUCTION,
+  CONTENT_BRIEF_GENERATION: CONTENT_BRIEF_GENERATION_INSTRUCTION + " Estrutura obrigatória da resposta: objeto raiz com EXATAMENTE as chaves developmentSchemaVersion (valor 2) e items; nenhum campo além. Cada item tem EXATAMENTE angle, hook, development, script, cta; cada bullet de development tem EXATAMENTE text, action, rationale, factRefs, cta; nenhum campo extra em nenhum nível.",
+  CONTENT_BRIEF_REPAIR: CONTENT_BRIEF_REPAIR_INSTRUCTION + " Estrutura obrigatória da resposta: objeto raiz com EXATAMENTE as chaves developmentSchemaVersion (valor 2), angle, hook, development, script, cta; nenhum campo além. Cada bullet de development tem EXATAMENTE text, action, rationale, factRefs, cta.",
   CONTENT_QUALITY_JUDGE: CONTENT_QUALITY_JUDGE_INSTRUCTION + " " + JUDGE_EDITORIAL_GUIDANCE,
   CONTENT_PART_REPAIR: CONTENT_PART_REPAIR_INSTRUCTION + " " + PART_REPAIR_EDITORIAL_GUIDANCE,
 };
@@ -186,13 +143,18 @@ const REASONING_BY_TASK: Record<LogicalTask, "low" | "medium" | "high"> = {
   PRODUCT_UNDERSTANDING: "low",
   COMMERCIAL_OPPORTUNITY_MAPPING: "medium",
   STRATEGY_SYNTHESIS: "high",
-  CONTENT_PLAN_GENERATION: "high",
   CONTENT_BRIEF_GENERATION: "medium",
-  CONTENT_SCENE_IDEAS: "high",
   CONTENT_BRIEF_REPAIR: "high",
   CONTENT_QUALITY_JUDGE: "high",
   CONTENT_PART_REPAIR: "high",
 };
+// E5: digests estáveis das instruções por capability — snapshots de política
+// (RunPolicySnapshotV1.instructionHashes) sem expor o texto da instrução.
+export function instructionDigests(tasks: readonly LogicalTask[]): Record<string, string> {
+  const digests: Record<string, string> = {};
+  for (const task of tasks) digests[task] = createHash("sha256").update(INSTRUCTION[task]).digest("hex");
+  return digests;
+}
 // ADR-017: correlação sanitizada — header precede; na ausência de header, apenas a chave
 // raiz JSON `id` do corpo (nunca o corpo/mensagem). ASCII 1–200; inválido omite ambos.
 const PROVIDER_REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
@@ -467,9 +429,7 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
         response_format:
           task === "PRODUCT_UNDERSTANDING"
             ? PRODUCT_UNDERSTANDING_JSON_SCHEMA_FORMAT
-            : task === "CONTENT_PLAN_GENERATION"
-              ? CONTENT_PLAN_JSON_SCHEMA_FORMAT
-              : { type: "json_object" },
+            : { type: "json_object" },
         messages: [
           {
             role: "system",

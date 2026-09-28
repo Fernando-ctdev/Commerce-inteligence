@@ -12,7 +12,12 @@ export type JobEventName =
   | "repair.completed"
   | "job.finalizing"
   | "job.reclaimed"
-  | "job.terminal";
+  | "job.terminal"
+  // Etapa 4 V2: Planner determinístico, fallback controlado e observações de
+  // estilo (proxies lexicais fora da autoridade).
+  | "v2.planner.completed"
+  | "v2.fallback"
+  | "v2.style.observations";
 
 export type JobEventFields = {
   jobId?: string; attempt?: number; stage?: string; task?: string; tier?: string; model?: string; instructionHash?: string;
@@ -21,6 +26,12 @@ export type JobEventFields = {
   expected?: number; received?: number; retry?: number; errorName?: string; errorCode?: string; reservationAction?: string; contextDigest?: string; item?: number; issue?: string; field?: string; errorKind?: string; rate?: Record<string, string>; gateReports?: SanitizedGateReport[]; cardinalityPolicyVersion?: number;
   // Gate de cenas (CONTENT_SCENE_IDEAS): contagem determinística do gateSceneSet.
   kept?: number; dropped?: number;
+  // Etapa 4 V2: tamanho do portfolio planejado, motivo sanitizado de fallback e
+  // contagem de hooks em pergunta (estilo fora da autoridade do gate).
+  planned?: number; reason?: string; questionHooks?: number; plannerPolicyVersion?: string;
+  // Etapa 4 V2: proveniência — binding da Skill, política de brief, hash do
+  // output do Planner e caminho efetivo (v2 principal / v1 fallback).
+  skillBinding?: string; briefPolicyVersion?: string; plannerOutputHash?: string; enginePath?: string;
 };
 
 // Resumo sanitizado de GateReport: apenas status determinísticos, decision, issues
@@ -77,9 +88,67 @@ const EVENT_ALLOWLIST: Record<JobEventName, (keyof JobEventFields)[]> = {
   // emitidos apenas quando o CAS do reclaim persiste (mesmo contrato do failJob).
   "job.reclaimed": BASE_ALLOWLIST,
   "job.terminal": [...BASE_ALLOWLIST, "errorCode", "durationMs", "expected", "received", "retry", "gateReports"],
+  "v2.planner.completed": [...BASE_ALLOWLIST, "planned", "plannerPolicyVersion", "skillBinding", "briefPolicyVersion", "plannerOutputHash", "enginePath"],
+  "v2.fallback": [...BASE_ALLOWLIST, "reason", "skillBinding", "briefPolicyVersion", "enginePath"],
+  "v2.style.observations": [...BASE_ALLOWLIST, "rate", "questionHooks", "enginePath"],
 };
 
 const buffer: string[] = [];
+
+// ─── E5: snapshots internos de política e métricas (sanitizados) ────────────
+// Somente formas serializáveis/contadas; nunca prompt, payload ou texto livre.
+export type RunPolicySnapshotV1 = {
+  platformSkillVersion: string;
+  creativeSystemVersion?: string;
+  plannerPolicyVersion?: string;
+  briefPolicyVersion?: string;
+  gatePolicyVersion: number;
+  cardinalityPolicyVersion: number;
+  instructionHashes: Readonly<Record<string, string>>;
+};
+export type DeliveryMetricsV1 = { expectedCount: number; deliveredCount: number; failedCount: number; terminalStatus: "SUCCEEDED" | "SUCCEEDED_PARTIAL" | "FAILED" };
+export type JudgeExecutionCount = "EXECUTED" | "NOT_EXECUTED" | "FAILED" | "NOT_APPLICABLE";
+export type CategoryMetricsV1 = {
+  category: string;
+  expectedCount: number;
+  deliveredCount: number;
+  failedCount: number;
+  judgeExecution: Record<JudgeExecutionCount, number>;
+  hardGate: Record<"PASS" | "REPAIR" | "REJECT", number>;
+  scenes: Record<"AVAILABLE" | "FILTERED" | "ERROR", number>;
+};
+
+export function buildDeliveryMetricsV1(expectedCount: number, deliveredCount: number, terminalStatus: DeliveryMetricsV1["terminalStatus"]): DeliveryMetricsV1 {
+  return { expectedCount, deliveredCount, failedCount: expectedCount - deliveredCount, terminalStatus };
+}
+
+export function buildCategoryMetricsV1(input: {
+  category: string;
+  expectedCount: number;
+  deliveredCount: number;
+  judgeRecords: readonly { execution: string }[];
+  reports: readonly { decision: string }[];
+  sceneSets: readonly { status: string }[];
+}): CategoryMetricsV1 {
+  const judgeExecution: CategoryMetricsV1["judgeExecution"] = { EXECUTED: 0, NOT_EXECUTED: 0, FAILED: 0, NOT_APPLICABLE: 0 };
+  for (const record of input.judgeRecords)
+    if (record.execution in judgeExecution) judgeExecution[record.execution as JudgeExecutionCount] += 1;
+  const hardGate: CategoryMetricsV1["hardGate"] = { PASS: 0, REPAIR: 0, REJECT: 0 };
+  for (const report of input.reports)
+    if (report.decision in hardGate) hardGate[report.decision as keyof CategoryMetricsV1["hardGate"]] += 1;
+  const scenes: CategoryMetricsV1["scenes"] = { AVAILABLE: 0, FILTERED: 0, ERROR: 0 };
+  for (const set of input.sceneSets)
+    if (set.status in scenes) scenes[set.status as keyof CategoryMetricsV1["scenes"]] += 1;
+  return {
+    category: input.category,
+    expectedCount: input.expectedCount,
+    deliveredCount: input.deliveredCount,
+    failedCount: input.expectedCount - input.deliveredCount,
+    judgeExecution,
+    hardGate,
+    scenes,
+  };
+}
 export function emitJobEvent(event: JobEventName, fields: JobEventFields): void {
   const allow = EVENT_ALLOWLIST[event];
   const line: Record<string, unknown> = { timestamp: new Date().toISOString(), event };

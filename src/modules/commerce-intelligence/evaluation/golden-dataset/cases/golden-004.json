@@ -1,0 +1,211 @@
+{
+  "case": {
+    "caseId": "golden-004",
+    "datasetVersion": "golden-dataset.v1",
+    "category": "VARIETY",
+    "scenario": "BOUNDARY",
+    "request": {
+      "targetContentCount": 2,
+      "briefBatchSize": 8,
+      "productId": "golden-product-004",
+      "jobId": "golden-job-004"
+    },
+    "policyRefs": {
+      "gatePolicy": "GATE_POLICY_VERSION:4",
+      "riskAssessment": "risk-assessment.v1"
+    },
+    "expected": {
+      "deliveredContentIds": [
+        "golden-004-content-1",
+        "golden-004-content-2"
+      ]
+    },
+    "fixtureRefs": {
+      "evidence": {
+        "fixtureId": "evidence",
+        "fixtureVersion": "1",
+        "contentHash": "5efc9dc8d45fb064828e282028734d494af97d9dfa491ceca4436b725b19d278",
+        "encoding": "canonical-json-utf8"
+      },
+      "creatorContext": {
+        "fixtureId": "creatorContext",
+        "fixtureVersion": "1",
+        "contentHash": "51d865c4d0211f7540b0b6bbd76c09de62cf66b70ec13707b1c783257bc4d927",
+        "encoding": "canonical-json-utf8"
+      },
+      "providerResponses": [
+        {
+          "fixtureId": "judgePool",
+          "fixtureVersion": "1",
+          "contentHash": "322e2c63df14c7993064c59eca30ec44397795b1275ae58348033c4d587fc0f1",
+          "encoding": "canonical-json-utf8"
+        }
+      ]
+    }
+  },
+  "fixture": {
+    "evidence": {
+      "facts": [
+        "Produto Golden",
+        "fato autorizado um"
+      ],
+      "refs": [
+        "product:name",
+        "fact:um"
+      ]
+    },
+    "creatorContext": {},
+    "contents": [
+      {
+        "contentId": "golden-004-content-1",
+        "brief": {
+          "angle": "Variedade A ângulo 1",
+          "hook": "Variedade A gancho 1 direto ao ponto",
+          "development": [
+            "Mostre Variedade A item 1 com o produto em uso",
+            "Feche mostrando Variedade A detalhe 1 sem fala"
+          ],
+          "script": "Demonstre Variedade A passo 1 e conclua sem enrolar.",
+          "cta": "Confira Variedade A 1 na página."
+        },
+        "gate": {
+          "briefId": "golden-004-content-1:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Ângulo A cena 1",
+            "Ângulo A cena 2"
+          ]
+        }
+      },
+      {
+        "contentId": "golden-004-content-2",
+        "brief": {
+          "angle": "Variedade B ângulo 2",
+          "hook": "Variedade B gancho 2 direto ao ponto",
+          "development": [
+            "Mostre Variedade B item 2 com o produto em uso",
+            "Feche mostrando Variedade B detalhe 2 sem fala"
+          ],
+          "script": "Demonstre Variedade B passo 2 e conclua sem enrolar.",
+          "cta": "Confira Variedade B 2 na página."
+        },
+        "gate": {
+          "briefId": "golden-004-content-2:brief-1",
+          "gateVersion": 4,
+          "factualStatus": "SUPPORTED",
+          "claimType": "objetivo",
+          "evidenceRefs": [
+            "fact:um"
+          ],
+          "structuralStatus": "PASS",
+          "platformStatus": "PASS",
+          "varietyStatus": "PASS",
+          "issues": [],
+          "decision": "PASS"
+        },
+        "scenes": {
+          "status": "AVAILABLE",
+          "kept": 2,
+          "dropped": 0,
+          "descriptions": [
+            "Ângulo B cena 1",
+            "Ângulo B cena 2"
+          ]
+        }
+      }
+    ],
+    "judgePool": [
+      {
+        "contentId": "golden-004-content-1",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      },
+      {
+        "contentId": "golden-004-content-2",
+        "round": 1,
+        "parts": [
+          {
+            "part": "hook",
+            "status": "PASS",
+            "criterion": "hook_curiosity",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "development",
+            "status": "PASS",
+            "criterion": "coherent_flow",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "script",
+            "status": "PASS",
+            "criterion": "speakable",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "cta",
+            "status": "PASS",
+            "criterion": "cta_fit",
+            "reason": "meets_criteria"
+          },
+          {
+            "part": "scenes",
+            "status": "PASS",
+            "criterion": "scene_flow",
+            "reason": "meets_criteria"
+          }
+        ]
+      }
+    ],
+    "judgeCallCostMinor": 900,
+    "judgeLatencyMs": 700
+  },
+  "inputHash": "62ffe84b34280217f18d708c075c015cb2ddbcc08d0a5ffa7032e0d8d24d6c04",
+  "caseHash": "6f04180fdc466bedf4808cea0742838ceb0222210e5e5e7973562b453e297084"
+}

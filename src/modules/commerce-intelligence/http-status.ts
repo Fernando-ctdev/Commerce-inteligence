@@ -4,25 +4,25 @@ import { readCookie, sameOriginRequest, SESSION_COOKIE, json } from "../identity
 import { resolveSession } from "../identity/service";
 import { isValidIdempotencyKey } from "../products/service";
 import { GenerationError, generationErrorStatus, publicGenerationError } from "./errors";
+import { briefPayloadSchemaOf, validateV2DevelopmentBullets } from "./engine-v2";
 import { CARDINALITY_POLICY } from "./contract";
 import { aggregateRunCosts, aggregateRunUsage } from "./cost-observability";
 import { startCommerceIntelligence, findBlockingGeneration, activeJobWhere } from "./service";
 type GenerationEnvelopeJob = { id: string; productId: string; status: string; stage: string | null; targetContentCount: number; publicErrorMessage: string | null; metadata?: unknown; createdAt: Date; startedAt: Date | null; finishedAt: Date | null; attempt: number; strategies?: Array<{ payload: unknown }>; plan?: { payload: unknown } | null; run?: { metadata: unknown } | null; contents?: Array<{ id: string; productId: string; planId: string; opportunityId: string | null; position: number; status: string; currentBriefVersionId: string | null; briefs?: Array<{ payload: unknown }>; sceneSets?: Array<{ briefVersionId: string; status: string; payload: unknown }> }> };
 function payloadObject(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
-// Leitor histórico VERSIONADO read-only (cutover v2 — Blueprint): v2 persiste
+// Leitor histórico VERSIONADO read-only (cutover v2 — Blueprint): roteado pelo
+// discriminador canônico briefPayloadSchemaOf (engine-v2). v2 persiste
 // DevelopmentBullet[] canônico e projeta SOMENTE texto (development: string[]) +
-// campos de briefing; v1 (strings) é ludo como está. Refs/rationale/action/cta de
+// campos de briefing; v1 (strings) é lido como está. Refs/rationale/action/cta de
 // bullet NUNCA vazam e refs jamais são inventadas. UI não é alterada.
 export function projectBriefPayload(value: unknown): Record<string, unknown> {
+  const schema = briefPayloadSchemaOf(value);
   const payload = payloadObject(value);
-  if (payload.version === 2) {
-    const bullets = payload.development;
-    const badBullet = !Array.isArray(bullets) || bullets.length < CARDINALITY_POLICY.development.min || bullets.length > CARDINALITY_POLICY.development.max ||
-      bullets.some((bullet) => { const b = bullet as Record<string, unknown> | null; return !b || typeof b.text !== "string" || !b.text.trim(); });
-    if (badBullet)
-      throw new GenerationError("GEN-SCHEMA", "Brief persistido contém development v2 inválido", false);
-    const { development: _bullets, ...rest } = payload;
-    return { ...rest, development: bullets.map((bullet) => String((bullet as Record<string, unknown>).text)) };
+  if (schema === "v2") {
+    // Validação estrita compartilhada com o reader (factRefs/action/rationale/cta).
+    const bullets = validateV2DevelopmentBullets(payload.development);
+    const { development: _bullets, scenes: _scenes, developmentSchemaVersion: _dsv, ...rest } = payload;
+    return { ...rest, development: bullets.map((bullet) => bullet.text) };
   }
   if (!Array.isArray(payload.development) || payload.development.length < CARDINALITY_POLICY.development.min || payload.development.length > CARDINALITY_POLICY.development.max || payload.development.some((point) => typeof point !== "string" || !point.trim())) throw new GenerationError("GEN-SCHEMA", "Brief persistido contém development inválido", false); const result = Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "scenes")); return { ...result, development: payload.development };
 }

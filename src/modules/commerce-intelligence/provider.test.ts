@@ -36,11 +36,9 @@ test("routes by tier: MID→BALANCED, HIGH→QUALITY, LOW→FAST with existing v
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
     await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} });
     await provider.complete("STRATEGY_SYNTHESIS", { trustedContext: {} });
-    await provider.complete("CONTENT_PLAN_GENERATION", { trustedContext: {} });
-    await provider.complete("CONTENT_SCENE_IDEAS", { trustedContext: {} });
     await provider.complete("CONTENT_QUALITY_JUDGE", { trustedContext: {} });
   } finally { restore(); }
-  assert.deepEqual(models, ["quality-model", "quality-model", "quality-model", "quality-model", "quality-model", "quality-model"], "capabilities críticas usam QUALITY");
+  assert.deepEqual(models, ["quality-model", "quality-model", "quality-model", "quality-model"], "capabilities críticas usam QUALITY");
 });
 
 test("falls back only between existing configured variables (BALANCED→FAST→none)", async () => {
@@ -90,19 +88,15 @@ test("sends fixed reasoning effort by logical capability", async () => {
     await provider.complete("PRODUCT_UNDERSTANDING", { trustedContext: {} });
     await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} });
     await provider.complete("STRATEGY_SYNTHESIS", { trustedContext: {} });
-    await provider.complete("CONTENT_PLAN_GENERATION", { trustedContext: {} });
     await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: {} });
-    await provider.complete("CONTENT_SCENE_IDEAS", { trustedContext: {} });
     await provider.complete("CONTENT_QUALITY_JUDGE", { trustedContext: {} });
   } finally { globalThis.fetch = originalFetch; }
-  assert.equal(bodies.length, 7);
+  assert.equal(bodies.length, 5);
   assert.deepEqual(bodies.map((body) => body.reasoning), [
     { effort: "low" },
     { effort: "medium" },
     { effort: "high" },
-    { effort: "high" },
     { effort: "medium" },
-    { effort: "high" },
     { effort: "high" },
   ]);
 });
@@ -526,38 +520,7 @@ test("provider adapter caps only PU cardinality arrays before returning output",
   assert.equal(bodies.length, 2);
 });
 
-// Job 149034bc (causa raiz): o plano era o único ponto crítico sem json_schema
-// estrito; o retry único consumido por GEN-VARIETY deixou a violação de
-// cardinalidade de noveltyTargets (GEN-SCHEMA) como falha terminal. O schema
-// estrutura a saída no provider; o validador do contrato permanece inalterado.
-test("CONTENT_PLAN_GENERATION request carries strict json_schema with noveltyTargets 1..4", async () => {
-  const bodies: Array<Record<string, unknown>> = [];
-  const restore = captureProviderBodies(bodies);
-  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { LOW: "fast", MID: "balanced", HIGH: "quality" }, timeoutMs: 5000 });
-  try {
-    await provider.complete("CONTENT_PLAN_GENERATION", { trustedContext: { targetContentCount: 5 } });
-  } finally { restore(); }
-  const format = recordOf(bodies[0].response_format);
-  assert.equal(format?.type, "json_schema");
-  const envelope = recordOf(format?.json_schema);
-  assert.equal(envelope?.strict, true, "strict é o único modo que garante minItems/maxItems");
-  assert.equal(envelope?.name, "content_plan");
-  const schema = recordOf(envelope?.schema);
-  assert.equal(schema?.additionalProperties, false);
-  const properties = recordOf(schema?.properties);
-  assert.ok(properties);
-  assert.deepEqual(Object.keys(properties).sort(), ["opportunities"]);
-  const opportunities = recordOf(properties?.opportunities);
-  const opportunityItems = recordOf(opportunities?.items);
-  const opportunitySchema = recordOf(opportunityItems);
-  assert.equal(opportunitySchema?.additionalProperties, false);
-  const opportunityProperties = recordOf(opportunitySchema?.properties);
-  const noveltyTargets = recordOf(opportunityProperties?.noveltyTargets);
-  assert.equal(noveltyTargets?.minItems, CARDINALITY_POLICY.noveltyTargets.min, "mínimo derivado da CARDINALITY_POLICY");
-  assert.equal(noveltyTargets?.maxItems, CARDINALITY_POLICY.noveltyTargets.max, "máximo derivado da CARDINALITY_POLICY");
-  const required = Array.isArray(opportunitySchema?.required) ? opportunitySchema.required.map(String) : [];
-  assert.deepEqual(required.sort(), ["angle", "commercialObjective", "coreMessage", "hookMechanism", "noveltyTargets"].sort());
-});
+
 
 test("non-PU tasks keep generic json_object response_format", async () => {
   const bodies: Array<Record<string, unknown>> = [];

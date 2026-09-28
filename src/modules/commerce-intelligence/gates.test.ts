@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { EvidenceSnapshot } from "./contract";
-import { validateBriefSet, parseStructuredDevelopment, diagnoseDevelopmentPoint, diagnoseStructuredDevelopmentBullet, developmentDiagnosticNeedsRepair, developmentRequirements, validDevelopmentPoint, isActionableCta } from "./gates";
+import { validateBriefSet, parseStructuredDevelopment, diagnoseDevelopmentPoint, diagnoseStructuredDevelopmentBullet, developmentDiagnosticNeedsRepair, developmentRequirements, validDevelopmentPoint, isActionableCta, gatePolicyAuthority } from "./gates";
 import { ContractError } from "./contract";
 
 test("structured development derives action and rationale from provider text", () => {
@@ -20,6 +20,13 @@ test("structured development derives action and rationale from provider text", (
   assert.equal(parsed.bullets[0]!.action, "Destaque");
   assert.equal(parsed.bullets[0]!.rationale, "para explicar o conforto no uso");
   assert.equal(parsed.diagnostics[0]!.grounded, true);
+});
+
+test("E5 matrix separa checks hard de diagnósticos advisory sem bump implícito", () => {
+  assert.equal(gatePolicyAuthority("factRefAllowed"), "HARD");
+  assert.equal(gatePolicyAuthority("shotList"), "HARD");
+  assert.equal(gatePolicyAuthority("actionPresent"), "ADVISORY");
+  assert.equal(gatePolicyAuthority("factTermsInRationale"), "ADVISORY");
 });
 
 test("structured development ignores provider action/rationale and derives both from text", () => {
@@ -276,8 +283,10 @@ test("regressão feature_list/connector: bullet sem ação+conector é diagnosti
   assert.equal(featureParsed.diagnostics[0]!.connectorValid, false);
   // texto projetado segue para o gate, que reprova (fail-closed preservado)
   const report = validateBriefSet([{ contentId: "c1", briefVersionId: "c1-v", version: 1 as const, angle: "a", hook: "h", development: [featureList.text, featureList.text], script: "Fale sobre o produto", cta: "c" }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined)[0];
-  assert.ok(["REPAIR", "REJECT"].includes(report.decision), `gate reprova fail-closed: ${report.decision} ${JSON.stringify(report.issues)}`);
-  assert.ok(report.issues.some((issue) => /orientar comunicação|lista de features/.test(issue)));
+  // E5: forma do development (ação/conector/feature-list) é ADVISORY —
+  // diagnóstico permanece, decisão deixa de reprovar.
+  assert.equal(report.decision, "PASS", "forma do development não reprova no E5");
+  assert.ok(report.advisoryIssues?.some((issue) => /orientar comunicação|lista de features/.test(issue)), "diagnóstico advisory presente");
   // convergência: ação + conector + grounding ≥2
   const fixed = { text: "Destaque o tecido respiravel para explicar o tecido respiravel no uso", action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar o tecido respiravel no uso" };
   const fixedParsed = parseStructuredDevelopment([fixed], evidence);
@@ -296,8 +305,9 @@ test("gate v4: trecho após o conector deve conter 2 termos do fato apontado por
   const withoutMap = validateBriefSet([brief], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined)[0]!;
   assert.equal(withoutMap.decision, "PASS", "sem bullets estruturados o requisito factRef não se aplica");
   const withMap = validateBriefSet([brief], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined, new Map([[brief.contentId, [drifting, drifting]]]))[0]!;
-  assert.equal(withMap.decision, "REPAIR");
-  assert.ok(withMap.issues.some((issue) => issue.includes("factRef")), "issue própria da ancoragem factRef");
+  // E5: factTermsInRationale é ADVISORY — decisão PASS com diagnóstico visível.
+  assert.equal(withMap.decision, "PASS", "drift de factRef não reprova no E5");
+  assert.ok(withMap.advisoryIssues?.some((issue) => issue.includes("factRef")), "issue própria da ancoragem factRef fica advisory");
   // Convergência: rationale/texto espelha ≥2 termos do fato → PASS.
   const grounded = { ...drifting, text: "Destaque o tecido respiravel para explicar como o tecido respiravel ajuda no uso", rationale: "para explicar como o tecido respiravel ajuda no uso" };
   const groundedReport = validateBriefSet([{ ...brief, development: [grounded.text, grounded.text] }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined, new Map([[brief.contentId, [grounded, grounded]]]))[0]!;
