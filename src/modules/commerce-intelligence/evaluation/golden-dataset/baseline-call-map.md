@@ -149,3 +149,13 @@ This artifact closes the **static call-map** portion of Etapa 1 for the pinned c
 - a full audit result for every semantic question and capability classification in the canonical Etapa 1 checklist.
 
 No runtime, provider behavior, threshold policy, E6 SPEC/PLAN, ADR, or other artifact was changed by this map.
+
+## D9 — Separação V2, baseline e E6
+
+Este documento permanece exclusivamente o artefato estático da baseline pinada por commit. Ele não é relatório live, resultado E6, aprovação de runtime ou substituto de metadata de execução.
+
+1. O runtime V2 é descrito pelos contratos e decisões do ADR-033 e por seus traces próprios.
+2. A baseline ADR-029 permanece reproduzível e isolada para comparação histórica.
+3. E6 é o runner comparativo que separa captures offline/replay de provider vivo, com proveniência, métricas e critérios próprios.
+4. Resultados, falhas, tiers, custos, latências ou expectativas de uma dessas classes não podem ser usados como evidência de outra classe.
+5. Este mapa registra fórmulas code-derived; chamadas físicas, tokens, custo, latência e qualidade live continuam `UNAVAILABLE` até coleta pareada.

@@ -84,3 +84,12 @@ A implementação deve demonstrar, em testes de contrato e no caso reduzido, que
 - ADR-004, ADR-012, ADR-019, ADR-020, ADR-021.
 - SYSTEM-DESIGN § Commerce Intelligence.
 - SPEC slice-003 B-003-05 e tabela de falhas de geração.
+
+## Adendo pós-Etapa 1 — D6: contexto de repair allowlisted
+
+O contexto de repair é separado por autoridade e não contém catálogo literal, IDs persistentes, quota, estado, comandos de workflow, payload bruto ou segredos.
+
+1. `CONTENT_BRIEF_REPAIR` recebe somente a projeção de realização do próprio Content, incluindo Blueprint resolvido, evidência validada e restrições necessárias, além de causas, checklist, diagnostics, índices/termos autorizados, sibling summary determinístico e Creator Context aplicável.
+2. `CONTENT_PART_REPAIR` recebe somente a parte atual, Content ID server-owned para correlação, criterion/reason, oportunidade e dimensões semânticas necessárias do Blueprint, regras allowlisted da plataforma e Creator Context aplicável.
+3. Nenhum repair possui autoridade de factualidade, entrega, quota, estado ou persistência. Hard gates finais permanecem autoridade.
+4. Falha, schema inválido ou reparo incompatível preserva a parte original. O contexto e seus hashes permanecem auditáveis sem persistir texto bruto adicional.

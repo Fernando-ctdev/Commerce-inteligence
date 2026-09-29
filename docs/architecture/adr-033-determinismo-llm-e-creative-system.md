@@ -560,3 +560,32 @@ Custos e riscos:
 - [ADR-021](./adr-021-geracao-parcial-declarada-e-retry-de-faltantes.md) — parcial objetivo, quota e memória somente dos entregues.
 - [ADR-029](./adr-029-pipeline-hibrida-deterministica-e-criativa.md) — baseline histórico/experimental; invariantes preservados; supersessão formal pendente de `V2_ACCEPTED`.
 - Nota canônica **"Plano de recalibração da commerce inteligence"** — fonte das Etapas 0–6.
+
+## Adendo pós-Etapa 1 — pacote de alinhamento aprovado
+
+O usuário aprovou formalmente as decisões D1–D9. Este registro consolida as decisões arquiteturais sem alterar o status `V2_DEFAULT_PENDING_ACCEPTANCE`, os PRDs, os planos ou a autorização de implementação.
+
+### D1 — Risk → Judge seletivo
+
+A ordem normativa do runtime V2 é `hard gates → Hard Gate Repair → Risk determinístico → Judge seletivo → Semantic Part Repair → hard gates/variedade finais → persistência`. Risk possui somente autoridade de roteamento. Falha, ausência ou indisponibilidade do Risk seleciona Judge por fail-safe. Item não selecionado registra `JudgeExecution=NOT_EXECUTED` e nunca `PASS`.
+
+### D2 — DiscoveryV2 e CreativeBlueprint canônicos
+
+`IntelligenceRun.metadata.discoveryV2` é a fonte imutável do envelope DiscoveryV2 completo, normalizado e hashado. `ContentOpportunity.payload.creativeDirection` é a única fonte canônica do CreativeBlueprint persistido por Content. `plannedV2` ou metadata operacional não podem manter uma segunda cópia integral do Blueprint.
+
+### D3 — Proveniência, versão, policy, seed e hashes
+
+Toda execução V2 deve ser capaz de registrar, no metadata allowlisted, commit/engine, PlatformSkill e Creative System, versões e hashes de contrato/policy, binding, seed do Planner, hash do input/contexto, hashes de instrução e output, provider/model/tier efetivos, retries, fallback e cobertura. `frozen-harness-fixture` identifica somente harness isolado e não é proveniência operacional.
+
+### D4 — Memória V2
+
+Snapshots novos usam exclusivamente `ProductMemorySignalsV1`, com merge canônico, deduplicação, ordem estável e idempotência. Sinais derivam somente de Contents entregues. `commercialEffects` não é derivado de `coreMessage`. Snapshots V1 permanecem read-only e não há fallback ou dual-write V1/V2.
+
+### D5 — Chamadas e budget
+
+Chamadas lógicas, tentativas físicas, retries de contrato, fallback de disponibilidade e etapas determinísticas são dimensões distintas. O budget e o deadline V2 devem cobrir somente capabilities alcançáveis no call graph V2, sem contabilizar capabilities removidas como chamadas provider-backed. Quota de Contents, budget operacional e custo observado permanecem contratos distintos. ADR-029/E6 conserva a fórmula histórica da baseline.
+
+### D6–D9 — Referências normativas
+
+D6, contexto allowlisted de Hard Gate Repair e Semantic Part Repair, é detalhado no ADR-025. D7, grounding factual/racional e sua autoridade hard ou advisory, é detalhado no ADR-019. D8, tiers provisórios e separação entre tier e reasoning, é detalhado no ADR-029. D9, separação entre runtime V2, baseline histórica e E6, é detalhado no mapa estático da Etapa 1.
+

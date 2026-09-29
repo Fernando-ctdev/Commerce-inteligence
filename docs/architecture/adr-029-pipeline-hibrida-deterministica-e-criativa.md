@@ -45,3 +45,9 @@ Este ADR supersede ADR-027 `Publicação com QUALITY_PENDING após repair semân
 ## Relações
 
 ADR-012, ADR-013, ADR-014, ADR-019, ADR-020, ADR-021, ADR-025 e SPEC Slice 003.
+
+## Adendo pós-Etapa 1 — D8: tiers provisórios
+
+A tabela de tiers deste ADR permanece provisória e histórica para a baseline ADR-029 enquanto `V2_DEFAULT_PENDING_ACCEPTANCE` não mudar. Ela não é, isoladamente, autoridade do call graph V2 atual.
+
+Tier lógico, reasoning do provider, modelo efetivo e fallback são dimensões distintas. O tier normativo de uma execução deve ser o do router vigente e deve ser confirmado por metadata de tentativa; reasoning não prova mudança de tier. Qualquer alteração de tier de produção exige eval live de qualidade, custo e latência e nova decisão registrada.

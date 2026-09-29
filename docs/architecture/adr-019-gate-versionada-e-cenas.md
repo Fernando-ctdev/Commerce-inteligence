@@ -42,3 +42,12 @@ O hard gate determinístico factual/estrutural e o Variety Gate objetivo permane
 ## Relações
 
 ADR-012 (política versionada), ADR-014 (Skill versionada), ADR-004 (variedade determinística), ADR-017 (correlação sanitizada — capabilities de cena seguem o mesmo tracker).
+
+## Adendo pós-Etapa 1 — D7: grounding factual e racional
+
+A matriz de autoridade permanece:
+
+1. `factRefAllowed`, claims não verificados, factualidade objetiva, schema, cenas e variedade são hard gates.
+2. `textGrounding`, `rationaleGrounding`, `factTermsInRationale`, ação, conector e estilo são diagnostics advisory, salvo quando sua falha revelar claim objetivo não sustentado.
+3. Diagnostics de grounding podem selecionar Hard Gate Repair, mas não concedem autoridade ao provider nem ao Judge.
+4. Promover qualquer check advisory a hard exige novo `GATE_POLICY_VERSION` e decisão arquitetural explícita.
