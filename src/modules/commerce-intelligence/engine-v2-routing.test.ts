@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { runFirstGeneration } from "./engine";
 import { runPlannerV2 } from "./engine-v2";
 import { collectJobEvents, resetJobEvents } from "./observability";
-import { CREATIVE_CATALOG } from "./platform-skill";
+import { CREATIVE_CATALOG } from "./creative-catalog";
 
 const describe = () => ({ provider: "test", model: "test-model", instructionVersion: "v2" });
 const recordOf = (value: unknown): Record<string, unknown> | undefined =>
@@ -62,9 +62,9 @@ function stubRouter(handlers: {
       if (task === "PRODUCT_UNDERSTANDING")
         return { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["b"], emotionalBenefits: ["e"], desiredOutcomes: ["d"], purchaseTriggers: ["t"], purchaseBarriers: ["b"], evidenceRefs: ["product:name"] };
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING")
-        return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["querer praticidade"], objections: ["o"], opportunities: [
-          { relevantCapabilities: ["cap"], benefits: ["praticidade no dia a dia"], proofOptions: ["p"], sellingArgument: "resolve o dia a dia", confidence: 0.9, evidenceRefs: ["product:description"] },
-          { relevantCapabilities: ["cap2"], benefits: ["acabamento reforçado"], proofOptions: ["p2"], sellingArgument: "durabilidade real", confidence: 0.8, evidenceRefs: ["product:description"] },
+        return { discoveryContractVersion: "2", hypotheses: [
+          { commercialObjective: "gerar desejo", angle: "praticidade", coreMessage: "leve para o dia a dia", desiredViewerResponse: null, audience: null, situation: null, desire: null, identification: null, curiosity: null, aspiration: null, humorPotential: null, visualPotential: null, pain: null, objection: null, desiredOutcome: null, relevantCapabilities: ["cap"], benefits: ["praticidade no dia a dia"], proofOptions: ["product:description"], commercialEffects: ["desejo"], evidenceRefs: ["product:description"], confidence: 0.9 },
+          { commercialObjective: "quebrar objeção", angle: "durabilidade", coreMessage: "durabilidade real", desiredViewerResponse: null, audience: null, situation: null, desire: null, identification: null, curiosity: null, aspiration: null, humorPotential: null, visualPotential: null, pain: null, objection: null, desiredOutcome: null, relevantCapabilities: ["cap"], benefits: ["acabamento reforçado"], proofOptions: ["product:description"], commercialEffects: ["confiança"], evidenceRefs: ["product:description"], confidence: 0.8 },
         ] };
       if (task === "STRATEGY_SYNTHESIS")
         return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };

@@ -4,24 +4,24 @@
 
 **Natureza:** precondição documental transversal do Slice 003; não é Slice de produto, não cria, renumera ou reutiliza o Slice 004.
 
-**Status:** `DOCUMENTATION_ONLY` — esta SPEC congela contratos, fronteiras e critérios de aprovação. Não autoriza implementação, execução de fixture/harness, A/B, alteração de runtime ou cutover.
+**Status:** `DOCUMENTATION_ONLY` — coordena o contrato alvo de risco/qualidade; não autoriza código, provider, E6 ou aceitação formal.
 
-**Runtime vigente:** ADR-029 integralmente vigente; `tiktok-commerce@1.2` em produção; `@1.3` permanece inativa.
+**Runtime atual:** Engine V2 default em `V2_DEFAULT_PENDING_ACCEPTANCE`; ADR-029/`@1.2` permanece baseline histórico/experimental. Risk pré-Judge e Judge seletivo são alvo pendente até implementação observável.
 
 ## 1. Objetivo e fronteira
 
-Esta SPEC resolve os gates documentais de risco e qualidade sem alterar a pipeline vigente. Ela define:
+Esta SPEC define:
 
-- a identidade documental e a relação com o Slice 003;
-- a separação entre hard gate objetivo, rubric semântico/Judge e RiskAssessment advisory;
-- o contrato futuro versionado de `RiskAssessment` sem autoridade de entrega;
-- a semântica explícita para Judge não executado;
-- a validação de Blueprint/recipe somente em fixture/harness;
-- o pré-registro de um experimento isolado de Judge reduction;
-- os invariantes de quota, tenant, Job, reservation, fencing, idempotência, D/N, parcial e retry;
-- os gates de thresholds, Golden Dataset e seed antes de qualquer experimento.
+- hard gates como autoridade objetiva de elegibilidade;
+- `PreJudgeRiskAssessmentV2` como roteamento determinístico antes do Judge;
+- falha/indisponibilidade de Risk selecionando Judge como fail-safe;
+- `JudgeSelectionDecisionV1` persistível e reproduzível;
+- `JudgeExecution=NOT_EXECUTED` sem `PASS` sintético;
+- offline fixtures para estrutura/registry/policy sem alegação de qualidade operacional;
+- experimento de atribuição Judge-all versus Risk-gated dentro da E6;
+- invariantes de quota, tenant, Job, fencing, idempotência, D/N, parcial e retry.
 
-A Etapa 5 não cria capability de produto, estado de Job, endpoint, serviço, aggregate, tabela, worker, migration, provider, contrato creator-facing ou alteração na autoridade do Slice 003.
+A Etapa 5 não cria capability de produto, estado de Job, endpoint, serviço, aggregate, tabela, worker, migration, provider ou contrato creator-facing. Também não afirma que Risk pré-Judge já esteja implementado no runtime V2.
 
 ## 2. Fontes e precedência
 
@@ -32,8 +32,8 @@ Fontes vinculantes e referências:
 1. [ADR-013 — Model Router e IntelligenceTier](../../architecture/adr-013-model-router-e-intelligence-tier.md) — tier, custo por tentativa efetiva, moeda e estados `UNAVAILABLE`/`PARTIAL`.
 2. [ADR-019 — Gate versionada, variedade funcional e ContentSceneSet](../../architecture/adr-019-gate-versionada-e-cenas.md) — policy versionada, variedade, cenas separadas e backfill.
 3. [ADR-021 — Geração parcial declarada e retry dos faltantes](../../architecture/adr-021-geracao-parcial-declarada-e-retry-de-faltantes.md) — D/N, `PARTIAL_FAILURE_CAP`, quota, parcial e retry explícito.
-4. [ADR-029 — Pipeline híbrida determinística e criativa](../../architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md) — runtime vigente, hard gates, Judge, repairs e `ROUTER_MAP`.
-5. [ADR-033 — Determinismo × LLM e Creative System](../../architecture/adr-033-determinismo-llm-e-creative-system.md) — autoridade, Blueprint futuro, Skill, catálogo e A/B.
+4. [ADR-029 — Pipeline híbrida determinística e criativa](../../architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md) — baseline histórico/experimental e invariantes preservados.
+5. [ADR-033 — Determinismo × LLM e Creative System](../../architecture/adr-033-determinismo-llm-e-creative-system.md) — V2 default pendente, Risk pré-Judge e E6 integral.
 6. [SYSTEM-DESIGN](../../architecture/SYSTEM-DESIGN.md) — fronteiras de Tenant, Job, Engine, Entitlements, Content e Model Router.
 7. [SLICES](../../delivery/SLICES.md) — Slice 003 de primeira geração e Slice 004 de revisão/controle.
 8. [SPEC da Etapa 4](../etapa-4-skill-brief/SPEC.md) e [PLAN da Etapa 4](../../plans/etapa-4-skill-brief/PLAN.md) — precondição documental anterior e preservação do runtime.
@@ -54,38 +54,32 @@ docs/plans/etapa-5-risk-quality/PLAN.md
 
 A Etapa 5 é uma precondição documental transversal do Slice 003. Ela não é um Slice adicional e não recebe User Outcome, domínio de produto, estado de creator ou ownership de revisão. O Slice 003 continua responsável pela primeira geração até Briefings, incluindo delivery objetivo, parcial e retry dos faltantes conforme ADR-021. O Slice 004 continua responsável por revisão, edição, aprovação, descarte e versionamento de Content.
 
-A referência mínima no SLICES deve apontar para esta SPEC e PLAN, declarar que não cria/renumera/reutiliza Slice 004 e manter ADR-029, `@1.2` e os gates atuais até aprovação formal. A referência não é incluída por esta SPEC automaticamente; sua alteração é uma operação documental separada e mínima.
+A referência no SLICES deve registrar V2 default pendente, ADR-029 como baseline e Risk pré-Judge como alvo não comprovado. Ela não autoriza runtime.
 
-## 4. Baseline imutável de runtime
+## 4. Estado atual e baseline
 
-Enquanto não houver SPEC/PLAN de cutover aprovados, A/B executado, relatório reproduzível e aprovação formal conforme ADR-033:
-
-- ADR-029 é o único runtime autorizado.
-- `tiktok-commerce@1.2` é o binding de produção; `@1.3` é foundation/harness inativa.
-- `ContentSceneSet` permanece separado de `ContentBriefVersion`; Brief novo não recebe `scenes`.
-- `BriefValidationReport` permanece objetivo e retorna somente `PASS|REPAIR|REJECT`.
-- `CONTENT_QUALITY_JUDGE` permanece após hard gates e retorna somente `PASS|REVIEW` por Content e parte.
-- Hard Gate Repair ocorre antes do Judge, por item, em `HIGH`, limitado por `GENERATION_MAX_REPAIRS` — default atual `2`.
-- Semantic Part Repair ocorre somente por parte `REVIEW`, no máximo uma vez, sem re-Judge; partes `PASS` e reparos inválidos preservam o original.
-- Falha de Judge ou repair não fabrica conteúdo, `PASS` ou faltante.
-- Somente hard gates objetivos, factualidade, cenas e variedade decidem elegibilidade e entrega.
-- `SUCCEEDED_PARTIAL` permanece decisão objetiva de D/N dentro do `PARTIAL_FAILURE_CAP`; `REVIEW` semântico não cria F.
-- Não há `QUALITY_PENDING`, `REJECT` semântico, fallback semântico ou alteração de tier.
-
+- Engine V2 é o runtime default por ADR-033.
+- ADR-029/`@1.2` permanece reproduzível para histórico/E6, não como call graph default.
+- Hard gates, `BriefValidationReport`, partial, quota, tenant, fencing e idempotência permanecem invariantes.
+- A ordem-alvo é hard gates → Risk Detector → Judge seletivo.
+- Risk possui autoridade de roteamento, nunca de entrega.
+- Falha ou indisponibilidade de Risk seleciona Judge.
+- Item não selecionado registra `JudgeExecution=NOT_EXECUTED`, nunca `PASS`.
+- Esta SPEC não afirma que o alvo esteja implementado; ausência de observabilidade mantém o gate de `V2_ACCEPTED` pendente.
 ## 5. Ordem e autoridade dos gates
 
-A ordem vigente e preservada é:
-
 ```text
-Brief Generator
-→ hard gates objetivos
+Brief + Scene Skeleton
+→ hard gates
 → Hard Gate Repair limitado
-→ ContentSceneSet válido
-→ CONTENT_QUALITY_JUDGE
+→ Risk Detector determinístico
+→ Judge somente nos itens selecionados
 → Semantic Part Repair único
 → hard gates/variedade finais
-→ persistência e decisão terminal
+→ persistência
 ```
+
+Esta é a ordem alvo do ADR-033. Documentação, fixture ou tipo isolado não provam sua execução no runtime.
 
 ### 5.1 Hard gate objetivo
 
@@ -111,157 +105,100 @@ REJECT → item/conjunto não entregável após limite ou falha não reparável
 
 ### 5.2 Judge e rubric semântico
 
-O Judge ocorre somente depois dos hard gates prévios, em batches homogêneos de até três Contents, e avalia as partes vigentes (`hook`, `development`, `script`, `cta`, `scenes`). Seu único resultado de qualidade é:
-
-```text
-PASS   → parte semântica preservada
-REVIEW → parte pode receber um Semantic Part Repair
-```
-
-Judge não decide factualidade, variedade, estado, quota, Tenant, retry, parcial ou publicação. Uma parte `REVIEW` recebe no máximo um `CONTENT_PART_REPAIR`, sem re-Judge; se o reparo for inválido, o original é preservado e os hard gates finais continuam determinando entrega.
+O Judge executa somente para seleções `selected=true` ou quando falha/indisponibilidade do Risk aciona o fail-safe. Retorna `PASS|REVIEW` por parte e não decide factualidade, variedade, estado, quota, Tenant, retry, parcial ou publicação. Uma parte `REVIEW` recebe no máximo um repair semântico, sem re-Judge.
 
 ### 5.3 Judge não executado
 
-A ausência de execução é um estado de cobertura, não um resultado semântico:
-
 ```text
 JudgeExecution = EXECUTED | NOT_EXECUTED | FAILED | NOT_APPLICABLE
-
-JudgeResult só existe quando JudgeExecution = EXECUTED:
-  PASS | REVIEW por Content e parte
+JudgeResult = PASS | REVIEW somente quando EXECUTED
 ```
 
-Regras:
+- `NOT_EXECUTED` exige decisão de seleção persistida e nunca vira `PASS`.
+- `FAILED` nunca vira `PASS` ou `REVIEW`.
+- Cobertura é reportada separadamente de qualidade semântica.
+- A entrega continua sob hard gates objetivos.
+- Eval subjetiva usa anotação cega separada do `JudgeResult`.
 
-- `NOT_EXECUTED` nunca é sintetizado como `PASS` ou `REVIEW`.
-- Quando `sources.judge=NOT_EXECUTED`, `assessmentStatus` é obrigatoriamente `PARTIAL` ou `UNAVAILABLE`; nunca `AVAILABLE`, inclusive por preenchimento sintético.
-- `FAILED` nunca é sintetizado como `PASS` ou `REVIEW`.
-- Não há novo estado público, `QUALITY_PENDING`, `REJECT` semântico, repair extra ou re-Judge por esta regra.
-- Thresholds que medirem qualidade semântica devem declarar o denominador de partes efetivamente executadas e a cobertura `NOT_EXECUTED`/`FAILED` separadamente.
-- O contrato de entrega vigente não é reescrito para preencher uma lacuna de evidência.
-
-## 6. Separação entre risk, hard gate e semantic rubric
-
-Os três planos podem compartilhar referências, mas nunca autoridade:
+## 6. Separação entre Risk, hard gate e rubric
 
 | Plano | Fonte | Resultado | Autoridade |
 |---|---|---|---|
-| Hard gate | Validator/código server-side | `PASS|REPAIR|REJECT` | Decide elegibilidade, D/F e entrega conforme ADR-029/021. |
-| Semantic rubric | `CONTENT_QUALITY_JUDGE` executado após hard gates | `PASS|REVIEW` por parte | Orienta um Part Repair; não decide publicação, factualidade, quota ou parcial. |
-| Risk | Assessment determinístico de evidências existentes | `RiskAssessment` advisory | Observa exposição/cobertura; não cria gate, retry, quota, estado ou publicação. |
+| Hard gate | código server-side | `PASS|REPAIR|REJECT` | elegibilidade, D/F e entrega |
+| Risk pré-Judge | policy/registry determinísticos | assessment + seleção | roteia Judge; nunca entrega |
+| Judge | LLM nos itens selecionados | `PASS|REVIEW` por parte | orienta um repair; nunca publica |
+| Rubrica E6 | avaliações humanas cegas | labels/scores adjudicados | evidência de aceitação; nunca altera runtime |
 
-`riskBand=HIGH` não é `REJECT`. `REVIEW` não é hard failure. `source=HARD_GATE` ou `source=SEMANTIC_RUBRIC` em um finding informa proveniência de uma decisão já existente; não cria segunda decisão. Risk não pode reclassificar um fato, gate ou resultado do Judge.
+`riskBand=HIGH` não é `REJECT`. `REVIEW` não é hard failure. Rubrica E6 não preenche resultado do Judge.
 
-## 7. Contrato `RiskAssessment`
-
-### 7.1 Papel
-
-`RiskAssessment` é um artefato interno de observabilidade/avaliação. É advisory, versionado, allowlisted, determinístico e sanitizado. Não é estado de Job, não é parte de `BriefValidationReport`, não é resultado do Judge e não decide DRAFT, `SUCCEEDED`, `SUCCEEDED_PARTIAL`, `FAILED`, quota, retry, Tenant ou persistência.
-
-### 7.2 Envelope mínimo futuro
-
-O contrato futuro deve manter forma equivalente à seguinte:
+## 7. Contratos pré-Judge
 
 ```ts
-type RiskAssessmentV1 = {
-  contractVersion: "risk-assessment.v1";
+type PreJudgeRiskAssessmentV2 = {
+  contractVersion: "risk-assessment.v2";
   policyVersion: string;
+  subject: { jobId: string; contentId: string };
   assessmentStatus: "AVAILABLE" | "PARTIAL" | "UNAVAILABLE";
-  subject: {
-    jobId: string;
-    contentId?: string;
-    part?: "hook" | "development" | "script" | "cta" | "scenes";
-  };
   riskBand: "NONE" | "LOW" | "MEDIUM" | "HIGH";
-  findings: readonly RiskFindingV1[];
+  findings: readonly RiskFindingV2[];
   sources: {
-    hardGate: "AVAILABLE" | "NOT_EXECUTED" | "UNAVAILABLE";
-    judge: "EXECUTED" | "NOT_EXECUTED" | "FAILED" | "NOT_APPLICABLE";
-    blueprintFixture: "EXECUTED" | "NOT_EXECUTED" | "NOT_APPLICABLE";
+    hardGate: "AVAILABLE";
+    blueprint: "AVAILABLE" | "UNAVAILABLE";
+    scenes: "AVAILABLE" | "FILTERED" | "ERROR";
+    memory: "AVAILABLE" | "EMPTY" | "UNAVAILABLE";
   };
 };
 
-type RiskFindingV1 = {
-  code: string; // registry fechado
-  domain: "FACTUALITY" | "STRUCTURE" | "VARIETY" | "SCENE" | "SEMANTIC" | "OPERATIONAL";
-  severity: "LOW" | "MEDIUM" | "HIGH";
-  source: "HARD_GATE" | "SEMANTIC_RUBRIC" | "OPERATIONAL_SIGNAL";
-  evidenceRefs: readonly string[]; // refs/hash server-owned
-  messageCode: string; // catálogo sanitizado local
+type JudgeSelectionDecisionV1 = {
+  policyVersion: string;
+  contentId: string;
+  selected: boolean;
+  triggerCodes: readonly string[];
 };
 ```
 
-### 7.3 Invariantes
+Invariantes:
 
-1. `contractVersion` e `policyVersion` são obrigatórios. Alteração de shape, registry ou semântica exige nova versão.
-2. `jobId`, `contentId`, `part`, refs, policy e Tenant são server-owned/validados; provider não define ownership, status, quota, IDs persistentes ou `assessmentStatus`.
-3. `code`, `domain`, `severity`, `source` e `messageCode` vêm de registries fechados. Campo extra, enum inválido, código desconhecido ou ref não autorizada invalida a entrada.
-4. `messageCode` aponta para catálogo sanitizado local. Não entram prompt, resposta bruta, mensagem livre do provider, segredo, token, cookie, dado de outro Tenant, instrução executável, copy final ou claim novo.
-5. O servidor deduplica e ordena findings por chave estável `(domain, code, severity, evidenceRef)`. `riskBand` é derivado deterministicamente da policy; provider não escolhe sua severidade final.
-6. `AVAILABLE`, `PARTIAL` e `UNAVAILABLE` descrevem cobertura do assessment; não significam sucesso/falha do Content.
-7. Se Judge não executou, `sources.judge=NOT_EXECUTED` e `assessmentStatus` é obrigatoriamente `PARTIAL` ou `UNAVAILABLE`; nunca `AVAILABLE`, inclusive por preenchimento sintético. Não há finding semântico nem `PASS` sintetizado.
-8. Um assessment pode referenciar um hard gate ou rubric, mas não os substitui, relaxa ou reexecuta.
+1. contrato, policy, registry e trigger codes são versionados e allowlisted;
+2. subject, refs e ownership são server-owned;
+3. findings derivam deterministicamente de Brief, Blueprint, cenas, memória e hard gates disponíveis;
+4. provider não escolhe risk band, seleção, quota, status ou persistência;
+5. falha, `PARTIAL` crítico ou `UNAVAILABLE` seleciona Judge;
+6. decisão de seleção é persistível e reproduzível;
+7. item não selecionado registra `NOT_EXECUTED`;
+8. Risk não cria copy, claim, repair ou faltante.
 
-## 8. Blueprint/recipe: fixture/harness-only
+O registry mínimo é o definido no ADR-033: genericidade; integração fraca do Produto; CTA incompatível; payoff ausente; repetição/saturação de attention mechanism, commercial effect, psychological effect, recipe e narrative shape; script longo; produção incerta; mecanismo criativo ou realização do Blueprint incompletos.
+## 8. Evidence offline de Risk/Blueprint
 
-`CreativePrimitive`, `CreativeRecipe`, `CreativeBlueprint` e compatibilidade continuam contrato-alvo da `PlatformSkill` conforme ADR-033, mas a Etapa 5 não ativa V2.
+Fixtures isoladas podem demonstrar:
 
-O SPEC/PLAN futuro pode descrever fixtures estáticas para:
+- schema, enum, cardinalidade e referências;
+- `load → validate → freeze → expose`;
+- registry, trigger codes, ordenação e deduplicação;
+- policy de seleção e fail-safe;
+- códigos `GEN-CS-*`;
+- não vazamento de catálogo no contexto projetado.
 
-- primitives, recipes e Blueprints válidos;
-- versão/Skill desconhecida;
-- refs inexistentes;
-- enum, cardinalidade e compatibilidade inválidos;
-- deduplicação/ordenação determinística permitida;
-- códigos estáveis `GEN-CS-VERSION`, `GEN-CS-SCHEMA`, `GEN-CS-REF`, `GEN-CS-COMPAT` e `GEN-CS-ELIGIBILITY`;
-- não vazamento de texto literal de hook/CTA no contexto allowlisted de um caminho Blueprint-driven.
+Fixtures, mocks e replay offline não demonstram naturalidade, criatividade, persuasão, qualidade semântica real, custo, tokens, latência, timeout ou retries de provider. Esses critérios ficam `UNAVAILABLE` para aceite operacional até provider vivo pareado.
 
-O harness pode executar `load → validate → freeze → expose` sobre fixtures isoladas. Isso não autoriza:
+Esta seção não autoriza writer, migration, ativação, provider ou alteração do runtime.
 
-- carregar `@1.3` no runtime;
-- escrever ou ler `ContentOpportunity.creativeDirection` em produção;
-- criar writer, reader V2, migration, endpoint, aggregate, serviço ou schema de produção;
-- enviar Blueprint/recipe ao provider do caminho ADR-029;
-- derivar ou reescrever histórico v1;
-- alterar cenas, gates, Judge, tier, repair, quota, Job ou persistência.
+## 9. Experimento de atribuição Risk-gated
 
-O aceite do fixture/harness não é evidência de naturalidade, factualidade, qualidade operacional, custo, latência ou equivalência de runtime.
+O experimento compara Judge-all e Risk-gated como uma atribuição dentro da E6. Antes da coleta, fixa:
 
-## 9. Experimento isolado de Judge reduction
+- baseline/candidato por commit/engine version;
+- mesma entrada, Skill/binding, provider/model/tier e parâmetros;
+- prompts/contextos, seed, policies e memória por bytes/hash;
+- regra de seleção, registry e fail-safe;
+- coverage `EXECUTED|NOT_EXECUTED|FAILED|NOT_APPLICABLE`;
+- usage/custo/latência e completude;
+- rubricas subjetivas, unidade, cegamento, avaliações independentes, adjudicação, agregação/categorias, missing e thresholds.
 
-### 9.1 Pré-registro, não execução
+Parte não chamada recebe `NOT_EXECUTED`, nunca `PASS` ou repair inferido. Evidence offline valida a policy; somente provider vivo mede qualidade semântica, custo e latência reais.
 
-A hipótese de redução de invocações do Judge exige A/B operacional próprio. A única variável independente é a regra pré-registrada de quais Contents/partes recebem `CONTENT_QUALITY_JUDGE`. Esta SPEC não escolhe algoritmo de redução, não cria flag e não executa experimento.
-
-### 9.2 Constantes do par
-
-Baseline e candidato devem manter iguais:
-
-- ADR-029 e commit/engine version fixados;
-- `tiktok-commerce@1.2`, mesmo `SkillBinding`, `platformSkillVersion`, modelo e tier `HIGH`;
-- Product Facts/evidências, `creatorContext`, `ProductMemorySnapshot`, Golden Dataset, categorias e seed derivado do Job;
-- prompt/context hashes, schema, `GATE_POLICY_VERSION`, timeouts, quota, Tenant, idempotência, persistência e retries;
-- hard gates, factualidade, variedade, `ContentSceneSet`, tentativas de cena, Hard Gate Repair e Semantic Part Repair;
-- RiskAssessment desativado como variável ou calculado com a mesma policy, sem autoridade;
-- Blueprint/recipe apenas em fixture/harness, não carregado e não enviado ao provider;
-- sem rebaixamento de tier, fallback semântico, repair novo, re-Judge ou alteração de cenas.
-
-Parte não chamada recebe `JudgeExecution=NOT_EXECUTED`; nunca recebe `PASS`, `REVIEW`, finding semântico ou repair por inferência.
-
-### 9.3 Métricas e gate de aprovação
-
-Antes de executar, o protocolo deve fixar versão de thresholds, denominadores, unidade monetária, regra de missing data e Golden Dataset. Deve medir, agregado e por categoria:
-
-- invocações e partes avaliadas;
-- cobertura `EXECUTED`, `NOT_EXECUTED`, `FAILED`, `NOT_APPLICABLE`;
-- `PASS|REVIEW` somente em partes executadas;
-- hard-gate failure, factualidade, variedade e `ContentSceneSet`;
-- `CONTENT_PART_REPAIR` sem alteração da policy;
-- D/N, `SUCCEEDED_PARTIAL`, `FAILED`, retries, chamadas efetivas, tokens, custo e latência p50/p95;
-- `cost_per_valid_content` com custo/completude conforme ADR-013;
-- findings de RiskAssessment somente como observabilidade não causal.
-
-Thresholds não são definidos numericamente nesta SPEC. Sem Golden Dataset, seed, baseline/candidato, versões, hashes, thresholds pré-registrados, relatório reproduzível, revisão arquitetural e aprovação formal, não há experimento válido nem cutover. Qualquer regressão em critério ou categoria reprova o candidato; economia isolada não aprova.
+Nenhum threshold ou resultado é inventado nesta SPEC. Regressão agregada ou por categoria reprova conforme policy pré-registrada. Sem relatório revisado e aceite explícito do usuário, V2 permanece default pendente.
 
 ## 10. Invariantes operacionais imutáveis
 
@@ -298,21 +235,21 @@ Thresholds não são definidos numericamente nesta SPEC. Sem Golden Dataset, see
 
 ## 11. Critérios de aceite
 
-- **AC5.1 — Identidade:** SPEC/PLAN usam `etapa-5-risk-quality`; Etapa 5 é pré-condição transversal do Slice 003 e não cria/renumera/reutiliza Slice 004.
-- **AC5.2 — Baseline:** ADR-029, `@1.2`, `ContentSceneSet` separado, gates, Judge e repairs vigentes estão explicitamente preservados.
-- **AC5.3 — Estados:** `BriefValidationReport` usa `PASS|REPAIR|REJECT`; Judge usa `PASS|REVIEW`; `JudgeExecution` distingue `NOT_EXECUTED` e `FAILED` sem sintetizar `PASS`.
-- **AC5.4 — RiskAssessment:** contrato versionado, allowlisted, determinístico e sanitizado; advisory-only e sem autoridade de entrega.
-- **AC5.5 — Separação:** hard, semantic rubric e risk têm perguntas, fontes, resultados e autoridade distintos.
-- **AC5.6 — Blueprint:** Blueprint/recipe são somente fixture/harness; nenhum runtime V2, writer, migration, `creativeDirection` ou ativação `@1.3`.
-- **AC5.7 — Judge reduction:** protocolo A/B isolado tem uma variável independente; RiskAssessment, Blueprint, cenas, tier, repair e gates são constantes.
-- **AC5.8 — A/B:** Golden Dataset, seed, baseline/candidato, versões, hashes, thresholds e missing data são pré-registrados; nenhuma execução é autorizada por esta SPEC.
-- **AC5.9 — Operação:** quota, Tenant, Job, reservation, fencing, idempotência, D/N, partial e retry permanecem imutáveis e rastreáveis.
-- **AC5.10 — Não alteração:** PRDs, ADRs, DESIGN, nota imutável e código permanecem fora desta mudança.
+- **AC5.1 — Identidade:** Etapa 5 permanece transversal ao Slice 003.
+- **AC5.2 — Estado:** V2 é default pendente; ADR-029/`@1.2` é baseline.
+- **AC5.3 — Ordem:** hard gates → Risk → Judge seletivo é alvo, não implementação presumida.
+- **AC5.4 — Risk:** contratos v2 e decisão de seleção são determinísticos, versionados e sem autoridade de entrega.
+- **AC5.5 — Fail-safe:** falha/indisponibilidade seleciona Judge; `NOT_EXECUTED` nunca é `PASS`.
+- **AC5.6 — Evidence:** fixtures offline não comprovam qualidade semântica, custo ou latência reais.
+- **AC5.7 — Atribuição:** Judge-all versus Risk-gated usa provider vivo pareado e controles pré-registrados.
+- **AC5.8 — Subjetivo:** rubrica, unidade, cegamento, adjudicação, agregação/categorias e thresholds são auditáveis.
+- **AC5.9 — Operação:** quota, Tenant, Job, fencing, idempotência, D/N, partial e retry permanecem invariantes.
+- **AC5.10 — Escopo:** nenhum código, teste ou runtime é alterado.
 
 ## 12. Fora do escopo
 
-- Implementação de `RiskAssessment`, Judge reduction, Blueprint, recipe, validator, worker, endpoint, migration ou telemetria.
-- Execução de fixtures, harness, Golden Dataset, A/B, benchmark, smoke, typecheck, lint ou build.
-- Mudança de tier, modelo, batch, cenas, gates, repairs, quota, Job, persistência, `ROUTER_MAP` ou provider.
-- Ativação de `@1.3`, escrita de `creativeDirection`, promoção de histórico ou catálogo V2.
-- Criação/renumeração de Slice, alteração de PRD, ADR, DESIGN, nota imutável ou código.
+- Implementação/correção de Risk pré-Judge, Judge seletivo, Blueprint, memória ou writer.
+- Execução de fixtures, harness, Golden Dataset, provider, A/B, benchmark, smoke, typecheck, lint ou build.
+- Mudança de tier, modelo, batch, cenas, gates, repairs, quota, Job, persistência ou provider.
+- Reescrita de histórico v1 ou fabricação de Blueprint/sinais.
+- Criação/renumeração de Slice, alteração de PRD, DESIGN, nota imutável, código ou testes.

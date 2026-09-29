@@ -2,24 +2,24 @@
 
 > **Para agentes de implementação:** este plano é documentation-only. Não execute tarefas de código, não execute A/B e não faça cutover a partir deste arquivo. Qualquer implementação futura exige um plano de cutover separado, aprovado conforme ADR-033.
 
-**Goal:** congelar a fronteira documental Planner → Skill/Creative System → Brief Generator do Slice 003, preservando o runtime ADR-029 e deixando o A/B futuro apenas pré-registrado.
+**Goal:** coordenar Planner → Skill/Creative System → Brief Generator com a Engine V2 default, mantendo ADR-029 somente como baseline E6 e sem afirmar pendências implementadas.
 
-**Architecture:** A Etapa 4 é uma precondição documental e técnica do Slice 003, não um Slice de produto. O código continua autoridade sobre schema, fatos, evidência, gates, estados, quota, tenant e persistência; o LLM continua limitado à realização criativa dentro do handoff validado. `ContentSceneSet` permanece separado do Brief e `tiktok-commerce@1.2` continua em produção.
+**Architecture:** Etapa 4 é precondição documental/técnica do Slice 003. Código mantém autoridade sobre schema, fatos, evidência, gates, estado, quota, tenant e persistência; LLM realiza criatividade no handoff validado. `ContentSceneSet` permanece separado do Brief.
 
-**Tech Stack:** Nenhuma alteração de stack. Documentação Markdown; runtime existente Next.js/TypeScript/PostgreSQL/Model Router/ADR-029 permanece sem alteração.
+**Tech Stack:** somente Markdown nesta alteração; nenhum runtime, provider ou teste é modificado.
 
 **Spec:** [`docs/specs/etapa-4-skill-brief/SPEC.md`](../../specs/etapa-4-skill-brief/SPEC.md)
 
 ## Global Constraints
 
-- `tiktok-commerce@1.2` permanece produção; `tiktok-commerce@1.3` permanece foundation/harness inativa.
-- ADR-029 continua sendo o runtime vigente até A/B, relatório reproduzível e aprovação formal.
-- `ContentBriefVersion` novo não contém `scenes`; cenas pertencem a `ContentSceneSet`.
-- `HIGH` permanece canônico para Brief, cenas, Judge e repairs.
-- A/B comum usa o mesmo `SkillBinding` por par e congela `platformSkillVersion`, modelo, seed, dataset, contexto e memória; tier só varia quando for a única variável declarada.
-- Comparação `@1.2`/`@1.3` exige ADR/protocolo experimental separado e não autoriza execução ou cutover.
-- Não escrever `creativeDirection`, não criar writer Blueprint e não alterar `ContentOpportunity` histórico.
-- Não alterar PRD, ADR-029, ADR-033, DESIGN, nota imutável, código, schema, provider, quota, Job ou persistência.
+- Engine V2 permanece default em `V2_DEFAULT_PENDING_ACCEPTANCE`.
+- ADR-029/`@1.2` permanece baseline histórico/experimental; ADR-033 define `@1.3` como binding operacional alvo ainda sujeito a comprovação de consistência.
+- `ContentBriefVersion` não contém `scenes`; `ContentSceneSet` permanece separado.
+- Tiers/capabilities do ADR-029 são baseline E6, não mapa corrente presumido.
+- E6 registra commit, provider/model/tier, params, prompts/contextos, seed, usage/custo/latência e cobertura.
+- Evidence offline não comprova custo, latência ou qualidade semântica real.
+- `creativeDirection` v2 é canônica no alvo; writer, memória, binding, Scene Skeleton, Risk pré-Judge e remoção de `selectedPatterns` não são presumidos completos.
+- Não alterar PRD, ADRs, DESIGN, nota, código, testes, schema, provider, quota, Job ou persistência.
 
 ---
 ## Autoridade e precedência
@@ -33,15 +33,9 @@ A ordem operacional segue o `AGENTS.md`: depois da nota superior, consulta PRDs,
 
 ## 1. Identidade e arquivos desta mudança
 
-| Operação autorizada | Arquivo | Responsabilidade |
-|---|---|---|
-| Criar | `docs/specs/etapa-4-skill-brief/SPEC.md` | Contrato, invariantes, gates, riscos e critérios de aceite da Etapa 4. |
-| Criar | `docs/plans/etapa-4-skill-brief/PLAN.md` | Sequência documental, dependências, gates de execução futura e limites de implementação. |
-| Atualizar | `docs/delivery/SLICES.md` | Uma referência mínima da Etapa 4 como precondição documental do Slice 003. |
+Esta Etapa permanece documentação transversal do Slice 003: a SPEC define contrato e limites; este PLAN define dependências e gates. A coordenação atual também alcança ADR-033, SYSTEM-DESIGN, SLICES e as SPEC/PLAN de Slice 003 e Etapas 5/6. Isso não cria Slice 004, não renumera slices nem altera o escopo de revisão/controle do Slice 004 existente.
 
-A referência no SLICES não cria Slice 004, não renumera slices, não altera o User Outcome do Slice 003 e não altera o escopo do Slice 004 existente, que continua sendo revisão e controle de Content.
-
-Arquivos canônicos não autorizados nesta mudança: PRDs, ADR-029, ADR-033, outros ADRs, SYSTEM-DESIGN, DESIGN, PRINCIPLES, nota imutável e qualquer arquivo de código.
+PRDs, DESIGN, PRINCIPLES, ADR-029, outros ADRs, nota imutável, código e testes não são alterados. ADR-033 é refinado somente em E6; SYSTEM-DESIGN/SLICES são alinhados deliberadamente ao estado default V2 pendente.
 
 ## 2. Dependências e fontes
 
@@ -51,9 +45,9 @@ A sequência usa, sem substituí-los:
 - Slice 003 para `CommerceIntelligenceJob`, pipeline, Content/Brief, quota, tenant e persistência;
 - ADR-019 para `ContentSceneSet` separado e gates de cenas;
 - ADR-021 para `SUCCEEDED_PARTIAL`, reconciliação D/N e retry de faltantes;
-- ADR-029 para ordem de execução, `HIGH`, Judge e repairs;
-- [`ADR-013 — Model Router e IntelligenceTier`](../../architecture/adr-013-model-router-e-intelligence-tier.md#decisão) para custo por tentativa efetiva, `usage.cost`, moeda explícita, estados `UNAVAILABLE`/`PARTIAL` e custo por Content entregue;
-- ADR-033 para matriz de autoridade, Skill versionada, catálogo literal fora do contexto novo e gate A/B/cutover;
+- ADR-029 para baseline histórica, gates e invariantes preservados;
+- [`ADR-013 — Model Router e IntelligenceTier`](../../architecture/adr-013-model-router-e-intelligence-tier.md#decisão) para custo por tentativa efetiva, `usage.cost`, moeda explícita e completude;
+- ADR-033 para V2 default pendente, matriz de autoridade, Skill/Blueprint, contexto e E6 integral;
 - `.gstack/etapa4-requisitos.md` e `.gstack/etapa4-decisoes.md` como registros de análise já aprovados para esta documentação.
 
 Dependência de produto excluída: Slice 004 não é reutilizado. Revisão, edição, aprovação, descarte e versionamento operacional continuam fora da Etapa 4.
@@ -104,73 +98,56 @@ cost_job_total =
 
 **B4-03 — Tier:**
 
-- `CONTENT_BRIEF_GENERATION`, `CONTENT_BRIEF_REPAIR`, `CONTENT_SCENE_IDEAS`, `CONTENT_QUALITY_JUDGE` e `CONTENT_PART_REPAIR` permanecem `HIGH`.
-- `MID` só pode ser hipótese de A/B isolado; não entra no runtime por este plano.
+- A matriz ADR-029 (`CONTENT_BRIEF_GENERATION`, repairs, `CONTENT_SCENE_IDEAS`, Judge) permanece somente baseline E6.
+- O runtime V2 registra tiers e capabilities efetivamente executados.
 
-**Gate:** nenhum contrato acima muda ADR-029, o `ROUTER_MAP`, o Job, a quota ou a persistência.
+**Gate:** esta documentação não altera mapa, tier, Job, quota ou persistência.
 
-### Fase 3 — Pré-registrar B4-04 sem executar
+### Fase 3 — Pré-registrar E6 sem executar
 
-O protocolo futuro fica registrado com as seguintes invariantes:
+1. Fixar baseline ADR-029/`@1.2` e candidato V2/`@1.3` por commit/engine version.
+2. Registrar provider/model/tier e parâmetros efetivos de cada braço.
+3. Congelar Product Facts/evidências, creator context, memória, prompts/contextos e seeds por bytes/hash.
+4. Registrar Skill/binding, Creative System, schemas, policies, timeout, retries, usage/custo/latência e cobertura.
+5. Listar antes da coleta todas as diferenças inerentes ao end-to-end; atribuições alteram uma variável.
+6. Separar evidence offline/replay de execução com provider vivo.
+7. Pré-registrar rubrica, unidade, cegamento, avaliações independentes, adjudicação, agregação/categorias, missing e thresholds.
+8. Não coletar nem declarar resultado por esta Etapa 4.
 
-1. Em cada par A/B, o `SkillBinding` é idêntico.
-2. `platformSkillVersion`, modelo/provider lógico, seed, dataset/Golden Dataset, Product Facts/evidências, `creatorContext` e `ProductMemorySnapshot` são idênticos por bytes.
-3. Tier permanece idêntico por par, salvo protocolo específico que declare a mudança de tier como a única variável.
-4. Engine commit, task, prompt/context hash, schema/gate policy, timeout, retries e quota autorizada/simulada são registrados.
-5. Golden Dataset, categorias, métricas, thresholds e regra de reprovação são fixados antes de qualquer execução.
-6. O relatório deve medir o agregado e cada categoria e registrar factualidade, variedade, qualidade semântica conforme rubrica cega, hard-gate failure, repair rate, partial/failure rate, chamadas, custo, tokens e latência p50/p95.
-7. Nenhum resultado é coletado por esta Etapa 4.
+**Gate:** V2 continua default pendente; ADR-029 continua baseline. Nenhuma classe de evidência substitui outra.
 
-Comparação `@1.2` versus `@1.3` não pertence ao A/B operacional comum: altera `SkillBinding` e `platformSkillVersion`, requer ADR/protocolo experimental próprios e não autoriza ativação, execução, escrita de `creativeDirection` ou cutover.
+### Fase 4 — Registrar Blueprint e contexto como pendências verificáveis
 
-**Gate:** o estado permanece `@1.2` em produção e `@1.3` inativa.
+`ContentOpportunity.creativeDirection` v2 é a fonte canônica alvo. Esta fase não cria writer, não promove histórico v1 e não afirma implementação.
 
-### Fase 4 — Preservar autoridade e futuro Blueprint
-
-O contrato futuro pode representar `CreativeBlueprint` versionado dentro de `ContentOpportunity` v2, sem aggregate paralelo. Esta fase não cria writer, não escreve `creativeDirection`, não promove histórico v1 e não altera projeções creator-facing.
-
-O caminho Blueprint-driven futuro deve possuir contract test que falhe se texto literal de hook/CTA do catálogo atravessar o contexto enviado ao provider. O caminho ADR-029 atual, inclusive `selectBriefPatterns`, permanece intacto até eval e cutover aprovados.
+O contexto V2 deve possuir contract test contra `selectedPatterns` e texto literal do catálogo. Fixture ADR-029/catalog permanece isolada no runner E6.
 
 **Gate:** nenhuma mudança de Skill, Planner, catálogo, prompt ou persistência ocorre nesta documentação.
 
-### Fase 5 — Preservar o pipeline e os limites operacionais
+### Fase 5 — Preservar autoridades e registrar ordem-alvo
 
-A futura implementação, caso autorizada em plano separado, deve manter:
+Permanecem invariantes:
 
-```text
-Brief Generator
-→ hard gates
-→ Hard Gate Repair limitado
-→ ContentSceneSet válido
-→ CONTENT_QUALITY_JUDGE
-→ Semantic Part Repair único
-→ hard gates/variedade finais
-→ persistência
-```
+- hard gates determinísticos e `BriefValidationReport` objetivo;
+- quota, tenant, Job, fencing, idempotência, D/N e parcial;
+- Risk sem autoridade de entrega;
+- Judge sem autoridade de factualidade, quota, estado ou publicação;
+- falha de Risk selecionando Judge; `NOT_EXECUTED` nunca sendo `PASS`;
+- `ContentSceneSet` separado.
 
-As regras preservadas são:
+A ordem-alvo é Brief + Scene Skeleton → hard gates/repair → Risk → Judge seletivo → repair semântico → hard gates/variedade finais → persistência. Esta documentação não afirma que essa ordem já esteja implementada.
 
-- hard gates determinísticos para schema, ownership, cardinalidade, evidência, factualidade, CTA, duplicatas, variedade e cenas;
-- `BriefValidationReport` objetivo `PASS|REPAIR|REJECT`;
-- Judge `PASS|REVIEW` somente após hard gates, sem decidir factualidade, quota, estado ou publicação;
-- um `CONTENT_PART_REPAIR` por parte `REVIEW`, sem re-Judge;
-- `CONTENT_BRIEF_REPAIR` por item, `HIGH`, limitado por `GENERATION_MAX_REPAIRS`;
-- falha de Judge/repair preserva a parte original e não cria faltante;
-- Job durável, tenant resolvido por sessão, uma execução ativa por usuário, quota transacional e finalização idempotente em transação curta;
-- `SUCCEEDED` para N entregues; `SUCCEEDED_PARTIAL` declarado para D/N dentro do contrato ADR-021; `FAILED` fora do CAP ou quando D=0.
-
-**Gate:** uma futura implementação só pode começar após SPEC/PLAN de cutover, A/B executado, relatório reproduzível e aprovação formal.
+**Gate:** correção futura exige plano próprio e review antes de runtime/testes.
 
 ## 4. Out of scope
 
-- Código, migrations, schema, provider, prompts de produção, runtime, `ROUTER_MAP`, tiers, retries, batch, quota, Job ou persistência.
-- Execução do A/B, Golden Dataset, thresholds efetivos, coleta de métricas, relatório ou cutover.
-- Ativação do `@1.3`, Creative System, Blueprint ou `creativeDirection`.
-- Writer, migração, promoção ou reescrita de `ContentOpportunity` v1 para v2.
-- Alteração de qualquer fonte canônica além da referência mínima no SLICES.
-- Revisão, edição, regeneração, aprovação, descarte, versionamento operacional, RecordingBatch, Agenda e Estúdio.
+- Código, migrations, schema, provider, prompts de produção, runtime, `ROUTER_MAP`, tiers, retries, quota, Job ou persistência.
+- Execução offline ou com provider vivo, coleta, relatório ou aceitação.
+- Implementação/correção de binding 1.3, writer Blueprint, memória, Scene Skeleton, Risk pré-Judge ou contexto V2.
+- Migração/promoção de histórico v1.
+- Alteração de fonte canônica fora dos arquivos pedidos nesta coordenação.
+- Funcionalidades de Slice 004/005.
 - Novo domínio, aggregate, serviço, agente, workflow, repositório ou capability.
-- Fallback criativo, template de cena, catálogo literal em prompt normal ou copy determinística.
 - Alegação de economia, qualidade, equivalência, latência ou redução de chamadas.
 
 ## 5. Critérios de aceite do plano
@@ -178,15 +155,15 @@ As regras preservadas são:
 - **PA-04.1:** SPEC e PLAN usam `etapa-4-skill-brief` como identidade e tratam a Etapa 4 como precondição do Slice 003.
 - **PA-04.2:** a referência do SLICES não cria Slice 004 e preserva Slice 004 como revisão e controle de Content.
 - **PA-04.3:** B4-01 registra Brief sem `scenes` e `ContentSceneSet` separado.
-- **PA-04.4:** B4-02 registra `cost_job_total`, tentativas efetivas e custo por Content entregue usando D.
-- **PA-04.5:** B4-03 mantém `HIGH` para Brief, cenas, Judge e repairs.
-- **PA-04.6:** B4-04 exige mesmo `SkillBinding` dentro de cada A/B e congela versão de Skill, modelo, seed, dataset, contexto e memória; tier só muda quando for a única variável declarada.
-- **PA-04.7:** `@1.2` permanece produção, `@1.3` permanece inativa e comparação entre ambas exige ADR/protocolo separado sem autorização de cutover.
-- **PA-04.8:** Blueprint/`ContentOpportunity` v2 aparece apenas como contrato futuro sem writer.
-- **PA-04.9:** o teste futuro de não vazamento de catálogo literal está definido e não altera o caminho ADR-029.
-- **PA-04.10:** gates, Judge, repairs, quota, Job, persistência, factualidade e tenant estão preservados.
-- **PA-04.11:** nenhum A/B ou cutover foi executado.
-- **PA-04.12:** somente os três arquivos autorizados foram criados/alterados.
+- **PA-04.4:** custo soma tentativas efetivas observadas; offline não satisfaz custo/latência reais.
+- **PA-04.5:** matriz ADR-029 é baseline; runtime V2 registra tier/capability efetivos.
+- **PA-04.6:** E6 congela commit, provider/model/tier, params, prompt/context, seed, usage/custo/latência e cobertura.
+- **PA-04.7:** `@1.2` é baseline e `@1.3` é alvo operacional sujeito a evidência; nenhum resultado é declarado.
+- **PA-04.8:** `creativeDirection` v2 é canônica sem presumir writer.
+- **PA-04.9:** gate de contexto bloqueia `selectedPatterns`/catálogo literal no V2.
+- **PA-04.10:** gates, quota, Job, factualidade e tenant permanecem autoridades server-side.
+- **PA-04.11:** nenhum E6 ou provider foi executado.
+- **PA-04.12:** nenhum runtime ou teste foi alterado.
 
 ## 6. Riscos e controles
 
@@ -195,9 +172,9 @@ As regras preservadas são:
 | Etapa 4 ser interpretada como novo Slice | Identidade documental explícita e referência única sob Slice 003. |
 | Slice 004 receber escopo de geração | Out of scope e dependência explícita: Slice 004 permanece revisão/controle. |
 | Custo subestimado | Fórmula por tentativas efetivas e denominador D entregue. |
-| A/B contaminar resultado | Parâmetros congelados e variável única declarada antes da execução. |
-| `@1.3` ativar por harness | Estado inativo e gate de ADR/protocolo/cutover. |
-| Catálogo literal vazar para provider | Contract test futuro no caminho Blueprint-driven; exceção ADR-029 preservada. |
+| E6 contaminar resultado | Controles/diferenças pré-registrados e classes de evidência separadas. |
+| Binding/writer parecer implementado por documentação | Estado pendente explícito e evidência operacional obrigatória. |
+| Catálogo literal vazar para provider | Contract test do contexto V2; fixtures ADR-029 confinadas ao baseline. |
 | LLM contornar regras do sistema | Handoff allowlisted e gates server-side de fatos, tenant, quota e persistência. |
 
 ## 7. Arquivos futuros — não editar neste plano
@@ -217,17 +194,4 @@ Esses caminhos só entram em plano futuro após ADR/protocolo de Skill ou cutove
 
 ## 8. Validação documental desta mudança
 
-A validação autorizada é limitada a existência de arquivos e presença textual dos contratos:
-
-```text
-test -f docs/specs/etapa-4-skill-brief/SPEC.md
-test -f docs/plans/etapa-4-skill-brief/PLAN.md
-test -f docs/delivery/SLICES.md
-
-grep -n "etapa-4-skill-brief\|ContentSceneSet\|cost_job_total\|cost_per_valid_content\|@1.2\|@1.3\|SkillBinding\|não.*cutover" \
-  docs/specs/etapa-4-skill-brief/SPEC.md \
-  docs/plans/etapa-4-skill-brief/PLAN.md \
-  docs/delivery/SLICES.md
-```
-
-Não executar testes de runtime, typecheck, lint, build, A/B ou smoke: esta mudança é documentação-only e o pedido restringe a validação a `test -f`/`grep`.
+Conferir links relativos, headings/status, V2 default versus baseline ADR-029, evidência offline/live, rubricas e limites de escopo com o diff. Não executar testes de runtime, typecheck, lint, build, A/B ou smoke nesta mudança documental.

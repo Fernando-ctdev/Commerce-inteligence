@@ -23,6 +23,14 @@ O MVP não cobre: publicação/agendamento externo, analytics externo (ROAS/CTR/
 
 Fontes: `docs/product/PRD.md` (produto geral), `PRD-Importation-product.md` (entrada de Produto — cadastro manual vigente), `PRD-commerce-intelligence-engine.md` (engine), `PRD-product-intelligence-analysis.md` (job assíncrono e UX de espera), `PRD-content-briefing.md` (briefing, lotes, agenda, estúdio), `PRD-model-router-inteligence.md` (camada de modelos). ADRs registram decisões; este documento descreve a composição.
 
+### Estado atual da Engine e alvo pendente
+
+A Engine V2 é o runtime default de produção por decisão explícita do usuário, efetiva no commit `8d1833b`, no estado documental `V2_DEFAULT_PENDING_ACCEPTANCE` do ADR-033. O ADR-029 permanece baseline histórico/experimental reproduzível e autoridade dos invariantes preservados; não descreve o call graph default atual e ainda não foi formalmente superseded.
+
+O runtime V2 atual já cortou a chamada obrigatória de Plan, introduziu Planner/Blueprint determinísticos e substituiu Scene Ideas por Scene Skeleton. Isso não prova conclusão do alvo. Permanecem pendentes para `V2_ACCEPTED`: `creativeDirection` canônica no `ContentOpportunity` v2, memória multidimensional consumida pelo Planner, Risk Detector antes do Judge seletivo, binding/proveniência 1.3 consistentes, remoção de `selectedPatterns` do contexto V2 e E6 integral com evidência offline e provider vivo. Este documento não afirma que essas pendências estejam implementadas.
+
+Falha ou ausência de E6 não faz rollback implícito: V2 continua default pendente. Rollback, aceitação formal e supersessão do ADR-029 exigem as decisões explícitas definidas no ADR-033.
+
 ## 2. Forma do sistema
 
 Monólito modular em TypeScript/Next.js com PostgreSQL/Prisma como fonte de registro. A entrada URL-first do Slice 012 é um componente HTTP do monólito que chama a CaptAPI; Product Importer, Agent Runner, Browser Harness e Chromium headless não entram no runtime deste fluxo.
@@ -45,7 +53,7 @@ Creator → Web/API → Application Use Cases → Domain Modules
 | **Identity / Tenant** | sessão server-side, usuário, Tenant/workspace pessoal, autorização | colaboração, RBAC, SSO, billing |
 | **Product (entrada vigente)** | cadastro manual de fatos em `/products/new` com validação server-side, origem/proveniência, correções do creator, readiness derivada (PENDING/ANALYZING/READY/FAILED) | decisão comercial, descoberta automática de fatos |
 | **Product Import (Slice 012, ADR-027/028)** | validar URL, chamar CaptAPI HTTP, normalizar `ProductCandidate`, expor lacunas no formulário e encaminhar confirmação ao caso de uso manual | persistência prematura, fatos sem confirmação humana, Browser/portal/MCP, contexto estratégico |
-| **Commerce Intelligence** | `CommerceIntelligenceJob`, `IntelligenceRun`, orchestrator e capabilities (Product Understanding, Commercial Opportunity Mapping, Strategy Builder, Content Portfolio Planner, Brief Generator, Fact Validator, Quality Judge, Variety Gate, Repair), `ProductMemorySnapshot`, Platform Skill | revisão/aprovação, lotes, gravação |
+| **Commerce Intelligence** | `CommerceIntelligenceJob`, `IntelligenceRun`, orchestrator e capabilities versionadas da Engine V2, contratos/gates preservados, Planner/Blueprint e Brief Generator; `ProductMemorySnapshot` e Platform Skill seguem contratos versionados. Runner isolado ADR-029 é previsto somente para baseline E6, sem presumir sua implementação | revisão/aprovação, lotes, gravação |
 | **Content Operations** | `Content`, `ContentBriefVersion`, revisão/edição/regeneração/aprovação/descarte, `RecordingBatch` + `RecordingBatchItem`, Agenda e Estúdio | estratégia, chamada direta a modelo |
 | **Entitlements** | limites por plano, reserva/confirmação/liberação transacional, virada mensal | qualidade diferente por plano, cobrança |
 | **Model Router / LLM Gateway** | tarefas lógicas → `IntelligenceTier` → provider adapter, validação de saída | decisão estratégica, regra de negócio |
@@ -76,7 +84,7 @@ Cadastro manual dos fatos + preparação (/products/new)
 1. **Cadastro:** o creator preenche os fatos do Produto e a preparação em `/products/new`; validação server-side; `targetContentCount` é resolvido no cadastro.
 2. **Salvamento:** persiste o `Product` ativo, escopado ao Tenant, sem criar job.
 3. **Analisar produto:** ação explícita do creator; único momento de criação do `CommerceIntelligenceJob` (`POST /api/generations` → `startCommerceIntelligence`, transacional com reserva de Entitlement).
-4. **Engine:** dentro do job, o orchestrator executa Understanding → Opportunity Mapping → Strategy Builder → Portfolio Planner → Brief Generator → gates → persistência.
+4. **Engine:** dentro do job, o orchestrator executa o call graph V2 default. Versão/proveniência efetivas devem ser registradas; sua completude ainda é pendência de `V2_ACCEPTED`. O alvo final organiza Product Facts → Discovery → Strategy/Planner determinísticos → Brief Generator → Scene Skeleton → hard gates → Risk → Judge seletivo → persistência; as partes ainda pendentes não são comportamento presumido.
 5. **Revisão:** contents entram em `DRAFT`; o creator edita/regenera, aprova ou descarta.
 6. **Execução:** aprovados formam um `RecordingBatch` com data planejada; Agenda e Estúdio organizam a execução.
 
@@ -124,13 +132,13 @@ Worker ────────┼──> Application Use Cases ───> Domai
 
 ### Commerce Intelligence
 
-- Schemas canônicos versionados: `ProductUnderstanding`, `CommercialOpportunity`, `ProductStrategy`, `ContentPlan`, `ContentOpportunity`, `Content`, `ContentBriefVersion`, `ProductMemorySnapshot`, `BriefValidationReport`, `IntelligenceRun`.
-- Job público: `status` (QUEUED/RUNNING/SUCCEEDED/SUCCEEDED_PARTIAL/FAILED/CANCELLED — parcial declarado conforme ADR-021) + `stage` (UNDERSTANDING_PRODUCT → … → FINALIZING) com mensagens humanas mapeadas 1:1 para etapas reais. Sem percentual ou ETA inventados.
-- `IntelligenceRun` registra engine version, skill version, modelo/provider por capability, custo, latência, retries — interno, nunca na UI.
+- Schemas canônicos são versionados. Contratos v1/ADR-029 permanecem legíveis para histórico e baseline; writers V2 devem convergir para `ContentOpportunity` v2 com `creativeDirection` canônica sem fabricar ou reescrever histórico.
+- Job público: `status` (QUEUED/RUNNING/SUCCEEDED/SUCCEEDED_PARTIAL/FAILED/CANCELLED — parcial declarado conforme ADR-021) + `stage` com mensagens humanas mapeadas 1:1 para trabalho real. Sem percentual ou ETA inventados.
+- `IntelligenceRun` registra engine/commit, Skill/binding, policy versions, modelo/provider por capability, parâmetros efetivos, prompt/context hashes, cobertura, usage/custo, latência e retries — interno, nunca na UI.
 - Todo Product `ACTIVE` retornado por leitura autenticada inclui `generationAction`: `AVAILABLE` com `reason`/`nextAction` nulos, ou `BLOCKED` com o par `GEN-ACTIVE`/`VIEW_ACTIVE_ANALYSIS` ou `GEN-CAPACITY`/`WAIT_FOR_CAPACITY`. Product `ARCHIVED` não serializa o campo; archive/reactivate retornam mutação mínima e a UI recarrega o Product. Não há novo código de bloqueio. O `POST` revalida e reserva transacionalmente. Ver ADR-016.
-- Capacities seguem `Input Schema → Capability → Output Schema`. LLM nunca decide regra de sistema (estado de job, quota, persistência, versões).
+- Capabilities seguem `Input Schema → Capability → Output Schema`. LLM nunca decide regra de sistema (estado de job, quota, persistência, versões).
 - Fato ≠ inferência: a engine pode inferir por que alguém compraria; não pode inventar o que o Produto é. Fact Validator classifica claims (`SUPPORTED`, `INFERRED_BUT_SAFE`, `UNSUPPORTED`, `CONTRADICTED`).
-- Gates e repairs: hard gate determinístico por briefing/conjunto (schema, estrutural, factual, cenas e variedade) é obrigatório antes e depois da composição. `Hard Gate Repair` é objetivo, anterior ao Judge, usa `CONTENT_BRIEF_REPAIR` por item e pode executar até `GENERATION_MAX_REPAIRS` rounds server-side; o hard gate decide se sua exaustão vira parcial/falha pelo ADR-021. Só depois de hard gate `PASS`, `CONTENT_QUALITY_JUDGE` avalia em batch homogêneo até três Contents e retorna `PASS|REVIEW`. `Semantic Part Repair` chama um único `CONTENT_PART_REPAIR` por parte `REVIEW`; partes `PASS` e reparos inválidos preservam o original, sem re-Judge. Semântica não bloqueia conteúdo objetivamente válido: hard gates finais decidem `DRAFT` ou o parcial declarado. Não há `REJECT` semântico nem `QUALITY_PENDING`.
+- Hard gates, partial, quota, tenant, fencing e idempotência permanecem autoridades determinísticas. A ordem-alvo V2 é hard gates → Risk Detector → Judge seletivo; Risk apenas roteia e falha seleciona Judge. Até a implementação observável desse alvo, a ordem efetivamente registrada pelo runtime é dívida explícita e não satisfaz `V2_ACCEPTED`; `JudgeExecution=NOT_EXECUTED` nunca equivale a `PASS`.
 
 ### Model Router
 
@@ -141,8 +149,8 @@ Engine Capability → Logical Intelligence Task → Model Router
   → Capability Contract Validation
 ```
 
-- Capabilities determinísticas não passam pelo router. O mapa de tier runtime, retries/fallback e autoridade é a tabela canônica do ADR-029; `ROUTER_MAP` atual é configuração operacional evolutiva por evals, não a heurística histórica “HIGH decide, MID executa, HIGH audita”.
-- Um provider por vez no MVP, atrás do adapter. Provider nunca entra na regra de negócio. Tiers nunca variam por plano comercial.
+- Capabilities determinísticas não passam pelo router. O mapa efetivo da Engine V2, sua versão e seus parâmetros são a configuração operacional default; a tabela do ADR-029 permanece congelada como baseline E6, não como descrição do call graph corrente.
+- Um provider por vez no MVP, atrás do adapter. Provider nunca entra na regra de negócio. Tiers nunca variam por plano comercial. E6 com provider vivo congela provider/model/tier e parâmetros por par, salvo a variável pré-registrada.
 - Conteúdo extraído de páginas é dado não confiável, nunca instrução: separação explícita entre system instructions, contexto confiável da engine e conteúdo do Produto.
 
 ### Content Operations
@@ -213,11 +221,12 @@ Fila visual de análises e central de atividades (após validação); notificaç
 | [ADR-015](./adr-015-content-operations-e-recording-batch.md) | Content Operations: versões de briefing, aprovação, `RecordingBatch`, estados derivados |
 | [ADR-017](./adr-017-correlacao-sanitizada-de-provider.md) | correlação sanitizada de chamadas ao provider |
 | [ADR-029](./adr-029-pipeline-hibrida-deterministica-e-criativa.md) | fronteira híbrida: gates e skeleton determinísticos; plano, cenas e copy criativos; judge/repair semânticos limitados |
+| [ADR-033](./adr-033-determinismo-llm-e-creative-system.md) | Engine V2 default pendente de aceitação, Creative System/Blueprint, matriz de autoridade, Risk antes do Judge seletivo e E6 integral; preserva ADR-029 como baseline |
 
 Se a implementação contrariar um ADR, o ADR é revisado antes. Se apenas conectar decisões já aceitas, este documento pode ser atualizado sem novo ADR.
 
 ## 12. Registro das decisões desta revisão
 
-Novos: [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md) (contratos canônicos da engine), [ADR-013](./adr-013-model-router-e-intelligence-tier.md) (Model Router e `IntelligenceTier`), [ADR-014](./adr-014-platform-skill-versionada.md) (Platform Skill versionada), [ADR-015](./adr-015-content-operations-e-recording-batch.md) (Content Operations e `RecordingBatch`) e [ADR-029](./adr-029-pipeline-hibrida-deterministica-e-criativa.md) (fronteira híbrida determinística/criativa). ADR-028 complementa ADR-027 de importação para formalizar Candidate transitório, confirmação explícita e limites do Slice 012.
+Novos: [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md), [ADR-013](./adr-013-model-router-e-intelligence-tier.md), [ADR-014](./adr-014-platform-skill-versionada.md), [ADR-015](./adr-015-content-operations-e-recording-batch.md), [ADR-029](./adr-029-pipeline-hibrida-deterministica-e-criativa.md) e [ADR-033](./adr-033-determinismo-llm-e-creative-system.md). O ADR-033 registra a Engine V2 como default no estado `V2_DEFAULT_PENDING_ACCEPTANCE`; o ADR-029 permanece histórico/experimental até a aceitação formal. ADR-028 complementa ADR-027 de importação para formalizar Candidate transitório, confirmação explícita e limites do Slice 012.
 
 Revisões in-place: ADR-002 (contrato v1 superseded), ADR-004 (pesos de sinal e descarte como sinal), ADR-005 (`CommerceIntelligenceJob`, um job ativo por usuário, indicador global). ADR-008 foi alinhado ao Product Importer. ADR-011 foi superseded após a remoção do Browser Service, portal, HITL e profiles por usuário.

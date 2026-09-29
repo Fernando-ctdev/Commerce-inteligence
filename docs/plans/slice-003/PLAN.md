@@ -1,10 +1,7 @@
 # Slice 003 — Primeira geração: CommerceIntelligenceJob até Briefings
-**Status:** ETAPA_2_APPROVED — documentação canônica da Etapa 2 aprovada; implementação, runtime e cutover continuam bloqueados pelos gates ADR-029/033.
+**Status:** `APPROVED_FOR_CANDIDATE_INTEGRATION` nesta feature branch; Engine V2 default desde `8d1833b`, ainda `V2_DEFAULT_PENDING_ACCEPTANCE`.
 
-**Etapa 2 documental:** APPROVED pelo Arquiteto e pelo Review; implementação, runtime e cutover continuam bloqueados pelos gates ADR-029/033.
-
-
-> **Para agentes de implementação:** execute este plano tarefa a tarefa, preservando os limites do Slice 003. Cada etapa termina com seu teste/gate local antes da próxima.
+**Autorização expressa do usuário:** implementar e avaliar a candidata Etapas 2–6 descrita na [SPEC](../../specs/slice-003/SPEC.md) e no [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md). As tarefas 1–9 abaixo registram a implementação histórica do Slice 003 e não devem ser reexecutadas para restaurar ADR-029. A integração candidata usa as fronteiras existentes, não modifica o Planner harness e não autoriza merge, deploy ou `V2_ACCEPTED` antes de E6 integral, revisão Architect e aceite expresso do usuário.
 
 **Goal:** Depois da confirmação de um Product com `targetContentCount` resolvida, criar uma única execução assíncrona durável e entregar `ProductStrategy`, `ContentPlan` e a quantidade solicitada de `Content` com `ContentBriefVersion` v1 em `DRAFT` — completa em `SUCCEEDED`, ou parcial declarada (`SUCCEEDED_PARTIAL`) publicando somente aprovados com retry explícito dos faltantes, conforme ADR-021; nunca sucesso parcial silencioso.
 
@@ -16,14 +13,14 @@
 
 ## 0. Gate documental da Etapa 0
 
-A Etapa 0 é uma pré-condição transversal documentada neste PLAN; não cria `slice-000` nem `stage-0`. O [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md) é a referência explícita da arquitetura-alvo, enquanto o [ADR-029](../../architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md) permanece o runtime vigente até eval A/B aprovado.
+A Etapa 0 é uma pré-condição transversal documentada neste PLAN; não cria `slice-000` nem `stage-0`. O [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md) registra a Engine V2 como runtime default em `V2_DEFAULT_PENDING_ACCEPTANCE`. O [ADR-029](../../architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md) permanece baseline histórico/experimental reproduzível.
 
-Nenhuma implementação deste PLAN pode remover ou reclassificar chamadas, tiers, cenas, gates, repairs ou o `ROUTER_MAP` antes de um protocolo A/B pareado, thresholds versionados, relatório reproduzível e aprovação formal conforme o ADR-033. O Blueprint e qualquer escrita de `creativeDirection` ficam bloqueados até SPEC e PLAN de cutover aprovados.
-**Gate documental:** Architect e Review aprovaram a documentação da Etapa 2, com referências consistentes ao ADR-033, baseline ADR-029, contrato do Creative System, compatibilidade fail-closed, histórico/memória versionados, catálogo fora do prompt normal e preservação de gates/repair/Judge. Esse gate documental não autoriza implementação, runtime novo ou cutover.
+Este PLAN não presume como implementados `creativeDirection` canônica, memória multidimensional, Risk pré-Judge, binding/proveniência 1.3 coerentes, contexto sem `selectedPatterns` ou E6 integral. Também não autoriza rollback para ADR-029.
+**Gate da candidata:** a instrução expressa do usuário autoriza a implementação e avaliação na feature branch, com rastreabilidade por etapa abaixo; não aprova antecipadamente o resultado nem altera a produção.
 
-**Gate de cutover/eval:** somente após o gate documental pode ser preparado o A/B com baseline ADR-029 e candidato ADR-033, mesmos inputs, Skill, modelo/tier, seed e Golden Dataset por par; thresholds e análise por categoria devem ser fixados antes da execução. Remoção ou reclassificação só ocorre depois do relatório aprovado; a economia isolada não é critério suficiente.
+**Gate E6:** comparação end-to-end e atribuições por variável devem pré-registrar rubricas, unidades, cegamento, adjudicação, agregação/categorias e thresholds. Evidência offline não satisfaz custo, latência ou qualidade semântica real; essas métricas exigem provider vivo pareado. Sem E6 integral, revisão Architect e aceite expresso do usuário, não há merge, deploy ou `V2_ACCEPTED`.
 
-**Status desta etapa:** `APPROVED` para a documentação da Etapa 2; implementação e cutover permanecem bloqueados pelos gates ADR-029/033.
+**Status desta etapa:** autorização para candidata, não aceitação formal V2.
 
 
 ## 1. Limites deste plano
@@ -37,18 +34,19 @@ Nenhuma implementação deste PLAN pode remover ou reclassificar chamadas, tiers
 - Strategy, Plan, Opportunities, Contents, BriefVersions, `BriefValidationReport`, `IntelligenceRun` e sinais estruturados de memória.
 - Model Router por tarefa lógica, um adapter de provider configurável e `TikTok Commerce Creative Skill` versionada.
 - Contrato documental do Creative System dentro da `PlatformSkill`: `CreativePrimitive`, `CreativeRecipe`, resolvedor de compatibilidade e `CreativeBlueprint`, com `load → validate → freeze → expose`, versionamento, histórico e falha fail-closed.
-- Cutover futuro e eval A/B formal antes de qualquer remoção ou reclassificação do runtime ADR-029; nenhuma escrita de `creativeDirection` durante a baseline.
+- ADR-029 preservado como runner/baseline E6; `ContentOpportunity.creativeDirection` v2 permanece gate de implementação/aceitação quando o writer canônico não estiver comprovado.
 - Indicador global no App Shell, readiness do Product, reentrada pelo backend, retry explícito e cancelamento seguro somente se suportado pelo worker.
 - Preservação de Product por archive operacional e DELETE Big Bang tenant-scoped transacional, conforme códigos e rollback definidos na SPEC.
 - Testes comportamentais, contract tests de capabilities, testes de concorrência/lease/quota e smoke autenticado.
+- Candidata Etapas 2–6 na feature branch: Discovery V2/Strategy determinística com A/B individual; integração externa ao Planner harness congelado com Blueprint canônico, Discovery/Strategy e memória V1; Skill/prompt V2; Risk pré-Judge seletivo; E6 integral. Contratos e critérios: [SPEC](../../specs/slice-003/SPEC.md), [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md), [Etapa 4](../../specs/etapa-4-skill-brief/SPEC.md), [Etapa 5](../../specs/etapa-5-risk-quality/SPEC.md) e [Etapa 6](../../specs/etapa-6-golden-evals/SPEC.md).
 
 ### Não incluído
 
-Não iniciar geração no simples `Salvar produto` de `/products/new`; não criar novo wizard ou tela permanente de análise; não implementar revisão, edição, regeneração, aprovação, descarte, RecordingBatch, Agenda, Estúdio, memória histórica consultada ou recorrência; não adicionar fila visual, Redis/Kafka, microserviço, embeddings, banco vetorial, judge LLM para aprovação do usuário, variedade ou memória semântica, mídia, publicação, analytics, TikTok OAuth/API, escolha de provider/tier na UI ou alteração de PRD/ADR/SYSTEM-DESIGN/DESIGN/SLICES. A curadoria semântica interna fica limitada a hook, development, script, CTA e cenas de `ContentSceneSet`: o `CONTENT_QUALITY_JUDGE` retorna somente `PASS|REVIEW` por parte; `BriefValidationReport` continua registrando somente o resultado objetivo `PASS|REPAIR|REJECT`; `Hard Gate Repair` usa `GENERATION_MAX_REPAIRS`; cada parte `REVIEW` recebe uma única `Semantic Part Repair`, sem re-Judge. `REVIEW` semântico não impede `DRAFT`: somente hard gates, schema, factualidade, cenas e variedade objetivos decidem entrega. Falha ou schema inválido preserva o original e não cria faltante.
-- A arquitetura-alvo não antecipa mudança operacional: chamadas, tiers, cenas, gates, repairs e `ROUTER_MAP` permanecem os do ADR-029 até o relatório A/B aprovado.
-- A Etapa 0 não implementa código nem cria serviço, agente, workflow, repositório ou aggregate separado para o Creative System.
+Não iniciar geração no simples `Salvar produto` de `/products/new`; não criar wizard, tela permanente de análise, edição/aprovação de Content, RecordingBatch, Agenda, Estúdio, loop de recorrência de produto, fila visual, Redis/Kafka, microserviço, embeddings, banco vetorial, judge LLM de variedade/memória, mídia, publicação, analytics, TikTok OAuth/API ou escolha de provider/tier na UI. Memória estruturada V1 e retry de faltantes exigidos pelo ADR-033 não significam memória histórica ampla ou novo slice de recorrência. Não alterar PRD/SYSTEM-DESIGN/DESIGN/SLICES por esta revisão; ADR-033 é coordenado explicitamente.
+- Este plano não redefine o call graph V2 atual nem promove contratos-alvo pendentes a comportamento existente; `@1.2` é o loader real observado em `8d1833b`, `@1.3` é fixture do harness e binding operacional alvo da candidata.
+- Não criar serviço, agente, workflow, repositório ou aggregate separado para o Creative System nem alterar funções, policies, fixtures ou testes do Planner harness puro.
 
-A confirmação deve ser conectada ao fluxo de confirmação existente quando ele for disponibilizado. No estado real atual há apenas o modelo `ProductImportAttempt` no Prisma, sem fluxo server-side de importação/Candidate conectado à UI; portanto, o ponto de entrada testável deste slice é um caso de uso que recebe `tenantId` resolvido, `productId` de um Product ativo sem resultado publicado e a quantidade persistida no Product. Product `READY` oferece `Revisar conteúdos` — e, quando o último job for `SUCCEEDED_PARTIAL`, também `Gerar faltantes` (ADR-021); nova geração/recorrência arbitrária do mesmo Product pertence ao Slice 008. O formulário manual continua apenas salvando Product; a ação contextual `Analisar produto` no detalhe representa a confirmação equivalente sem transformar o salvamento em geração automática.
+À época da elaboração da Etapa 2, a conexão de confirmação de importação/Candidate à UI não existia; o ponto de entrada planejado era um caso de uso com `tenantId` resolvido, `productId` ativo sem resultado publicado e quantidade persistida. Esta observação histórica não declara o estado atual da importação. Product `READY` oferece `Revisar conteúdos` e, quando o último job for `SUCCEEDED_PARTIAL`, `Gerar faltantes` (ADR-021); não há reanálise no mesmo Product neste slice.
 
 A política de lifecycle e DELETE não é uma decisão nova deste plano: está ancorada na SPEC aprovada, B-003-14, RI-003-18 e AC 47–52. `DELETE` físico é a remoção Big Bang tenant-scoped, transacional e com rollback integral; `Arquivar produto` é uma operação distinta e preservativa.
 
@@ -133,23 +131,21 @@ O plano deve implementar e testar o `WorkerEngineFactsPayload` exatamente confor
 
 Na fronteira provider/canonicalização, chaves explicitamente proibidas são rejeitadas e comandos, workflow, instruções ou outros campos fora do shape suportado são descartados. Rejeitar esses campos desconhecidos em vez de descartá-los é mudança de runtime. O limite ativo é `1–10`, sem expansão de quota por referências históricas ou de migration `1–30`.
 
-### 3.3A Creative System e CreativeBlueprint — contrato alvo sem cutover
+### 3.3A Creative System e CreativeBlueprint — estado atual e alvo pendente
 
 O Creative System é conhecimento declarativo/versionado dentro da `PlatformSkill`, não um domínio, serviço, agente, workflow ou repositório separado. A Skill expõe `CreativePrimitive`, `CreativeRecipe` e o resolvedor de compatibilidade somente após `load → validate → freeze → expose`.
 
-`CreativePrimitive` representa dimensões semânticas combináveis, nunca frases. `CreativeRecipe` é um conjunto coerente de restrições, nunca um script. O `CreativeBlueprint` futuro contém `recipeId?`, `attentionMechanisms[]`, `psychologicalEffects[]`, `format`, `narrativeMoves[]` e `productRole`; sua compatibilidade é versionada, fail-closed e sem fallback criativo, reescrita silenciosa ou fabricação.
+`CreativePrimitive` representa dimensões semânticas combináveis, nunca frases. `CreativeRecipe` é um conjunto coerente de restrições, nunca um script. `CreativeBlueprint` contém `recipeId?`, `attentionMechanisms[]`, `psychologicalEffects[]`, `format`, `narrativeMoves[]` e `productRole`; sua compatibilidade é versionada e fail-closed.
 
-Após cutover aprovado, o Blueprint será persistido como `creativeDirection` dentro de `ContentOpportunity`, sem aggregate ou tabela paralela. O contrato v1 histórico permanece legível e não é reescrito; memória e snapshots são aditivos e carregam a versão usada. O provider, repair e qualquer caminho externo não escrevem o Blueprint.
+`ContentOpportunity.creativeDirection` v2 é a fonte canônica alvo. Histórico v1 permanece legível sem Blueprint fabricado; provider e repair não escrevem Blueprint. A documentação não afirma que o writer v2 já esteja completo.
 
-O catálogo literal continua corpus de referência, benchmark e eval. Não é enviado ao prompt normal dos caminhos novos; qualquer experimento de exemplos exige flag, harness, dataset e métricas próprios. O runtime ADR-029, inclusive `selectBriefPatterns`, permanece intacto até eval.
+O catálogo literal continua corpus de referência, benchmark e eval. `selectedPatterns` e copy literal são proibidos no contexto V2 alvo; a remoção efetiva continua gate verificável de `V2_ACCEPTED`.
 
 ### 3.4 Model Router e Skill
 
-Criar a porta mínima em `src/modules/commerce-intelligence/model-router.ts` e um adapter HTTP separado em `src/modules/commerce-intelligence/provider.ts`, usando `fetch` nativo e configuração server-side. O Router recebe task lógica e contexto projetado; resolve o tier e registra provider/modelo lógico, reasoning efetivo e versão/hash das instruções. O MVP usa somente `LLM_MODEL_FAST`, `LLM_MODEL_BALANCED` e `LLM_MODEL_QUALITY`, resolvidas por tier (`LOW→FAST`, `MID→BALANCED`, `HIGH→QUALITY`) com fallback apenas entre variáveis existentes e configuradas.
+O Router recebe task lógica e contexto projetado; resolve o tier e registra provider/modelo lógico, parâmetros efetivos e hashes de instrução/contexto. O mapa efetivo da Engine V2 é versionado. O mapa abaixo é a baseline ADR-029/`@1.2` para replay E6, não o runtime default:
 
-O mapa abaixo é a baseline operacional exata do ADR-029, do `ROUTER_MAP` atual em `src/modules/commerce-intelligence/model-router.ts` e do runtime vigente. Não rebaixar tiers, alterar retries/fallbacks ou mudar autoridades por este PLAN:
-
-| Capability lógica | Tier runtime atual | Retries / fallback | Autoridade |
+| Capability da baseline ADR-029 | Tier histórico | Retries / fallback | Autoridade |
 | --- | --- | --- | --- |
 | `PRODUCT_UNDERSTANDING` | `HIGH` | Um retry de contrato; `HIGH` é terminal para fallback. | LLM propõe entendimento; schema/fatos server-side decidem. |
 | `COMMERCIAL_OPPORTUNITY_MAPPING` | `MID` | Um retry de contrato; disponibilidade pode subir `MID → HIGH`. | LLM propõe mapeamento; schema/evidência server-side decidem. |
@@ -161,7 +157,7 @@ O mapa abaixo é a baseline operacional exata do ADR-029, do `ROUTER_MAP` atual 
 | `CONTENT_QUALITY_JUDGE` | `HIGH` | Sem retry semântico; falha isolável não vira `PASS`. | Judge só marca `PASS|REVIEW`; não publica nem bloqueia. |
 | `CONTENT_PART_REPAIR` (`Semantic Part Repair`) | `HIGH` | Uma passagem por parte `REVIEW`; sem fallback acima de `HIGH`. | LLM propõe só a parte; original é preservado se inválido; hard gate final decide. |
 
-Essa baseline permanece vigente até protocolo A/B, relatório versionado e aprovação formal do ADR-033. Nenhuma mudança de tier, retry, fallback, cena, Judge ou repair ocorre antes disso.
+Essa tabela permanece congelada para histórico e E6. Não deve ser aplicada ao runtime V2 por este PLAN.
 
 O provider envia `reasoning: { effort: "low" }` explicitamente por padrão para todas as tasks. O esforço é configurável somente por configuração server-side allowlisted para testes controlados; a engine não escolhe reasoning por request. O Router registra o reasoning efetivo. Reasoning não substitui limites de contexto, schema ou exact-N.
 
@@ -171,25 +167,27 @@ O provider ausente, timeout ou resposta não utilizável causa `GEN-PROVIDER` ou
 
 Registrar metadata allowlisted por capability/batch: task, tier, provider/modelo lógico, reasoning efetivo, versão/hash das instruções, duração, tamanhos de request/context/response, tentativa, retry, validações, repairs e erro. Nunca registrar prompt completo, payload bruto, cookie, token ou segredo.
 
-Preservar a `TikTok Commerce Creative Skill` vigente conforme o runtime ADR-029. Especificar e validar de modo aditivo somente a fundação Creative System, com validação de versão, schema e compatibilidade; nenhuma ativação operacional do Creative System, escrita de `creativeDirection` ou uso do Blueprint ocorre antes de SPEC/PLAN de cutover e eval aprovados. A Skill não tem acesso a Job, Prisma, quota ou persistência.
+ADR-033 define `tiktok-commerce@1.3` como binding operacional alvo da Engine V2. A consistência efetiva entre Strategy, Plan, `IntelligenceRun`, Planner e Creative System deve ser comprovada; esta documentação não a presume.
 
-O Creative System pode ser carregado, validado, congelado e exposto como fundação declarativa somente no caminho aditivo autorizado pelo gate documental. Compatibilidade desconhecida, referência inválida, versão ausente ou elegibilidade impossível falham fechado com códigos estáveis `GEN-CS-*`; isso não ativa o sistema no runtime ADR-029. Nenhum número de recipes, proporção recipe/composição livre, quantidade de chamadas ou threshold de eval é contrato deste PLAN.
+Compatibilidade desconhecida, referência inválida, versão ausente ou elegibilidade impossível falham fechado com códigos `GEN-CS-*`. Nenhum número de recipes, proporção recipe/composição livre, quantidade de chamadas ou threshold é contrato deste PLAN.
 
-### 3.5 Primeira pipeline
+### 3.5 Baseline histórica e runtime V2
 
-1. `UNDERSTANDING_PRODUCT`: Product Understanding usando fatos confirmados e `evidenceRefs`.
-2. `MAPPING_COMMERCIAL_OPPORTUNITIES`: uma chamada compacta para um envelope não vazio de oportunidades comerciais; recebe somente Product facts essenciais, catálogo de evidências e os campos de entendimento necessários.
-3. `BUILDING_STRATEGY`: Strategy Builder para uma única Strategy v1.
-4. `BUILDING_CONTENT_PLAN`: Content Portfolio Planner para um único Plan cuja distribuição soma exatamente `targetContentCount`.
-5. `GENERATING_BRIEFS`: Brief Generator em batches sequenciais de 4–8 oportunidades; cada item recebe identidade server-side depois da validação.
-6. Fact Validator com estados `SUPPORTED`, `INFERRED_BUT_SAFE`, `UNSUPPORTED`, `CONTRADICTED`, baseado em fatos/evidências estruturados.
-7. Quality Gate estrutural/factual/plataforma por briefing e Variety Gate determinístico no conjunto.
-8. Repair limitado em batches somente para rejeitados, carregando causas e oportunidade original, preservando Briefings `PASS`.
-9. Resultado final completo em `SUCCEEDED` ou parcial declarado em `SUCCEEDED_PARTIAL` (somente aprovados, variedade revalidada `ceil(D/K)` — ADR-021), sem preencher quantidade com conteúdo irrelevante.
+A sequência abaixo é a baseline ADR-029 reproduzível, não o call graph default atual:
 
-Para `targetContentCount = N`, a linha de base de chamadas é `4 + ceil(N / batchSize)`, com `batchSize` entre 4 e 8, sem contar repair. Não disparar `N` requests simultâneos por padrão; concorrência adicional exige limite explícito, telemetria e teste de rate limit.
+1. Product Understanding.
+2. Commercial Opportunity Mapping.
+3. Strategy Builder.
+4. Content Plan LLM.
+5. Brief Generator em batches de 4–8.
+6. Fact Validator.
+7. hard gates e Variety Gate.
+8. repairs.
+9. persistência completa ou parcial declarada.
 
-Os quatro calls fundacionais, a composição de briefs, cenas por Content e Judge são a baseline operacional ADR-029 deste PLAN. A arquitetura-alvo do ADR-033 só pode substituir o menor caminho comprovado por eval A/B; retries, gates e repairs existentes continuam medidos separadamente.
+Sua linha de base é `4 + ceil(N / batchSize)`, sem repairs, mais cenas por Content e Judge-all. O runner E6 deve preservá-la por commit sem recolocá-la em produção.
+
+O runtime default é V2. Seu call graph efetivo deve ser registrado por versão/commit; o alvo final Facts → Discovery → Strategy/Planner determinísticos → Brief Generator → Scene Skeleton → hard gates → Risk → Judge seletivo só é considerado completo quando writer, memória, ordem de gates, Skill/proveniência, prompt e E6 estiverem comprovados.
 
 Stages são atualizados antes da etapa. O Brief Generator recebe somente a projeção da Strategy, oportunidade, restrições aplicáveis, `Creator Context` e `validationRules` da Skill. Seus prompts instruem separação entre decisão estratégica e fala sugerida, cenas simples, linguagem oral e liberdade para não ler o script literalmente.
 
@@ -238,13 +236,15 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto (complet
 ---
 
 ## 5. Sequência de implementação
+> **Estado das tarefas 1–9:** registro histórico do Slice 003. Não executar estas tarefas para restaurar ADR-029 nem para corrigir pendências V2; a integração candidata autorizada segue a Tarefa 5B, a SPEC e os PLANs das Etapas 4–6, sem reimplementar o histórico.
+
 ### Tarefa 0 — Aprovar a documentação da Etapa 0
-**Arquivos:** revisar somente `docs/specs/slice-003/SPEC.md`, `docs/plans/slice-003/PLAN.md` e `docs/delivery/SLICES.md`.
+**Arquivos:** esta tarefa registrava originalmente SPEC/PLAN do Slice 003 e SLICES; a coordenação documental atual inclui ADR-033, SYSTEM-DESIGN e as Etapas 4/5/6, sem implementação.
 
 - Confirmar que a Etapa 0 é pré-condição transversal, sem `slice-000`/`stage-0`.
-- Confirmar referências explícitas ao ADR-033 e a coexistência temporária com o runtime ADR-029.
-- Confirmar Creative System na `PlatformSkill`, Primitive/Recipe/Blueprint, `load → validate → freeze → expose`, fail-closed, versionamento/histórico, memória, catálogo fora do prompt e gates preservados.
-- Confirmar que qualquer remoção ou reclassificação depende do protocolo A/B, relatório reproduzível e aprovação formal.
+- Confirmar referências explícitas ao ADR-033 e ao ADR-029 apenas como baseline histórico/experimental.
+- Confirmar Creative System na `PlatformSkill`, Primitive/Recipe/Blueprint, `load → validate → freeze → expose`, fail-closed, histórico e gates preservados.
+- Confirmar que pendências V2 e E6 não são declaradas implementadas por este PLAN.
 
 **Gate:** Architect e Review aprovam os três documentos; enquanto pendente, nenhuma tarefa de código desta seção é executável.
 
@@ -290,34 +290,34 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto (complet
 **Arquivos:** modificar `src/modules/commerce-intelligence/platform-skill.ts`, `model-router.ts`, `provider.ts` e testes contract.
 
 
-- Especificar e validar a Skill/Creative System de forma aditiva e versionada, com `CreativePrimitive`, `CreativeRecipe`, compatibilidade e `load → validate → freeze → expose`; falhar fechado para versão, schema, referência, compatibilidade ou elegibilidade inválidos. A ativação operacional fica bloqueada até SPEC/PLAN de cutover e eval aprovados.
-- Manter o mapa de tasks, tiers, cenas, gates, repairs e provider do ADR-029 como baseline operacional; nenhuma capability existente é removida ou reclassificada nesta tarefa.
-- Preparar a definição versionada da fundação Creative System associada à TikTok Commerce Creative Skill default vigente (`tiktok-commerce@1.2`) e suas `validationRules`; o Creative System aditivo `@1.3` permanece inativo antes do gate, e nenhuma versão registra Blueprint como execução ativa antes do cutover aprovado.
+- Preservar ADR-029/`@1.2` somente como fixture/runner de baseline E6.
+- Registrar a Skill/binding efetivamente usada pela Engine V2; o alvo 1.3 deve ser coerente em Strategy, Plan, Run, Planner e Creative System, sem declarar essa coerência antes de comprová-la.
+- Não usar esta tarefa histórica para ativar, desativar ou alterar o runtime.
 
 - Separar semanticamente `ModelRouter` e `OpenAICompatibleProvider`; o Router resolve task/tier e o adapter executa HTTP. Um único provider/modelo é permitido no MVP, mas task, tier, provider/modelo lógico e versão/hash das instruções devem ser registrados.
 - Separar instruções confiáveis, contexto confirmado, `Creator Context` e texto externo não confiável em envelopes distintos; aplicar projeções allowlisted e limites de tamanho; nunca enviar cookies, tokens, secrets, payloads de outro Tenant ou instrução externa como regra.
 - Adapter HTTP usa configuração server-side, `AbortSignal`, deadline da tentativa e resposta estruturada; sanitiza erros e não persiste resposta bruta. Ausência de configuração, timeout e JSON sem contrato produzem seus códigos específicos (`GEN-SKILL`, `GEN-PROVIDER`, `GEN-SCHEMA`); o worker converte em falha recuperável sem transformar schema/repair/factualidade em `GEN-PERSISTENCE`.
 - Os prompts do Brief Generator devem transportar `validationRules` como contexto de execução, sem permitir que Skill controle workflow, quota ou persistência.
-- Adicionar contract test executável do contexto Blueprint-driven que falhe se qualquer texto literal de hook/CTA atravessar o contexto enviado ao provider. O teste deve manter explicitamente o caminho ADR-029/catalog atual, incluindo `selectBriefPatterns`, como exceção até o cutover aprovado.
+- No contexto V2, contract test futuro deve falhar se `selectedPatterns` ou texto literal de hook/CTA atravessar o provider; fixture ADR-029/catalog fica confinada ao baseline E6.
 
-**Gate:** contract tests verificam a baseline ADR-029 sem alteração, a especificação/validação aditiva da Skill e Creative System `@1.3` inativo, compatibilidade fail-closed, ausência de ativação prematura, o contract test de exclusão de texto literal no contexto Blueprint-driven com a exceção ADR-029/catalog registrada, batch envelope, separação de contexto, IDs server-derived, rejeição de ownership/status vindos do provider, `tiktok-commerce@1.2` e erros específicos sem conversão indevida para `GEN-PERSISTENCE`.
+**Gate:** revisão comprova separação entre baseline ADR-029 e runtime V2, sem inferir writer, binding ou contexto já corrigidos.
 
 
 ### Tarefa 4A — Preparar Blueprint de forma aditiva
-**Arquivos:** somente os contratos e artefatos explicitamente aprovados na SPEC/PLAN de cutover; não alterar o runtime vigente nesta tarefa.
+**Arquivos:** tarefa histórica de preparo; a implementação candidata do writer/leitor v2 ocorre fora do Planner harness, conforme seção 5B e ADR-033.
 
-- Definir o `CreativeBlueprint` e sua matriz de compatibilidade como contrato versionado da `PlatformSkill`.
-- Preparar leitura histórica v1 e futura v2 sem fabricar `creativeDirection`; manter `ContentOpportunity` como único contêiner da decisão e preservar `hookMechanism`/`narrativePattern` legados enquanto o cutover não for aprovado.
+- Verificar o `CreativeBlueprint` e sua matriz de compatibilidade versionada.
+- Implementar writer/leitor v2 fora do harness, sem fabricar `creativeDirection` no histórico e sem manter `hookMechanism`/`narrativePattern` como segunda fonte em novos registros.
 - Garantir que catálogo literal, memória e sinais de geração tenham escopo e versionamento explícitos, sem inserir exemplos literais no prompt normal.
 
-**Gate:** contract tests e inspeção documental comprovam load/validate/freeze/expose, falha fail-closed, compatibilidade/histórico e ausência de escrita prematura de `creativeDirection`.
+**Gate:** contract tests e inspeção comprovam `load → validate → freeze → expose`, falha fail-closed, compatibilidade/histórico e persistência canônica somente em novos registros V2. Esta tarefa não autoriza mexer no harness congelado.
 
 ### Tarefa 5 — Implementar engine, gates e repair
 **Arquivos:** modificar `src/modules/commerce-intelligence/engine.ts`, `strategy.ts`, `content-plan.ts`, `gates.ts`, `memory.ts` e testes unit/contract.
 
 - Baseline atual: não há contract test implementado para o caminho `reuseStrategy`. A implementação futura desta tarefa SHALL adicionar esse teste e cobrir ausência de `STRATEGY_SYNTHESIS`, Strategy preservada/recanonicalizada, novo `jobId` e geração somente dos faltantes.
 
-- Orquestrar a baseline operacional ADR-029 com exatamente quatro chamadas fundacionais (`PRODUCT_UNDERSTANDING`, `COMMERCIAL_OPPORTUNITY_MAPPING`, `STRATEGY_SYNTHESIS`, `CONTENT_PLAN_GENERATION`) e Brief Generator em batches sequenciais de 4–8; emitir stage real antes de cada chamada. Qualquer composição-alvo do ADR-033 fica bloqueada ao A/B aprovado.
+- Não orquestrar ADR-029 como produção. Preservar seu runner fixado por commit e mapear o call graph V2 efetivo; correções do alvo exigem plano próprio.
 - Construir e validar `CommercialOpportunityMappingEnvelope` e cada `CommercialOpportunity`; construir Strategy/Plan/ContentOpportunities usando somente projeções de Product facts, restrições, `Creator Context` aplicável ou vazio explícito, Skill e memória vazia; manter fato separado de inferência.
 - Construir o catálogo de evidências depois da projeção factual do worker, dentro da engine, por `buildEvidenceCatalog`, com relação 1:1 entre valores elegíveis e `evidenceRefs` (`fact:<chave>`; do segundo valor em diante, `fact:<chave>:<n>`). O catálogo não pertence a `projectEngineFacts` nem é um campo do payload worker.
 
@@ -331,16 +331,30 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto (complet
 
 
 
-### Tarefa 5A — Executar eval A/B e aprovar cutover antes de remover
-**Arquivos:** artefatos versionados de protocolo, thresholds, Golden Dataset e relatório; nenhum corte de runtime antes da aprovação da SPEC/PLAN de cutover e do gate A/B.
+### Tarefa 5A — Executar E6 antes de `V2_ACCEPTED`
+**Arquivos:** artefatos versionados de protocolo, thresholds, Golden Dataset, captures e relatório da candidata; execução autorizada nesta feature branch sob o protocolo aprovado, sem promover produção.
 
-- Fixar o baseline ADR-029 por versão/commit e o candidato ADR-033 antes da coleta.
-- Executar pares com os mesmos fatos/evidências, Creator Context, memória, `platformSkillVersion`, modelo/tier e seed derivado do job.
-- Comparar factualidade, diversidade multidimensional, naturalidade/criatividade/templating, repair rate, custo, latência p50/p95 e falhas, no agregado e por categoria.
-- Persistir relatório reproduzível com hashes/versões, métricas, veredito e dados suficientes para reprodução.
-- Só depois de aprovação explícita do Software Architect, do Review e do usuário quando exigido pelo ADR registrar supersede; uma mudança por vez e pelo menor caminho comprovado.
+- Fixar baseline ADR-029/`@1.2` e candidato V2/`@1.3` por commit/engine version.
+- Separar evidence offline/replay de execução pareada com provider vivo.
+- Congelar provider/model/tier, parâmetros, prompts/contextos, seed, usage/custo/latência e cobertura; registrar diferenças inerentes entre os braços antes da coleta.
+- Pré-registrar rubrica, unidade, avaliações cegas independentes, adjudicação, agregação/categorias, missing e thresholds para cada critério subjetivo.
+- Executar end-to-end e atribuições por variável; preservar avaliações brutas, deltas pareados, incerteza e cobertura.
+- Persistir relatório reproduzível sem inventar resultado, não-regressão ou aprovação.
 
-**Gate:** sem relatório aprovado, ADR-029 permanece integralmente vigente e nenhuma chamada, tier, cena, gate, repair ou capability é removida, integrada ou reclassificada.
+**Gate:** sem relatório revisado e aceite explícito do usuário, V2 permanece default pendente; ADR-029 permanece baseline e não volta a ser default implicitamente.
+
+### Tarefa 5B — Integração candidata autorizada (Etapas 2–6)
+
+**Dependências:** [SPEC Slice 003](../../specs/slice-003/SPEC.md), [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md), [Etapa 4 SPEC](../../specs/etapa-4-skill-brief/SPEC.md) e [PLAN](../etapa-4-skill-brief/PLAN.md), [Etapa 5 SPEC](../../specs/etapa-5-risk-quality/SPEC.md) e [PLAN](../etapa-5-risk-quality/PLAN.md), [Etapa 6 SPEC](../../specs/etapa-6-golden-evals/SPEC.md) e [PLAN](../etapa-6-golden-evals/PLAN.md). Não ampliar o MVP nem alterar o mapa SLICES.
+
+1. **Etapa 2:** projetar fatos allowlisted em Discovery V2 dentro de Mapping, validar/persistir pool JSON-safe com hash estável; selecionar Strategy determinística com proveniência. A/B individual atribui o efeito da retirada de PU e Strategy LLM antes de mudar essas chamadas no runtime padrão.
+2. **Etapa 3:** reutilizar o Planner harness e suas policies/fixtures/testes congelados sem modificação. Fora do harness, adaptar engine/worker/persistência para entradas validadas Discovery/Strategy, persistir Blueprint canônico em `ContentOpportunity.creativeDirection`, manter Strategy e memória estruturada V1 com sinais multidimensionais; releitura tenant-scoped valida versão/hash/refs. Não criar segunda fonte em metadata.
+3. **Etapa 4:** integrar Skill/prompt segundo SPEC/PLAN próprios, excluir `selectedPatterns` e catálogo literal do contexto V2 e registrar binding/proveniência operacional `@1.3` consistente; manter `@1.2` reproduzível no baseline E6.
+4. **Etapa 5:** integrar Risk determinístico antes do Judge seletivo, com seleção fail-safe e sem transferir a Risk autoridade de hard gates, D/F, quota ou publicação.
+5. **Etapa 6:** executar E6 integral e A/B por variável, com baseline ADR-029 fixada por commit e candidato final fixado por commit, evidência offline separada de provider vivo, relatório reproduzível e revisão Architect. Falha mantém V2 produção default pendente; somente aceite expresso do usuário após E6 integral e revisão permite propor merge/deploy e `V2_ACCEPTED`.
+
+**Gate de implementação:** validações comportamentais de cada etapa antes de avançar, sem afirmar resultados não coletados. **Gate de promoção:** nenhum merge/deploy/aceitação formal antes de E6 integral, revisão Architect e aceite expresso do usuário.
+
 
 ### Tarefa 6 — Implementar worker durável, liveness e finalização
 **Arquivos:** modificar `src/modules/commerce-intelligence/worker.ts`, `runtime.ts`, `repository.ts`, `worker.test.ts` e `scripts/worker.mts`; criar `health.ts`, `health-route.ts`, `health.test.ts` e `src/app/api/api/health/generation/route.ts`.
@@ -391,11 +405,11 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto (complet
 **Arquivos:** atualizar fixtures/testes existentes que assumem `/api/generations` antigo; criar testes de integração PostgreSQL somente onde necessário. O script de `package.json` já inclui os testes de generation e não deve ser alterado por esta tarefa.
 
 - Preservar o script `test` atual, que já inclui os testes de generation, commerce-intelligence, Entitlement, Product lifecycle, HTTP, observability, runtime, worker, worker-fence, Product readiness e UI-model; adicionar somente os cenários/fixtures ainda ausentes e manter testes de banco identificáveis e executáveis com `DATABASE_URL`.
-- Criar cenário de smoke autenticado com `count=1` e `count=10`: Product confirmado → `Analisar produto` → `QUEUED` → worker → stages reais → quatro chamadas fundacionais → batches 4–8 → gates → `SUCCEEDED` → Strategy/Plan/Contents/BriefVersions; repetir via reload. Exercitar também rejeição ativa para `N=11`, `N=16` e `N=30`, mantendo fixtures/migrações legadas `1–30` apenas como compatibilidade documental, sem ampliar quota. Exercitar o caminho parcial: job que fecha `SUCCEEDED_PARTIAL` com D de N publicados, motivo sanitizado por item e ação `Gerar faltantes` criando novo job com reserva F (ADR-021).
+- Smoke futuro deve observar o call graph V2 efetivo por engine version, não esperar quatro chamadas ADR-029. `count=1`/`count=10`, parcial, quota e reentrada permanecem cenários de comportamento; baseline ADR-029 roda somente no runner E6.
 
 - Confirmar que salvar manualmente não cria Job/reservation, que editar Product fora do fluxo não altera resultados publicados silenciosamente, que Product `READY` não inicia reanálise e que DELETE executa Big Bang tenant-scoped com rollback, resposta sanitizada e sem confundir a operação com archive.
 - Registrar metadata operacional allowlisted por capability/batch (task, tier, provider/modelo lógico, versão/hash, duração, bytes, retries, validações, repairs e códigos); redigir textos, URL, prompts, output, cookies e tokens.
-- Executar regressão no Golden Dataset aprovado, medindo factualidade, variedade, naturalidade, custo, latência, taxa de schema inválido e repair; sem fixture/artefato aprovado, manter o gate `BLOCKED` e não declarar a implementação plenamente validada ou pronta para produção.
+- E6 futura separa checks offline de execução com provider vivo. Fixtures não comprovam custo, latência ou qualidade semântica; sem protocolo/artefatos/thresholds aprovados, o gate permanece `BLOCKED`.
 
 **Gate:** o script atual de `package.json` inclui os testes de generation, commerce-intelligence, Entitlement, Product lifecycle, HTTP, observability, runtime, worker, worker-fence, Product readiness e UI-model; `npm run test` passa no ambiente disponível, testes de banco são explicitamente reportados quando pulados por indisponibilidade e nenhum teste de Slice 004+ ou 008 é adicionado.
 
@@ -424,7 +438,7 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto (complet
 |---|---|---|
 | Confirmação atômica | Product novo: ativação + `active_products` + reservation + Job; Product já `ACTIVE`: reconciliação do contador + reservation + Job, sem nova unidade de Product ativo | Product/job/reserva parcial, quota de `active_products` reaplicada ou contador divergente |
 | Quantidade | required, inteiro, `1–10`, estabilidade durante o Job, rejeição de `N=11/16/30` no contrato ativo e fixture legada `1–30` isolada | Cliente altera quantidade, contrato ativo aceita legacy ou exact-N quebrado |
-| Composição | `count=1`, `count=10`, quatro chamadas fundacionais, batches 4–8, limite de concorrência e repair separado | chamadas acima da baseline, `Promise.all` sem limite ou custo não mensurável |
+| Composição | `count=1`, `count=10`, call graph V2 efetivo versionado; baseline ADR-029 isolada no runner E6 | chamada não rastreada, baseline executada como produção ou custo não mensurável |
 | Entitlements | capacidade, backfill/contagem de `active_products`, activate/archive/reactivate concorrentes, mês UTC, confirmação/liberação uma vez | overage, contador divergente, reserva duplicada ou mês errado |
 | Fila | claim condicional, lease, heartbeat, deadline, reclaim, backoff, max attempts e health | worker preso, trabalho órfão, retry infinito ou liveness falso |
 | Idempotência | reconnect/reentry/reclaim e retry explícito separado, incluindo fencing após repetição externa | nova run no retry técnico, terminal sobrescrito ou publicação duplicada |
@@ -443,7 +457,7 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto (complet
 | API/CSRF | sessão, origem, payload adulterado, erro sanitizado e `generationAction` sem dados de quota | mutação sem intenção, stack/secret exposto ou vazamento de plano/uso |
 | UI/reentrada | `idle`, `queued`, `running`, `succeeded`, `failed`, `cancelled`, `blocked` derivado da projeção, navegação, reload, mobile e teclado | estado dependente de aba/localStorage, capacidade inferida no cliente ou ação inacessível |
 
-Contract tests usam provider in-memory apenas como adaptador de teste. Testes de qualidade estratégica com provider real exigem Golden Dataset aprovado; sem artefato/hash/limiares aprovados, o gate permanece `BLOCKED`, sem declarar aceitação plena da Engine.
+Contract tests com provider in-memory comprovam contratos determinísticos, não qualidade semântica, custo ou latência reais. Essas métricas exigem E6 pareada com provider vivo e artefatos aprovados.
 
 ---
 
@@ -457,14 +471,14 @@ Executar, após todas as tarefas e somente no estado final:
 4. `npm run test`.
 5. Testes de integração PostgreSQL/migration com `DATABASE_URL` configurado, incluindo concorrência, índice de Job ativo, reservation UTC, FKs/uniques compostos tenant/product, `currentBriefVersionId` nullable + preenchimento atômico, unique de memória, rollback integral, DELETE Big Bang tenant-scoped, archive/decremento do contador, worker obsoleto e health/liveness.
 6. `npm run build`.
-7. Smoke autenticado com `count=1` e `count=10`: Product confirmado → projeção `AVAILABLE` → `Analisar produto` → `QUEUED` → worker → stages reais → quatro chamadas fundacionais → batches 4–8 → gates → `SUCCEEDED`, Strategy/Plan/Contents/BriefVersions; repetir via reload. Exercitar `N=16` somente como rejeição do contrato ativo ou fixture legada isolada, nunca como sucesso. Exercitar também `GEN-ACTIVE` e `GEN-CAPACITY`: a projeção deve desabilitar a ação antes do clique e o `POST` deve continuar revalidando em corrida.
+7. Smoke autenticado observa o call graph V2 efetivo por engine version; não exige quatro chamadas ADR-029. Exercita `count=1`, `count=10`, reentrada, `GEN-ACTIVE`, `GEN-CAPACITY` e rejeição de `N=16`.
 
 8. Exercitar provider HTTP 200 com corpo atrasado, timeout, perda de lease, heartbeat, reclaim, fencing e retry técnico; verificar que não há publicação/uso duplicado e que a chamada antiga é abortada quando suportado.
 9. Verificar falhas de schema, factualidade, variedade, repair e persistência; confirmar códigos internos específicos, mensagem pública sanitizada, rollback integral e liberação CAS única.
 10. Verificar projeções de contexto, separação entre instruções/fatos/dados externos e ausência de IDs persistentes/ownership/status/quota vindos do provider.
 11. Verificar mobile/tablet/desktop e teclado: indicador não cobre header/drawer, badges e filtro `Pendente`, estado `blocked`, foco/labels/aria presentes, alvo mínimo `44×44px`, erro não depende de cor, glass restrito a shell/toolbar/sheet e `prefers-reduced-motion` remove deslocamento.
 12. Verificar por leitura de logs/respostas que não há prompt, token, cookie, payload bruto ou dado cross-tenant exposto; metadata operacional permanece allowlisted.
-13. Executar regressão no Golden Dataset aprovado, comparando factualidade, variedade, naturalidade, custo, latência, taxa de schema inválido e repair com a versão anterior de Engine/Skill/Model Router; registrar dataset/hash, versão default `tiktok-commerce@1.2`, Creative System aditivo `@1.3` inativo, limiares e resultado. Sem fixture/artefato aprovado no repositório, declarar o gate `BLOCKED`.
+13. Executar E6 somente sob protocolo aprovado: baseline/candidato por commit, evidence offline separada de provider vivo, rubricas e thresholds pré-registrados, provider/model/tier/params/prompts/contextos/seed comparáveis e usage/custo/latência/cobertura completos. Sem isso, declarar `BLOCKED`.
 14. Confirmar que `/products/new` continua salvando Product sem criar Job e que nenhum código deste slice adiciona revisão, aprovação, lotes, Agenda, Estúdio, memória histórica, recorrência ou reanálise de Product `READY`.
 
 O resultado de cada validação deve ser registrado no handoff da implementação; qualquer validação não executada deve ser declarada explicitamente.
@@ -486,14 +500,14 @@ O resultado de cada validação deve ser registrado no handoff da implementaçã
 - `S003-25`: Tarefas 3 e 7; origem, fingerprint e ciclo de vida da `Idempotency-Key`.
 - `S003-26`: Tarefas 1, 4–6; `structure`, cenas válidas, hash estrutural e regras qualitativas do Briefing.
 - `S003-27`: Tarefas 1, 2 e 6; `briefId` deriva de `contentId + briefVersionId`.
-- `S003-28`: Tarefas 4–5 e matriz de composição; quatro chamadas fundacionais, batches 4–8 e limite de concorrência.
+- `S003-28`: call graph V2 efetivo versionado; baseline ADR-029 isolada no runner E6.
 - `S003-29`: Tarefas 4–5 e seção 6; projeções allowlisted e separação de contexto.
 - `S003-30`: Tarefas 1, 5–6 e 8; stages antes do trabalho efetivo.
 - `S003-31`: Tarefas 4–6 e matriz de observabilidade; IDs server-derived e metadata por capability/batch.
 
-Todos os 31 requisitos rastreáveis e os 53 critérios de aceite da SPEC têm uma tarefa, teste ou validação final correspondente. Nenhum requisito de Slice 004+ ou 008 é usado como dependência de implementação.
+Os 31 requisitos rastreáveis da implementação histórica continuam mapeados às tarefas 1–9. Os critérios adicionais da integração candidata na SPEC correspondem à Tarefa 5B e aos SPEC/PLAN das Etapas 4–6; não criam dependência de funcionalidades de slices futuros.
 
-**Status:** ETAPA_2_APPROVED — documentação canônica da Etapa 2 aprovada; a seção visual mantém seus requisitos históricos, e implementação/runtime/cutover continuam bloqueados pelos gates ADR-029/033.
+**Status:** `APPROVED_FOR_CANDIDATE_INTEGRATION` na feature branch; E6 e correções da candidata autorizadas, aceitação formal, merge e deploy sujeitos aos gates acima.
 
 ## 10. Plano visual integral — Products e Product detail
 
@@ -655,4 +669,4 @@ Executar somente no frontend final:
 
 Não executar nem modificar backend/provider/worker/Golden Dataset/ADR-017 neste plano. Qualquer validação não executada deve ser declarada no handoff.
 
-**Status da seção visual:** requisitos históricos preservados; a Etapa 2 documental está aprovada, mas nenhum requisito visual libera implementação, runtime ou cutover.
+**Status da seção visual:** requisitos históricos preservados; a autorização da candidata Etapas 2–6 não altera este plano visual nem libera merge, deploy ou cutover de produção.

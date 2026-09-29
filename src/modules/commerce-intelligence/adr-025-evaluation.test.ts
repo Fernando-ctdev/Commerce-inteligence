@@ -5,7 +5,7 @@
 // disponíveis e vazamento editorial de instrução de cena no script do Content 02.
 // Contexto autorizado MINIMIZADO: produto genérico de tecido (mesma família
 // factual já usada na suíte), sem dados reais do usuário. Configuração: Judge e
-// repair HIGH, reasoning low (padrão B-003-05), skill tiktok-commerce@1.2.
+// repair HIGH, reasoning low (padrão B-003-05), skill tiktok-commerce@1.3.
 // Expectativas sob o contrato vigente (judge único PASS|REVIEW, no máximo um
 // repair por parte marcada, sem re-Judge — judge-semantico-contrato-a):
 //   - nenhum metacomentário/instrução de cena no script entregue (e o vazamento
@@ -43,7 +43,7 @@ test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, parcial 3/
     if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["barreira"], evidenceRefs: ["product:name"] };
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 5 }, (_, i) => ({ relevantCapabilities: ["cap"], benefits: [`benefício distinto ${i + 1}`], proofOptions: ["product:description"], sellingArgument: `argumento ${i + 1}`, confidence: 0.9, evidenceRefs: ["product:description"] })) };
       if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
-    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", targetContentCount: 5, opportunities: Array.from({ length: 5 }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstration", "problem", "discovery", "price-value", "other"][i], noveltyTargets: ["n"] })) };
+    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.3", targetContentCount: 5, opportunities: Array.from({ length: 5 }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstration", "problem", "discovery", "price-value", "other"][i], noveltyTargets: ["n"] })) };
     if (task === "CONTENT_BRIEF_GENERATION") {
       briefCalls += 1;
       const size = [4, 1][briefCalls - 1];

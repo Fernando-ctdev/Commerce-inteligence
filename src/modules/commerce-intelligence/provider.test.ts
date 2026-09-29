@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_BRIEF_REPAIR_INSTRUCTION, CONTENT_PART_REPAIR_INSTRUCTION, CONTENT_QUALITY_JUDGE_INSTRUCTION, JUDGE_EDITORIAL_GUIDANCE, PART_REPAIR_EDITORIAL_GUIDANCE, createHttpProvider, dollarsLexemeToMinor, extractReportedCostLexeme, normalizeProviderUsage, PRODUCT_UNDERSTANDING_INSTRUCTION, UNDERSTANDING_CARDINALITY, UNDERSTANDING_FIELDS } from "./provider";
 import { CARDINALITY_POLICY } from "./contract";
+import { parseDiscoveryEnvelopeV2 } from "./engine-v2";
 import { GenerationError } from "./errors";
 import { ROUTER_MAP } from "./model-router";
 
@@ -100,7 +101,7 @@ test("sends fixed reasoning effort by logical capability", async () => {
     { effort: "high" },
   ]);
 });
-test("brief provider gets separate selected hook and CTA patterns in a compact context", async () => {
+test("brief provider transports the V2 canonical context verbatim in the user message", async () => {
   const originalFetch = globalThis.fetch;
   let request: Record<string, unknown> | undefined;
   globalThis.fetch = (async (_url: unknown, init: { body: string }) => {
@@ -109,39 +110,47 @@ test("brief provider gets separate selected hook and CTA patterns in a compact c
   }) as typeof fetch;
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { HIGH: "m" }, timeoutMs: 5000 });
   try {
-    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: { productReference: { name: "Calça" }, selectedPatterns: [{ opportunityId: "o1", hook: { id: "problem", text: "Eu não acredito que isso custa tão pouco" }, cta: { id: "details", text: "Confira os detalhes disponíveis" } }] } });
+    await provider.complete("CONTENT_BRIEF_GENERATION", { trustedContext: { realizations: [{ commercialObjective: "vender", angle: "demonstração", coreMessage: "tecido respirável", hookMechanism: "demonstration", blueprint: { format: "pov", recipe: [] } }], platformRules: {}, creatorContext: {} } });
   } finally { globalThis.fetch = originalFetch; }
   assert.ok(request);
   const messages = request.messages as Array<{ content: string }>;
-  assert.ok(messages[1].content.includes("Eu não acredito que isso custa tão pouco"));
-  assert.ok(messages[1].content.includes("Confira os detalhes disponíveis"));
-  assert.ok(messages[1].content.includes('"productReference":{"name":"Calça"}'));
+  assert.ok(messages[1].content.includes('"hookMechanism":"demonstration"'));
+  assert.ok(messages[1].content.includes("tecido respirável"));
+  assert.ok(!messages[1].content.includes("selectedPatterns"));
+});
+
+test("CONTENT_BRIEF_GENERATION/REPAIR instructions do not reference context fields absent from the V2 allowlist", () => {
+  // Cutover V2 (engine.ts:1188/1391): o contexto real de cada capability não contém
+  // selectedPatterns/causes/repairContrast/relevantFacts/developmentRequirements —
+  // prompt que referencia esses campos instrui o modelo a ler chaves que nunca existem.
+  // A dimensão positiva (toda chave citada existe no contexto real capturado) é
+  // verificada comportamentalmente pelo boundary test em engine-pipeline.test.ts.
+  const ghosts = ["selectedPatterns", "causes[", "repairContrast", "relevantFacts", "developmentRequirements"];
+  for (const instruction of [CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_BRIEF_REPAIR_INSTRUCTION]) {
+    for (const absent of ghosts) {
+      assert.ok(!instruction.includes(absent), `prompt não pode referenciar campo ausente do contexto V2: ${absent}`);
+    }
+  }
 });
 
 test("brief provider instruction makes development strategic, evidence-grounded, and keeps CTA separate", () => {
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("selectedPatterns[index].hook.text como hook"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("variação curta de até 12 palavras"));
   assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("productReference.category"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use categoria no hook somente se explícita em relevantFacts"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use categoria no hook somente se explícita em productFacts"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Development contém 2 a 6 bullets"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("cada bullet precisa combinar ação de comunicação, razão significativa ligada ao fato e o fato específico de relevantFacts"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("cada bullet precisa combinar ação de comunicação, razão significativa ligada ao fato e o fato específico de productFacts"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("'para contextualizar', 'para explicar esse detalhe' e outras frases sem ligação concreta não contam"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Não faça lista de features nem instrução de câmera/gravação"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use relevantFacts como única fonte de fatos técnicos em development e script"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use productFacts como única fonte de fatos técnicos em development e script"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("angle e mecanismo da oportunidade orientam o recorte, mas não são fonte de fatos"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("todo fato técnico no script deve estar em relevantFacts e representado em development"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("todo fato técnico no script deve estar em productFacts e representado em development"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não retorne scenes nem qualquer campo de cena"));
-  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use selectedPatterns[index].cta.text literalmente como cta"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("adapte o wording"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("mesma função"));
-  assert.ok(!CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("selectedPatterns[index].cta.text literalmente"));
-  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("adapte o wording"));
-  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("mesma função"));
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("selectedPatterns"));
+  assert.ok(!CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("selectedPatterns"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Mantenha cta separado de hook, development e script"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Bom:"));
   assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Ruim:"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("causes[index]"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("repairContrast[index]"));
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("causes[index]"));
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("repairContrast[index]"));
 });
 
 test("non-2xx captures allowlisted rate headers in detail without body leakage", async () => {
@@ -522,12 +531,75 @@ test("provider adapter caps only PU cardinality arrays before returning output",
 
 
 
+// ADR-033 §3: Commercial + Creative Discovery V2 (hypotheses). O boundary do
+// provider impõe o contrato POR CHAMADA sobre o output real (maxOpportunities é
+// dinâmico e vem do trustedContext do engine); strings obrigatórias vazias,
+// opcionais presentes vazios, refs fora do catálogo e ids server-owned falham.
+test("COMMERCIAL_OPPORTUNITY_MAPPING impõe o contrato Discovery V2 no boundary do output real", async () => {
+  const trustedContext = { product: { name: "Calça" }, understanding: {}, evidenceRefsCatalog: ["product:description"], maxOpportunities: 3, creatorContext: {} };
+  const hypothesis = (overrides: Record<string, unknown> = {}) => ({
+    commercialObjective: "vender",
+    angle: "demonstração",
+    coreMessage: "tecido respirável que resolve o calor no uso diário",
+    pain: null,
+    objection: null,
+    relevantCapabilities: ["cap"],
+    benefits: ["respira no calor"],
+    proofOptions: ["tecido respirável em uso"],
+    commercialEffects: ["demonstra o tecido respirável aliviando o calor durante o uso"],
+    evidenceRefs: ["product:description"],
+    confidence: 0.9,
+    ...overrides,
+  });
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  const completeWith = async (payload: unknown) => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const restore = captureProviderBodies(bodies, () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(payload) } }] }), { status: 200, headers: { "content-type": "application/json" } }));
+    try {
+      return await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext });
+    } finally { restore(); }
+  };
+
+  // Output válido cruza o boundary e volta EXATAMENTE como o provider respondeu.
+  const valid = { discoveryContractVersion: "2", hypotheses: [hypothesis()] };
+  const bodies: Array<Record<string, unknown>> = [];
+  const restore = captureProviderBodies(bodies, () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(valid) } }] }), { status: 200, headers: { "content-type": "application/json" } }));
+  let result: unknown;
+  try {
+    result = await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext });
+  } finally { restore(); }
+  assert.deepEqual(result, valid, "output real do boundary é o parsed do provider");
+  assert.equal(recordOf(bodies[0].response_format)?.type, "json_schema");
+
+  // Rejeições fail-closed no MESMO boundary (cada caso via provider.complete real).
+  const rejects = async (name: string, payload: unknown) => {
+    await assert.rejects(
+      () => completeWith(payload),
+      (error: unknown) => error instanceof GenerationError && error.code === "GEN-SCHEMA" && (error as GenerationError).detail?.task === "COMMERCIAL_OPPORTUNITY_MAPPING",
+      `deveria rejeitar: ${name}`,
+    );
+  };
+  const excess = Array.from({ length: 4 }, () => hypothesis());
+  await rejects("hypotheses acima do maxOpportunities dinâmico", { discoveryContractVersion: "2", hypotheses: excess });
+  await rejects("campo obrigatório ausente", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), commercialObjective: undefined }] });
+  await rejects("string obrigatória vazia", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), coreMessage: "   " }] });
+  await rejects("opcional presente vazio", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), pain: "" }] });
+  await rejects("evidenceRefs fora do catálogo", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), evidenceRefs: ["fact:inexistente"] }] });
+  await rejects("sourceOpportunityId é server-owned", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), sourceOpportunityId: "commercial-1" }] });
+  await rejects("contractVersion divergente", { discoveryContractVersion: "1", hypotheses: [hypothesis()] });
+  await rejects("chave raiz desconhecida", { discoveryContractVersion: "2", hypotheses: [hypothesis()], audiences: [] });
+  await rejects("confidence fora de [0,1]", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), confidence: 1.5 }] });
+  await rejects("hypotheses vazio", { discoveryContractVersion: "2", hypotheses: [] });
+  await rejects("opcional com tipo inválido", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), audience: 7 }] });
+  await rejects("array com item não-string", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), benefits: [1] }] });
+});
+
 test("non-PU tasks keep generic json_object response_format", async () => {
   const bodies: Array<Record<string, unknown>> = [];
   const restore = captureProviderBodies(bodies);
   const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { LOW: "fast", MID: "balanced", HIGH: "quality" }, timeoutMs: 5000 });
   try {
-    await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext: {} });
+    await provider.complete("STRATEGY_SYNTHESIS", { trustedContext: {} });
   } finally { restore(); }
   assert.deepEqual(bodies[0].response_format, { type: "json_object" });
 });

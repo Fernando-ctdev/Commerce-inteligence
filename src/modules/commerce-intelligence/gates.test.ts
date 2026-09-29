@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import type { EvidenceSnapshot } from "./contract";
 import { validateBriefSet, parseStructuredDevelopment, diagnoseDevelopmentPoint, diagnoseStructuredDevelopmentBullet, developmentDiagnosticNeedsRepair, developmentRequirements, validDevelopmentPoint, isActionableCta, gatePolicyAuthority } from "./gates";
 import { ContractError } from "./contract";
+import { CREATIVE_CATALOG } from "./creative-catalog";
+import { GATE_POLICY_VERSION } from "./gates";
 
 test("structured development derives action and rationale from provider text", () => {
   const text = "Destaque o tecido respiravel para explicar o conforto no uso";
@@ -71,7 +73,7 @@ test("diagnóstico canônico inclui CTA inválido e faz o gate reprovar", () => 
     [brief],
     evidence,
     "tiktok-commerce",
-    "tiktok-commerce@1.2",
+    "tiktok-commerce@1.3",
     [],
     undefined,
     new Map([[brief.contentId, [structuredBullet, structuredBullet]]]),
@@ -119,17 +121,17 @@ test("creator solo production gate uses recordsAlone and declared equipment", ()
   const ev = { facts: ["Fone Space S1", "drivers de 40 mm", "R$"], refs: ["product:name", "fact:features", "fact:priceCurrency"] };
   const complex = { ...brief("solo-1"), development: ["Destaque os drivers de 40 mm para relacionar 40 mm aos drivers informados", "Destaque os drivers de 40 mm para relacionar 40 mm aos drivers informados"], script: "A câmera gira 360 graus ao redor de mim enquanto o som passa de lado a lado.", cta: "Saiba mais." };
   const soloContext = { recordsAlone: true, recordingEquipment: ["camera"], recordingSupport: ["tripod"] };
-  const blocked = validateBriefSet([complex], ev, "tiktok-commerce", "tiktok-commerce@1.2", [], soloContext)[0];
+  const blocked = validateBriefSet([complex], ev, "tiktok-commerce", "tiktok-commerce@1.3", [], soloContext)[0];
   assert.equal(blocked.decision, "REPAIR");
   assert.ok(blocked.issues.includes("produção incompatível com creator solo"));
-  const noSoloConstraint = validateBriefSet([complex], ev, "tiktok-commerce", "tiktok-commerce@1.2", [], { ...soloContext, recordsAlone: false })[0];
+  const noSoloConstraint = validateBriefSet([complex], ev, "tiktok-commerce", "tiktok-commerce@1.3", [], { ...soloContext, recordsAlone: false })[0];
   assert.equal(noSoloConstraint.decision, "PASS");
   const droneBrief = { ...brief("solo-drone"), development: ["Destaque os drivers de 40 mm para relacionar 40 mm aos drivers informados", "Destaque os drivers de 40 mm para relacionar 40 mm aos drivers informados"], script: "O drone acompanha o produto." };
-  const missingDrone = validateBriefSet([droneBrief], ev, "tiktok-commerce", "tiktok-commerce@1.2", [], soloContext)[0];
+  const missingDrone = validateBriefSet([droneBrief], ev, "tiktok-commerce", "tiktok-commerce@1.3", [], soloContext)[0];
   assert.ok(missingDrone.issues.includes("produção incompatível com creator solo"));
-  const declaredDrone = validateBriefSet([droneBrief], ev, "tiktok-commerce", "tiktok-commerce@1.2", [], { ...soloContext, recordingEquipment: ["camera", "drone"] })[0];
+  const declaredDrone = validateBriefSet([droneBrief], ev, "tiktok-commerce", "tiktok-commerce@1.3", [], { ...soloContext, recordingEquipment: ["camera", "drone"] })[0];
   assert.equal(declaredDrone.decision, "PASS");
-  const solo = validateBriefSet([{ ...brief("solo-2"), development: ["Destaque drivers de 40 mm para relacionar 40 mm aos drivers informados", "Reforce drivers de 40 mm para conectar os drivers de 40 mm ao som"], script: "Esse fone é o Fone Space S1 e tem drivers de 40 mm.", cta: "Se você curte esse tipo de imersão, vale dar uma olhada nesse aqui." }], ev, "tiktok-commerce", "tiktok-commerce@1.2", [], soloContext)[0];
+  const solo = validateBriefSet([{ ...brief("solo-2"), development: ["Destaque drivers de 40 mm para relacionar 40 mm aos drivers informados", "Reforce drivers de 40 mm para conectar os drivers de 40 mm ao som"], script: "Esse fone é o Fone Space S1 e tem drivers de 40 mm.", cta: "Se você curte esse tipo de imersão, vale dar uma olhada nesse aqui." }], ev, "tiktok-commerce", "tiktok-commerce@1.3", [], soloContext)[0];
   assert.equal(solo.decision, "PASS", JSON.stringify(solo));
 });
 test("normalized, hook, CTA, and structural duplicates are repaired", () => {
@@ -282,7 +284,7 @@ test("regressão feature_list/connector: bullet sem ação+conector é diagnosti
   assert.equal(featureParsed.diagnostics[0]!.actionPresent, false);
   assert.equal(featureParsed.diagnostics[0]!.connectorValid, false);
   // texto projetado segue para o gate, que reprova (fail-closed preservado)
-  const report = validateBriefSet([{ contentId: "c1", briefVersionId: "c1-v", version: 1 as const, angle: "a", hook: "h", development: [featureList.text, featureList.text], script: "Fale sobre o produto", cta: "c" }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined)[0];
+  const report = validateBriefSet([{ contentId: "c1", briefVersionId: "c1-v", version: 1 as const, angle: "a", hook: "h", development: [featureList.text, featureList.text], script: "Fale sobre o produto", cta: "c" }], evidence, "tiktok-commerce", "tiktok-commerce@1.3", [], undefined)[0];
   // E5: forma do development (ação/conector/feature-list) é ADVISORY —
   // diagnóstico permanece, decisão deixa de reprovar.
   assert.equal(report.decision, "PASS", "forma do development não reprova no E5");
@@ -292,7 +294,7 @@ test("regressão feature_list/connector: bullet sem ação+conector é diagnosti
   const fixedParsed = parseStructuredDevelopment([fixed], evidence);
   assert.equal(fixedParsed.diagnostics[0]!.connectorPresent, true);
   assert.equal(validDevelopmentPoint(fixed.text, evidence), true);
-  const fixedReport = validateBriefSet([{ contentId: "c2", briefVersionId: "c2-v", version: 1 as const, angle: "a", hook: "h", development: [fixedParsed.texts[0]!, fixedParsed.texts[0]!], script: "Tecido respiravel", cta: "c" }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined)[0];
+  const fixedReport = validateBriefSet([{ contentId: "c2", briefVersionId: "c2-v", version: 1 as const, angle: "a", hook: "h", development: [fixedParsed.texts[0]!, fixedParsed.texts[0]!], script: "Tecido respiravel", cta: "c" }], evidence, "tiktok-commerce", "tiktok-commerce@1.3", [], undefined)[0];
   assert.equal(fixedReport.decision, "PASS");
 });
 
@@ -302,22 +304,22 @@ test("gate v4: trecho após o conector deve conter 2 termos do fato apontado por
   // o requisito factRef não se aplica (comportamento textual existente preservado).
   const drifting = { text: "Destaque o tecido respiravel para explicar o conforto no uso diario", action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar o conforto no uso diario" };
   const brief = { contentId: "c-v4", briefVersionId: "c-v4-v", version: 1 as const, angle: "a", hook: "Veja o tecido", development: [drifting.text, drifting.text], script: "Tecido respiravel", cta: "c" };
-  const withoutMap = validateBriefSet([brief], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined)[0]!;
+  const withoutMap = validateBriefSet([brief], evidence, "tiktok-commerce", "tiktok-commerce@1.3", [], undefined)[0]!;
   assert.equal(withoutMap.decision, "PASS", "sem bullets estruturados o requisito factRef não se aplica");
-  const withMap = validateBriefSet([brief], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined, new Map([[brief.contentId, [drifting, drifting]]]))[0]!;
+  const withMap = validateBriefSet([brief], evidence, "tiktok-commerce", "tiktok-commerce@1.3", [], undefined, new Map([[brief.contentId, [drifting, drifting]]]))[0]!;
   // E5: factTermsInRationale é ADVISORY — decisão PASS com diagnóstico visível.
   assert.equal(withMap.decision, "PASS", "drift de factRef não reprova no E5");
   assert.ok(withMap.advisoryIssues?.some((issue) => issue.includes("factRef")), "issue própria da ancoragem factRef fica advisory");
   // Convergência: rationale/texto espelha ≥2 termos do fato → PASS.
   const grounded = { ...drifting, text: "Destaque o tecido respiravel para explicar como o tecido respiravel ajuda no uso", rationale: "para explicar como o tecido respiravel ajuda no uso" };
-  const groundedReport = validateBriefSet([{ ...brief, development: [grounded.text, grounded.text] }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined, new Map([[brief.contentId, [grounded, grounded]]]))[0]!;
+  const groundedReport = validateBriefSet([{ ...brief, development: [grounded.text, grounded.text] }], evidence, "tiktok-commerce", "tiktok-commerce@1.3", [], undefined, new Map([[brief.contentId, [grounded, grounded]]]))[0]!;
   assert.equal(groundedReport.decision, "PASS");
   // Fato com <2 termos de ancoragem: regra vacuamente satisfeita (nunca falso positivo).
   const currencyBullet = { text: "Destaque o preço para explicar a oferta", action: "Destaque", factRefs: ["fact:priceCurrency"], cta: "Confira o produto na página.", rationale: "para explicar a oferta" };
   const currencyReport = validateBriefSet(
     [{ ...brief, contentId: "c-cur", briefVersionId: "c-cur-v", development: [currencyBullet.text, currencyBullet.text], script: "Fale sobre o preço" }],
     { facts: ["R$"], refs: ["fact:priceCurrency"] },
-    "tiktok-commerce", "tiktok-commerce@1.2", [], undefined,
+    "tiktok-commerce", "tiktok-commerce@1.3", [], undefined,
     new Map([["c-cur", [currencyBullet, currencyBullet]]]),
   )[0]!;
   assert.ok(!currencyReport.issues.some((issue) => issue.includes("factRef")), "fato sem 2 termos: requisito não aplicável");
@@ -329,11 +331,11 @@ test("primeira pessoa/experiencial é permitida; claim objetivo não ancorado e 
   const good = { text: "Comente que eu adorei o tecido respiravel porque comentei como o tecido respiravel mudou meu dia", action: "Comente", rationale: "porque comentei como o tecido respiravel mudou meu dia", factRefs: ["product:description"], cta: "Confira o produto na página." };
   const briefFor = (development: string[]) => ({ contentId: "c-fp", briefVersionId: "c-fp-v", version: 1 as const, angle: "a", hook: "Veja o tecido", development, script: "Fale sobre o produto", cta: "c" });
   // (1) primeira pessoa/experiencial passa o hard gate — sem gate ético/testemunho.
-  const ok = validateBriefSet([briefFor([good.text, good.text])], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined, new Map([["c-fp", [good, good]]]))[0]!;
+  const ok = validateBriefSet([briefFor([good.text, good.text])], evidence, "tiktok-commerce", "tiktok-commerce@1.3", [], undefined, new Map([["c-fp", [good, good]]]))[0]!;
   assert.equal(ok.decision, "PASS", "primeira pessoa/experiencial não é rejeitada por si só");
   // (2) primeira pessoa com claim OBJETIVO não ancorado (50 kg) reprova.
   const absurd = { ...good, text: "Eu garanto que ele aguenta 50 kg porque comentei os 50 kg medidos em casa", rationale: "porque comentei os 50 kg medidos em casa" };
-  const bad = validateBriefSet([briefFor([absurd.text, absurd.text])], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined, new Map([["c-fp", [absurd, absurd]]]))[0]!;
+  const bad = validateBriefSet([briefFor([absurd.text, absurd.text])], evidence, "tiktok-commerce", "tiktok-commerce@1.3", [], undefined, new Map([["c-fp", [absurd, absurd]]]))[0]!;
   assert.notEqual(bad.decision, "PASS", "claim objetivo não ancorado reprova mesmo em primeira pessoa");
   // (3) cta por bullet: TODOS os bullets são diagnosticados (sem curto-circuito).
   const badCta = { ...good, cta: "Aproveite o frete grátis acima de R$ 99" };
@@ -350,10 +352,10 @@ test("primeira pessoa/experiencial é permitida; claim objetivo não ancorado e 
   assert.equal(isActionableCta("Confira o produto"), true, "imperativo exato é acionável");
   const wordParsed = parseStructuredDevelopment([wordCta, wordCta, good], evidence);
   assert.deepEqual(wordParsed.diagnostics.map((d) => d.ctaValid), [false, false, true], "falso positivo de stem eliminado em todos os bullets");
-  const naReport = validateBriefSet([briefFor([notActionable.text, notActionable.text])], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined, new Map([["c-fp", [notActionable, notActionable]]]))[0]!;
+  const naReport = validateBriefSet([briefFor([notActionable.text, notActionable.text])], evidence, "tiktok-commerce", "tiktok-commerce@1.3", [], undefined, new Map([["c-fp", [notActionable, notActionable]]]))[0]!;
   assert.equal(naReport.decision, "REPAIR", "gate reprova cta não acionável");
   assert.ok(naReport.issues.some((issue) => issue.includes("cta sem suporte")));
-  const ctaReport = validateBriefSet([briefFor([badCta.text, badCta.text])], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], undefined, new Map([["c-fp", [badCta, badCta]]]))[0]!;
+  const ctaReport = validateBriefSet([briefFor([badCta.text, badCta.text])], evidence, "tiktok-commerce", "tiktok-commerce@1.3", [], undefined, new Map([["c-fp", [badCta, badCta]]]))[0]!;
   assert.equal(ctaReport.decision, "REPAIR");
   assert.ok(ctaReport.issues.some((issue) => issue.includes("cta sem suporte")), "cta por bullet validada no hard gate");
 });
@@ -373,4 +375,57 @@ test("rationale sem conector é espelhado do trecho de text após o conector; se
     evidence,
   );
   assert.equal(missingConnector.diagnostics[0]!.connectorValid, false);
+});
+
+test("hook e CTA do catálogo não têm isenção: segundo uso falha na repetição normal (ADR-033 §7)", () => {
+  const evidence: EvidenceSnapshot = { facts: ["Produto", "uso do produto", "uso cotidiano"], refs: ["product:name", "fact:usage", "fact:usage-context"] };
+  const brief = (id: string, angle: string, hook: string, script: string, cta: string) => ({
+    contentId: id, briefVersionId: `b-${id}`, version: 1 as const, angle, hook,
+    development: ["Destaque o uso cotidiano para explicar como o uso cotidiano ajuda no dia a dia", "Comente o uso cotidiano para conectar o uso cotidiano ao dia a dia"],
+    script, cta,
+  });
+  const catalogHook = CREATIVE_CATALOG.hooks[0].text;
+  const hookRepeats = validateBriefSet([
+    brief("cat-hook-1", "ângulo um", catalogHook, "Script um", "Confira o produto na página."),
+    brief("cat-hook-2", "ângulo dois", catalogHook, "Script dois", "Confira o produto na página."),
+  ], evidence);
+  assert.ok(hookRepeats[1].issues.includes("hook repetido"), "hook do catálogo repetido cai na regra normal");
+  const catalogCta = CREATIVE_CATALOG.ctas[0].text;
+  const ctaRepeats = validateBriefSet([
+    brief("cat-cta-1", "ângulo um", "Hook um", "Script um", catalogCta),
+    brief("cat-cta-2", "ângulo dois", "Hook dois", "Script dois", catalogCta),
+  ], evidence);
+  assert.ok(ctaRepeats[1].issues.includes("CTA repetido"), "CTA do catálogo repetido cai na regra normal");
+});
+
+test("teto funcional de CTA deriva do domínio classificador versionado, não do corpus (ADR-033 §7)", () => {
+  // Consumer-facing no limite do teto: CTAs lexicalmente distintos, todos na
+  // função interaction — categoria que o corpus não contém — provam que o cap
+  // vem do domínio do classificador (K=5; discovery/unclassified não conta),
+  // sem ler o catálogo. N=10 → cap=ceil(10/5)=2: 3º uso em diante marca.
+  const evidence: EvidenceSnapshot = { facts: ["Produto", "uso do produto", "uso cotidiano"], refs: ["product:name", "fact:usage", "fact:usage-context"] };
+  const brief = (index: number) => ({
+    contentId: `cap-${index}`, briefVersionId: `b-cap-${index}`, version: 1 as const,
+    angle: `ângulo ${index}`, hook: `Hook distinto número ${index} sobre o uso`,
+    development: ["Destaque o uso cotidiano para explicar como o uso cotidiano ajuda no dia a dia", "Comente o uso cotidiano para conectar o uso cotidiano ao dia a dia"],
+    script: `Script distinto número ${index}`,
+    cta: `Comente o que achou da variação ${index} do produto`,
+  });
+  const flagged = validateBriefSet(Array.from({ length: 10 }, (_, i) => brief(i)), evidence);
+  assert.ok(!flagged[1].issues.includes("função de CTA repetida no conjunto"), "2º uso está no teto (cap=2)");
+  assert.ok(flagged[2].issues.includes("função de CTA repetida no conjunto"), "3º uso excede o teto do domínio");
+  assert.ok(!flagged[1].issues.includes("CTA repetido"), "textos lexicalmente distintos não são duplicata");
+  // N=2 → cap=ceil(2/5)=1: o 2º uso excede.
+  const pair = validateBriefSet([brief(0), brief(1)], evidence);
+  assert.ok(pair[1].issues.includes("função de CTA repetida no conjunto"), "par acima do teto unitário");
+  // Discovery/unclassified não é evidência de concentração.
+  const unclassified = validateBriefSet([
+    { ...brief(0), contentId: "u1", briefVersionId: "b-u1", hook: "Hook um", cta: "Veja o uso cotidiano" },
+    { ...brief(1), contentId: "u2", briefVersionId: "b-u2", hook: "Hook dois", cta: "Veja o uso cotidiano" },
+  ], evidence);
+  assert.ok(!unclassified[1].issues.includes("função de CTA repetida no conjunto"), "unclassified não é evidência de concentração");
+});
+
+test("gateVersion é 5: catálogo deixou de governar gates default (ADR-033 §7)", () => {
+  assert.equal(GATE_POLICY_VERSION, 5);
 });

@@ -1,16 +1,6 @@
 import { GenerationError } from "./errors";
-import catalogData from "../../../resources/system-knowledge/catalog/catalog.json";
 import { CREATIVE_SYSTEM_SKILL_VERSION, loadCreativeSystem } from "./creative-system";
 
-type CreativePattern = {
-  id: string;
-  type: "hook" | "cta";
-  category: string;
-  categoryScope: string;
-  source: string;
-  text: string;
-};
-type CreativeCatalogInput = { version: string; items: CreativePattern[] };
 type SkillSlice = "planner" | "brief";
 type SkillSlicePath =
   | "principles"
@@ -26,38 +16,12 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-export function validateCreativeCatalog(value: unknown): CreativeCatalogInput {
-  if (!isRecord(value) || typeof value.version !== "string" || !value.version.trim() || !Array.isArray(value.items) || value.items.length === 0)
-    throw new GenerationError<"GEN-SKILL">("GEN-SKILL", "Catalogo criativo invalido");
-  const ids = new Set<string>();
-  const items = value.items.map((item): CreativePattern => {
-    if (!isRecord(item) || !["id", "category", "categoryScope", "source", "text"].every((key) => typeof item[key] === "string" && (item[key] as string).trim()) || (item.type !== "hook" && item.type !== "cta"))
-      throw new GenerationError<"GEN-SKILL">("GEN-SKILL", "Catalogo criativo invalido");
-    const pattern = item as CreativePattern;
-    if (ids.has(pattern.id))
-      throw new GenerationError<"GEN-SKILL">("GEN-SKILL", "Catalogo criativo invalido");
-    ids.add(pattern.id);
-    return { ...pattern };
-  });
-  return { version: value.version, items };
-}
-
-const catalog = validateCreativeCatalog(catalogData);
-const catalogItems = catalog.items;
-export const CREATIVE_CATALOG = deepFreeze({
-  version: catalog.version,
-  hooks: catalogItems.filter((item) => item.type === "hook"),
-  ctas: catalogItems.filter((item) => item.type === "cta"),
-});
-
-const TIKTOK_COMMERCE_SKILL_V1_2 = deepFreeze({
+// ADR-033 §7 (clean cut): Skill única do runtime — @1.3 com Creative System.
+// Sem @1.2 como loader, alias ou fallback; @1.2 existe somente como baseline
+// ADR-029 fixada por commit/fixture do runner E6 isolado.
+const TIKTOK_COMMERCE_SKILL = deepFreeze({
   id: "tiktok-commerce",
-  version: "tiktok-commerce@1.2",
-  creativeCatalog: CREATIVE_CATALOG,
+  version: CREATIVE_SYSTEM_SKILL_VERSION,
   principles: [
     "estratégia separada da fala",
     "cenas simples",
@@ -101,22 +65,12 @@ const TIKTOK_COMMERCE_SKILL_V1_2 = deepFreeze({
     scriptNotLiteral: true,
     soloCreatorProduction: true,
   },
-});
-
-// ADR-033 (decisão 3): o Creative System entra na Skill como versão aditiva.
-// @1.2 permanece byte-a-byte igual — histórico carregável e runtime ADR-029 —
-// e segue sendo o default; nenhuma projeção/slice muda com @1.3.
-const TIKTOK_COMMERCE_SKILL_V1_3 = deepFreeze({
-  ...TIKTOK_COMMERCE_SKILL_V1_2,
-  version: CREATIVE_SYSTEM_SKILL_VERSION,
   creativeSystem: loadCreativeSystem(CREATIVE_SYSTEM_SKILL_VERSION),
 });
 
 export const PLATFORM_SKILLS = deepFreeze({
-  "tiktok-commerce@1.2": TIKTOK_COMMERCE_SKILL_V1_2,
-  [CREATIVE_SYSTEM_SKILL_VERSION]: TIKTOK_COMMERCE_SKILL_V1_3,
+  [CREATIVE_SYSTEM_SKILL_VERSION]: TIKTOK_COMMERCE_SKILL,
 });
-export const TIKTOK_COMMERCE_SKILL = PLATFORM_SKILLS["tiktok-commerce@1.2"];
 export type PlatformSkill = typeof TIKTOK_COMMERCE_SKILL;
 
 export function projectPlatformSkillSlice(skill: PlatformSkill, slice: SkillSlice): Record<string, unknown> {
@@ -129,17 +83,19 @@ export function projectPlatformSkillSlice(skill: PlatformSkill, slice: SkillSlic
   return projected;
 }
 
-export function loadPlatformSkill(version: string = TIKTOK_COMMERCE_SKILL.version): PlatformSkill {
+export function loadPlatformSkill(version: string = CREATIVE_SYSTEM_SKILL_VERSION): PlatformSkill {
   const skill = PLATFORM_SKILLS[version as keyof typeof PLATFORM_SKILLS];
   if (!skill) throw new GenerationError<"GEN-SKILL">("GEN-SKILL", "Skill indisponivel");
   return skill;
 }
 
 // ─── Classificação determinística de buckets (ADR-019) ────────────────────────
-// Espaço comum para variedade: mecanismos de hook do plano e textos do catálogo
-// são classificados nos MESMOS buckets por regex fechada (sem embeddings/LLM,
-// ADR-004). Usado pela regra ceil(N/M) do plano, pela seleção estratificada de
-// padrões e pelo gate de variedade funcional de CTA.
+// Variedade por classificação regex fechada do próprio texto (sem embeddings/
+// LLM, ADR-004), sobre o que a pipeline produz — o catálogo literal está em
+// creative-catalog.ts (corpus de testes/eval) e não participa do runtime.
+// classifyHookMechanism: buckets de mecanismos de hook para o teto ceil(N/M)
+// do plano; classifyCtaFunction: regras de função de CTA para o gate de
+// variedade funcional (ceil(N/K) sobre o domínio do classificador).
 
 export type HookMechanismBucket = "problem" | "discovery" | "demonstration" | "objection" | "price-value" | "other";
 const HOOK_BUCKET_RULES: ReadonlyArray<readonly [HookMechanismBucket, RegExp]> = [
@@ -175,10 +131,10 @@ export function classifyCtaFunction(text: string): CtaFunction {
   return UNCLASSIFIED_CTA_FUNCTION;
 }
 
-// K do teto ceil(N/K) do gate de CTA: buckets realmente presentes no catálogo.
-export const CTA_FUNCTION_BUCKET_COUNT = new Set(
-  CREATIVE_CATALOG.ctas.map(({ text }) => classifyCtaFunction(text)),
-).size;
+// K do teto ceil(N/K) do gate de CTA: domínio do classificador
+// determinístico/versionado (regras identificáveis; discovery/unclassified não
+// conta). Independente do corpus — o catálogo não governa gates (ADR-033 §7).
+export const CTA_FUNCTION_BUCKET_COUNT = CTA_FUNCTION_RULES.length;
 
 // M do teto ceil(N/M) do plano: buckets do espaço comum de mecanismos.
 export const HOOK_BUCKET_COUNT = HOOK_BUCKET_RULES.length + 1;

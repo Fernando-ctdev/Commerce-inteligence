@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { validateBriefSet } from "./gates";
 import type { EvidenceSnapshot } from "./contract";
-import { CREATIVE_CATALOG } from "./platform-skill";
+import { CREATIVE_CATALOG } from "./creative-catalog";
 const evidence: EvidenceSnapshot = { facts: ["Produto", "uso do produto", "uso cotidiano"], refs: ["product:name", "fact:usage", "fact:usage-context"] };
 const base = { contentId: "c", briefVersionId: "b", version: 1 as const, angle: "a", hook: "h", development: ["Destaque o uso cotidiano para orientar a conversa sobre o uso cotidiano", "Destaque o uso cotidiano para orientar a conversa sobre o uso cotidiano"], script: "Produto", cta: "c" };
 test("rejects unsupported objective claim", () => { const report = validateBriefSet([{ ...base, script: "aguenta 5 kg" }], evidence)[0]; assert.equal(report.factualStatus, "UNSUPPORTED"); assert.equal(report.claimType, "objetivo"); assert.equal(report.decision, "REPAIR"); });
@@ -226,7 +226,7 @@ test("normalized duplicate hooks and repeated CTAs fail the set variety gate", (
   assert.ok(repeatedCta[1].issues.includes("CTA repetido"));
   assert.ok(!repeatedCta[1].issues.some((issue) => /copyright|direitos autorais|cópia/i.test(issue)));
 });
-test("five regressions: catalog verbatim, adapted duplicate, full duplicate, declared drone, and solo without equipment", () => {
+test("five regressions: catalog repeat now repaired, adapted duplicate, full duplicate, declared drone, and solo without equipment", () => {
   const catalogHook = CREATIVE_CATALOG.hooks[0].text;
   const content = (id: string, angle: string, hook: string, script: string, cta: string) => ({
     ...base,
@@ -241,7 +241,8 @@ test("five regressions: catalog verbatim, adapted duplicate, full duplicate, dec
     content("catalog-1", "angle um", catalogHook, "Script um", "CTA um"),
     content("catalog-2", "angle dois", catalogHook, "Script dois", "CTA dois"),
   ], evidence);
-  assert.equal(catalogReuse[1].decision, "PASS", "hook literal do catálogo pode ser reutilizado");
+  assert.equal(catalogReuse[1].decision, "REPAIR", "hook do catálogo repetido não tem isenção (ADR-033 §7)");
+  assert.ok(catalogReuse[1].issues.includes("hook repetido"));
 
   const adapted = `${catalogHook} do meu jeito`;
   const adaptedRepeated = validateBriefSet([
@@ -263,13 +264,13 @@ test("five regressions: catalog verbatim, adapted duplicate, full duplicate, dec
     development: ["Destaque a orbita de 360 graus para explicar como a orbita acompanha o produto", "Destaque a orbita de 360 graus para explicar como a orbita acompanha o produto"],
   };
   const orbitEvidence = { facts: ["A camera orbita 360 graus ao redor do produto"], refs: ["fact:movement"] };
-  const droneEquipped = validateBriefSet([orbitBrief], orbitEvidence, "tiktok-commerce", "tiktok-commerce@1.2", [], {
+  const droneEquipped = validateBriefSet([orbitBrief], orbitEvidence, "tiktok-commerce", "tiktok-commerce@1.3", [], {
     recordsAlone: true,
     recordingEquipment: ["drone"],
   });
   assert.equal(droneEquipped[0].decision, "PASS", "drone declarado suporta tomada orbital solo");
 
-  const soloWithoutEquipment = validateBriefSet([orbitBrief], orbitEvidence, "tiktok-commerce", "tiktok-commerce@1.2", [], {
+  const soloWithoutEquipment = validateBriefSet([orbitBrief], orbitEvidence, "tiktok-commerce", "tiktok-commerce@1.3", [], {
     recordsAlone: true,
   });
   assert.equal(soloWithoutEquipment[0].decision, "REPAIR", "produção incompatível sem equipamento declarado");
@@ -281,12 +282,33 @@ test("catalog phrases may be reused literally without anti-copy rejection", () =
   assert.equal(reused.decision, "PASS");
   assert.ok(!reused.issues.some((issue) => /catálogo|cópia|copyright|direitos autorais/i.test(issue)));
 });
+test("CTA literal do catálogo repetido não tem isenção: segundo uso falha (ADR-033 §7)", () => {
+  const catalogCta = CREATIVE_CATALOG.ctas[0].text;
+  const content = (id: string, angle: string, hook: string, cta: string) => ({
+    ...base,
+    contentId: id,
+    briefVersionId: `b-${id}`,
+    angle,
+    hook,
+    cta,
+  });
+  // CTA literal único passa (distingue repetição de anti-copy inexistente).
+  const single = validateBriefSet([content("cta-single", "ângulo um", "Hook um", catalogCta)], evidence)[0];
+  assert.ok(!single.issues.includes("CTA repetido"), "uso único de CTA do catálogo não é repetição");
+  // Dois CTAs iguais do catálogo: segundo cai na regra normal.
+  const repeated = validateBriefSet([
+    content("cta-literal-1", "ângulo um", "Hook um", catalogCta),
+    content("cta-literal-2", "ângulo dois", "Hook dois", catalogCta),
+  ], evidence);
+  assert.equal(repeated[1].decision, "REPAIR");
+  assert.ok(repeated[1].issues.includes("CTA repetido"));
+});
 test("selected pattern validation rejects hook/CTA type swaps", () => {
   const hook = CREATIVE_CATALOG.hooks[0];
   const cta = CREATIVE_CATALOG.ctas[0];
   const selected = [{ hook, cta }];
-  const hookGetsCta = validateBriefSet([{ ...base, hook: cta.text }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", selected)[0];
+  const hookGetsCta = validateBriefSet([{ ...base, hook: cta.text }], evidence, "tiktok-commerce", "tiktok-commerce@1.3", selected)[0];
   assert.ok(hookGetsCta.issues.includes("CTA usado como hook"));
-  const ctaGetsHook = validateBriefSet([{ ...base, cta: hook.text }], evidence, "tiktok-commerce", "tiktok-commerce@1.2", selected)[0];
+  const ctaGetsHook = validateBriefSet([{ ...base, cta: hook.text }], evidence, "tiktok-commerce", "tiktok-commerce@1.3", selected)[0];
   assert.ok(ctaGetsHook.issues.includes("hook usado como CTA"));
 });

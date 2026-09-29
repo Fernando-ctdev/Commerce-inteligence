@@ -34,3 +34,94 @@ test("JudgeExecutionRecord permite audit apenas quando executado e falha fechado
   assert.throws(() => validateJudgeExecutionRecord({ contentId: "content-1", round: 1, execution: "FAILED", parts: [{}] }));
   assert.throws(() => validateJudgeExecutionRecord({ contentId: "content-1", round: 1, execution: "NOT_EXECUTED", parts: [], errorCode: "GEN-PROVIDER" }));
 });
+
+// ─── Stage 5: PreJudgeRiskAssessmentV2 + JudgeSelectionDecisionV1 ────────────
+// SPEC Etapa 5 §7: assessment pré-Judge determinístico; Risk SÓ roteia (nunca
+// entrega); PARTIAL/UNAVAILABLE seleciona Judge (fail-safe, nunca pula em
+// silêncio); decisão persistível e reproduzível. Registry fechado ADR-033.
+import { buildPreJudgeRiskAssessment, selectForJudge, validateJudgeSelectionDecision, type PreJudgeRiskInputV2 } from "./risk-assessment";
+
+const blueprintOk = { recipeId: "recipe-1", attentionMechanisms: ["demonstração"], psychologicalEffects: ["confiança"], format: "pov", narrativeMoves: ["gancho", "payoff"], productRole: "hero" };
+const policy = { version: "risk-policy.prejudge.v1", judgeIfRiskBandAtLeast: "MEDIUM" as const, scriptMaxChars: 400 };
+const briefOk = { hook: "Tecido respirável no calor", development: ["Mostre o tecido respirável no calor"], script: "Sinta o tecido respirável aliviando o calor no uso.", cta: "Confira o tecido na página." };
+const baseInput: PreJudgeRiskInputV2 = {
+  policyVersion: "risk-policy.prejudge.v1",
+  subject: { jobId: "job-1", contentId: "content-1" },
+  brief: briefOk,
+  blueprint: blueprintOk,
+  blueprintRealized: true,
+  scenes: { status: "AVAILABLE" },
+  memory: { status: "EMPTY" },
+  productTerms: ["tecido", "respirável", "calor"],
+  production: { signals: [] },
+  selectionPolicy: policy,
+};
+
+test("pré-Judge V2: script sem payoff é HIGH e seleciona; repetição isolada é LOW e não seleciona", () => {
+  const high = buildPreJudgeRiskAssessment({ ...baseInput, brief: { ...briefOk, script: "   " } });
+  assert.equal(high.assessment.contractVersion, "risk-assessment.v2");
+  assert.equal(high.assessment.assessmentStatus, "AVAILABLE");
+  assert.equal(high.assessment.riskBand, "HIGH");
+  assert.ok(high.assessment.findings.some(({ code }) => code === "PAYOFF_ABSENT"));
+  const highDecision = selectForJudge(high.assessment, policy);
+  assert.equal(highDecision.selected, true);
+  assert.deepEqual(highDecision.triggerCodes, ["PAYOFF_ABSENT"]);
+  assert.deepEqual(validateJudgeSelectionDecision(highDecision), highDecision);
+
+  const low = buildPreJudgeRiskAssessment({ ...baseInput, memory: { status: "AVAILABLE", priorMechanisms: ["demonstração"] } });
+  assert.equal(low.assessment.riskBand, "LOW");
+  assert.ok(low.assessment.findings.some(({ code }) => code === "ATTENTION_MECHANISM_REPEAT"));
+  const lowDecision = selectForJudge(low.assessment, policy);
+  assert.equal(lowDecision.selected, false, "LOW < MEDIUM baseline: não seleciona");
+  assert.deepEqual(lowDecision.triggerCodes, ["ATTENTION_MECHANISM_REPEAT"]);
+});
+
+test("pré-Judge V2: Blueprint ausente é UNAVAILABLE com fail-safe selecionando", () => {
+  const missing = buildPreJudgeRiskAssessment({ ...baseInput, blueprint: undefined });
+  assert.equal(missing.assessment.sources.blueprint, "UNAVAILABLE");
+  assert.equal(missing.assessment.assessmentStatus, "UNAVAILABLE");
+  const decision = selectForJudge(missing.assessment, policy);
+  assert.equal(decision.selected, true, "fail-safe: UNAVAILABLE nunca pula o Judge");
+  assert.ok(decision.triggerCodes.includes("RISK_UNAVAILABLE_FAILSAFE"));
+});
+
+test("pré-Judge V2: fonte indeterminada é PARTIAL e fail-safe seleciona; determinável AVAILABLE não", () => {
+  const partial = buildPreJudgeRiskAssessment({ ...baseInput, blueprintRealized: undefined });
+  assert.equal(partial.assessment.assessmentStatus, "PARTIAL");
+  const partialDecision = selectForJudge(partial.assessment, policy);
+  assert.equal(partialDecision.selected, true, "fail-safe: PARTIAL seleciona Judge");
+  assert.ok(partialDecision.triggerCodes.includes("RISK_PARTIAL_FAILSAFE"));
+  assert.deepEqual(selectForJudge(partial.assessment, policy), partialDecision, "decisão reproduzível (mesma entrada → mesma decisão)");
+
+  const available = buildPreJudgeRiskAssessment(baseInput);
+  assert.equal(available.assessment.assessmentStatus, "AVAILABLE");
+  assert.equal(available.assessment.riskBand, "NONE");
+  assert.equal(selectForJudge(available.assessment, policy).selected, false);
+  assert.deepEqual(available.assessment.findings, []);
+});
+
+test("pré-Judge V2: repetições de mechanism/effect/recipe/structure viram findings deduplicados; integração fraca e script longo são MEDIUM", () => {
+  const repeats = buildPreJudgeRiskAssessment({
+    ...baseInput,
+    memory: { status: "AVAILABLE", priorMechanisms: ["demonstração"], priorEffects: ["confiança"], priorRecipes: ["recipe-1"], priorStructures: ["gancho>payoff"] },
+  });
+  const codes = repeats.assessment.findings.map(({ code }) => code);
+  for (const expected of ["ATTENTION_MECHANISM_REPEAT", "PSYCHOLOGICAL_EFFECT_REPEAT", "RECIPE_SATURATION", "STRUCTURE_REPEAT"]) {
+    assert.ok(codes.includes(expected), `esperado ${expected}`);
+  }
+  assert.equal(new Set(codes).size, codes.length, "findings deduplicados");
+  assert.deepEqual(codes, [...codes].sort(), "findings ordenados");
+
+  const weak = buildPreJudgeRiskAssessment({ ...baseInput, brief: { ...briefOk, development: ["Mostre o diferencial na prática"], script: "Veja como funciona na prática." } });
+  assert.ok(weak.assessment.findings.some(({ code, severity }) => code === "WEAK_PRODUCT_INTEGRATION" && severity === "MEDIUM"));
+
+  const long = buildPreJudgeRiskAssessment({ ...baseInput, brief: { ...briefOk, script: "x".repeat(401) } });
+  assert.ok(long.assessment.findings.some(({ code }) => code === "SCRIPT_TOO_LONG"));
+
+  const decision = selectForJudge(weak.assessment, policy);
+  assert.equal(decision.policyVersion, "risk-policy.prejudge.v1");
+  assert.equal(decision.contentId, "content-1");
+  assert.equal(decision.selected, true);
+  assert.throws(() => validateJudgeSelectionDecision({ ...decision, extra: true }));
+  assert.throws(() => validateJudgeSelectionDecision({ ...decision, triggerCodes: ["INVENTADO"] }));
+});

@@ -1,76 +1,148 @@
-# ADR-033: Determinismo × LLM e Creative System na Commerce Intelligence
+# ADR-033: Engine V2 — Determinismo × LLM, Creative System e cutover controlado
 
 ## Status
 
-Aceito — decisão arquitetural da Etapa 0 da recalibração da Commerce Intelligence. Registra o princípio transversal Determinismo × LLM e introduz o Creative System como conhecimento versionado da `PlatformSkill`. O runtime vigente permanece integralmente o do [ADR-029](./adr-029-pipeline-hibrida-deterministica-e-criativa.md) até evals aprovados conforme a decisão 14. Fonte canônica imutável, registrada pelo nome exato: **"Plano de recalibração da commerce inteligence"** (nota sticky conectada ao Review). Nenhuma implementação de runtime e nenhuma escrita de `creativeDirection` são autorizadas apenas por este ADR (decisão 8).
+**Aceito — `V2_DEFAULT_PENDING_ACCEPTANCE`.**
+
+A Engine V2 é o runtime padrão de produção por direção explícita do usuário, efetiva no commit `8d1833b`. Esta decisão operacional não equivale à aceitação arquitetural final da recalibração: o estado formal permanece `PENDING` até a Etapa 6 comparar o pipeline inteiro, o relatório versionado ser revisado pelo Software Architect e o usuário aprová-lo explicitamente.
+
+O [ADR-029](./adr-029-pipeline-hibrida-deterministica-e-criativa.md) permanece aceito como baseline histórico e experimental e como autoridade para invariantes que este ADR preserva. Ele não descreve mais o call graph padrão de produção. Sua supersessão formal como runtime só será registrada quando este ADR alcançar `V2_ACCEPTED`.
+
+A fonte canônica imutável desta decisão é a nota sticky **"Plano de recalibração da commerce inteligence"**. Em divergência, a nota prevalece e este ADR deve ser corrigido.
 
 ## Contexto
 
-A implementação atual já consolidou contratos canônicos, IDs server-owned, cardinalidade, factualidade, hard gates, memória, seleção de padrões, variedade, planner skeleton, batching e repair localizado (ADR-012/019/020/021/025/029). Isso deve ser preservado.
+A Commerce Intelligence deve responder como criar conteúdo capaz de fazer alguém querer comprar um Produto. Compra não é exclusivamente racional: desejo, curiosidade, identificação, humor, confiança, impulso, percepção de valor, demonstração e forma criativa podem ser o próprio mecanismo comercial.
 
-Porém a distribuição entre determinismo e LLM está ruim. Para aproximadamente 10 conteúdos, no caminho feliz e sem retries/repairs, a engine chega a ~21 chamadas LLM — 1 Understanding, 1 Mapping, 1 Strategy, 1 Plan, ~3 Brief (batch default 4), 10 Scene Ideas (uma por conteúdo) e ~4 Judge (batch máximo 3) — praticamente todas em `HIGH` (nota, "Estado atual observado no código", ≈L107–175). Isso produz latência alta, custo alto, muitos pontos de falha e mais oportunidades de gate/repair.
+O runtime do ADR-029 consolidou contratos canônicos, IDs server-owned, factualidade, cardinalidade, hard gates, variedade, batching, repair localizado, cenas separadas, job durável e parcial declarado. Entretanto, para aproximadamente dez conteúdos, seu caminho feliz podia chegar a cerca de 21 chamadas LLM: Understanding, Mapping, Strategy, Plan, Briefs, uma Scene Ideas por Content e Judge em lotes. O catálogo literal de hooks/CTAs também participava do prompt normal.
 
-Agravantes estruturais observados: `hookMechanism` é eixo de planejamento estreito demais; o catálogo literal de hooks/CTAs (`catalog.json` + `selectBriefPatterns()`) ancora a geração em frases prontas; o repertório atual mistura copy examples, mecanismos, policies e regras de validação.
+A nota determina:
 
-A nota "Plano de recalibração da commerce inteligence" estabelece o princípio raiz: LLM descobre possibilidades e realiza criatividade; código organiza, combina, seleciona, restringe, distribui, memoriza e valida. Determinismo opera sobre mecanismos e espaços de possibilidades, nunca sobre o texto criativo final.
+> **LLM descobre possibilidades e realiza criatividade. Código organiza, combina, seleciona, restringe, distribui, memoriza e valida sempre que isso puder ser feito sem perda semântica.**
+
+O cutover V2 removeu a chamada obrigatória de Plan, substituiu cenas por Scene Skeleton e introduziu Planner/Blueprint determinísticos. A revisão arquitetural posterior identificou lacunas de fechamento: Blueprint ainda não canônico no `ContentOpportunity`, memória V2 incompleta, Risk Detector posterior ao Judge, skill/proveniência dividida, prompt V2 ainda referindo `selectedPatterns` e Etapa 6 limitada ao experimento de cobertura do Judge.
+
+## Tensão entre runtime e aprovação formal
+
+Esta emenda resolve explicitamente a tensão:
+
+1. **Runtime:** V2 continua sendo o padrão de produção porque o usuário assim determinou. Este ADR não autoriza rollback implícito para ADR-029.
+2. **Conformidade:** V2 ainda não pode ser declarada integralmente conforme à nota nem formalmente aceita enquanto os contratos e gates abaixo não forem satisfeitos.
+3. **Baseline:** ADR-029 continua reproduzível e fixado por commit para comparação da Etapa 6; não volta a ser default por ausência de aprovação.
+4. **Falha da Etapa 6:** mantém V2 em produção no estado `V2_DEFAULT_PENDING_ACCEPTANCE`, registra os critérios reprovados, corrige o candidato e repete o protocolo. Rollback exige nova decisão explícita do usuário.
+5. **Fechamento:** somente relatório E6 integral aprovado pelo Software Architect e aceito explicitamente pelo usuário muda o status para `V2_ACCEPTED` e formaliza a supersessão do ADR-029 como runtime.
+
+`V2_DEFAULT_PENDING_ACCEPTANCE` e `V2_ACCEPTED` são estados documentais deste ADR; não são estados de Job, campos de API ou enums de produto.
+
+**Autorização de implementação candidata:** por instrução expressa do usuário, as [SPEC](../specs/slice-003/SPEC.md) e [PLAN](../plans/slice-003/PLAN.md) canônicas do Slice 003 autorizam implementar e avaliar nesta feature branch as Etapas 2–6: Discovery V2/Strategy determinística com A/B individual; Planner harness puro inalterado com Blueprint/Discovery/Strategy/memória integrados externamente; Skill/prompt; Risk pré-Judge seletivo; E6 integral. Esta autorização não é merge, deploy, rollback nem aceitação V2. O default de produção permanece V2 (`8d1833b`) em `V2_DEFAULT_PENDING_ACCEPTANCE` até relatório E6 integral, revisão Architect e aceite expresso do usuário.
 
 ## Decisão
 
-### 1. Fonte imutável e rastreabilidade
+### 1. Autoridade e rastreabilidade
 
-A nota **"Plano de recalibração da commerce inteligence"** é a fonte imutável desta decisão. Seu conteúdo não é copiado nem alterado aqui; o mapeamento abaixo é referencial, por título de seção e linha aproximada (≈L), para rastreabilidade de revisão. Em caso de divergência entre este ADR e a nota, a nota prevalece e o ADR deve ser corrigido.
-
-| Decisão deste ADR | Seção da nota (imutável) |
+| Área | Fonte principal |
 |---|---|
-| 2 — Princípio e matriz de autoridade | ETAPA 0 · "Princípio central" ≈L93–104; "O que deve ser determinístico" ≈L237–280; "O que deve continuar com LLM" ≈L284–308; "Determinismo não deve escrever criatividade" ≈L311–340 |
-| 3 — Creative System na Skill | "Creative System — conhecimento criativo canônico" ≈L343–360; "Creative System no código" ≈L834–887; "Organização sugerida do conhecimento" ≈L799–831 |
-| 4 — CreativePrimitive | "CreativePrimitive" ≈L363–455 |
-| 5 — CreativeRecipe | "CreativeRecipe" ≈L458–510; "Recipes iniciais do MVP" ≈L512–590 (quantidade não vira contrato) |
-| 6 — Recipes + composição livre | "Recipes + composição livre" ≈L592–620; ETAPA 3 · "Composição livre" ≈L1703–1710 |
-| 7 — Blueprint campo a campo | "CreativeBlueprint" ≈L624–668; "ContentOpportunity + CreativeBlueprint" ≈L672–731; ETAPA 3 · "CreativeBlueprint como decisão canônica do Planner" ≈L1578–1607 |
-| 8 — Contrato versionado e proibição de escrita | ETAPA 3 · "Migração de hookMechanism" ≈L1817–1834; "Migração de narrativePattern" ≈L1838–1854; "Ordem de execução" ≈L3018–3061 |
-| 9 — Schema de compatibilidade versionado | "Creative System no código" ≈L834–887; ETAPA 3 · "Recipes como constraint sets" ≈L1677–1699 |
-| 10 — Catálogo literal fora do prompt | "Evolução do Creative Catalog atual" ≈L733–765; "Papel futuro do catálogo literal" ≈L768–796 |
-| 11 — Preservação de gates | "Regra para todas as próximas etapas" ≈L890–911; ETAPA 5 · "Hard Gates" ≈L2431–2466 |
-| 12 — Memória versionada | ETAPA 3 · "Product Memory" ≈L1858–1885 |
-| 13 — ADR-029 vigente; escopo mínimo | "Objetivo arquitetural" ≈L179–233; "Regra para todas as próximas etapas" ≈L890–911; "Ordem de execução" ≈L3018–3061; "Meta final de runtime" ≈L2940–2980 (hipótese, não contrato) |
-| 14 — A/B operacional | ETAPA 6 · "Avaliar arquitetura" ≈L2811–2847; "A/B arquitetural" ≈L2851–2877; "A/B Creative System" ≈L2881–2910 |
+| Princípio Determinismo × LLM, Creative System e ordem das etapas | Nota canônica, Etapas 0–6 |
+| Produto, comportamento humano e resultado esperado | `PRD.md` e `PRD-commerce-intelligence-engine.md` |
+| Forma do sistema e limites de módulos | `SYSTEM-DESIGN.md` |
+| Contratos, memória, Skill, gates, partial e baseline | ADR-003/004/012/013/014/019/021/029 |
+| Práticas permanentes | `PRINCIPLES.md` |
+| Sequência de entrega | `SLICES.md` |
+| Contratos operacionais detalhados | SPEC/PLAN aplicáveis |
 
-### 2. Princípio Determinismo × LLM e matriz de autoridade
+A direção explícita do usuário define V2 como runtime padrão. Ela não dispensa versionamento, validação, avaliação ou registro de proveniência.
 
-Para toda decisão futura da engine: se a decisão não exige interpretação ou criação semântica real, resolver deterministicamente; se exige, usar LLM. Nunca manter uma chamada de LLM apenas porque ela já existe. Vedações simétricas: **a LLM não escolhe entre combinações que o sistema já conhece; o código não escreve situação concreta, hook final, fala, script, payoff ou tom.**
+### 2. Matriz de autoridade
 
-| Campo / decisão | Autoridade | Validação / enforcement |
+| Campo / decisão | Autoridade | Enforcement |
 |---|---|---|
-| Fatos do Produto, preço/moeda | Código (Product confirmado) | Fato ≠ inferência; Fact Validator (`SUPPORTED`/`INFERRED_BUT_SAFE`/`UNSUPPORTED`/`CONTRADICTED`) |
-| Schema, ownership, IDs persistentes, posições, cardinalidade | Código | `GEN-SCHEMA` fail-closed; campos de ownership proibidos na saída de provider |
-| Quota, estados, estágios, retry policy, persistência, idempotência | Código | Transações curtas, lease, `job.id` como chave idempotente |
-| Seleção de combinações conhecidas (recipe, primitives, format, product role, mecanismo de hook, função de CTA) | Código (Planner determinístico, pós-eval) | Resolvedor server-side fail-closed (decisão 9) |
-| Ranking, alocação de portfólio, diversidade, variedade, memória | Código | Tetos e normalização determinísticos; bump de policy version ao mudar |
-| Descoberta comercial e criativa (hipóteses, contextos, situações, desejos) | LLM | Contrato de saída + validação server-side antes de qualquer uso |
-| Realização criativa: situação concreta, hook final, falas, script, payoff, tom | LLM | Hard gates + Judge `PASS\|REVIEW`; código jamais produz copy |
-| Cenas | LLM (runtime vigente ADR-029) | Gate de cenas; permanecem em `ContentSceneSet` separado |
-| Campos do Blueprint (`creativeDirection`) | Código — ver matriz campo a campo na decisão 7 | Resolvedor valida antes de qualquer uso ou persistência |
+| Fatos do Produto, preço e moeda | Código a partir do Product confirmado | Fato ≠ inferência; Fact Validator |
+| Schema, ownership, IDs, posições e cardinalidade | Código | Validação fail-closed; provider não possui autoridade |
+| Quota, estado, retry, persistência e idempotência | Código | Transações curtas, lease, fencing e `job.id` |
+| Discovery comercial/criativa | LLM | Contrato V2 e evidências allowlisted |
+| Strategy aggregation/ranking | Código | Política versionada e determinística |
+| Recipe, primitives, format, product role e Blueprint | Planner determinístico | Creative System versionado e fail-closed |
+| Ranking, MMR, variedade e memória | Código | Policies versionadas e seed controlado |
+| Hook final, situação concreta, fala, script, payoff e tom | LLM | Brief V2, hard gates e Judge seletivo |
+| Scene Skeleton | Código | Blueprint + fatos autorizados; gate de cenas |
+| Qualidade objetiva e elegibilidade | Hard gates | `PASS\|REPAIR\|REJECT` objetivo |
+| Suspeita semântica | Risk Detector determinístico | Registry/policy versionados |
+| Qualidade semântica difícil | Judge LLM seletivo | `PASS\|REVIEW`; sem autoridade de entrega |
 
-### 3. Creative System versionado dentro da PlatformSkill
+Código não escreve copy criativa. LLM não escolhe combinações conhecidas, não controla workflow e não escreve Blueprint.
 
-`CreativePrimitive`, `CreativeRecipe` e o resolvedor de compatibilidade são dados declarativos e versionados da `PlatformSkill` (ADR-014), carregados por versão como `load → validate → freeze → expose`. Não são domínio separado, serviço, agente, workflow ou repositório próprio. A Skill continua sem controle sobre jobs, persistência, billing, retry ou estados, e sem dados de tenant.
+### 3. Product Facts, Discovery V2 e Strategy
 
-### 4. CreativePrimitive
+O contrato-alvo da Etapa 2 é:
 
-Unidade semântica combinável de criatividade ou persuasão, tipada por dimensão fechada: attention mechanism, psychological effect, format, narrative move, product role. Primitives não são frases; nunca carregam copy. IDs são estáveis dentro da versão da Skill. A taxonomia inicial (dimensões e valores) pertence à SPEC; este ADR fixa apenas que ela é dado versionado, não código ramificado.
+```text
+Product Facts confirmados
+→ projeção factual determinística
+→ Commercial + Creative Discovery V2
+→ Strategy V2 majoritariamente determinística
+```
 
-### 5. CreativeRecipe
+`PRODUCT_UNDERSTANDING` não permanece chamada obrigatória no alvo. A capability atual `COMMERCIAL_OPPORTUNITY_MAPPING` evolui, sem criar agente ou serviço paralelo, para uma Discovery forte:
 
-Constraint set criativo: combinação conhecidamente coerente de primitives que restringe attention, efeitos psicológicos, formatos compatíveis, narrative moves e papéis do produto. Não é script e não contém frases. O conjunto inicial é curado pela SPEC; **nenhuma quantidade de recipes é contrato deste ADR** — recipes são ponto de partida, não limite da engine, e crescem por evolução versionada da Skill.
+```ts
+type CommercialCreativeDiscoveryV2 = {
+  discoveryContractVersion: "2";
+  hypotheses: Array<{
+    sourceOpportunityId: string;
+    commercialObjective: string;
+    angle: string;
+    coreMessage: string;
+    desiredViewerResponse?: string;
+    audience?: string;
+    situation?: string;
+    desire?: string;
+    identification?: string;
+    curiosity?: string;
+    aspiration?: string;
+    humorPotential?: string;
+    visualPotential?: string;
+    pain?: string;
+    objection?: string;
+    desiredOutcome?: string;
+    relevantCapabilities: string[];
+    benefits: string[];
+    proofOptions: string[];
+    commercialEffects: string[];
+    evidenceRefs: string[];
+    confidence: number;
+  }>;
+};
+```
 
-### 6. Recipes + composição livre
+Dor, objeção e necessidade prévia são opcionais. Discovery pode propor hipóteses; não pode inventar atributos do Produto. `commercialObjective`, `angle` e `coreMessage` são **hipóteses textuais obrigatórias da LLM Discovery**, não copy fabricada pela Strategy/Planner; `desiredViewerResponse` é hipótese opcional. O parser rejeita ausência, vazio, referência factual inválida ou IDs de origem repetidos. `sourceOpportunityId` é atribuído pelo servidor por hipótese após validação e permanece estável na Discovery persistida, Strategy, Planner e Opportunity. `ProductStrategyV2` agrega, seleciona, ordena e projeta deterministicamente a Discovery validada. A retirada de Product Understanding e Strategy LLM exige A/B específico da Etapa 6 antes de alterar essas duas chamadas no runtime padrão.
 
-O Planner prefere recipes conhecidas como caminho seguro e permite composição livre de primitives compatíveis como exploração controlada, sem proporção hardcoded. Composição livre sem `recipeId` é válida somente com primitives compatíveis entre si, com as restrições do creator e com a evidência; caso contrário, falha tipada do resolvedor.
+**Persistência canônica, sem tabela nova:** o parser primeiro valida e normaliza `CommercialCreativeDiscoveryV2` em forma JSON-safe, omitindo chaves opcionais ausentes ou `undefined` (não as converte em `null` nem em string vazia), e preservando todas as hipóteses, dimensões presentes, `confidence`, `evidenceRefs` e IDs server-owned, inclusive as não selecionadas. Esse envelope normalizado é a fonte imutável por job em `IntelligenceRun.metadata.discoveryV2`. `discoveryHash = sha256Hex(canonicalSerialization(discoveryV2))`: SHA-256 dos bytes UTF-8 de `CANONICAL_SERIALIZATION_V1` sobre **o mesmo envelope normalizado/validado persistido, sem o próprio hash**, usando as funções existentes [`canonicalSerialization`/`sha256Hex`](../../src/modules/commerce-intelligence/planner-harness/canonical.ts). O hash fica separado do envelope; releitura JSON-safe recalcula exatamente o mesmo hash ou falha fechado, sem nova normalização que altere bytes ou introduza opcionais.
 
-### 7. CreativeBlueprint em `ContentOpportunity` — matriz campo a campo
+`ProductStrategy.payload` é a fonte da projeção selecionada e versionada: contém `strategyContractVersion`, `strategyPolicyVersion`, `sourceDiscoveryRef: { intelligenceRunId, discoveryContractVersion, discoveryHash }` e seleção com `sourceOpportunityIds`/`evidenceRefs` autorizados, além dos campos da Strategy; não copia o pool. O reader resolve o run original no mesmo Tenant, recalcula o hash pelo algoritmo acima e falha fechado se versão, hash, IDs selecionados ou refs divergirem da Discovery. A projeção Strategy → Planner conserva esse vínculo; hipóteses não selecionadas permanecem na Discovery. `ContentOpportunity.payload` guarda somente a decisão daquele Content e seu `creativeDirection` canônico, `sourceOpportunityId` e proveniência necessária para resolver a origem, nunca o pool completo ou segunda fonte do Blueprint. Histórico v1 permanece intacto. Os campos JSON existentes (`IntelligenceRun.metadata`, `ProductStrategy.payload`, `ContentOpportunity.payload`) suportam a evolução sem migration ou tabela nova.
 
-O Blueprint é a decisão criativa concreta por conteúdo, persistida como `creativeDirection` dentro de `ContentOpportunity` — não como aggregate, tabela própria, job, capability ou entidade paralela:
+**Projeção normativa sem troca de papéis semânticos:** seleção/ordem por policy versionada sobre IDs de hipóteses validadas; Strategy persiste `sourceOpportunityIds` nessa ordem e `sourceDiscoveryRef`. `primaryPositioning` é o `coreMessage` da primeira hipótese selecionada; `audiences` contém somente `audience` presente, `priorityBenefits` somente `benefits`, `priorityObjections` somente `objection` presente, `priorityArguments` somente `coreMessage`, `priorityAngles` somente `angle`, sempre com deduplicação estável na ordem selecionada. `communicationPrinciples` deriva das regras versionadas da Skill, não de efeitos comerciais nem de copy inventada. Se nenhum valor sustenta um campo opcional, manter array vazio conforme contrato; se campo obrigatório não puder ser satisfeito por hipótese validada, falhar fechado. `commercialEffects` são exclusivamente IDs de efeitos comerciais usados pelo Planner/variedade/memória: nunca viram `audiences` ou `benefits`. `relevantCapabilities`, `benefits`, `proofOptions`, `evidenceRefs` e demais hipóteses preservam seus significados e proveniência na Discovery; Strategy referencia seleção sem copiar o pool completo.
+
+**Handoff Strategy → Planner:** resolver no mesmo Tenant os `sourceOpportunityIds` selecionados contra `IntelligenceRun.metadata.discoveryV2` e verificar versão/hash/refs; construir `CommercialDiscoveryPool.evidenceCatalog` do catálogo factual validado e uma `CommercialDiscoveryOpportunity` por hipótese selecionada, na mesma ordem: `sourceOpportunityId`, `commercialObjective`, `angle`, `coreMessage`, `commercialEffects` e `evidenceRefs` são cópias exatas dos campos de origem (refs convertidas aos objetos `EvidenceRef` do catálogo autorizado, sem sintetizar hash/ref); `desiredViewerResponse` copia o opcional; `audienceContext = audience ?? situation` somente quando presente; `proofPattern = proofOptions[0]` somente quando presente. O pool inteiro permanece em Discovery; a Strategy conserva apenas sua seleção e agregados, sem perder hipóteses não selecionadas. O Planner puro constrói Blueprint/novelty/posições e devolve `PlannedOpportunityV2` com esses três textos inalterados; engine persiste os textos e `creativeDirection` na `ContentOpportunity` V2. Não derivar objetivo de `desire`/`desiredOutcome`/`sellingArgument`, ângulo de `benefits`/`relevantCapabilities` nem efeito comercial de `benefits`: esse fallback do adapter atual não é o contrato-alvo.
+
+### 4. Creative System dentro da `PlatformSkill`
+
+`CreativePrimitive`, `CreativeRecipe` e o resolvedor de compatibilidade são dados declarativos da `PlatformSkill`, carregados como `load → validate → freeze → expose`. Não são domínio, serviço, agente, workflow, aggregate ou repositório próprio.
+
+Primitives são unidades semânticas, nunca frases. Recipes são constraint sets coerentes, nunca scripts. O Planner prefere recipes e admite composição livre de primitives compatíveis, sem proporção hardcoded.
+
+**Compatibilidade da composição livre:** manter `compatibility.formatsByProductRole` explícito. Para os demais pares entre dimensões de primitives do Blueprint, as allowlists versionadas são derivadas exclusivamente da coocorrência nas `CreativeRecipe` da mesma versão da Skill: cada recipe declara um constraint set coerente, portanto os pares entre membros de suas dimensões são admissíveis; a união desses pares forma a allowlist. **Na fronteira de integração candidata do runtime, fora do `planner-harness` congelado**, o caller aplica esse gate antes de aceitar uma composição sem `recipeId`: o par formato × papel deve estar no mapa explícito e todos os demais pares entre dimensões devem constar das allowlists; par não declarado, recipe inválida ou versão divergente falha fechado com `GEN-CS-COMPAT`/erro de schema ou versão aplicável. O `resolveBlueprint` compartilhado permanece validador estrutural/schema/eligibility consumido pelo harness; sua aceitação isolada não autoriza composição livre no runtime nem substitui o gate pairwise no caller. O gate não altera IDs, não reordena `narrativeMoves` nem escolhe recipe substituta. Compatibilidade pareada pode admitir uma combinação completa ausente de qualquer recipe, desde que todos os pares sejam autorizados; recipes continuam constraint sets para composições com `recipeId`, não templates de copy. Ao versionar recipes, reavaliar a compatibilidade derivada; recipes com alternativas mutuamente incompatíveis não contam como evidência de coocorrência sem restrições explícitas na Skill. O harness, suas fixtures, policies e testes não são alterados por esta decisão.
+
+Falhas permanecem fechadas e estáveis:
+
+- `GEN-CS-VERSION`;
+- `GEN-CS-SCHEMA`;
+- `GEN-CS-REF`;
+- `GEN-CS-COMPAT`;
+- `GEN-CS-ELIGIBILITY`.
+
+Não existe fallback criativo, substituição silenciosa de recipe ou fabricação de Blueprint.
+
+### 5. `CreativeBlueprint`
 
 ```ts
 type CreativeBlueprint = {
@@ -83,146 +155,408 @@ type CreativeBlueprint = {
 };
 ```
 
-Matriz campo a campo — entrada, autoridade, validação, rejeição/normalização e falha. **Não há fallback criativo em nenhum campo**: rejeição é rejeição; normalização é apenas a operações estáticas sem perda semântica (dedup, ordenação já definida).
+| Campo | Autoridade e validação |
+|---|---|
+| `recipeId` | Opcional; precisa existir na Skill registrada. Ausência significa composição livre. |
+| `attentionMechanisms[]` | IDs fechados, únicos e compatíveis; mínimo 1. |
+| `psychologicalEffects[]` | IDs fechados, únicos e compatíveis com recipe/evidência. |
+| `format` | Um ID permitido pela recipe, Blueprint e restrições do creator. |
+| `narrativeMoves[]` | Sequência válida; o código não reordena para consertar. |
+| `productRole` | Um ID compatível com recipe e format. |
 
-| Campo | Entrada | Autoridade | Validação | Rejeição / normalização | Falha estável |
-|---|---|---|---|---|---|
-| `recipeId` | opcional; ID de recipe catalogada na `platformSkillVersion` usada | Código (Planner determinístico) | ID existe em `recipes` da versão da Skill; ausência = composição livre | ID desconhecido/retirado da versão → rejeita o Blueprint inteiro; nunca substitui por recipe "parecida" | `GEN-CS-REF` |
-| `attentionMechanisms[]` | IDs da dimensão attention | Código | Enum fechado; ≥1; unicidade; compatíveis entre si e com a recipe quando presente | Dedup estável preservando primeira ocorrência; ID fora do enum → rejeição sem substituição | `GEN-CS-SCHEMA` / `GEN-CS-COMPAT` |
-| `psychologicalEffects[]` | IDs da dimensão psychological effect | Código | Enum fechado; cardinalidade conforme política versionada; compatibilidade com recipe/evidência | Dedup estável; fora do enum ou incompatível → rejeição | `GEN-CS-SCHEMA` / `GEN-CS-COMPAT` |
-| `format` | ID único da dimensão format | Código | Enum fechado; exatamente 1; compatível com recipe/attention; produção viável para o creator | Ausente, duplicado ou inválido → rejeição; nunca coerção a formato padrão | `GEN-CS-SCHEMA` / `GEN-CS-ELIGIBILITY` |
-| `narrativeMoves[]` | IDs da dimensão narrative move, sequenciados | Código | Enum fechado; sequência permitida pela recipe/compatibilidade; ≥1 | Código jamais reordena para "consertar"; movimento inválido → rejeição | `GEN-CS-COMPAT` |
-| `productRole` | ID único da dimensão product role | Código | Enum fechado; compatível com recipe/format | Inválido ou incompatível → rejeição sem valor padrão | `GEN-CS-SCHEMA` / `GEN-CS-COMPAT` |
+A LLM não propõe esses campos. O Planner os constrói a partir de Discovery, Creative System, restrições do creator e memória.
 
-A LLM não propõe nenhum destes campos: descobre o espaço comercial/criativo (inputs do Planner) e realiza o conteúdo; a construção do Blueprint a partir do pool + Creative System + memória é determinística.
+### 6. `ContentOpportunity` V2 canônica
 
-### 8. Contrato versionado de `ContentOpportunity`, writer/reader e proibição de escrita
+O Blueprint é persistido dentro do próprio `ContentOpportunity`, não em entidade paralela:
 
-- **Proibição expressa:** nenhuma escrita de `creativeDirection` em qualquer registro antes de SPEC e PLAN do cutover aprovados explicitamente. Até lá, jobs novos seguem integralmente o contrato vigente do ADR-029 (`hookMechanism` no allowlist do slot, `narrativePattern` opcional).
-- **Versão do contrato:** `ContentOpportunity` passa a carregar `opportunityContractVersion` no payload — `1` (hoje: sem `creativeDirection`) e `2` (futuro: com `creativeDirection` validado). A versão é escrita pela engine no momento da persistência; histórico v1 nunca é reescrito nem promovido.
-- **Writer:** somente a engine, no caminho do Planner determinístico definido pela SPEC/PLAN aprovadas do cutover. Provider, repair, edit de Content Operations e qualquer outro caminho não escrevem `creativeDirection`.
-- **Reader:** leitor versionado lê v1 como está (campos ausentes permanecem ausentes; nada é fabricado) e v2 nativamente.
-- **Projeção pública:** `creativeDirection` é interno nesta etapa. Superfícies creator-facing e APIs públicas mantêm a projeção atual; exposição de qualquer campo do Blueprint exige decisão própria em SPEC futura.
-- **Derivação legada:** pós-cutover, `hookMechanism` e `narrativePattern` tornam-se projeções derivadas computadas na leitura a partir do `creativeDirection` (função determinística versionada), somente para consumidores legados/gates; nunca persistidas duplicadas no mesmo registro.
+```ts
+type ContentOpportunityPayloadV2 = {
+  opportunityContractVersion: "2";
+  id: string;
+  sourceOpportunityId: string;
+  commercialObjective: string;
+  desiredViewerResponse?: string;
+  angle: string;
+  coreMessage: string;
+  noveltyTargets: string[];
+  evidenceRefs: string[];
+  creativeDirection: CreativeBlueprint;
+};
+```
 
-### 9. Schema de compatibilidade versionado e falhas estáveis
+Regras:
 
-O Creative System é artefato executável validado no load, no padrão do catálogo atual: `load → validate → freeze → expose`. O schema de compatibilidade é **versionado** (herda a versão da Skill; mudança de compatibilidade exige bump da versão da Skill e registro na geração) e declara como dado: IDs/domínios fechados por dimensão, referências entre recipes e primitives, pares/combinações permitidas e restrições de produção. Validação **semântica mínima** — apenas sintaxe, enum, referência e compatibilidade declarada; o resolvedor não julga mérito criativo.
+1. Somente a engine, após Planner e resolvedor, escreve `creativeDirection`.
+2. Provider, repair e Content Operations não escrevem nem alteram Blueprint.
+3. Novas oportunidades V2 não persistem `hookMechanism` ou `narrativePattern` como segunda fonte; projeções legadas são derivadas na leitura por função versionada.
+4. Histórico v1 permanece legível como está e não recebe Blueprint fabricado.
+5. O payload JSONB existente continua sendo o armazenamento do contrato evolutivo. Não se cria tabela de Blueprint.
+6. `IntelligenceRun` registra policy, seed, binding e hash do plano; não mantém segunda cópia canônica integral do Blueprint.
+7. `creativeDirection` permanece interna. Exposição creator-facing exige decisão própria.
 
-Falhas usam conjunto fechado e estável de códigos, independentes de texto de mensagem:
+Até a correção do writer, a existência de Blueprint apenas em `plannedV2`/metadata não satisfaz este contrato nem o gate de `V2_ACCEPTED`.
 
-- `GEN-CS-VERSION` — versão de Skill/contrato ausente, desconhecida ou incompatível;
-- `GEN-CS-SCHEMA` — forma/enum/cardinalidade inválida;
-- `GEN-CS-REF` — referência irresolvível (ID de recipe/primitive não existe na versão);
-- `GEN-CS-COMPAT` — combinação incompatível entre primitives/recipe/format/role/moves;
-- `GEN-CS-ELIGIBILITY` — elegibilidade negada por evidência, restrição do creator ou produção inviável.
+### 7. Skill 1.3, prompt e proveniência — estado e alvo
 
-Sem fallback criativo, sem reescrita silenciosa, sem fabricação de conteúdo (precedente: alternativa "fallback determinístico de conteúdo" rejeitada no ADR-021). Mensagens sanitizadas; códigos estáveis para diagnóstico e evals.
+**Estado observado no commit `8d1833b`:** a Engine V2 é default por decisão do usuário, mas o loader de Skill do runtime usa `tiktok-commerce@1.2`; o binding `@1.3` do Planner V2 provém de fixture congelada do harness. Isso é divergência de proveniência, não evidência de `@1.3` como binding operacional atual. O [call map estático da Etapa 1](../../src/modules/commerce-intelligence/evaluation/golden-dataset/baseline-call-map.md) registra as duas superfícies; não substitui metadata de execução live.
 
-### 10. Catálogo literal fora do prompt normal — enforcement testável
+**Cutover da Skill ativa, sem usuários ativos:** o loader/runtime PlatformSkill agora usa exclusivamente `tiktok-commerce@1.3` como default e expõe seu Creative System, sem loader para `@1.2`, fallback, alias ou compatibilidade de Skill v1.2. `@1.2` existe somente no baseline ADR-029 fixado por commit ou em fixtures do runner isolado E6 exigido pela nota; isso **não** é compatibilidade do runtime. O estado observado em `8d1833b` acima permanece histórico. O cutover do loader não comprova writer canônico nem proveniência efetiva coerente de Strategy, Plan, `IntelligenceRun`, Planner e Creative System: o Planner ainda recebe `source = "frozen-harness-fixture"`, e `V2_ACCEPTED` permanece pendente até os gates deste ADR.
 
-O corpus literal de hooks/CTAs permanece como referência, pesquisa, corpus, benchmark e material de evolução da Skill (`copy-examples`), porém:
+O `skillBinding.source = "frozen-harness-fixture"` exigido pelo Planner harness congelado identifica somente a entrada do harness; não comprova proveniência operacional `@1.3`, mesmo se a versão textual coincidir. O caller de integração deve obter e registrar separadamente o binding efetivo da PlatformSkill ativa; a consistência verificável entre Strategy, Plan, Run, Planner e Creative System continua pendência para `V2_ACCEPTED`. Esta emenda não autoriza modificar o harness nem apresentar a fixture como binding runtime.
 
-- O caminho normal de geração não envia textos literais do catálogo como exemplos ao provider. A projeção de contexto por capability é allowlist; um **contract test** falha a build se qualquer texto literal de hook/CTA do catálogo (`selectBriefPatterns` incluído) atravessar o contexto de provider no caminho Blueprint-driven.
-- O runtime vigente do ADR-029 (incluindo `selectBriefPatterns`) permanece intacto até eval; o enforcement aplica-se a qualquer caminho novo introduzido por esta recalibração.
-- Reintrodução de recuperação seletiva de exemplos é experimento isolado: harness próprio, flag explícita, dataset fixado, resultados medidos pelo protocolo da decisão 14 — nunca dependência estrutural do prompt de produção.
+O prompt de `CONTENT_BRIEF_GENERATION` V2 deve citar somente chaves presentes no contexto allowlisted V2. São proibidas referências a:
 
-### 11. Preservação integral de gates, contratos e entrega
+- `selectedPatterns[index].hook.text`;
+- `selectedPatterns[index].cta.text`;
+- hook ou CTA literal do catálogo;
+- campo ausente do contexto V2;
+- regra lexical usada apenas para moldar texto ao validator.
 
-O Blueprint não altera nenhum contrato de validação ou entrega existente:
+O catálogo literal permanece corpus, benchmark, pesquisa e eval. Contract test compara o contexto enviado ao provider com o corpus conhecido e falha se texto literal atravessar o caminho Blueprint-driven. Reintrodução de exemplos exige experimento isolado e aprovado.
 
-- Blueprint inválido falha no resolvedor **antes** da persistência; nada persiste sem validação server-side.
-- `BriefValidationReport` mantém schema, chave `briefId` e semântica atuais; não ganha campos de Blueprint nesta etapa.
-- `factRefs` continuam propostas do modelo, validadas contra o snapshot autorizado; o código jamais infere refs silenciosamente.
-- Judge permanece `PASS|REVIEW` por parte, sem re-Judge; `Semantic Part Repair` permanece único por parte `REVIEW`.
-- Cenas permanecem contrato separado (`ContentSceneSet`, ADR-019), sem voltar ao brief.
-- `SUCCEEDED_PARTIAL` permanece decisão exclusivamente objetiva (hard gates/variedade, ADR-021); anotação semântica nunca cria faltante.
-- Idempotência por `job.id`, tenant scoping, quota transacional e sanitização de telemetria permanecem inalterados.
+No caminho default, o catálogo literal também não governa decisões de qualidade ou variedade: duplicatas de hook/CTA são avaliadas sem isenção para texto presente no corpus; o limite de diversidade funcional de CTA deriva de domínio/policy determinístico versionado, nunca da contagem de itens ou buckets presentes no corpus. A mudança de autoridade do gate exige versão de gate correspondente. `PlatformSkill.creativeCatalog` pode ser removido quando não houver consumer; o corpus permanece apenas como referência/benchmark/eval, não como dependência de geração ou de seus gates.
 
-### 12. Memória versionada e idempotência
+### 8. Brief, cenas, hard gates e repairs
 
-`ProductMemorySnapshot` ganha `signalsSchemaVersion`. Os novos sinais (`recipeId`, attention mechanisms, psychological effects, format, product role, narrative shape, commercial effect, audience/context e proof pattern) são **aditivos**: snapshots legados são lidos como estão, sem fabricação retroativa; snapshots novos registram a versão usada. `audience/context` e `proof pattern` derivam dos campos opcionais correspondentes da oportunidade realizada e permanecem ausentes quando a oportunidade não os declara — ausência legada continua ausência. Sinais de conteúdo continuam sendo gerados **somente por Contents entregues** (falha objetiva não sinaliza, ADR-021). O retry dos faltantes cria novo job, reutiliza o snapshot corrente e não duplica sinais — idempotência preservada por `job.id`/constraints existentes. Sem embeddings, banco vetorial ou judge LLM de variedade/memória (ADR-004).
+O Brief Generator continua LLM-owned e recebe apenas fatos relevantes, objetivo comercial, Blueprint, creator context, regras da plataforma e restrições de memória. Ele realiza hook, situação, fala, script, payoff, CTA e tom.
 
-### 13. ADR-029 vigente; escopo mínimo comprovado
+`ContentSceneSet` permanece separado de `ContentBriefVersion`. No V2, Scene Skeleton é derivado deterministicamente do Blueprint e de fatos autorizados, passa pelo gate de cenas e não escreve fala ou claim novo.
 
-Nenhuma capability, tier, retry, fallback, gate ou repair muda por este ADR. Este ADR autoriza somente: o registro do princípio, o Creative System como dado versionado da Skill, o contrato versionado futuro do Blueprint (leitura/projeção/derivação) e os protocolos de eval. Candidatos a mudança de runtime — `CONTENT_PLAN_GENERATION` opcional/removido como chamada obrigatória, `CONTENT_SCENE_IDEAS` integrado ao Brief ou reduzido por scene skeleton derivado, Judge por risco, rebaixamento de tier — exigem A/B prévio aprovado (decisão 14) e seguem o **menor caminho comprovado**: uma mudança por vez, sempre a menor que a evidência suportar, sem empacotar cortes de chamada. As metas de runtime da nota (~3–5 chamadas na primeira geração; ~1–2 nas posteriores com reuso) são hipótese de arquitetura a validar, não contrato.
+Permanecem vigentes, por ADR-019/021/029:
 
-### 14. Protocolo A/B operacional — gate formal de supersede
+- hard gates antes e depois da composição;
+- `BriefValidationReport` objetivo;
+- Hard Gate Repair causal e limitado;
+- `CONTENT_QUALITY_JUDGE` retornando somente `PASS|REVIEW`;
+- um Semantic Part Repair por parte `REVIEW`, sem re-Judge;
+- `REVIEW` semântico sem autoridade sobre D/F;
+- `SUCCEEDED_PARTIAL` apenas por falha objetiva dentro do CAP;
+- cenas persistidas em `ContentSceneSet`;
+- quota, tenant, idempotência, fencing e finalização transacional.
 
-Toda migração LLM → código e toda mudança de runtime decorrente desta recalibração exigem A/B **pareado e operacional**, com artefatos obrigatórios:
+### 9. Memória multidimensional
 
-1. **Protocolo pareado:** braço baseline (runtime ADR-029, fixado por commit/engine version) e braço candidato recebem exatamente os mesmos inputs — fatos e evidência do Produto, creator context, memory snapshot — com mesmo Golden Dataset versionado, mesma `platformSkillVersion`, mesmo modelo e tier por par, e mesmo seed derivado do job.
-2. **Fixação prévia:** baseline, dataset, modelo/tier, versão da Skill e seed são registrados no protocolo **antes** da execução; qualquer alteração invalida o experimento e exige novo protocolo.
-3. **Thresholds versionados antes do experimento:** critérios quantitativos de não-regressão (factualidade, diversidade multi-dimensão, naturalidade/criatividade/templating por rubrica cega, repair rate, custo, latência p50/p95, taxa de falha/parcial) são definidos e versionados no documento de thresholds **antes** da coleta; este ADR não fixa valores. Economia sozinha é insuficiente; o candidato deve ser igual ou melhor em todos os critérios.
-4. **Análise por categoria:** resultados são reportados no agregado **e** por categoria de produto do Golden Dataset. **Qualquer regressão em qualquer critério, no agregado ou em qualquer categoria, reprova o experimento.** Não existe regressão justificável sob o rótulo de não-regressão; o protocolo não prevê escape por justificativa no relatório. Exceção, se alguma vez for considerada, exige aprovação explícita e prévia do usuário registrada no protocolo versionado antes da coleta — e, mesmo assim, não produz supersede automático: a mudança segue dependendo de relatório aprovado conforme o item 6, com a exceção citada nele.
-5. **Relatório obrigatório:** artefato persistido e versionado com braços, hashes/versões de tudo que foi fixado, métricas por critério e por categoria, veredito e dados suficientes para reprodução. Sem relatório, o experimento não existe.
-6. **Autoridade formal:** o relatório é revisado pelo Software Architect e aprovado explicitamente pelo usuário antes de qualquer efeito. **Sem relatório aprovado, ADR-029 permanece vigente integralmente e nenhuma supersede parcial é registrada neste ADR.** A supersede, quando aprovada, é registrada aqui com referência ao relatório.
+Novos snapshots usam exclusivamente:
+
+```ts
+type ProductMemorySignalsV1 = {
+  signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1";
+  signals: Array<{
+    signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1";
+    recipeId?: string;
+    attentionMechanisms: string[];
+    psychologicalEffects: string[];
+    format?: string;
+    productRole?: string;
+    narrativeShape: string[];
+    commercialEffects?: string[];
+    audienceContext?: string;
+    proofPattern?: string;
+  }>;
+};
+```
+
+Cada snapshot **novo** grava em `ProductMemorySnapshot.signals` exatamente `ProductMemorySignalsV1` acima: somente `signalsSchemaVersion` e `signals` no envelope; cada sinal tem exclusivamente as chaves declaradas no tipo. Não inclui `plannerSignals`, `generatedCount`, `deliveredHookMechanisms`, `deliveredCtaFunctions`, `deliveredAngles` nem metadata de execução, tampouco os grava ao lado como dual-write. Sinais derivam somente da oportunidade V2 e do Blueprint efetivamente realizados por Content entregue; `commercialEffects` não é fabricado a partir de `coreMessage`. Campos opcionais ausentes permanecem ausentes. O merge com snapshot V2 válido usa chave canônica, deduplicação e ordem estável, idempotente sob retry técnico e retry dos faltantes.
+
+Snapshots v1 legados com arrays de hook/CTA/ângulo continuam read-only sob seu próprio contrato. O leitor V2 os trata como memória V2 vazia, sem conversão nem fabricação de sinais; o primeiro snapshot V2 pode conter somente sinais das novas entregas. Envelope que declara `PLANNER_MEMORY_SIGNALS_V1` mas viola o shape falha fechado, não é tratado como legado vazio. O campo JSON `ProductMemorySnapshot.signals` existente é suficiente, sem tabela nova.
+
+### 10. Hard gates → Risk Detector → Judge seletivo
+
+A ordem V2 obrigatória é:
+
+```text
+Brief + Scene Skeleton
+→ hard gates
+→ Hard Gate Repair limitado
+→ Risk Detector determinístico
+→ Judge somente nos itens selecionados
+→ Semantic Part Repair único
+→ hard gates/variedade finais
+→ persistência
+```
+
+Risk possui autoridade de **roteamento**, nunca de entrega. Não altera D/F, quota, status, retry, factualidade, hard gate ou publicação.
+
+O contrato pré-Judge não depende do resultado do Judge:
+
+```ts
+type PreJudgeRiskAssessmentV2 = {
+  contractVersion: "risk-assessment.v2";
+  policyVersion: string;
+  subject: { jobId: string; contentId: string };
+  assessmentStatus: "AVAILABLE" | "PARTIAL" | "UNAVAILABLE";
+  riskBand: "NONE" | "LOW" | "MEDIUM" | "HIGH";
+  findings: RiskFindingV2[];
+  sources: {
+    hardGate: "AVAILABLE";
+    blueprint: "AVAILABLE" | "UNAVAILABLE";
+    scenes: "AVAILABLE" | "FILTERED" | "ERROR";
+    memory: "AVAILABLE" | "EMPTY" | "UNAVAILABLE";
+  };
+};
+```
+
+A seleção é persistível e reproduzível:
+
+```ts
+type JudgeSelectionDecisionV1 = {
+  policyVersion: string;
+  contentId: string;
+  selected: boolean;
+  triggerCodes: string[];
+};
+```
+
+O registry fechado deve cobrir, no mínimo:
+
+- genericidade lexical;
+- integração fraca do Produto;
+- CTA incompatível com o objetivo;
+- payoff esperado ausente;
+- repetição de attention mechanism;
+- repetição de commercial effect;
+- repetição de psychological effect;
+- saturação de recipe;
+- repetição de estrutura/narrative shape;
+- script excessivamente longo;
+- produção incerta;
+- mecanismo criativo incompleto;
+- realização incerta do Blueprint.
+
+Produção objetivamente impossível continua hard gate. Sinais incertos apenas selecionam Judge. Falha ou indisponibilidade do Risk Detector seleciona o item para Judge como fail-safe; nunca pula avaliação silenciosamente. Item não selecionado registra `JudgeExecution=NOT_EXECUTED`, nunca `PASS`.
+
+O Judge recebe objetivo, resposta desejada, Blueprint, fatos/evidências, Brief, SceneSet, creator constraints e trigger codes. Avalia atenção, efeito comercial, integração do Produto, payoff, CTA, realização do Blueprint e perceived templating, sem prever venda.
+
+### 11. Etapa 6 — avaliação integral
+
+Os artefatos existentes `golden-dataset.v1` (`manifest.json` `FROZEN`), `golden-rubric.v1` (`rubrics.json`) e `THRESHOLD_POLICY_GOLDEN_V1` (`threshold-policy.json`) formam **somente evidência offline parcial do experimento Judge reduction**: a rubrica v1 cobre `NATURALNESS` por `CONTENT` e a policy v1 usa `risk-assessment.v1`, `JUDGE_EXECUTED_CONTENTS` e thresholds de redução/cobertura do Judge. Permanecem preservados sob suas versões; `FROZEN` significa imutabilidade daquele escopo, não pacote ou aprovação de E6 integral. Eles não incluem as rubricas subjetivas multidimensionais, agregação por categoria, comparações end-to-end/atribuições completas nem observações live requeridas abaixo.
+
+A Etapa 6 final possui:
+
+1. **Comparação end-to-end:** baseline ADR-029/`@1.2`, fixada por commit, versus pipeline V2 final/`@1.3`.
+2. **Experimentos de atribuição por variável:** Product Understanding/Strategy LLM versus Facts + Discovery + Strategy determinística; Plan LLM versus Planner V2; Scene Ideas versus Scene Skeleton; Judge-all versus Risk-gated; catálogo versus Blueprint; recipe-backed versus composição livre; Skill 1.2 versus 1.3; e tiers por capability.
+3. **Primeira geração e recorrência:** inclui reutilização de Strategy e memória.
+
+A baseline deverá ser executada a partir do commit fixado em runner de avaliação isolado; código legado não volta ao runtime default de produção. O [call map da Etapa 1](../../src/modules/commerce-intelligence/evaluation/golden-dataset/baseline-call-map.md) é auditoria estática, não observação de custo, latência ou tokens.
+
+#### 11.1 Classes de evidência
+
+E6 separa evidência por origem e não permite promoção entre classes:
+
+| Classe | Pode demonstrar | Não pode demonstrar |
+|---|---|---|
+| **Offline determinística/replay** | schema, cardinalidade, hashes, compatibilidade, gates determinísticos, Planner/Blueprint, memória, idempotência, pareamento, redaction e reprodução de uma resposta já congelada | custo real, tokens reais, latência real, timeout/retry do provider ou qualidade semântica produzida pelo provider vivo |
+| **Provider vivo pareado** | comportamento real do modelo, qualidade semântica, naturalidade, criatividade, persuasão, usage/tokens, custo, latência, timeout, retry e cobertura operacional | regras server-side não observadas ou invariantes presumidas apenas pelo output textual |
+
+Fixture, mock, resposta gravada ou replay offline nunca satisfaz threshold de custo, latência, usage/tokens ou qualidade semântica real. Essas métricas ficam `UNAVAILABLE` para aceite operacional até execução pareada com provider vivo. Evidência offline continua obrigatória para invariantes determinísticos, mas não substitui o experimento vivo.
+
+#### 11.2 Comparabilidade baseline/candidato com provider vivo
+
+Antes da coleta, cada braço registra e congela:
+
+- commit e engine version;
+- provider, model ID/version e tier efetivos;
+- parâmetros efetivos do modelo e da chamada, inclusive reasoning, temperature, top-p, max tokens, response/schema mode, timeout, retry e fallback;
+- `platformSkillVersion`, Skill binding, Creative System, contratos e policy versions;
+- prompt/instruction e contexto allowlisted por bytes ou artefato versionado, com hashes;
+- Product Facts, evidence, creator context e memory snapshot por bytes/hash;
+- dataset/case/category, ordem, seed e versão da derivação;
+- capabilities executadas, cobertura e motivo de `NOT_EXECUTED|FAILED|NOT_APPLICABLE`;
+- usage/tokens, moeda, pricing source/snapshot, custo e completude;
+- latência por tentativa/capability e end-to-end, retries, repairs, timeout e erro.
+
+No end-to-end, controles externos ao pipeline comparado permanecem iguais entre os braços. Diferenças inerentes ao baseline/candidato são listadas antes da coleta em um manifest de diferenças; alteração não pré-registrada invalida o par. Experimentos de atribuição alteram uma única variável declarada. Ausência de provider/model/version/params, prompt/context artifact, seed, usage/custo/latência ou cobertura torna a métrica afetada `PARTIAL`, `UNAVAILABLE` ou o par `INVALID` conforme a threshold policy; nunca autoriza imputação pós-hoc.
+
+#### 11.3 Auditoria de critérios subjetivos
+
+Cada dimensão subjetiva possui rubrica versionada antes da coleta com:
+
+- definição operacional e pergunta avaliada;
+- unidade de avaliação explícita (`CONTENT`, `PART`, `SCENE`, `CASE` ou `JOB`);
+- escala/labels, âncoras positivas, negativas e limítrofes;
+- evidência mínima exigida e regra de `NOT_ANNOTATED`;
+- política de conflito e adjudicação;
+- população, categorias, denominador e missing-data policy;
+- função de agregação dentro da unidade, por case, por categoria e total;
+- estatística pareada, incerteza e threshold de não-regressão/aprovação.
+
+Naturalidade, criatividade/originalidade, especificidade ao Produto, potencial persuasivo, atenção, integração do Produto, realização do Blueprint, diversidade psicológica/criativa, perceived templating, aderência à plataforma e coerência de recipe/composição livre usam no mínimo duas avaliações humanas independentes e cegas por unidade. O assignment oculta braço, commit, provider, modelo, tier, custo, latência e resultados automáticos. Divergências seguem a policy de adjudicação pré-registrada; avaliações brutas, conflitos, exclusões e decisão adjudicada permanecem no artefato auditável.
+
+Agregação nunca mistura unidades ou categorias silenciosamente. O protocolo fixa se a métrica é micro, macro ou ambas, pesos, tratamento de múltiplas partes/cenas por Content, tamanho mínimo/cobertura por categoria e regra para categorias insuficientes. O relatório apresenta resultado pareado por braço, delta, incerteza, cobertura e missing no agregado e em cada categoria pré-registrada. Corte, peso, exclusão ou categoria não muda após observar resultados.
+
+#### 11.4 Artefatos, métricas e decisão
+
+Artefatos obrigatórios e versionados:
+
+- protocolo e manifest de diferenças;
+- Golden Dataset/manifesto/cases/fixtures redacted e hashados;
+- rubricas e threshold policy aprovadas antes da coleta;
+- novo congelamento full E6 com versões próprias para manifesto/cases, rubricas, aggregation e thresholds, hashes e aprovação pré-registrados antes da coleta; documentar diferenças de contrato em relação ao v1 sem reescrever nem promover seus artefatos `FROZEN`;
+- assignments cegos, avaliações independentes e adjudicações;
+- captures de execução offline e com provider vivo, identificadas pela classe de evidência;
+- relatório e approval com hash do relatório.
+
+O relatório mede agregado e por categoria: critérios subjetivos acima; factualidade; calls por capability; tiers; tokens/usage; custo e completude; latência total e p50/p95; retries/repairs/timeouts; cobertura/falha do Judge; hard-gate failure; parcial/failure; Contents por chamada, custo e segundo; e missing data.
+
+Custo ausente/incompatível permanece `PARTIAL`/`UNAVAILABLE`, nunca zero. Métrica subjetiva sem cegamento, avaliações independentes, adjudicação, unidade, agregação ou threshold prévio é `INVALID`. Qualquer regressão em critério, no agregado ou por categoria, reprova o candidato, salvo exceção aprovada explicitamente pelo usuário no protocolo antes da coleta.
+
+Este ADR não registra execução, resultado, não-regressão ou aprovação de E6. Enquanto os artefatos offline e com provider vivo não satisfizerem seus gates, o estado permanece `V2_DEFAULT_PENDING_ACCEPTANCE`.
+
+### 12. Proveniência e estados de cutover
+
+Toda geração V2 registra:
+
+- commit/engine version;
+- `platformSkillVersion` e binding;
+- Creative System version;
+- contract e policy versions;
+- planner seed e output hash;
+- prompt/context hashes;
+- gate, risk e Judge-selection policy versions;
+- capability, tier, modelo/provider lógico, tokens, custo, latência, retry e repair;
+- cobertura `EXECUTED|NOT_EXECUTED|FAILED|NOT_APPLICABLE`.
+
+Sem payload bruto, prompt completo, segredo, token ou dados de outro tenant.
+
+`metadata.discoveryV2` é dado de domínio validado e imutável do job, **não telemetria mutável**. Reentrada/upsert preserva o mesmo envelope JSON-safe e `discoveryHash`; divergência falha fechado. Retry dos faltantes que reutiliza `ProductStrategy` preserva seu payload e `sourceDiscoveryRef` original (`intelligenceRunId`, versão e hash), sem reescrever Discovery; o run novo pode registrar somente referência à origem. Metadata operacional pode evoluir separadamente, mas `plannedV2`/trace não vira segunda fonte integral do Blueprint persistido em `ContentOpportunity.payload`. Leitura tenant-scoped recalcula `sha256Hex(canonicalSerialization(discoveryV2))` sobre o envelope re-lido, sem `undefined`/opcionais fabricados, e valida versão, seleção por `sourceOpportunityIds` e `evidenceRefs` contra a Discovery antes de projetar para o Planner.
+
+Estados documentais:
+
+```text
+V2_DEFAULT_PENDING_ACCEPTANCE
+  V2 é produção por decisão do usuário;
+  contratos/evals ainda não fecharam.
+
+V2_ACCEPTED
+  contratos P0/P1 satisfeitos;
+  E6 integral aprovada pelo Architect;
+  aceite explícito do usuário;
+  ADR-029 formalmente superseded como runtime.
+```
+
+### 13. Compatibilidade e migração
+
+1. Migração é aditiva e versionada; não reescreve histórico.
+2. `ContentOpportunity` v1 continua legível sem Blueprint fabricado.
+3. Writer novo grava somente v2; não existe dual-write v1/v2.
+4. `hookMechanism`/`narrativePattern` históricos permanecem nos registros antigos; em v2 são apenas projeções derivadas.
+5. A PlatformSkill do runtime após cutover carrega exclusivamente `tiktok-commerce@1.3` com Creative System, sem fallback/alias para `@1.2`; a Skill `@1.2` permanece apenas na baseline por commit/fixture do runner E6 isolado, não como caminho de leitura ou geração do runtime. O writer V2 usa 1.3 após a correção do binding operacional, ainda pendente.
+6. Snapshot de memória legado não é convertido em sinal V2.
+7. `RiskAssessmentV1` permanece read-only; seleção pré-Judge usa contrato v2.
+8. Reports, briefs e SceneSets históricos permanecem válidos sob suas versões.
+9. Mudança de gate/policy/Skill/contrato exige bump explícito.
+10. Falha de leitor, versão ou referência é fail-closed e sanitizada.
+
+### 14. Coordenação documental posterior
+
+Depois deste ADR, e antes de declarar `V2_ACCEPTED`, devem ser atualizados deliberadamente:
+
+- `docs/architecture/SYSTEM-DESIGN.md`;
+- `docs/delivery/SLICES.md`;
+- `docs/specs/slice-003/SPEC.md`;
+- `docs/plans/slice-003/PLAN.md`;
+- `docs/specs/etapa-4-skill-brief/SPEC.md`;
+- `docs/plans/etapa-4-skill-brief/PLAN.md`;
+- `docs/specs/etapa-5-risk-quality/SPEC.md`;
+- `docs/plans/etapa-5-risk-quality/PLAN.md`;
+- `docs/specs/etapa-6-golden-evals/SPEC.md`;
+- `docs/plans/etapa-6-golden-evals/PLAN.md`.
+
+Estas fontes exigiam coordenação por descreverem, total ou parcialmente, ADR-029/1.2 como runtime, 1.3 fixture-only, Risk apenas pós-Judge/advisory ou E6 limitada a Judge reduction. A coordenação documental alinha baseline, runtime default e alvo pendente sem alterar PRD ou a nota; não constitui evidência de implementação, avaliação nem aceite.
+
+## Critérios para `V2_ACCEPTED`
+
+Todos são obrigatórios:
+
+1. Auditoria da Etapa 1 e call map versionados: o [call map estático de `8d1833b`](../../src/modules/commerce-intelligence/evaluation/golden-dataset/baseline-call-map.md) registra o baseline e as divergências, mas não conclui a auditoria live; chamadas físicas, tokens, custo e latência observados permanecem `UNAVAILABLE` até coleta real.
+2. Discovery/Strategy alvo especificado e cada migração LLM → código coberta por A/B próprio.
+3. `ContentOpportunity` v2 persistida com `creativeDirection` canônica.
+4. Nenhuma segunda fonte persistida de Blueprint/hook/narrative em novos registros.
+5. Memória `PLANNER_MEMORY_SIGNALS_V1` multidimensional, idempotente e consumida pelo Planner.
+6. Binding 1.3 consistente em Strategy, Plan, Run, Planner e Creative System.
+7. Prompt/contexto V2 sem `selectedPatterns` ou copy literal do catálogo.
+8. Scene Skeleton validado e `ContentSceneSet` separado.
+9. Pipeline hard gates → risk → Judge seletivo observável.
+10. Registry de risco cobrindo todos os sinais mínimos desta decisão.
+11. Falha de Risk selecionando Judge; `NOT_EXECUTED` nunca sintetizado como `PASS`.
+12. Hard gates, partial, quota, tenant, fencing, idempotência e repair semântico sem regressão.
+13. E6 end-to-end e experimentos de atribuição executados com thresholds prévios, separando evidência offline de provider vivo.
+14. Critérios subjetivos auditáveis por rubrica, unidade, cegamento, avaliações independentes, adjudicação, agregação, categoria e threshold pré-registrados; custo/latência/qualidade semântica real comprovados somente com provider vivo pareado.
+15. Relatório e approval versionados, reproduzíveis e pertencentes aos commits, com provider/model/tier, parâmetros, prompts/contextos, seed, usage/custo/latência e cobertura comparáveis.
+16. Revisão formal do Software Architect.
+17. Aceite explícito do usuário referenciando o hash do relatório.
+18. Atualização coordenada das fontes listadas na decisão 14.
+19. Discovery completa imutável por job em `IntelligenceRun.metadata.discoveryV2`, com `discoveryHash` reproduzível por `CANONICAL_SERIALIZATION_V1`; `ProductStrategy.payload` contém `strategyContractVersion`, `strategyPolicyVersion`, `sourceDiscoveryRef` (`intelligenceRunId`, versão e hash) e seleção por `sourceOpportunityIds`/`evidenceRefs`; `ContentOpportunity.payload` guarda somente decisão/Blueprint do seu Content. Reader tenant-scoped recalcula hash e rejeita divergência de versão/IDs/refs; hipóteses não selecionadas continuam rastreáveis. Retry/reentrada preservam o mesmo envelope, payload de Strategy e referência, sem reescrever Discovery nem duplicar o pool; snapshots novos contêm somente `ProductMemorySignalsV1`, com `audienceContext?: string`, sem dual-write legado, merge canônico idempotente e leitura v1 read-only.
+
+Somente então este ADR registra `V2_ACCEPTED` e a supersessão formal do ADR-029 como runtime.
 
 ## Não-objetivos
 
-- Não remove capabilities, tiers, gates, Judge ou repairs; não altera o `ROUTER_MAP` vigente.
-- Não autoriza escrita de `creativeDirection` antes de SPEC/PLAN do cutover aprovados.
-- Não cria `RecipeService`, `RecipeAgent`, `RecipeEngine`, `RecipeRepository`, domínio separado, serviço ou agente.
-- Não introduz embeddings, banco vetorial, deduplicação semântica ou judge LLM de variedade/memória.
-- Não transforma a engine em template engine: código não escreve situação, hook, fala, script ou payoff.
-- Não fixa quantidade de recipes, proporção recipe/free, número de chamadas, distribuição de portfólio nem thresholds de eval como contrato.
-- Não altera `BriefValidationReport`, `factRefs`, `PASS|REVIEW`, cenas separadas, repair único ou o parcial objetivo do ADR-021.
-- Não altera PRD, DESIGN, SLICES, SPEC, PLAN, código ou a nota canônica nesta rodada.
+- Não criar serviço, domínio, agente, aggregate, repositório ou tabela para Blueprint/Recipe.
+- Não introduzir embeddings, banco vetorial ou judge LLM de variedade/memória.
+- Não transformar mecanismos em copy determinística.
+- Não permitir que Risk ou Judge decidam quota, D/F, estado ou publicação.
+- Não reescrever histórico v1 ou fabricar sinais de memória.
+- Não expor Blueprint, provider, modelo, tier ou prompts ao creator.
+- Não fixar número de recipes, proporção recipe/free ou meta de chamadas como contrato de produto.
+- A decisão ADR não executa alterações de runtime por si; a implementação e avaliação candidatas nesta feature branch estão expressamente autorizadas na SPEC/PLAN do Slice 003, sem liberar merge, deploy ou `V2_ACCEPTED` antes dos gates E6.
 
 ## Alternativas consideradas
 
-| Opção | Decisão | Motivo |
+| Opção | Decisão | Trade-off |
 |---|---|---|
-| Manter o runtime do ADR-029 sem mudança | Rejeitada | Preserva custo/latência altos e ancoragem literal do catálogo. |
-| Editar o ADR-029 in-place | Rejeitada | Mudança de contrato canônico do plano sem trilha própria; perderia o runtime vigente como baseline. |
-| ADR novo com supersede parcial condicionada a relatório A/B aprovado (escolhida) | Princípio registrado agora; runtime só muda com evidência formal | Convivência temporária de duas decisões até o cutover. |
-| Creative System como domínio/serviço próprio | Rejeitada | Paralelismo vedado por ADR-014 e padrões proibidos dos PRINCIPLES. |
-| Blueprint como entidade/aggregate paralelo | Rejeitada | Duplicaria a decisão de conteúdo já representada em `ContentOpportunity`. |
-| Blueprint proposto pela LLM | Rejeitada | Combinação entre possibilidades conhecidas é seleção, não criação; autoridade do código (nota, "Regra para todas as próximas etapas"). |
-| Fallback criativo ao falhar resolvedor | Rejeitada | Fabricação de conteúdo vedada (ADR-012/021); erro tipado fail-closed com código estável. |
-| Remover o catálogo literal imediatamente | Rejeitada | Perde corpus de benchmark/eval; saída do caminho normal com enforcement testável é suficiente agora. |
+| Reverter para ADR-029 até E6 | Rejeitada | Contraria direção explícita do usuário e o estado real de produção. |
+| Declarar V2 aceita apenas porque está em produção | Rejeitada | Confunde decisão operacional com evidência de qualidade e viola a nota/ADR-012/033. |
+| V2 default com aceitação pendente | Escolhida | Preserva direção do usuário e torna a dívida de evidência explícita. |
+| Editar ADR-029 in-place | Rejeitada | Apaga o baseline necessário para A/B e a trilha histórica. |
+| Blueprint em entidade/tabela própria | Rejeitada | Duplica `ContentOpportunity` e cria fronteira sem necessidade. |
+| Dual-write v1/v2 | Rejeitada | Cria duas fontes de verdade e migração indefinida. |
+| Risk como hard gate | Rejeitada | Heurística semântica não deve controlar entrega objetiva. |
+| Falha de Risk pulando Judge | Rejeitada | Reduz cobertura silenciosamente; fail-safe deve selecionar Judge. |
+| E6 somente para Judge reduction | Rejeitada | Não avalia as demais migrações do pipeline. |
 
-## Consequências
+## Trade-offs e consequências
 
 Positivas:
 
-- Fonte imutável nomeada e mapeada por seção/linha: toda decisão é rastreável à nota sem copiá-la.
-- Matriz campo a campo do Blueprint elimina ambiguidade de entrada/autoridade/validação/rejeição/falha.
-- Contrato versionado com writer/reader/projeção/derivação definidos e proibição de escrita prematura.
-- Falhas estáveis (`GEN-CS-*`) tornam o resolvedor auditável e testável por contract test.
-- A/B operacional com fixação prévia, thresholds versionados, análise por categoria, relatório obrigatório e autoridade formal impede cutover por economia ou por anedota.
+- Estado de produção e estado de aprovação deixam de ser confundidos.
+- ADR-029 continua sendo baseline reproduzível sem governar o runtime default.
+- Blueprint passa a possuir uma fonte canônica.
+- Memória e variedade passam a operar sobre dimensões criativas reais.
+- Judge pode cair sem assumir autoridade de entrega.
+- E6 mede qualidade, custo e latência do produto final e atribui cada migração.
 
-Negativas e riscos:
+Custos e riscos:
 
-- A Skill ganha peso (schemas, compatibilidade versionada, curadoria de recipes); maior custo de engenharia.
-- Qualidade de primitives/recipes é hipótese até o Golden Dataset; recipe mal calibrada degrada em silêncio — mitigado por evals e versionamento, como em ADR-014.
-- Cutover exige SPEC/PLAN próprios, leitor versionado e contract tests de projeção/derivação — caminho longo e deliberado.
-- Nenhuma melhoria é reivindicável sem baseline e relatório aprovados; a Etapa 1 (auditoria semântica + custo/chamadas) é pré-requisito.
-- Variedade precisa passar a observar múltiplas dimensões do Blueprint, senão dois conteúdos com hooks diferentes e mesmo Blueprint essencial permanecem próximos.
+- V2 permanece em produção antes da aceitação integral; risco é explícito e exige observabilidade e correção, não negação documental.
+- Skill/compatibilidade e contracts versionados aumentam manutenção.
+- JSONB preserva flexibilidade, mas shape depende do writer/reader da aplicação.
+- Memória legada não ganha dimensões retroativas.
+- Risk Detector pode gerar falso positivo; efeito é custo de Judge, não rejeição.
+- Falso negativo de Risk é o risco principal; mitigado por E6, registry fechado, fail-safe e monitoramento de cobertura.
+- E6 operacional custa tempo/provider/anotação; é o preço para afirmar não-regressão.
 
-## Compatibilidade histórica
+## Segurança e operação
 
-- Registros existentes (planos, oportunidades, briefs, reports, snapshots, runs) permanecem válidos sob a política vigente na sua execução; nenhum campo é fabricado retroativamente.
-- Leitor versionado trata `hookMechanism`/`narrativePattern` como legado; revalidação sob versão de política diferente continua `GEN-GATE-VERSION` (ADR-019), nunca REPAIR falso.
-- `platformSkillVersion` por geração preserva a reprodução de comportamento histórico; o Creative System é função da versão da Skill usada.
-- Snapshots de memória legados são lidos como estão; novos sinais existem somente em snapshots novos, sob `signalsSchemaVersion` registrada.
-- `BriefValidationReport`, `DevelopmentBullet` v2 e leitores de payload de brief não são alterados por este ADR.
-
-## Segurança / Operação
-
-- Creative System é dado estático versionado; não recebe dados de tenant, não controla workflow, não acessa jobs/persistência/quota (ADR-014).
-- Saída de provider continua não confiável; nenhum campo do Blueprint provém do provider no contrato definido por este ADR.
-- Contexto mínimo por capability preservado: o Brief Generator recebe Blueprint e projeções compactas allowlisted, nunca o corpus literal completo nem o agregado do Product.
-- Erros do resolvedor usam códigos estáveis e mensagens sanitizadas; nada do Creative System vira UI.
+- Creative System permanece dado estático sem tenant, Job, quota ou persistência.
+- Saída de provider é não confiável e nunca escreve Blueprint.
+- Contextos de provider são allowlisted e mínimos.
+- Ownership, IDs, status, quota e policy versions são server-owned.
+- Chamadas externas permanecem fora de transação.
+- Finalização permanece curta, fenced e idempotente.
+- Telemetria registra hashes e métricas, nunca payload bruto ou segredo.
+- Evals usam fixtures redacted e IDs não produtivos.
 
 ## Relações
 
 - [ADR-002](./adr-002-engine-estrategica-como-core.md) — engine como core.
-- [ADR-003](./adr-003-postgresql-memoria-e-rastreabilidade.md) — persistência, memória e rastreabilidade.
-- [ADR-004](./adr-004-variedade-por-memoria-estruturada.md) — variedade determinística; memória sem embeddings.
-- [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md) — contratos canônicos, políticas versionadas e Golden Dataset.
-- [ADR-013](./adr-013-model-router-e-intelligence-tier.md) — router, tiers e evals.
-- [ADR-014](./adr-014-platform-skill-versionada.md) — Skill versionada; recebe o Creative System.
-- [ADR-019](./adr-019-gate-versionada-e-cenas.md), [ADR-020](./adr-020-repair-per-item-e-preselecao-segura.md), [ADR-021](./adr-021-geracao-parcial-declarada-e-retry-de-faltantes.md), [ADR-025](./adr-025-batching-semantico-de-curadoria.md) — gates, repair, parcial declarado e batching permanecem.
-- [ADR-029](./adr-029-pipeline-hibrida-deterministica-e-criativa.md) — runtime vigente até relatório A/B aprovado; supersede parcial futura registrada aqui.
-- Nota canônica imutável **"Plano de recalibração da commerce inteligence"** — fonte do princípio e das etapas 1–6 (mapeamento na decisão 1).
+- [ADR-003](./adr-003-postgresql-memoria-e-rastreabilidade.md) — JSONB versionado, memória e proveniência.
+- [ADR-004](./adr-004-variedade-por-memoria-estruturada.md) — variedade determinística e memória sem embeddings.
+- [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md) — contratos, gates e Golden Dataset.
+- [ADR-013](./adr-013-model-router-e-intelligence-tier.md) — router, tiers, custo e evals.
+- [ADR-014](./adr-014-platform-skill-versionada.md) — Skill versionada e proveniência.
+- [ADR-019](./adr-019-gate-versionada-e-cenas.md) — gates versionados e `ContentSceneSet`.
+- [ADR-021](./adr-021-geracao-parcial-declarada-e-retry-de-faltantes.md) — parcial objetivo, quota e memória somente dos entregues.
+- [ADR-029](./adr-029-pipeline-hibrida-deterministica-e-criativa.md) — baseline histórico/experimental; invariantes preservados; supersessão formal pendente de `V2_ACCEPTED`.
+- Nota canônica **"Plano de recalibração da commerce inteligence"** — fonte das Etapas 0–6.

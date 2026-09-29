@@ -16,12 +16,14 @@ import {
   type ContentOpportunity,
   type DevelopmentBullet,
   type EvidenceSnapshot,
+  type ProductStrategy,
+  type ProductUnderstanding,
   type SceneIdea,
 } from "./contract";
 import { GenerationError } from "./errors";
 import { GATE_POLICY_VERSION, gateSceneSet, parseStructuredDevelopment } from "./gates";
 import { CREATIVE_SYSTEM_SKILL_VERSION, loadCreativeSystem, resolveBlueprint } from "./creative-system";
-import { classifyCtaFunction } from "./platform-skill";
+import { classifyCtaFunction, loadPlatformSkill } from "./platform-skill";
 import { canonicalSerialization, harnessSeedForFixture, sha256Hex } from "./planner-harness/canonical";
 import {
   PLANNER_MEMORY_SIGNALS_V1,
@@ -31,13 +33,14 @@ import {
   type MemorySnapshotInput,
   type PlannerInput,
 } from "./planner-harness/plan-portfolio";
-import type { CreativeBlueprint, CreatorConstraints, PlannedOpportunityV2, ProductFactsProjection } from "./planner-harness/types";
+import type { CommercialDiscoveryPool, CreativeBlueprint, CreatorConstraints, PlannedOpportunityV2, ProductFactsProjection } from "./planner-harness/types";
 import type { SceneSetOutcome } from "./engine";
 
 export const BRIEF_GENERATION_POLICY_V2 = "BRIEF_GENERATION_POLICY_V1" as const;
 
-// Binding do harness congelado (único aceito por planPortfolio). Runtime de
-// produção permanece @1.2; o binding @1.3 só existe dentro do V2 planner.
+// Binding do harness congelado (único aceito por planPortfolio) — fixture,
+// nunca provenance live (ADR-033 §7). A Skill única do runtime é carregada por
+// loadPlatformSkill() (default @1.3); provenance de Strategy/Run usa essa.
 export const ENGINE_V2_SKILL_BINDING = {
   platformSkillVersion: "tiktok-commerce@1.3",
   creativeSystemVersion: "1.3",
@@ -371,6 +374,204 @@ export function parseBriefRepairDraftV2(output: unknown, evidence: EvidenceSnaps
   return { draft: validateContentBriefDraft({ angle: record.angle, hook: record.hook, development: texts, script: record.script, cta: record.cta }), bullets };
 }
 
+// ─── Stage 2: Discovery V2 (LLM evoluído — envelope versionado) ────────────
+// Valida o envelope do LLM Discovery: allowlist exata, refs ⊆ catálogo,
+// commercialEffects obrigatórios para diversidade do planner. Fail-closed.
+
+const DISCOVERY_ENVELOPE_KEYS = ["discoveryContractVersion", "opportunities"] as const;
+const DISCOVERY_OPPORTUNITY_KEYS = ["commercialObjective", "angle", "coreMessage", "commercialEffects", "evidenceRefs"] as const;
+
+const DISCOVERY_ENVELOPE_KEYS_V2 = ["discoveryContractVersion", "hypotheses"] as const;
+const DISCOVERY_HYPOTHESIS_KEYS_V2 = [
+  "commercialObjective", "angle", "coreMessage", "desiredViewerResponse",
+  "audience", "situation", "desire", "identification", "curiosity",
+  "aspiration", "humorPotential", "visualPotential", "pain", "objection",
+  "desiredOutcome", "relevantCapabilities", "benefits", "proofOptions",
+  "commercialEffects", "evidenceRefs", "confidence",
+] as const;
+const DISCOVERY_NULLABLE_FIELDS: readonly string[] = [
+  "desiredViewerResponse", "audience", "situation", "desire",
+  "identification", "curiosity", "aspiration", "humorPotential",
+  "visualPotential", "pain", "objection", "desiredOutcome",
+];
+
+export function parseDiscoveryEnvelopeV2(
+  raw: unknown,
+  evidence: EvidenceSnapshot,
+): DiscoveryEnvelopeV2 {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+    throw new ContractError("GEN-SCHEMA", "Discovery V2 deve ser um objeto");
+  const envelope = raw as Record<string, unknown>;
+  for (const key of Object.keys(envelope))
+    if (!(DISCOVERY_ENVELOPE_KEYS_V2 as readonly string[]).includes(key))
+      throw new ContractError("GEN-SCHEMA", `Discovery V2: campo desconhecido "${key}" no envelope`, key);
+  if (envelope.discoveryContractVersion !== "2")
+    throw new ContractError("GEN-SCHEMA", "Discovery V2 exige discoveryContractVersion=2", "discoveryContractVersion");
+  if (!Array.isArray(envelope.hypotheses))
+    throw new ContractError("GEN-SCHEMA", "Discovery V2 sem hypotheses", "hypotheses");
+  const knownRefs = new Set(evidence.refs);
+  const hypotheses: DiscoveryHypothesisV2[] = envelope.hypotheses.map((item, index) => {
+    if (typeof item !== "object" || item === null || Array.isArray(item))
+      throw new ContractError("GEN-SCHEMA", `Discovery V2 hypothesis ${index + 1} inválida`, "hypotheses");
+    const h = item as Record<string, unknown>;
+    for (const key of Object.keys(h))
+      if (!(DISCOVERY_HYPOTHESIS_KEYS_V2 as readonly string[]).includes(key))
+        throw new ContractError("GEN-SCHEMA", `Discovery V2: campo desconhecido "${key}" na hypothesis ${index + 1}`, key);
+    for (const key of ["commercialObjective", "angle", "coreMessage"] as const)
+      if (typeof h[key] !== "string" || !(h[key] as string).trim())
+        throw new ContractError("GEN-SCHEMA", `Discovery V2 hypothesis ${index + 1}: ${key} obrigatório`, key);
+    if (!Array.isArray(h.commercialEffects) || h.commercialEffects.length === 0 || h.commercialEffects.some((e) => typeof e !== "string" || !e.trim()))
+      throw new ContractError("GEN-SCHEMA", `Discovery V2 hypothesis ${index + 1}: commercialEffects obrigatório (≥1)`, "commercialEffects");
+    if (!Array.isArray(h.evidenceRefs) || h.evidenceRefs.length === 0 || h.evidenceRefs.some((ref) => typeof ref !== "string" || !knownRefs.has(ref)))
+      throw new ContractError("GEN-SCHEMA", `Discovery V2 hypothesis ${index + 1}: evidenceRefs fora do catálogo autorizado`, "evidenceRefs");
+    if (typeof h.confidence !== "number" || h.confidence < 0 || h.confidence > 1)
+      throw new ContractError("GEN-SCHEMA", `Discovery V2 hypothesis ${index + 1}: confidence inválido`, "confidence");
+    const nullable = (key: string): string | null => (typeof h[key] === "string" && (h[key] as string).trim() ? (h[key] as string) : null);
+    return {
+      commercialObjective: h.commercialObjective as string,
+      angle: h.angle as string,
+      coreMessage: h.coreMessage as string,
+      desiredViewerResponse: nullable("desiredViewerResponse"),
+      audience: nullable("audience"),
+      situation: nullable("situation"),
+      desire: nullable("desire"),
+      identification: nullable("identification"),
+      curiosity: nullable("curiosity"),
+      aspiration: nullable("aspiration"),
+      humorPotential: nullable("humorPotential"),
+      visualPotential: nullable("visualPotential"),
+      pain: nullable("pain"),
+      objection: nullable("objection"),
+      desiredOutcome: nullable("desiredOutcome"),
+      relevantCapabilities: Array.isArray(h.relevantCapabilities) ? h.relevantCapabilities.filter((c): c is string => typeof c === "string" && c.trim().length > 0) : [],
+      benefits: Array.isArray(h.benefits) ? h.benefits.filter((b): b is string => typeof b === "string" && b.trim().length > 0) : [],
+      proofOptions: Array.isArray(h.proofOptions) ? h.proofOptions.filter((p): p is string => typeof p === "string" && p.trim().length > 0) : [],
+      commercialEffects: Object.freeze(h.commercialEffects as string[]),
+      evidenceRefs: Object.freeze(h.evidenceRefs as string[]),
+      confidence: typeof h.confidence === "number" ? h.confidence : 0,
+    };
+  });
+  if (hypotheses.length === 0)
+    throw new ContractError("GEN-SCHEMA", "Discovery V2 sem hypotheses", "hypotheses");
+  return { discoveryContractVersion: "2", hypotheses };
+}
+
+// ─── Stage 2: ProductStrategy V2 determinística ─────────────────────────────
+
+export function synthesizeStrategyV2(
+  opportunities: readonly DiscoveryHypothesisV2[],
+  understanding: ProductUnderstanding,
+  ids: { jobId: string; productId: string },
+): ProductStrategy {
+  const primaryPositioning = opportunities
+    .map((o) => o.coreMessage)
+    .sort((a, b) => b.length - a.length)[0] ?? understanding.functionalBenefits[0] ?? "produto";
+  const audiences = [...new Set(opportunities.flatMap((o) => o.commercialEffects))];
+  const priorityBenefits = [...new Set(opportunities.flatMap((o) => [o.commercialObjective]))];
+  const priorityObjections = [...new Set(understanding.purchaseBarriers)];
+  const priorityArguments = [...new Set(opportunities.map((o) => o.coreMessage))];
+  const priorityAngles = [...new Set(opportunities.map((o) => o.angle))];
+  const communicationPrinciples = ["estratégia separada da fala", "cenas simples", "linguagem oral", "script não literal", "produção de creator solo"];
+  return {
+    id: `${ids.jobId}-strategy`,
+    productId: ids.productId,
+    jobId: ids.jobId,
+    version: 1,
+    status: "ACTIVE",
+    platformId: "tiktok-commerce",
+    platformSkillVersion: loadPlatformSkill().version,
+    primaryPositioning,
+    audiences,
+    priorityBenefits,
+    priorityObjections,
+    priorityArguments,
+    priorityAngles,
+    communicationPrinciples,
+    opportunities: opportunities.map((o, index) => ({
+      id: `commercial-${index + 1}`,
+      relevantCapabilities: understanding.capabilities,
+      benefits: [...o.commercialEffects],
+      proofOptions: o.proofOptions.length > 0 ? [...o.proofOptions] : ["demonstração observável"],
+      sellingArgument: o.coreMessage,
+      confidence: 0.9,
+      evidenceRefs: [...o.evidenceRefs],
+    })),
+  };
+}
+
+// Ponte versionada para o harness frozen — CommercialDiscoveryPool.
+export function discoveryPoolV2(
+  discovery: DiscoveryEnvelopeV2,
+  evidence: EvidenceSnapshot,
+): CommercialDiscoveryPool {
+  const catalog = evidenceRefCatalog(evidence);
+  const knownRefs = new Map(catalog.map((ref) => [ref.id, ref]));
+  return {
+    evidenceCatalog: { refs: catalog },
+    opportunities: discovery.hypotheses.map((h, index) => ({
+      sourceOpportunityId: `discovery-${index + 1}`,
+      commercialObjective: h.commercialObjective,
+      angle: h.angle,
+      coreMessage: h.coreMessage,
+      ...(h.desiredViewerResponse !== null ? { desiredViewerResponse: h.desiredViewerResponse } : {}),
+      commercialEffects: [...h.commercialEffects],
+      ...(h.audience !== null ? { audienceContext: h.audience } : {}),
+      ...(h.proofOptions.length > 0 ? { proofPattern: h.proofOptions[0] } : {}),
+      evidenceRefs: h.evidenceRefs.map((ref) => {
+        const known = knownRefs.get(ref);
+        return known ?? { id: ref, field: ref, valueHash: sha256Hex(ref) };
+      }),
+    })),
+  };
+}
+
+// Adiciona blueprint canônico + contract version ao ContentOpportunity V2.
+export function enrichContentOpportunity(
+  base: ContentOpportunity,
+  planned: PlannedOpportunityV2,
+): ContentOpportunity & { opportunityContractVersion: "2"; creativeDirection: PlannedOpportunityV2["blueprint"] } {
+  return {
+    ...base,
+    opportunityContractVersion: "2" as const,
+    creativeDirection: planned.blueprint,
+  };
+}
+
+// ─── Stage 3: ProductMemory multidimensional (PLANNER_MEMORY_SIGNALS_V1) ───
+
+export function projectMemorySignalsForPlanner(
+  delivered: readonly {
+    blueprint: { recipeId?: string; attentionMechanisms: readonly string[]; psychologicalEffects: readonly string[]; format: string; productRole: string; narrativeMoves: readonly string[] };
+    commercialEffects?: readonly string[];
+    audienceContext?: string;
+    proofPattern?: string;
+  }[],
+): Array<{
+  signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1";
+  recipeId?: string;
+  attentionMechanisms: readonly string[];
+  psychologicalEffects: readonly string[];
+  format?: string;
+  productRole?: string;
+  narrativeShape: readonly string[];
+  commercialEffects?: readonly string[];
+  audienceContext?: string;
+  proofPattern?: string;
+}> {
+  return delivered.map((item) => ({
+    signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1" as const,
+    ...(item.blueprint.recipeId !== undefined ? { recipeId: item.blueprint.recipeId } : {}),
+    attentionMechanisms: [...item.blueprint.attentionMechanisms],
+    psychologicalEffects: [...item.blueprint.psychologicalEffects],
+    ...(item.blueprint.format !== undefined ? { format: item.blueprint.format } : {}),
+    ...(item.blueprint.productRole !== undefined ? { productRole: item.blueprint.productRole } : {}),
+    narrativeShape: [...item.blueprint.narrativeMoves],
+    ...(item.commercialEffects !== undefined ? { commercialEffects: [...item.commercialEffects] } : {}),
+    ...(item.audienceContext !== undefined ? { audienceContext: item.audienceContext } : {}),
+    ...(item.proofPattern !== undefined ? { proofPattern: item.proofPattern } : {}),
+  }));
+}
+
 // ─── Projeção allowlisted de realização (contexto do provider) ──────────────
 // Contrato canônico da nota (requisitos §4.2): projeção allowlisted POR
 // oportunidade. NUNCA contém: catálogo literal (hooks/CTAs), selectedPatterns,
@@ -543,3 +744,67 @@ export function briefStyleObservations(briefs: readonly ContentBriefVersion[]): 
 
 // isEmptyMemorySnapshot reexportado para o engine não depender do harness direto.
 export { isEmptyMemorySnapshot };
+// ─── Stage 2: Discovery/Strategy V2 (contrato canônico) ────────────────────
+
+export type DiscoveryHypothesisV2 = {
+  commercialObjective: string;
+  angle: string;
+  coreMessage: string;
+  desiredViewerResponse: string | null;
+  audience: string | null;
+  situation: string | null;
+  desire: string | null;
+  identification: string | null;
+  curiosity: string | null;
+  aspiration: string | null;
+  humorPotential: string | null;
+  visualPotential: string | null;
+  pain: string | null;
+  objection: string | null;
+  desiredOutcome: string | null;
+  relevantCapabilities: readonly string[];
+  benefits: readonly string[];
+  proofOptions: readonly string[];
+  commercialEffects: readonly string[];
+  evidenceRefs: readonly string[];
+  confidence: number;
+};
+
+export type DiscoveryEnvelopeV2 = {
+  discoveryContractVersion: "2";
+  hypotheses: readonly DiscoveryHypothesisV2[];
+};
+
+// ─── Stage 3: ContentOpportunity V2 persistence enrichment ─────────────────
+
+// Enriquece a opportunity com o handoff V2 (blueprint canônico + contract
+// version) para persistência no payload do contentOpportunity. Sem IDs de
+// provider, sem catálogo, sem cena.
+export function enrichOpportunityV2(
+  base: ContentOpportunity,
+  handoff: PlannedOpportunityHandoffV2,
+): ContentOpportunity & { opportunityContractVersion: "2"; creativeDirection: PlannedOpportunityHandoffV2["creativeDirection"] } {
+  return {
+    ...base,
+    opportunityContractVersion: "2" as const,
+    creativeDirection: handoff.creativeDirection,
+  };
+}
+
+// ─── Stage 3: Memory snapshot V1 — merge canônico para persistência ─────────
+
+// Constrói o snapshot de memória a partir dos sinais canônicos do planner.
+// Delega o merge deduplicado ao harness (mergeMemorySignalsCanonical).
+// Legacy snapshots (sem envelope) são ignorados — sem retrofabricar sinais.
+export function buildPlannerMemorySnapshot(
+  previousSignals: unknown,
+  deliveredRecords: readonly ReturnType<typeof projectMemorySignalsForPlanner>[number][],
+): { signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1"; signals: readonly Record<string, unknown>[] } {
+  const snapshot = memorySnapshotV2(previousSignals);
+  if (isEmptyMemorySnapshot(snapshot) && deliveredRecords.length === 0)
+    return { signalsSchemaVersion: PLANNER_MEMORY_SIGNALS_V1, signals: [] };
+  // Se legacy (sem envelope), o planner recebe empty — sem retrofabricar.
+  if (isEmptyMemorySnapshot(snapshot)) return { signalsSchemaVersion: PLANNER_MEMORY_SIGNALS_V1, signals: deliveredRecords };
+  // Envelope V1 válido → merge canônico via harness.
+  return { signalsSchemaVersion: PLANNER_MEMORY_SIGNALS_V1, signals: [...snapshot.signals, ...deliveredRecords] };
+}

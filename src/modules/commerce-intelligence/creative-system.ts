@@ -2,8 +2,9 @@
 // decisões 3–9). Dados sem frases: primitives são unidades semânticas por
 // dimensão fechada; recipes são constraint sets, nunca scripts. Fluxo
 // load → validate → freeze → expose, fail-closed com códigos estáveis GEN-CS-*.
-// Fundação apenas: nada aqui é lido pelo runtime ADR-029 e nenhuma escrita de
-// creativeDirection é autorizada antes do cutover (ADR-033 decisão 8).
+// É parte da Skill única do runtime ativo (@1.3, ADR-033 §7 clean cut); a
+// baseline E6 é a ADR-029 fixada por commit/fixture do runner isolado, não um
+// caminho de leitura ou geração do runtime.
 import rawCreativeSystem from "../../../resources/system-knowledge/tiktok-commerce/creative-system.json";
 import { GenerationError } from "./errors";
 
@@ -74,12 +75,21 @@ const DATA_FIELDS = Object.values(FIELD_BY_DIMENSION) as DimensionField[];
 const csError = (code: CreativeSystemErrorCode, message: string): GenerationError<CreativeSystemErrorCode> =>
   new GenerationError<CreativeSystemErrorCode>(code, message);
 
+// Fail-closed: chave própria desconhecida é rejeitada, nunca silenciada
+// (ADR-033 decisão 9). Chaves dinâmicas legítimas (papéis dentro de
+// formatsByProductRole) ficam fora do escopo deste helper.
+const assertExactKeys = (value: Record<string, unknown>, keys: readonly string[], what: string): void => {
+  for (const key of Object.keys(value))
+    if (!keys.includes(key)) throw csError("GEN-CS-SCHEMA", `${what}: chave desconhecida ${key}`);
+};
+
 // IDs únicos por dimensão; arrays não vazios; recipes com todas as dimensões
 // preenchidas e referências resolvíveis. Sem coerção, sem valor padrão
 // (ADR-033 decisão 9).
 export function validateCreativeSystem(value: unknown): CreativeSystemData {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw csError("GEN-CS-SCHEMA", "Creative System invalido");
   const record = value as Record<string, unknown>;
+  assertExactKeys(record, [...DATA_FIELDS, "recipes", "compatibility"], "Creative System");
   const dimensionIds = new Map<DimensionField, string[]>();
   for (const field of DATA_FIELDS) {
     const ids = record[field];
@@ -92,6 +102,7 @@ export function validateCreativeSystem(value: unknown): CreativeSystemData {
   const compatibility = record.compatibility;
   if (!compatibility || typeof compatibility !== "object" || Array.isArray(compatibility))
     throw csError("GEN-CS-SCHEMA", "Compatibilidade invalida");
+  assertExactKeys(compatibility as Record<string, unknown>, ["formatsByProductRole"], "Compatibilidade");
   const formatsByProductRole = (compatibility as Record<string, unknown>).formatsByProductRole;
   if (!formatsByProductRole || typeof formatsByProductRole !== "object" || Array.isArray(formatsByProductRole))
     throw csError("GEN-CS-SCHEMA", "formatsByProductRole invalido");
@@ -111,6 +122,7 @@ export function validateCreativeSystem(value: unknown): CreativeSystemData {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw csError("GEN-CS-SCHEMA", "Recipe invalida");
     const raw = entry as Record<string, unknown>;
     if (typeof raw.id !== "string" || !raw.id.trim()) throw csError("GEN-CS-SCHEMA", "Recipe sem id");
+    assertExactKeys(raw, ["id", "attentionMechanisms", "psychologicalEffects", "formats", "narrativeMoves", "productRoles"], `Recipe ${raw.id}`);
     if (recipeIds.has(raw.id)) throw csError("GEN-CS-SCHEMA", `Recipe duplicada: ${raw.id}`);
     recipeIds.add(raw.id);
     const pick = (field: DimensionField): string[] => {
@@ -157,9 +169,10 @@ function deepFreeze<T>(value: T): T {
   return Object.freeze(value);
 }
 
-// Registro por versão da Skill: o schema de compatibilidade herda a versão
-// (ADR-033 decisão 9). Versões sem Creative System falham GEN-CS-VERSION —
-// inclusive @1.2, preservado intacto como histórico e runtime ADR-029.
+// Registro único da Skill do runtime: o schema de compatibilidade herda a
+// versão (ADR-033 decisão 9). Versões sem Creative System falham GEN-CS-VERSION
+// — inclusive @1.2, que existe somente como baseline E6 por commit/fixture, sem
+// loader, alias ou fallback no runtime (ADR-033 §7).
 export const CREATIVE_SYSTEM_SKILL_VERSION = "tiktok-commerce@1.3";
 
 const CREATIVE_SYSTEMS: Record<string, CreativeSystem> = {
@@ -187,9 +200,53 @@ export function primitiveExists(system: CreativeSystem, dimension: CreativeDimen
 // única normalização permitida — o resto é rejeição, nunca substituição.
 const dedupStable = (ids: readonly string[]): string[] => [...new Set(ids)];
 
+// ADR-033 §4: allowlists dos demais pares entre dimensões derivam
+// exclusivamente da coocorrência nas CreativeRecipe desta versão da Skill —
+// cada recipe declara um constraint set coerente; a união dos seus pares forma
+// a allowlist. format×productRole usa o mapa explícito formatsByProductRole.
+const DIMENSIONS: readonly CreativeDimension[] = [
+  "attention",
+  "psychologicalEffect",
+  "format",
+  "narrativeMove",
+  "productRole",
+];
+const PAIR_DIMENSIONS: ReadonlyArray<readonly [CreativeDimension, CreativeDimension]> = DIMENSIONS.flatMap(
+  (a, index): ReadonlyArray<readonly [CreativeDimension, CreativeDimension]> =>
+    DIMENSIONS.slice(index + 1).map((b) => [a, b] as const),
+);
+
+// ADR-033 §4 (emenda Architect): gate pairwise FORA do resolveBlueprint. Esta
+// regra versionada é chamada explicitamente pelo caller da integração
+// candidata do runtime quando ele consumir composição livre; o
+// resolveBlueprint compartilhado decide somente estrutura/schema/eligibility
+// e o mapa explícito format×productRole. Nesta etapa não existe caller runtime
+// de composição livre (o planner é recipe-backed), então a regra fica
+// exportada e testada sem forçar integração das Etapas 1–6.
+export function assertFreeCompositionCooccurrence(system: CreativeSystem, blueprint: CreativeBlueprint): void {
+  const members: Record<CreativeDimension, readonly string[]> = {
+    attention: blueprint.attentionMechanisms,
+    psychologicalEffect: blueprint.psychologicalEffects,
+    format: [blueprint.format],
+    narrativeMove: blueprint.narrativeMoves,
+    productRole: [blueprint.productRole],
+  };
+  // Verificação direta em recipes, sem estado temporário por chamada.
+  const coOccurs = (a: CreativeDimension, x: string, b: CreativeDimension, y: string): boolean =>
+    system.recipes.some((recipe) => recipe[FIELD_BY_DIMENSION[a]].includes(x) && recipe[FIELD_BY_DIMENSION[b]].includes(y));
+  for (const [a, b] of PAIR_DIMENSIONS) {
+    if (a === "format" && b === "productRole") continue; // autoridade: mapa explícito
+    for (const x of members[a])
+      for (const y of members[b])
+        if (!coOccurs(a, x, b, y))
+          throw csError("GEN-CS-COMPAT", `Par ${x} (${a}) × ${y} (${b}) sem coocorrencia em recipe`);
+  }
+}
+
 export function resolveBlueprint(system: CreativeSystem, value: unknown): CreativeBlueprint {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw csError("GEN-CS-SCHEMA", "Blueprint invalido");
   const record = value as Record<string, unknown>;
+  assertExactKeys(record, ["recipeId", "attentionMechanisms", "psychologicalEffects", "format", "narrativeMoves", "productRole"], "Blueprint");
   const recipeId = record.recipeId === undefined ? undefined : record.recipeId;
   if (recipeId !== undefined && (typeof recipeId !== "string" || !recipeId.trim()))
     throw csError("GEN-CS-SCHEMA", "recipeId invalido");
@@ -236,7 +293,7 @@ export function resolveBlueprint(system: CreativeSystem, value: unknown): Creati
     // Composição livre: válida somente com o par formato×papel declarado na
     // compatibilidade versionada (ADR-033 decisões 6 e 9) — enum válido não é
     // compatibilidade. Ausência de entrada = nada compatível declarado. A
-    // coerenência recipe-backed permanece sendo o constraint set da própria
+    // coherência recipe-backed permanece sendo o constraint set da própria
     // recipe. Sem coerção e sem fallback.
     throw csError("GEN-CS-COMPAT", `Formato ${format} incompativel com o papel ${productRole}`);
   }

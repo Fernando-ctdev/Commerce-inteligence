@@ -4,6 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseStructuredBriefDraft, runFirstGeneration } from "./engine";
+import { CONTENT_BRIEF_GENERATION_INSTRUCTION, CONTENT_BRIEF_REPAIR_INSTRUCTION } from "./provider";
 import { ContractError } from "./contract";
 import { ctaTextFactualIssues } from "./gates";
 import { collectJobEvents, resetJobEvents } from "./observability";
@@ -196,6 +197,97 @@ test("mapping context is compact and allowlisted without strategy plan skill or 
   const productContext = (capturedContext as { product: Record<string, unknown> }).product;
   assert.deepEqual(Object.keys(productContext).sort(), ["brand", "category", "description", "name", "priceAmount", "priceCurrency"]);
   assert.equal("discount" in productContext, false);
+});
+
+// Fronteira prompt↔contexto (cutover V2): o prompt de cada capability só pode
+// instruir uso de campos que o contexto REAL capturado do engine fornece. Um
+// prompt que cite chave fora da allowlist instrui o modelo a ler campos que
+// nunca existem (bug V1: selectedPatterns/relevantFacts/developmentRequirements).
+const CONTEXT_KEYS_BY_TASK: Record<string, readonly string[]> = {
+  CONTENT_BRIEF_GENERATION: [
+    // topo do batchContext (engine.ts:1188-1204)
+    "realizations", "platformRules", "creatorContext",
+    // chaves de buildRealizationContext (engine-v2.ts:626-640)
+    "commercialObjective", "angle", "coreMessage", "desiredViewerResponse", "hookMechanism", "blueprint",
+    "validatedEvidenceRefs", "productFacts", "creatorConstraints", "memoryConstraints",
+  ],
+  CONTENT_BRIEF_REPAIR: [
+    // topo do repairContext (engine.ts:1391-1400)
+    "realization", "issues", "repairChecklist", "developmentDiagnostics", "failedBulletIndexes",
+    "failedBullets", "siblingSummary", "creatorContext",
+    // chaves de buildRealizationContext dentro de realization
+    "commercialObjective", "angle", "coreMessage", "hookMechanism", "blueprint",
+    "validatedEvidenceRefs", "productFacts", "creatorConstraints", "memoryConstraints", "platformRules",
+  ],
+};
+// Campos de saída canônica (o prompt instrui o formato da resposta, não o contexto).
+const OUTPUT_FIELDS = new Set(["angle", "hook", "development", "script", "cta", "items", "scenes"]);
+
+test("prompts de brief generation/repair só instruem campos presentes no contexto real do engine", async () => {
+  const briefContexts: Array<Record<string, unknown>> = [];
+  const repairContexts: Array<Record<string, unknown>> = [];
+  // Primeiro brief reprova por claim objetivo sem suporte (dispara o repair);
+  // segundo brief passa — mesmo shape do teste de repair per-item.
+  let briefCalls = 0;
+  const badDevelopment = [
+    { text: "Destaque os 999 kg de carga para demonstrar resistência", action: "Destaque", factRefs: ["product:description"], rationale: "para demonstrar resistência", cta: "Confira o produto na página." },
+    { text: "Destaque os 999 kg de carga para demonstrar resistência", action: "Destaque", factRefs: ["product:description"], rationale: "para demonstrar resistência", cta: "Confira o produto na página." },
+  ];
+  const goodDevelopment = sbPair("Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso");
+  const router = { describe, hash: () => "h", complete: async (task: string, input?: { trustedContext?: unknown }) => {
+    if (task === "PRODUCT_UNDERSTANDING") return understanding;
+    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
+    if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
+    if (task === "CONTENT_BRIEF_GENERATION") { briefContexts.push((input?.trustedContext ?? {}) as Record<string, unknown>); briefCalls += 1; return { developmentSchemaVersion: 2, items: [briefCalls === 1 ? { angle: "x", hook: "h", development: badDevelopment, script: "testado com 999 kg de carga", cta: "c" } : { angle: "y", hook: "h2", development: goodDevelopment, script: "Mostre o Produto", cta: "c" }] }; }
+    if (task === "CONTENT_BRIEF_REPAIR") { repairContexts.push((input?.trustedContext ?? {}) as Record<string, unknown>); return { developmentSchemaVersion: 2, angle: "x", hook: "h", development: goodDevelopment, script: "Mostre o Produto", cta: "c" }; }
+    if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
+    return {};
+  } };
+  await runFirstGeneration({ productId: "p", jobId: "j-fronteira", name: "Calça", description: "Tecido respirável", targetContentCount: 1, router });
+  if (briefContexts.length === 0) throw new Error("contexto do brief generation não capturado");
+  if (repairContexts.length === 0) throw new Error("contexto do repair não capturado (repair não disparou)");
+  // Chaves reais presentes nos contextos capturados: topo + chaves de cada
+  // realization/realization aninhada (o prompt cita campos dentro delas).
+  const collectKeys = (contexts: ReadonlyArray<Record<string, unknown>>, nested?: readonly string[]): Set<string> => {
+    const keys = new Set<string>();
+    for (const context of contexts) {
+      for (const key of Object.keys(context)) keys.add(key);
+      for (const container of nested ?? []) {
+        const value = context[container];
+        const list = Array.isArray(value) ? value : [value];
+        for (const item of list) if (item && typeof item === "object") for (const key of Object.keys(item)) keys.add(key);
+      }
+    }
+    return keys;
+  };
+  const realKeys: Record<string, Set<string>> = {
+    CONTENT_BRIEF_GENERATION: collectKeys(briefContexts, ["realizations"]),
+    CONTENT_BRIEF_REPAIR: collectKeys(repairContexts, ["realization"]),
+  };
+  // O prompt não pode instruir uso de nenhuma chave que o contexto real não fornece.
+  for (const [task, instruction] of [["CONTENT_BRIEF_GENERATION", CONTENT_BRIEF_GENERATION_INSTRUCTION], ["CONTENT_BRIEF_REPAIR", CONTENT_BRIEF_REPAIR_INSTRUCTION]] as const) {
+    const known = CONTEXT_KEYS_BY_TASK[task]!;
+    for (const key of known) {
+      if (!instruction.includes(key)) continue; // prompt nem menciona: ok
+      if (!realKeys[task]!.has(key)) continue; // mencionada e presente: ok
+    }
+    // Inverso (o que pega o bug): referências V1 conhecidas que NÃO existem no contexto real capturado.
+    for (const ghost of ["selectedPatterns", "relevantFacts", "developmentRequirements", "causes[", "repairContrast"]) {
+      if (!instruction.includes(ghost)) continue;
+      assert.fail(`${task}: prompt referencia campo ausente do contexto real: ${ghost}`);
+    }
+    // Toda chave que o prompt cita e que está na allowlist conhecida deve existir de fato no contexto capturado.
+    for (const key of known) {
+      if (!instruction.includes(key)) continue;
+      assert.ok(realKeys[task]!.has(key), `${task}: prompt cita '${key}' mas o contexto real não fornece`);
+    }
+  }
+  // Repair: campos que o prompt cita explicitamente devem existir no repairContext real.
+  for (const cited of ["developmentDiagnostics", "failedBulletIndexes", "failedBullets"]) {
+    if (CONTENT_BRIEF_REPAIR_INSTRUCTION.includes(cited)) {
+      assert.ok(realKeys.CONTENT_BRIEF_REPAIR!.has(cited), `repair prompt cita '${cited}' ausente do repairContext real`);
+    }
+  }
 });
 
 test("brief context exposes only the V2 realization allowlist", async () => {

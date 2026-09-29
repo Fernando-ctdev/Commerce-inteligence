@@ -1,195 +1,148 @@
 # Etapa 6 — Golden Dataset e Evals Documentation Plan
 
-> **Para agentes:** este plano é documentation-only. Não execute código, dataset, fixture, harness, provider, benchmark, anotação, A/B, relatório de resultados ou cutover a partir deste arquivo. Qualquer execução futura exige protocolo separado, aprovado conforme ADR-033.
+> **Para agentes:** documentation-only. Não execute dataset, fixture, provider, benchmark, anotação, E6 ou cutover a partir deste plano.
 
-**Goal:** consolidar a precondição documental `etapa-6-golden-evals` do Slice 003 para avaliações redacted, versionadas e reproduzíveis sem alterar o runtime ADR-029.
+**Goal:** preparar avaliação integral auditável de ADR-029/`@1.2` versus Engine V2 final com binding `@1.3` consistente **ainda pendente**, sem declarar resultado ou aceitação.
 
-**Architecture:** o manifesto, cases, fixtures, rubrics, assignments, thresholds e relatórios são artefatos offline versionados e hashados. O runtime permanece ADR-029/`@1.2`; o único candidato futuro permitido neste plano é uma regra de invocação/cobertura do Judge reduction, com baseline por commit, seed derivado do Job, fingerprint e aprovação formal.
+**Architecture:** E6 usa runner isolado para baseline fixada por commit, validação offline dos invariantes e execução pareada com provider vivo para métricas operacionais e qualidade semântica. Rubricas, cegamento, adjudicação, agregação e thresholds são pré-registrados.
 
-**Tech Stack:** Markdown e referências documentais; nenhuma alteração de Next.js, TypeScript, PostgreSQL, Model Router, provider, schema, worker, quota, Job ou persistência.
+**Tech Stack:** Markdown nesta alteração. Nenhum código, provider, teste ou schema modificado.
 
 **Spec:** [`docs/specs/etapa-6-golden-evals/SPEC.md`](../../specs/etapa-6-golden-evals/SPEC.md)
 
 ## Global Constraints
 
-- A nota imutável “Plano de recalibração da commerce inteligence” é a autoridade superior.
-- A Etapa 6 é precondição documental transversal do Slice 003; não é Slice de produto e não cria/renumera/reutiliza Slice 004.
-- ADR-029 permanece runtime vigente e baseline; `tiktok-commerce@1.2` permanece em produção; `@1.3` permanece inativa.
-- `ContentSceneSet` permanece separado; hard gates, Judge, repairs e `BriefValidationReport` não mudam.
-- Quota, Tenant, Job, reservation, fencing, idempotência, D/N, parcial e retry permanecem os contratos atuais.
-- Manifesto, case, fixture, rubric, assignment, threshold e relatório são artefatos de avaliação, não contratos de produção.
-- Cases e fixtures devem ser redacted, canonical-json, versionados e hashados; hash/seed/assignment incompatível falha fechado.
-- Seed Job/derivation/fingerprint e `ThresholdPolicyVersion` devem ser pré-registrados antes de execução futura.
-- Assignment cego e `JudgeExecution` são autoridades distintas; ausência do Judge nunca produz `PASS`.
-- Candidato futuro possui uma única variável: regra de invocação/cobertura do Judge reduction.
-- Métricas precisam de denominador, missing data, categoria, custo ADR-013, moeda e latência explícitos.
-- Relatório futuro exige revisão do Software Architect e aprovação explícita do usuário.
-- Não alterar PRD, ADR, SYSTEM-DESIGN, DESIGN, nota imutável ou código.
+- Engine V2 permanece default em `V2_DEFAULT_PENDING_ACCEPTANCE`.
+- ADR-029/`@1.2` permanece baseline histórico/experimental.
+- No commit `8d1833b`, loader runtime usa `@1.2` e Planner V2 usa `@1.3` de fixture harness; V2 default não prova binding operacional `@1.3`.
+- O [call map estático da Etapa 1](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/baseline-call-map.md) documenta essas superfícies e chamadas lógicas; chamadas físicas, tokens, custo e latência observados seguem `UNAVAILABLE` sem execução real.
+- [`manifest.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/manifest.json) `FROZEN` `golden-dataset.v1`, [`rubrics.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/rubrics.json) `golden-rubric.v1` e [`threshold-policy.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/threshold-policy.json) `THRESHOLD_POLICY_GOLDEN_V1` pertencem somente ao experimento offline parcial Judge reduction; não são o pacote nem aprovação full E6. Preservá-los sem alteração.
+- Falha/incompletude de E6 não faz rollback implícito.
+- End-to-end e atribuições por variável são ambos obrigatórios.
+- Fixtures/replay offline não satisfazem custo, latência, usage ou qualidade semântica real.
+- Provider vivo pareado é obrigatório para essas métricas.
+- Quota, Tenant, Job, D/N, partial, retry, fencing e idempotência permanecem invariantes.
+- Não inventar thresholds, resultados, aprovação ou não-regressão.
+- Não alterar PRDs, ADRs, DESIGN, nota, código ou testes.
 
 ---
 
-## 1. Arquivos e responsabilidades
+## 1. Arquivos e fronteiras
 
-| Arquivo | Operação | Responsabilidade |
-|---|---|---|
-| `docs/specs/etapa-6-golden-evals/SPEC.md` | Criar | Identidade, fontes, contratos, invariantes, artefatos, protocolo futuro, métricas, aprovação e limites. |
-| `docs/plans/etapa-6-golden-evals/PLAN.md` | Criar | Sequência documental, dependências, gates de revisão e validação sem runtime. |
-| `docs/delivery/SLICES.md` | Atualizar minimamente | Uma referência sob a pré-condição do Slice 003; não criar, renumerar ou reutilizar Slice 004. |
+| Arquivo | Responsabilidade |
+|---|---|
+| `docs/specs/etapa-6-golden-evals/SPEC.md` | protocolo, evidência, rubricas, comparabilidade, métricas e aceite |
+| `docs/plans/etapa-6-golden-evals/PLAN.md` | sequência documental e gates de Review |
+| `docs/delivery/SLICES.md` | Etapa 6 transversal sob Slice 003 |
 
-Nenhum outro arquivo é autorizado nesta mudança.
+Etapa 6 não cria Slice nem move revisão/controle do Slice 004.
 
 ## 2. Sequência documental
 
-### Task 1: Congelar identidade, fontes e baseline
+### Task 1 — Fixar estados e escopo
 
-**Files:**
+- [ ] Registrar V2 como default, aceitação pendente.
+- [ ] Fixar ADR-029/`@1.2` como baseline por commit.
+- [ ] Registrar V2 final com `@1.3` operacional consistente como candidato futuro por commit; não inferir essa consistência ponta a ponta apenas do loader ativo, pois o binding do Planner ainda é `frozen-harness-fixture`.
+- [ ] Separar primeira geração e recorrência.
+- [ ] Bloquear alegação de resultado/aceite a partir de documentação.
 
-- Create: `docs/specs/etapa-6-golden-evals/SPEC.md`
-- Reference: `docs/delivery/SLICES.md`, Slice 003 e Slice 004
-- Read-only: nota imutável, PRDs, SYSTEM-DESIGN, ADR-013/019/021/029/033, Etapa 4, Etapa 5 e `.gstack/etapa6-*`
+**Gate:** Review pode reprovar qualquer frase que recoloque ADR-029 em produção ou trate pendência V2 como implementada.
 
-**Produces:** identidade `etapa-6-golden-evals`, status `DOCUMENTATION_ONLY`, precondição do Slice 003 e baseline operacional imutável.
+### Task 2 — Congelar **novas versões full E6** de manifesto/cases/fixtures, rubricas e thresholds
 
-- [ ] Declarar que a nota imutável tem precedência.
-- [ ] Linkar ADR-013, ADR-019, ADR-021, ADR-029, ADR-033, SYSTEM-DESIGN, SLICES, Etapa 4, Etapa 5 e scratchs.
-- [ ] Fixar ADR-029, `@1.2`, scenes, gates, Judge, repairs, quota, Tenant, Job, D/N, partial e retry.
-- [ ] Declarar `@1.3`, Blueprint/recipe, Creative System e `creativeDirection` fora do runtime.
-- [ ] Declarar que nenhuma execução ou cutover é autorizado.
+- [ ] Registrar diferenças para v1: manifesto `golden-dataset.v1` congelado com `golden-case.v1` versus novo conjunto end-to-end/atribuições; rubrica v1 apenas `NATURALNESS`/`CONTENT` versus dimensões, unidades, âncoras e dupla anotação cega; threshold v1 `risk-assessment.v1`/`JUDGE_EXECUTED_CONTENTS`/Judge reduction versus policies full por categoria, agregação, evidência e missing.
+- [ ] Versionar novos dataset, rubricas, aggregation/threshold policies e categorias; preservar v1 sem reescrita e sem herdar `FROZEN` como aceite.
+- [ ] Redactar Product Facts, evidence, creator context, memória e replay.
+- [ ] Usar canonical JSON UTF-8, SHA-256, IDs estáveis e hashes.
+- [ ] Exigir **novo manifesto full E6** `FROZEN` e rubricas/aggregation/thresholds hashados e aprovados antes da coleta.
 
-**Gate:** a SPEC não cria capability, estado, endpoint, serviço, worker, schema ou mudança de runtime.
+**Gate:** `FROZEN` v1 comprova apenas o escopo parcial Judge reduction, não o pacote full. Fixture sem hash, redaction ou proveniência é inelegível; replay não vira provider vivo.
 
-### Task 2: Congelar manifesto, case, fixture e rubric
+### Task 3 — Congelar protocolo comparável
 
-**Files:**
+Por braço, registrar antes da coleta:
 
-- Modify: `docs/specs/etapa-6-golden-evals/SPEC.md`
-- Reference: ADR-019, ADR-029, ADR-033
+- commit/engine version;
+- provider/model ID/version/tier;
+- parâmetros efetivos, reasoning, temperature, top-p, max tokens, response/schema mode, timeout, retry, fallback;
+- Skill/binding, Creative System, contratos e policies;
+- prompt/instruction e contexto por bytes/hash;
+- Facts/evidence, creator context, memória e dataset por bytes/hash;
+- seed/derivation e pair fingerprint;
+- capabilities, cobertura e tentativas;
+- usage/tokens, pricing source, moeda/custo, latência e completude.
 
-**Produces:** schemas versionados `GoldenDatasetManifestV1`, `GoldenCaseV1`, `FixtureRefV1` e `GoldenRubricV1`.
+No end-to-end, congelar controles externos e registrar diferenças inerentes entre braços. Atribuições mudam uma variável. Diferença não pré-registrada invalida o par ou a métrica afetada.
 
-- [ ] Exigir manifesto `DRAFT|FROZEN|RETIRED`, `schemaVersion`, `rubricVersion`, `thresholdPolicyVersion`, `SHA-256`, ordem e `manifestHash`.
-- [ ] Exigir cases com cenário, refs de Product/evidence/creator/memory/provider replay, policies, expected, `inputHash` e `caseHash`.
-- [ ] Exigir canonical JSON UTF-8 e IDs de fixture estáveis, sem relógio, aleatoriedade, rede, banco corrente ou IDs de produção.
-- [ ] Redactar segredo, cookie, token, PII desnecessária, URL viva, payload bruto e dado cross-tenant.
-- [ ] Manter provider response como fixture offline sem autorizar provider.
-- [ ] Separar expectativa objetiva de anotação livre.
-- [ ] Versionar dimensão, unidade, labels, evidência, cegamento e adjudicação da rubric.
+### Task 4 — Pré-registrar rubricas e thresholds
 
-**Gate:** manifesto não `FROZEN`, hash ausente, redaction inválida ou referência órfã não é elegível para eval.
+Para cada dimensão subjetiva:
 
-### Task 3: Fixar seed, derivação e fingerprint
+- [ ] Definir pergunta, unidade, escala/labels e âncoras.
+- [ ] Exigir evidência mínima e regra `NOT_ANNOTATED`.
+- [ ] Definir ao menos duas avaliações humanas independentes e cegas por unidade.
+- [ ] Definir adjudicação sem sobrescrever avaliações brutas.
+- [ ] Fixar agregação por unidade, case, categoria e total.
+- [ ] Fixar micro/macro, pesos, amostra mínima, incerteza e missing.
+- [ ] Aprovar threshold policy antes da coleta, sem valores inventados neste PLAN.
 
-**Files:**
+**Gate:** Review pode reprovar dimensão sem unidade, cegamento, adjudicação, agregação/categoria ou threshold prévio.
 
-- Modify: `docs/specs/etapa-6-golden-evals/SPEC.md`
-- Reference: ADR-033, ADR-021 e SYSTEM-DESIGN
+### Task 5 — Separar evidência offline e live
 
-**Produces:** contrato documental de `seedDerivationVersion`, Job seed, replay seed e `pairFingerprint`.
+| Evidence | Permite | Não permite |
+|---|---|---|
+| Offline/fixture/replay | contrato, hash, gate determinístico, Planner, policy, pareamento | custo, latência, usage ou qualidade semântica real |
+| Provider vivo | qualidade semântica, usage, custo, latência, timeout e cobertura operacional | dispensar invariantes determinísticos |
 
-- [ ] Declarar que o runtime atual não é alterado para introduzir seed nesta etapa.
-- [ ] Exigir derivação determinística baseada no `jobId` lógico, entrada canônica, versão e hash.
-- [ ] Usar o mesmo seed Job nos dois braços do par.
-- [ ] Incluir dataset/case/input/policy/rubric, commits, SkillBinding, modelo/tier, prompts/context, seed e thresholds no fingerprint.
-- [ ] Invalidar par com seed, hash ou fingerprint incompatível.
-- [ ] Separar seed de fixture/replay do seed operacional futuro.
+Métrica live sem provider vivo é `UNAVAILABLE`; não imputar zero.
 
-**Gate:** sem derivação e fingerprint pré-registrados não existe A/B pareado válido.
+### Task 6 — Pré-registrar experimentos
 
-### Task 4: Separar assignment cego de JudgeExecution
+- [ ] End-to-end ADR-029 versus V2.
+- [ ] Product Understanding/Strategy LLM versus Facts + Discovery + Strategy determinística.
+- [ ] Plan LLM versus Planner V2.
+- [ ] Scene Ideas versus Scene Skeleton.
+- [ ] Judge-all versus Risk-gated.
+- [ ] Catálogo versus Blueprint.
+- [ ] Recipe-backed versus composição livre.
+- [ ] Skill 1.2 versus 1.3.
+- [ ] Tiers por capability.
+- [ ] Primeira geração e recorrência.
 
-**Files:**
+Cada atribuição fixa variável única e controles. Nenhum experimento é executado por este plano.
 
-- Modify: `docs/specs/etapa-6-golden-evals/SPEC.md`
-- Reference: Etapa 5 SPEC/PLAN e ADR-029
+### Task 7 — Definir relatório e gate de revisão
 
-**Produces:** `BlindAssignmentV1`, contrato de adjudicação e estados explícitos do Judge.
+O relatório futuro deve conter:
 
-- [ ] Ocultar arm, provider, modelo, tier, reasoning, custo, latência, retries, RiskAssessment e resultado esperado do anotador.
-- [ ] Proteger o mapeamento de `opaqueArmId` e validar seed/hash/rubric do assignment.
-- [ ] Manter `JudgeExecution=EXECUTED|NOT_EXECUTED|FAILED|NOT_APPLICABLE` separado da rubric.
-- [ ] Permitir `PASS|REVIEW` somente quando o Judge executou.
-- [ ] Exigir `RiskAssessment PARTIAL|UNAVAILABLE` quando `sources.judge=NOT_EXECUTED`.
-- [ ] Proibir que anotação/adjudicação altere Job, Content, Brief, D/F, quota ou publicação.
+- protocol/dataset/manifest/threshold/rubric/aggregation hashes;
+- commits e pair fingerprints;
+- evidence class por métrica;
+- provider/model/tier/params/prompts/contextos/seed;
+- avaliações cegas, conflitos e adjudicações;
+- resultados pareados e incerteza no total e por categoria;
+- usage/custo/latência e cobertura;
+- missing/invalid pairs;
+- verdict e report hash.
 
-**Gate:** assignment inválido falha fechado; anotação cega nunca preenche `JudgeResult`.
+Review pode rejeitar protocolo, par, categoria, resultado ou relatório incompleto. `V2_ACCEPTED` exige revisão formal do Software Architect e aceite explícito do usuário com `reportHash`. Este PLAN não os presume.
 
-### Task 5: Fixar missing data e ThresholdPolicyVersion
+## 3. Critérios de conclusão documental
 
-**Files:**
+- [ ] Runtime V2 default e aceitação pendente registrados.
+- [ ] ADR-029/`@1.2` preservado somente como baseline.
+- [ ] Artefatos v1 `FROZEN` preservados como evidência parcial Judge reduction, com diferenças de contrato e novas versões full E6 pré-registradas; não há aprovação herdada.
+- [ ] End-to-end e atribuições por variável separados no protocolo full E6.
+- [ ] Evidence offline e provider vivo separados.
+- [ ] Fixtures não satisfazem métricas live.
+- [ ] Provider/model/tier/params/prompts/contextos/seed e coverage comparáveis.
+- [ ] Rubrica, unidade, avaliações cegas, adjudicação, agregação/categoria e thresholds auditáveis.
+- [ ] Missing/invalid não viram zero, PASS ou exclusão silenciosa.
+- [ ] Nenhum resultado/approval foi inventado.
+- [ ] Nenhum runtime ou teste foi alterado.
 
-- Modify: `docs/specs/etapa-6-golden-evals/SPEC.md`
-- Reference: ADR-013, ADR-019, ADR-021, ADR-033
+## 4. Validação documental
 
-**Produces:** estados de missing e schema de `ThresholdPolicyVersionV1` sem valores numéricos inventados.
-
-- [ ] Registrar `MISSING`, `NOT_APPLICABLE`, `UNAVAILABLE`, `PARTIAL`, `NOT_EXECUTED`, `FAILED`, `NOT_ANNOTATED` e `INVALID`.
-- [ ] Fazer hash/seed/assignment incompatível produzir `INVALID`, sem veredito.
-- [ ] Proibir zero inventado para custo, cobertura ou qualidade.
-- [ ] Manter scenes `AVAILABLE|FILTERED|ERROR`, backfill e Judge ausente distintos.
-- [ ] Exigir policy pré-registrada para denominadores, exclusões, unidades, missing e regressão.
-- [ ] Não fixar número de threshold, anotadores, acordo, score ou margem nesta etapa.
-
-**Gate:** thresholds e missing data devem estar aprovados antes de qualquer coleta futura; nenhum relatório pós-hoc é válido.
-
-### Task 6: Fixar par futuro, métricas e relatório
-
-**Files:**
-
-- Modify: `docs/specs/etapa-6-golden-evals/SPEC.md`
-- Reference: ADR-013, ADR-029 e ADR-033
-
-**Produces:** protocolo documental de baseline/candidato, matriz de métricas e envelope de relatório.
-
-- [ ] Fixar baseline ADR-029/`@1.2` por commit/engine version.
-- [ ] Declarar candidato com única variável de Judge reduction: invocação/cobertura do Judge.
-- [ ] Manter constantes SkillBinding, scenes, gates, repairs, RiskAssessment, Blueprint, tier, modelo, inputs, memória, quota, retry e persistência.
-- [ ] Proibir `@1.2` versus `@1.3` no A/B comum; `@1.3` continua inativa.
-- [ ] Cobrir factualidade, gates, scenes, variety, naturalidade, templating, semântica, risco, partial/retry, Judge, custo e latência.
-- [ ] Usar denominadores explícitos; `usage.cost` primário ADR-013, moeda compatível, `D_content`, chamadas efetivas e p50/p95.
-- [ ] Exigir relatório com hashes, commits, seeds, fingerprints, assignments, JudgeExecution, métricas, missing e veredito.
-- [ ] Exigir revisão do Software Architect e aprovação explícita do usuário antes de qualquer efeito.
-
-**Gate:** sem relatório reproduzível aprovado, ADR-029 e `@1.2` permanecem vigentes e não há cutover.
-
-### Task 7: Adicionar referência mínima no SLICES
-
-**Files:**
-
-- Modify: `docs/delivery/SLICES.md` sob a pré-condição documental do Slice 003
-- Reference: `docs/specs/etapa-6-golden-evals/SPEC.md`
-- Reference: `docs/plans/etapa-6-golden-evals/PLAN.md`
-
-**Produces:** uma única referência documental mínima, sem criar Slice.
-
-- [ ] Linkar SPEC e PLAN da Etapa 6.
-- [ ] Declarar Etapa 6 como precondição transversal do Slice 003.
-- [ ] Mencionar Golden Dataset, fixtures, rubricas, anotação cega, Judge reduction e A/B.
-- [ ] Declarar que não cria, renumera ou reutiliza Slice 004.
-- [ ] Manter ADR-029, `@1.2` e gates atuais até relatório reproduzível e aprovação formal.
-
-**Gate:** nenhuma alteração fora da linha de pré-condição documental do Slice 003.
-
-## 3. Validação documental
-
-Executar somente após as três edições:
-
-1. Validar que os links Markdown relativos da SPEC, PLAN e referência do SLICES resolvem para arquivos existentes.
-2. Confirmar que os três arquivos contêm `DOCUMENTATION_ONLY`, `etapa-6-golden-evals`, ADR-029, `@1.2`, `@1.3`, `JudgeExecution`, `ThresholdPolicyVersion`, custo ADR-013, aprovação Architect/usuário e limites de não execução.
-3. Confirmar que a referência aparece sob Slice 003 e não cria/renumera/reutiliza Slice 004.
-4. Confirmar por inspeção de mudança que nenhum PRD, ADR, DESIGN, nota imutável, código ou outro arquivo foi alterado.
-
-Não executar testes de runtime, build, lint, typecheck, provider, fixture, harness, benchmark, A/B ou cutover: não há comportamento implementado nesta etapa.
-
-## 4. Critérios de aceite do PLAN
-
-- [ ] Os três arquivos autorizados são os únicos alvos da mudança.
-- [ ] SPEC e PLAN têm links válidos para ADR-013/019/021/029/033, SYSTEM-DESIGN, SLICES e Etapas 4/5.
-- [ ] O manifesto/cases/fixtures/rubrics são versionados, redacted e hashados.
-- [ ] Seed Job, derivation e fingerprint estão definidos como pré-condição futura.
-- [ ] Assignment cego não é confundido com `JudgeExecution`.
-- [ ] Missing/hash/seed/assignment incompatíveis falham fechado.
-- [ ] Thresholds permanecem sem números inventados e exigem aprovação prévia.
-- [ ] Baseline é ADR-029/`@1.2` por commit e o candidato é uma única variável Judge reduction.
-- [ ] Métricas têm denominadores, custo ADR-013, latência e missing data explícitos.
-- [ ] Relatório futuro é reproduzível e exige Architect + usuário.
-- [ ] Nenhuma execução real ou alteração de runtime ocorre.
+Validar links Markdown relativos, headings, estados, limites de evidência e diff. Não executar testes de runtime, typecheck, lint, build, fixture, provider, benchmark, E6 ou smoke.

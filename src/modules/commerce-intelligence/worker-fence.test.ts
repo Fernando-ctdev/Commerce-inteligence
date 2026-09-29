@@ -466,7 +466,7 @@ test("fence perdido: sceneOutcomes NÃO persistem no IntelligenceRun pelo owner 
       tenantId: job.tenantId,
       productId: job.productId,
       engineVersion: "teste-fence",
-      platformSkillVersion: "tiktok-commerce@1.2",
+      platformSkillVersion: "tiktok-commerce@1.3",
       metadata: { internalError: failureRun.internalError, diagnostics: failureRun.diagnostics },
     }, {});
     assert.equal(terminalized, false, "CAS perdido não terminaliza nem persiste");
@@ -494,7 +494,7 @@ test("complete-mode finalize com Strategy ACTIVE existente: única ACTIVE e plan
     data: { tenantId: job.tenantId, userId: job.userId, productId: job.productId, idempotencyKey: randomUUID(), fingerprint: randomUUID(), targetContentCount: 5, generatedContentsMonth: monthUtc(), status: "SUCCEEDED_PARTIAL", stage: "FINALIZING" },
   });
   const originalStrategy = await prisma.productStrategy.create({
-    data: { id: `${originalJob.id}-strategy`, tenantId: job.tenantId, productId: job.productId, jobId: originalJob.id, platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.2", payload: { id: `${originalJob.id}-strategy`, productId: job.productId, jobId: originalJob.id, version: 1, status: "ACTIVE" } },
+    data: { id: `${originalJob.id}-strategy`, tenantId: job.tenantId, productId: job.productId, jobId: originalJob.id, platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.3", payload: { id: `${originalJob.id}-strategy`, productId: job.productId, jobId: originalJob.id, version: 1, status: "ACTIVE" } },
   });
   try {
     const claimed = await claimGeneration(new Date(), "owner-c", job.id);

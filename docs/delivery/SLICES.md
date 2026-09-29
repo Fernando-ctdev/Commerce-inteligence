@@ -42,13 +42,13 @@ Este documento é um mapa de construção. Não é PRD, ADR, SPEC ou PLAN e não
 
 ## Pré-condição transversal — Etapa 0 (ADR-033)
 
-**Status documental:** `APPROVED` — aprovação documental registrada; implementação, runtime e cutover permanecem bloqueados pelos gates ADR-029/033 e pelo A/B formal.
+**Status documental:** `APPROVED`; coordenação com o runtime V2 registrada, aceitação formal ainda pendente.
 
-A Etapa 0 é uma pré-condição transversal para o Slice 003 e para qualquer cutover posterior da Commerce Intelligence. Ela não é um slice de produto e não cria `slice-000` nem `stage-0`.
+A Etapa 0 é uma pré-condição transversal para o Slice 003 e para o fechamento arquitetural da Commerce Intelligence. Ela não é um slice de produto e não cria `slice-000` nem `stage-0`.
 
-O [ADR-033](../architecture/adr-033-determinismo-llm-e-creative-system.md) documenta a arquitetura-alvo e mantém o [ADR-029](../architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md) como runtime vigente. Enquanto SPEC/PLAN de cutover e eval não forem aprovados, chamadas, tiers, cenas, gates, repairs e `ROUTER_MAP` permanecem inalterados.
+O [ADR-033](../architecture/adr-033-determinismo-llm-e-creative-system.md) registra a Engine V2 como runtime default de produção no estado `V2_DEFAULT_PENDING_ACCEPTANCE`. O [ADR-029](../architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md) permanece baseline histórico/experimental reproduzível e autoridade dos invariantes preservados; não é o call graph default e sua supersessão formal aguarda `V2_ACCEPTED`.
 
-A documentação da Etapa 0 registra o Creative System dentro da `PlatformSkill` (`CreativePrimitive`, `CreativeRecipe`, `CreativeBlueprint`, compatibilidade `load → validate → freeze → expose`, versionamento, histórico, memória e fail-closed), sem domínio, serviço, agente, workflow, repositório ou aggregate paralelo. A fundação pode ser especificada e validada de forma aditiva, mas não tem ativação operacional nem escreve `creativeDirection` antes de SPEC/PLAN de cutover e eval aprovados. O Blueprint futuro pertence a `ContentOpportunity.creativeDirection`; o catálogo literal permanece fora do prompt normal de caminhos novos.
+O Creative System permanece dentro da `PlatformSkill`, sem domínio, serviço, agente, workflow, repositório ou aggregate paralelo. O runtime V2 atual não satisfaz automaticamente o alvo completo: `creativeDirection` canônica, memória multidimensional, Risk antes do Judge seletivo, proveniência/binding 1.3 coerentes, contexto sem `selectedPatterns` e E6 integral continuam pendências explícitas até evidência de implementação e aceitação. Este mapa não promove essas pendências a comportamento existente.
 
 ## Princípios usados para definir os slices
 
@@ -64,7 +64,7 @@ A documentação da Etapa 0 registra o Creative System dentro da `PlatformSkill`
 * **Lote significa gravação:** `RecordingBatch` é a unidade operacional do Estúdio; seus estados (`Aguardando`, `Gravando`, `Concluído`) são derivados do progresso. `lote` nunca significa nova geração de conteúdos.
 * **Memória construída pelo uso:** geração, aprovação, descarte e conclusão preservam sinais que alimentam a `ProductMemorySnapshot`.
 * **Modelos são detalhe interno:** capabilities usam tarefas lógicas e Model Router; `LOW/MID/HIGH`, provider e prompt não aparecem na experiência.
-* **Pré-condição antes de implementação:** a Etapa 0 deve estar aprovada nos documentos da SPEC, PLAN e mapa de Slices antes de qualquer mudança operacional; avaliações A/B e gates preservam o runtime ADR-029 até aprovação formal.
+* **Estado operacional explícito:** V2 é o default pendente de aceitação; ADR-029 é baseline histórico/experimental. Documentação, implementação e evidência devem distinguir o runtime observado dos contratos-alvo ainda pendentes, sem rollback ou cutover inferidos por este mapa.
 * **UX orientada à próxima ação:** Home, Produtos, Estúdio e Agenda comunicam o próximo comportamento útil, não a arquitetura interna.
 * **Mobile completo, desktop expandido:** nenhuma capacidade essencial existe somente no desktop.
 * **Escopo explícito:** publicação, social scheduling, analytics externo, ROAS, CTR, geração de mídia, embeddings obrigatórios e demais não objetivos permanecem fora do MVP.
@@ -131,7 +131,7 @@ resultado completo disponível para revisão
 
 Strategy e Plan permanecem consultáveis, mas não são gates obrigatórios.
 
-Na primeira geração, a sequência observável continua sendo a do runtime ADR-029. O ADR-033 descreve uma arquitetura-alvo condicionada a eval: a LLM descobre e realiza criatividade; o código organiza, combina, seleciona, restringe, distribui, memoriza e valida. Essa distinção não altera a experiência/UI nem autoriza mudança de chamadas, tiers ou cenas nesta etapa.
+Na primeira geração, o runtime default é a Engine V2 registrada no ADR-033. O princípio permanece: a LLM descobre/realiza criatividade; o código organiza, combina, seleciona, restringe, distribui, memoriza e valida. Os contratos-alvo ainda não comprovados continuam pendências de `V2_ACCEPTED`, não etapas simuladas na experiência/UI.
 
 ### Revisão
 
@@ -273,9 +273,8 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 
 **User Outcome:** Depois de acionar `Analisar produto` sobre o Produto salvo, o creator recebe, sem etapas intermediárias, uma Strategy comercial e um conjunto consistente de Briefings em `DRAFT` prontos para revisão — podendo continuar usando a aplicação enquanto a análise trabalha.
 
-**Depends On:** Slice 002 + Etapa 0 documental (ADR-033)
-**Pré-condição documental adicional:** a [Etapa 4 — Skill e Brief Generation](../specs/etapa-4-skill-brief/SPEC.md), com [PLAN](../plans/etapa-4-skill-brief/PLAN.md), e a [Etapa 6 — Golden Dataset e Evals](../specs/etapa-6-golden-evals/SPEC.md), com [PLAN](../plans/etapa-6-golden-evals/PLAN.md), devem estar aprovadas antes de qualquer mudança de contrato relacionada às respectivas frentes e antes de qualquer cutover; na Etapa 6 inclui Golden Dataset, fixtures, rubricas, anotação cega, Judge reduction e A/B; essas frentes são documentação técnica transversal do Slice 003, não criam, renumeram ou reutilizam um Slice 004 e não alteram o escopo do Slice 004 existente. ADR-029, `@1.2` e os gates atuais permanecem vigentes até relatório reproduzível e aprovação formal.
-**Pré-condição documental adicional:** a [Etapa 5 — Gates de risco e qualidade](../specs/etapa-5-risk-quality/SPEC.md), com [PLAN](../plans/etapa-5-risk-quality/PLAN.md), deve estar aprovada antes de qualquer mudança de contrato ou cutover de `RiskAssessment`, `Judge reduction` ou validação `Blueprint/recipe`; é `DOCUMENTATION_ONLY`, documentação técnica transversal do Slice 003, não cria, renumera ou reutiliza um Slice 004. ADR-029, `@1.2` e os gates atuais permanecem vigentes até relatório reproduzível e aprovação formal.
+**Depends On:** Slice 002 + coordenação documental do ADR-033
+**Pré-condição documental adicional:** [Etapa 4 — Skill e Brief Generation](../specs/etapa-4-skill-brief/SPEC.md), com [PLAN](../plans/etapa-4-skill-brief/PLAN.md), [Etapa 5 — Gates de risco e qualidade](../specs/etapa-5-risk-quality/SPEC.md), com [PLAN](../plans/etapa-5-risk-quality/PLAN.md), e [Etapa 6 — Golden Dataset e Evals](../specs/etapa-6-golden-evals/SPEC.md), com [PLAN](../plans/etapa-6-golden-evals/PLAN.md), são documentação técnica transversal do Slice 003. Não criam, renumeram ou reutilizam Slice 004. Devem separar o runtime V2 default das pendências de aceitação e preservar ADR-029/`@1.2` somente como histórico/baseline E6.
 
 **Domain Areas:** Commerce Intelligence (engine + job), Model Router, Entitlements, Content (criação), App Shell
 
@@ -285,14 +284,14 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 - Execução assíncrona durável: fila no PostgreSQL, worker com lease, estados `QUEUED`/`RUNNING`/`SUCCEEDED`/`SUCCEEDED_PARTIAL`/`FAILED`/`CANCELLED`, stages públicos com mensagens humanas reais e retry idempotente.
 - Um job ativo por usuário: `Analisar produto` desabilitado com explicação enquanto existir job `QUEUED`/`RUNNING`.
 - Indicador global de atividade no App Shell: Produto, etapa real, sucesso, falha recuperável e ação seguinte; sobrevive a navegação e ao fechamento da aba.
-- Primeira análise da engine: Product Understanding → Commercial Opportunity Mapping → ProductStrategy v1 → Content Portfolio Planner → Brief Generator.
-- Preservar o carregamento da TikTok Commerce Creative Skill conforme o runtime ADR-029; especificar e validar de forma aditiva somente a fundação Creative System, sem ativação operacional, escrita de `creativeDirection` ou uso de Blueprint antes de SPEC/PLAN de cutover e eval aprovados.
-- Creative System e `CreativeBlueprint` entram como contrato-alvo versionado da `PlatformSkill`, sem ativação operacional nesta revisão documental.
-- A primeira geração mantém exatamente o runtime ADR-029/`ROUTER_MAP`; qualquer cutover exige SPEC/PLAN de cutover aprovados, A/B pareado, thresholds versionados, relatório reproduzível e aprovação formal antes de remover ou reclassificar chamada, tier ou cena.
+- Engine V2 default conforme ADR-033, preservando hard gates, partial, quota, tenant, fencing, idempotência e histórico.
+- Creative System e `CreativeBlueprint` permanecem contratos internos da `PlatformSkill`; `ContentOpportunity.creativeDirection` v2 é o destino canônico, mas sua escrita só pode ser afirmada após evidência do writer correspondente.
+- O estado documental não presume conclusão de memória multidimensional, Risk pré-Judge, binding/proveniência 1.3, remoção de `selectedPatterns` ou E6.
 - Roteamento de modelos por tarefa lógica com `IntelligenceTier` (LOW/MID/HIGH) e um provider atrás de adapter; capabilities determinísticas fora do router.
+- Fact Validation, hard gates, Variety Gate, Judge e repairs preservam as autoridades de ADR-019/021/029. A ordem-alvo V2 é hard gates → Risk → Judge seletivo; enquanto essa ordem não estiver implementada e observada, permanece pendência de aceitação, sem fabricar `PASS` para `NOT_EXECUTED`.
 - Fact Validation, Quality Gate e Variety Gate com Repair Loop limitado; o `BriefValidationReport` registra somente resultado objetivo `PASS|REPAIR|REJECT`; `CONTENT_QUALITY_JUDGE` semântico retorna somente `PASS|REVIEW` por parte. Cada parte `REVIEW` recebe no máximo um `Semantic Part Repair`, sem re-Judge; `GENERATION_MAX_REPAIRS` aplica-se somente ao `Hard Gate Repair`; falha ou schema inválido preserva o original e não cria faltante. Nenhum sucesso parcial silencioso — parcial somente como `SUCCEEDED_PARTIAL` declarado, revalidado e com retry dos faltantes (ADR-021).
 - `REVIEW` semântico não bloqueia `DRAFT`; apenas hard gates objetivos, schema, factualidade, cenas e variedade decidem elegibilidade e entrega.
-- Para geração nova, `ContentSceneSet` é separado de `ContentBriefVersion` conforme ADR-019; `scenes` não é campo obrigatório do Briefing. Payloads legados que contenham `scenes` permanecem read-only e não são reescritos; o runtime ADR-029 permanece vigente até eval aprovado.
+- Para geração nova, `ContentSceneSet` é separado de `ContentBriefVersion` conforme ADR-019; `scenes` não é campo obrigatório do Briefing. Payloads legados com `scenes` permanecem read-only. `CONTENT_SCENE_IDEAS` do ADR-029 pertence apenas à baseline; o alvo V2 usa Scene Skeleton.
 - Reservar capacidade mensal na criação do job e confirmar/liberar transacionalmente; sem cobrança duplicada em retry técnico.
 - Persistir Strategy, ContentPlan, ContentOpportunities e `Content` + `ContentBriefVersion` iniciais em `DRAFT`.
 - Strategy consultável depois na página do Produto; readiness do Produto alimenta o filtro `Pendentes`.
@@ -300,7 +299,7 @@ A recorrência busca novas oportunidades relevantes e reduz repetição sem reco
 - **Responsabilidade única do parcial e do retry dos faltantes (ADR-021):** o Slice 003 é o único responsável por `SUCCEEDED_PARTIAL` — publicação dos aprovados, variedade revalidada, motivo sanitizado por item, quota D confirmada/N−D liberada e a ação `Gerar faltantes` (novo job com reserva F, reusando Strategy e sinais já persistidos). O Slice 008 não implementa nem duplica esse fluxo.
 
 **Out of Scope:** Fila visual de múltiplos jobs, prioridade manual, cancelamento como ação primária, edição/regeneração de briefing, lotes, memória histórica na primeira geração, aprendizado por performance, escolha de provider na UI, exposição de prompts/tiers/modelos.
-**Cutover:** fora do escopo do Slice 003 enquanto SPEC/PLAN de cutover, eval A/B, relatório e aprovações do ADR-033 não estiverem concluídos; não remover nem reclassificar chamadas, tiers, cenas, gates, repairs ou `ROUTER_MAP` por esta atualização documental.
+**Aceitação V2:** fora do escopo deste mapa. E6 precisa comparar o pipeline integral, separar evidência offline de provider vivo e auditar critérios subjetivos antes de `V2_ACCEPTED`; falha ou ausência da avaliação mantém V2 default pendente e não restaura ADR-029 implicitamente.
 
 ---
 
@@ -585,4 +584,4 @@ Nenhuma alteração deste mapa antecipa código, SPEC ou PLAN de um slice futuro
 
 Todo requisito do MVP está coberto por exatamente um slice responsável; nenhum slice é puramente técnico.
 
-A Etapa 0 é uma pré-condição documental transversal, não um slice adicional; o Slice 003 só pode sair de `Pendente` após aprovação da SPEC e do PLAN pelo Software Architect e pelo Review. Nenhuma mudança de runtime é inferida pela alteração deste mapa.
+A Etapa 0 é uma pré-condição documental transversal, não um slice adicional. A aprovação documental do Slice 003 não equivale à aceitação arquitetural da Engine V2; nenhuma pendência-alvo é tratada como implementada por este mapa.

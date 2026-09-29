@@ -12,21 +12,20 @@ import {
 export type { DevelopmentBullet, DevelopmentBulletDiagnostic } from "./contract";
 import {
   PLATFORM_SKILLS,
-  CREATIVE_CATALOG,
-  TIKTOK_COMMERCE_SKILL,
   classifyCtaFunction,
   classifyHookMechanism,
   type HookMechanismBucket,
   CTA_FUNCTION_BUCKET_COUNT,
   UNCLASSIFIED_CTA_FUNCTION,
 } from "./platform-skill";
+import { CREATIVE_SYSTEM_SKILL_VERSION } from "./creative-system";
 import { ContractError } from "./contract";
 
 // ADR-019: versão da política de gates com bump manual (mesmo precedente de
 // CARDINALITY_POLICY_VERSION). Reports persistidos carregam a versão sob a qual
 // foram produzidos; revalidação sob versão diferente é GATE-VERSION-MISMATCH,
 // nunca REPAIR falso. 1 = pré-versionamento implícito (histórico).
-export const GATE_POLICY_VERSION = 4; // E5: diagnósticos de estilo (ação/conector/ancoragem) viram advisory; hard retém factualidade/variety/scenes/CTA factual
+export const GATE_POLICY_VERSION = 5; // v5: catálogo literal não governa gates default (repetição normal para hook/CTA catalogado; teto de função CTA pelo domínio do classificador) — ADR-033 §7. v4: E5 advisory de estilo.
 
 // E5: matriz declarativa para consumidores internos (risk assessment e engine).
 // A versão não muda aqui: qualquer alteração de decisão exige matriz aprovada e
@@ -917,7 +916,7 @@ export function validateBriefSet(
   briefs: unknown[],
   evidence: EvidenceSnapshot = { facts: [], refs: [] },
   platformId = "tiktok-commerce",
-  skillVersion: string = TIKTOK_COMMERCE_SKILL.version,
+  skillVersion: string = CREATIVE_SYSTEM_SKILL_VERSION,
   selectedPatterns: SelectedBriefPatterns = [],
   creatorContext: CreatorRecordingContext = {},
   structuredDevelopment?: ReadonlyMap<string, readonly DevelopmentBullet[]>,
@@ -930,8 +929,9 @@ export function validateBriefSet(
   const seenHooks = new Set<string>();
   const seenCtas = new Set<string>();
   const structuralHashes = new Set<string>();
-  // Variedade funcional de CTA (ADR-019): nenhuma função (bucket determinístico
-  // classificado do texto) além de ceil(N/K), K = buckets presentes no catálogo.
+  // Variedade funcional de CTA (ADR-019; ADR-033 §7): nenhuma função (bucket
+  // determinístico classificado do texto) além de ceil(N/K), K = domínio do
+  // classificador versionado — independente do corpus, discovery não conta.
   const ctaFunctionCounts = new Map<string, number>();
   const ctaFunctionCap = briefs.length > 1 && CTA_FUNCTION_BUCKET_COUNT > 1
     ? Math.ceil(briefs.length / CTA_FUNCTION_BUCKET_COUNT)
@@ -977,12 +977,6 @@ export function validateBriefSet(
     const normalizedBrief = normalizeForVariety(`${brief.angle}|${brief.hook}|${brief.script}`);
     const normalizedHook = normalizeForVariety(brief.hook);
     const normalizedCta = normalizeForVariety(brief.cta);
-    const catalogHookVerbatim = CREATIVE_CATALOG.hooks.some(
-      ({ text }) => normalizeForVariety(text) === normalizedHook,
-    );
-    const catalogCtaVerbatim = CREATIVE_CATALOG.ctas.some(
-      ({ text }) => normalizeForVariety(text) === normalizedCta,
-    );
     const structuralHash = structureHash(brief);
     // Teto de hooks em pergunta: só o excesso (além do cap proporcional) é
     // marcado, e apenas quando existem alternativas elegíveis no lote.
@@ -991,8 +985,10 @@ export function validateBriefSet(
       if (hookQuestionOrdinal > hookQuestionCap) issues.push("excesso de hooks em pergunta no lote");
     }
     if (seenBriefs.has(normalizedBrief)) issues.push("duplicata normalizada");
-    if (!catalogHookVerbatim && seenHooks.has(normalizedHook)) issues.push("hook repetido");
-    if (!catalogCtaVerbatim && seenCtas.has(normalizedCta)) issues.push("CTA repetido");
+    // ADR-033 §7: catálogo literal não governa gates default — repetição
+    // normal se aplica mesmo a texto catalogado.
+    if (seenHooks.has(normalizedHook)) issues.push("hook repetido");
+    if (seenCtas.has(normalizedCta)) issues.push("CTA repetido");
     if (structuralHashes.has(structuralHash)) issues.push("duplicata estrutural");
     // Teto de função só vale para função realmente identificada no texto;
     // fallback sem regra não é evidência de concentração funcional.
@@ -1004,8 +1000,8 @@ export function validateBriefSet(
         issues.push("função de CTA repetida no conjunto");
     }
     seenBriefs.add(normalizedBrief);
-    if (!catalogHookVerbatim) seenHooks.add(normalizedHook);
-    if (!catalogCtaVerbatim) seenCtas.add(normalizedCta);
+    seenHooks.add(normalizedHook);
+    seenCtas.add(normalizedCta);
     structuralHashes.add(structuralHash);
     const fact = classifyFactual(brief, evidence);
     if (fact.status === "UNSUPPORTED" || fact.status === "CONTRADICTED")
@@ -1133,7 +1129,7 @@ export function repairBriefs(
   maxRepairs: number,
   evidence: EvidenceSnapshot = { facts: [], refs: [] },
   platformId = "tiktok-commerce",
-  skillVersion = TIKTOK_COMMERCE_SKILL.version,
+  skillVersion = CREATIVE_SYSTEM_SKILL_VERSION,
 ): ContentBriefVersion[] {
   const rejected = briefs
     .map((brief, index) => ({ brief, report: reports[index] }))

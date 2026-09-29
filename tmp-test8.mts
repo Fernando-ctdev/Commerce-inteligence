@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { CONTENT_BRIEF_GENERATION_INSTRUCTION } from './src/modules/commerce-intelligence/provider';
+test("brief provider instruction makes development strategic, evidence-grounded, and keeps CTA separate", () => {
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Construa o hook a partir do blueprint, do hookMechanism e do commercialObjective"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("cada briefing tem hook próprio e distinto"));
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("productReference.category"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use categoria no hook somente se explícita em productFacts"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Development contém 2 a 6 bullets"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("cada bullet precisa combinar ação de comunicação, razão significativa ligada ao fato e o fato específico de productFacts"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("'para contextualizar', 'para explicar esse detalhe' e outras frases sem ligação concreta não contam"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Não faça lista de features nem instrução de câmera/gravação"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use productFacts como única fonte de fatos técnicos em development e script"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("angle e mecanismo da oportunidade orientam o recorte, mas não são fonte de fatos"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("todo fato técnico no script deve estar em productFacts e representado em development"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não retorne scenes nem qualquer campo de cena"));
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("selectedPatterns"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("adapte o wording"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("mesma função"));
+  assert.ok(!CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("selectedPatterns[index].cta.text literalmente"));
+  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("adapte o wording"));
+  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("mesma função"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Mantenha cta separado de hook, development e script"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Bom:"));
+  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Ruim:"));
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("causes[index]"));
+  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("repairContrast[index]"));
+});

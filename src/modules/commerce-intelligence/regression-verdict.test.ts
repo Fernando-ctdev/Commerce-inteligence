@@ -125,7 +125,7 @@ test("regressão Space S1: produção incompatível com creator solo é REPAIR c
     hook: "Eu achava que áudio espacial era meio conversa de marketing.",
     script,
     development: ["Mostre os drivers de 40 mm para relacionar 40 mm ao som informado", "Mostre os drivers de 40 mm para relacionar 40 mm ao som informado"],
-  })], evidence, "tiktok-commerce", "tiktok-commerce@1.2", [], solo)[0];
+  })], evidence, "tiktok-commerce", "tiktok-commerce@1.3", [], solo)[0];
   assert.equal(blocked.decision, "REPAIR");
   assert.ok(blocked.issues.includes("produção incompatível com creator solo"));
 });
@@ -199,7 +199,7 @@ test("gateVersion: versão incompatível (ou pré-versionamento) é GATE-VERSION
 
 test("platformSkillVersion registrada no registry continua válida; desconhecida falha", () => {
   const evidence = { facts: ["Produto"], refs: ["product:name"] };
-  const registered = validateBriefSet([brief("p1")], evidence, "tiktok-commerce", "tiktok-commerce@1.2")[0];
+  const registered = validateBriefSet([brief("p1")], evidence, "tiktok-commerce", "tiktok-commerce@1.3")[0];
   assert.equal(registered.platformStatus, "PASS");
   const unknown = validateBriefSet([brief("p2")], evidence, "tiktok-commerce", "tiktok-commerce@9.9")[0];
   assert.equal(unknown.platformStatus, "FAIL");

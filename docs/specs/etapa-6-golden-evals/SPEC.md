@@ -2,116 +2,109 @@
 
 **Identificador documental:** `etapa-6-golden-evals`
 
-**Natureza:** precondição documental transversal do Slice 003; não é Slice de produto, não cria, renumera ou reutiliza o Slice 004.
+**Natureza:** precondição documental transversal do Slice 003; não é Slice de produto e não altera o Slice 004.
 
-**Status:** `DOCUMENTATION_ONLY` — esta SPEC congela contratos de avaliação, fronteiras, pré-registro e critérios de aprovação. Não autoriza dataset real, fixture/harness, provider, benchmark, A/B, relatório de resultados, alteração de runtime ou cutover.
+**Status:** `DOCUMENTATION_ONLY` — define o protocolo de aceitação; não executa dataset, fixture, provider, anotação, benchmark, E6, relatório ou cutover.
 
-**Autoridade superior:** a nota imutável **“Plano de recalibração da commerce inteligence”**. Seu conteúdo não é copiado nem reinterpretado nesta SPEC; conflito contra a nota permanece bloqueado para decisão superior.
+**Runtime atual:** Engine V2 default por decisão do usuário, efetiva no commit `8d1833b`, no estado `V2_DEFAULT_PENDING_ACCEPTANCE`. ADR-029/`@1.2` permanece baseline histórico/experimental reproduzível. Esta SPEC não declara resultado, não-regressão, aprovação ou rollback.
 
-**Runtime vigente:** ADR-029 integralmente; `tiktok-commerce@1.2` em produção; `@1.3` inativa; `ContentSceneSet` separado; gates, Judge, repairs, quota, Tenant, Job, D/N, parcial e retry preservados.
+O loader de Skill da V2 no commit `8d1833b` usa `@1.2`; `@1.3` no Planner provém de fixture congelada do harness, **não** é binding operacional comprovado. A consistência `@1.3` permanece contrato-alvo de aceite, conforme [ADR-033 §7](../../architecture/adr-033-determinismo-llm-e-creative-system.md).
 
 ## 1. Objetivo e fronteira
 
-Esta SPEC define o contrato documental para uma futura avaliação reproduzível da Commerce Intelligence:
+E6 deve produzir evidência auditável para:
 
-- manifesto, cases, fixtures e rubricas versionados, redacted e hashados;
-- seed derivado do Job, derivação versionada e fingerprint reproduzível;
-- assignment cego e adjudicação separados do `CONTENT_QUALITY_JUDGE` runtime;
-- missing data, incompatibilidade de hash, seed ou assignment com comportamento fail-closed;
-- `ThresholdPolicyVersion` pré-registrada sem valores inventados nesta SPEC;
-- baseline ADR-029/`@1.2` fixado por commit e candidato de uma única variável: regra de invocação/cobertura do Judge reduction;
-- métricas por categoria, denominadores explícitos, custo conforme ADR-013, latência e cobertura de missing;
-- relatório reproduzível, revisão arquitetural e aprovação explícita do usuário antes de qualquer efeito.
+1. comparar end-to-end ADR-029/`@1.2` e V2/`@1.3`;
+2. atribuir efeito às migrações individuais do ADR-033;
+3. avaliar primeira geração e recorrência;
+4. medir invariantes, qualidade, custo, latência e cobertura;
+5. permitir ao Review reprovar protocolo, execução, relatório ou candidato antes de qualquer correção de runtime.
 
-Esta SPEC não cria capability de produto, endpoint, estado de Job, worker, serviço, tabela, migration, schema de produção, provider adapter, persistência, flag, capability de Judge reduction, Blueprint/recipe, `creativeDirection` ou alteração de Skill.
-
-### 1.1 Não objetivos
-
-Ficam fora desta SPEC:
-
-- executar dataset, fixture, harness, provider, benchmark, anotação, A/B, smoke ou cutover;
-- gerar relatório de resultados, veredito de não-regressão ou recomendação operacional;
-- ativar `@1.3`, Creative System, Blueprint/recipe ou Judge reduction;
-- alterar ADRs, PRDs, SYSTEM-DESIGN, DESIGN, nota imutável, código, SLICES além da referência documental mínima separada, quota ou persistência;
-- escolher valores numéricos de thresholds, quantidade de anotadores, score mínimo, margem ou concordância sem protocolo aprovado;
-- tratar harness estrutural do Planner como evidência operacional de factualidade, naturalidade, cenas, Judge, custo ou latência.
+Esta SPEC não cria capability, endpoint, estado de Job, worker, serviço, tabela, migration, adapter, flag ou persistência. Não corrige writer, memória, Skill, prompt, Risk ou Judge.
 
 ## 2. Fontes e precedência
 
 1. Nota imutável “Plano de recalibração da commerce inteligence”.
-2. [PRD principal](../../product/PRD.md) e PRDs de frente relevantes.
+2. PRDs vigentes.
 3. [SYSTEM-DESIGN](../../architecture/SYSTEM-DESIGN.md).
-4. ADRs vinculantes:
-   - [ADR-013 — Model Router e IntelligenceTier](../../architecture/adr-013-model-router-e-intelligence-tier.md);
-   - [ADR-019 — Gate versionada, variedade funcional e ContentSceneSet](../../architecture/adr-019-gate-versionada-e-cenas.md);
-   - [ADR-021 — Geração parcial declarada e retry dos faltantes](../../architecture/adr-021-geracao-parcial-declarada-e-retry-de-faltantes.md);
-   - [ADR-029 — Pipeline híbrida determinística e criativa](../../architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md);
-   - [ADR-033 — Determinismo × LLM e Creative System](../../architecture/adr-033-determinismo-llm-e-creative-system.md).
-5. [SLICES](../../delivery/SLICES.md), especialmente Slice 003 e Slice 004.
-6. [SPEC da Etapa 4](../etapa-4-skill-brief/SPEC.md) e [PLAN da Etapa 4](../../plans/etapa-4-skill-brief/PLAN.md).
-7. [SPEC da Etapa 5](../etapa-5-risk-quality/SPEC.md) e [PLAN da Etapa 5](../../plans/etapa-5-risk-quality/PLAN.md).
-8. Registros locais de requisitos e decisões da Etapa 6 (`.gstack/etapa6-requisitos.md` e `.gstack/etapa6-decisoes.md`), preservados fora da árvore versionada.
+4. [ADR-013](../../architecture/adr-013-model-router-e-intelligence-tier.md), [ADR-019](../../architecture/adr-019-gate-versionada-e-cenas.md), [ADR-021](../../architecture/adr-021-geracao-parcial-declarada-e-retry-de-faltantes.md), [ADR-029](../../architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md) e [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md).
+5. [SLICES](../../delivery/SLICES.md), Slice 003 e Slice 004.
+6. [Etapa 4 SPEC](../etapa-4-skill-brief/SPEC.md) e [PLAN](../../plans/etapa-4-skill-brief/PLAN.md).
+7. [Etapa 5 SPEC](../etapa-5-risk-quality/SPEC.md) e [PLAN](../../plans/etapa-5-risk-quality/PLAN.md).
+8. [Call map estático da Etapa 1](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/baseline-call-map.md) — evidencia o call graph e a divergência de binding em `8d1833b`, não auditoria live completa: chamadas físicas, tokens, custo e latência observados seguem `UNAVAILABLE` até execução real.
 
-A precedência operacional continua sendo: nota imutável → PRDs → SYSTEM-DESIGN → ADRs → PRINCIPLES → DESIGN → SLICES → SPEC/PLAN. Esta SPEC não altera fontes superiores.
+## 3. Estado operacional e estado de aceitação
 
-## 3. Identidade e dependência do Slice 003
+| Tema | Estado |
+|---|---|
+| Runtime default | Engine V2 |
+| Aceitação formal | pendente |
+| Baseline E6 | ADR-029/`@1.2`, fixada por commit |
+| Candidato E6 integral | V2 final com `@1.3` operacional consistente, alvo pendente fixado por commit; não confundir com o binding atual da fixture Planner |
+| Rollback | somente por decisão explícita do usuário |
+| Supersessão formal do ADR-029 | somente em `V2_ACCEPTED` |
 
-A identidade estável é `etapa-6-golden-evals`.
+Falha, invalidade ou incompletude de E6 mantém V2 default em `V2_DEFAULT_PENDING_ACCEPTANCE`; não promove o candidato nem restaura ADR-029 implicitamente.
 
-A Etapa 6 é precondição documental transversal do Slice 003. O Slice 003 continua responsável pela primeira geração até Briefings, incluindo delivery objetivo, D/N, parcial e retry conforme ADR-021. O Slice 004 continua responsável por revisão, edição, aprovação, descarte e versionamento de Content.
+## 4. Classes de evidência
 
-A Etapa 6 não recebe User Outcome, não cria domínio de produto, não recebe ownership de creator, não cria um novo Slice e não altera o escopo do Slice 004. Qualquer execução ou mudança de contrato relacionada ao Golden Dataset, fixtures, rubricas, anotação cega, Judge reduction ou A/B exige SPEC/PLAN aprovados, protocolo versionado e gates deste documento.
+### 4.1 Evidence offline determinística/replay
 
-## 4. Baseline imutável de runtime
+Pode demonstrar:
 
-Enquanto não houver protocolo de cutover aprovado, A/B operacional válido, relatório reproduzível e aprovação formal:
+- schema, cardinalidade, refs e canonicalização;
+- policies/gates determinísticos;
+- Planner/Blueprint, compatibilidade e seed;
+- idempotência, fencing, partial/retry e quota em harness;
+- redaction, hashes, fingerprints e pareamento;
+- replay exato de resposta de provider já congelada.
 
-- ADR-029 é o único runtime autorizado;
-- `tiktok-commerce@1.2` é o binding de produção; `@1.3` permanece inativa;
-- `ContentSceneSet` permanece separado de `ContentBriefVersion`; Brief novo não recebe `scenes`;
-- `BriefValidationReport` permanece objetivo e retorna `PASS|REPAIR|REJECT`;
-- hard gates continuam server-side e autoridade de elegibilidade;
-- `CONTENT_QUALITY_JUDGE` continua após hard gates e retorna `PASS|REVIEW` por Content/parte somente quando executado;
-- `JudgeExecution=NOT_EXECUTED|FAILED` nunca produz `PASS` ou `REVIEW` sintético;
-- Hard Gate Repair continua antes do Judge, limitado por `GENERATION_MAX_REPAIRS` vigente;
-- Semantic Part Repair continua no máximo uma vez por parte `REVIEW`, sem re-Judge;
-- `REVIEW`, ausência de Judge e `RiskAssessment` advisory não criam F nem determinam parcial;
-- quota, Tenant, Job, reservation, fencing, idempotência, D/N, `SUCCEEDED_PARTIAL`, `FAILED` e retry continuam os contratos de ADR-021 e Slice 003;
-- Blueprint/recipe, Creative System e `creativeDirection` continuam fixture/harness-only e não são input do runtime `@1.2`.
+Não pode satisfazer thresholds de:
 
-## 5. Artefatos de avaliação
+- qualidade semântica real;
+- naturalidade, criatividade, persuasão ou perceived templating do modelo vivo;
+- usage/tokens reais;
+- custo real;
+- latência, timeout, retry ou fallback reais do provider.
 
-Os contratos desta seção são artefatos offline/futuros de avaliação, não contratos de produção. Mudança de shape, semântica, registry, policy, rubric, case, fixture, ordem ou expectativa exige bump de versão, novos hashes e novo protocolo.
+Fixture, mock, adapter in-memory ou replay deixa essas métricas `UNAVAILABLE` para aceitação operacional.
 
-### 5.1 Manifesto versionado
+### 4.2 Evidence com provider vivo
+
+É obrigatória para:
+
+- comportamento real do modelo;
+- critérios subjetivos de qualidade;
+- usage/tokens;
+- custo e completude;
+- latência por tentativa/capability e end-to-end;
+- timeout, retry, fallback e cobertura operacional.
+
+Provider vivo não substitui testes determinísticos. As classes são complementares e identificadas separadamente no relatório.
+
+## 5. Golden Dataset e fixtures
+
+**Artefatos existentes preservados:** [`manifest.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/manifest.json) declara `golden-dataset.v1`/`golden-case.v1`, rubrica `golden-rubric.v1`, threshold `THRESHOLD_POLICY_GOLDEN_V1` e `FROZEN`; [`rubrics.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/rubrics.json) cobre somente `NATURALNESS` por `CONTENT`; [`threshold-policy.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/threshold-policy.json) usa `risk-assessment.v1`, `JUDGE_EXECUTED_CONTENTS` e thresholds de Judge reduction. Esse congelamento preserva apenas a evidência offline parcial do experimento de atribuição do Judge; não congela o pacote full E6, não contém execução live e não aprova o pipeline. Nenhum artefato v1 é reescrito ou revalidado retroativamente pelo contrato abaixo.
+
+**Diferença de contrato para E6 integral:** versionar e hashar novos manifesto/cases/fixtures, rubricas por dimensão/unidade com âncoras e dupla anotação cega, aggregation policy por categoria, threshold policy para end-to-end e atribuições, protocolo/comparabilidade de provider e classes de evidência. Aprovar e congelar esse **novo conjunto** antes da coleta; registrar relação e diferenças explícitas com v1. `FROZEN` de v1 não é herança de cobertura, thresholds ou aprovação full.
+
+O shape a seguir descreve o alvo documental de E6 integral, não a representação já congelada de `golden-dataset.v1`:
 
 ```ts
-type GoldenDatasetManifestV1 = {
+type GoldenDatasetManifestFullE6 = {
   datasetId: "commerce-intelligence-golden";
   datasetVersion: string;
-  schemaVersion: "golden-case.v1";
+  schemaVersion: string; // versão nova pré-registrada; não reutilizar golden-case.v1 sem compatibilidade comprovada
   rubricVersion: string;
-  thresholdPolicyVersion?: string;
+  thresholdPolicyVersion: string;
   hashAlgorithm: "SHA-256";
   manifestHash: string;
   caseIds: readonly string[];
   categories: readonly string[];
   status: "DRAFT" | "FROZEN" | "RETIRED";
 };
-```
 
-Invariantes:
-
-- somente `FROZEN` é elegível para protocolo de eval operacional futuro;
-- `DRAFT` serve apenas para revisão; `RETIRED` permanece rastreável e não é baseline;
-- `manifestHash` cobre versão, schema, rubrica, policy, categorias, ordem dos casos e hashes de fixtures/cases;
-- caso removido não é reescrito; nova seleção recebe nova versão;
-- manifesto sem hash ou com hash divergente falha fechado.
-
-### 5.2 Case e fixture redacted
-
-```ts
-type GoldenCaseV1 = {
+type GoldenCaseFullE6 = {
   caseId: string;
   datasetVersion: string;
   category: string;
@@ -153,75 +146,42 @@ type FixtureRefV1 = {
 
 Regras:
 
-1. Product Facts, evidence, creator context, memory e provider responses são projeções mínimas, allowlisted e redacted. Não incluem segredo, cookie, token, PII desnecessária, URL viva, dado cross-tenant ou payload bruto.
-2. `tenantId`, ownership, quota, reservation, status, comando, ID de produção ou saída do provider nunca são autoridade de fixture.
-3. IDs de case, Product, Content e Job são estáveis de fixture e não IDs de produção.
-4. Factos e evidências têm hashes próprios; o caso aponta para snapshot fechado, não banco corrente.
-5. `providerResponses` é replay offline de resposta já fixtureada; sua existência não autoriza chamada a provider.
-6. Fixtures usam JSON canônico UTF-8, newline e ordem de chaves/arrays definidas, sem relógio, UUID aleatório, rede, variável ambiental ou aleatoriedade implícita.
-7. Texto literal de catálogo usado para avaliar templating fica redacted e controlado, fora do contexto normal de produção.
-8. Falha de redaction, hash ausente, referência órfã ou snapshot incompatível torna o case inelegível.
+1. somente o **novo manifesto full E6** `FROZEN`, com rubricas/aggregation/thresholds próprios aprovados e hashados, habilita coleta integral; o `FROZEN` v1 continua elegível apenas para seu escopo Judge reduction;
+2. canonical JSON UTF-8, ordem estável e SHA-256;
+3. Product Facts, evidence, creator context e memory são snapshots redacted/allowlisted;
+4. sem segredo, cookie, token, PII desnecessária, URL viva, payload bruto ou dado cross-tenant;
+5. IDs são de fixture, nunca IDs de produção;
+6. hash/referência divergente torna o case `INVALID`;
+7. provider response fixture é apenas replay offline;
+8. categorias e população full E6 são fixadas antes da coleta e não herdadas automaticamente de v1.
 
-### 5.3 Expectativas e cobertura
+## 6. Protocolo pareado e comparabilidade
 
-Cada case declara versões de expectativa e policy, códigos allowlisted e evidências de suporte. Texto livre não é ground truth.
+Cada braço registra:
 
-A matriz do manifesto deve cobrir, com cenários felizes, de fronteira, adversariais e de falha:
+- commit e engine version;
+- provider e model ID/version efetivos;
+- tier;
+- parâmetros efetivos: reasoning, temperature, top-p, max tokens, schema/response mode, timeout, retry e fallback;
+- `platformSkillVersion`, Skill binding e Creative System version;
+- contract, schema, gate, Risk e Judge-selection policy versions;
+- prompt/instructions e contexto allowlisted por artefato versionado e hash;
+- Product Facts/evidence, creator context e memory por bytes/hash;
+- dataset, case, categoria e ordem;
+- seed, `seedDerivationVersion` e algoritmo;
+- capabilities/tentativas executadas e cobertura;
+- usage/tokens por categoria disponível;
+- pricing source/snapshot, moeda, custo e completude;
+- latência por tentativa/capability e end-to-end;
+- retries, repairs, timeout, fallback e erros.
 
-| Categoria | Evidência mínima | Autoridade |
-|---|---|---|
-| `FACTUALITY` | claims suportados, `UNSUPPORTED`, `CONTRADICTED`, refs órfãs e inferências seguras | hard gate/evidence server-side; rubrica mede concordância |
-| `HARD_GATES` | schema, ownership, cardinalidade, evidence, CTA, duplicata, variedade e códigos de `PASS|REPAIR|REJECT` | gate objetivo |
-| `SCENES` | `ContentSceneSet`, `AVAILABLE|FILTERED|ERROR`, mínimo, ação, âncora, backfill e erro | policy de scenes |
-| `VARIETY` | mecanismos, CTA, ângulos, duplicatas, `structureHash`, ordem e D revalidado | gate objetivo |
-| `NATURALNESS` | fluidez, clareza e adequação em rubric cega | anotação offline |
-| `TEMPLATING` | percepção de fórmula, repetição literal/normalizada e evidência | anotação offline; não hard reject |
-| `SEMANTIC_COHERENCE` | alinhamento entre hook, development, script, CTA, scenes, Produto e creator | Judge/rubric, sem autoridade de publicação |
-| `RISK` | proveniência, cobertura, severidade advisory e distinção entre sinal e gate | RiskAssessment advisory |
-| `PARTIAL_RETRY` | D/N, F/CAP vigente, residual, reservation, retry, fencing e idempotência | ADR-021/Job |
-| `COST_LATENCY` | chamadas efetivas, tokens, `usage.cost`, moeda, custo por D, timeout e p50/p95 | ADR-013/telemetria |
-| `TENANT_IDEMPOTENCY` | isolamento, owner, replay, CAS, fencing, quota e persistência | contratos de plataforma |
+### 6.1 Controles
 
-O dataset deve incluir as bordas já vigentes de cardinalidade, batches, D/N, falha e retry, sem criar novos limites.
+Na comparação end-to-end, controles externos ao pipeline permanecem iguais. Diferenças inerentes entre ADR-029 e V2 são listadas antes da coleta em um manifest de diferenças.
 
-### 5.4 Rubricas versionadas
+Experimentos de atribuição alteram uma única variável declarada. Diferença não pré-registrada, mudança de provider/model/version/params, prompt/contexto ausente, seed divergente ou cobertura incompatível invalida o par ou a métrica afetada conforme policy.
 
-```ts
-type GoldenRubricV1 = {
-  rubricId: string;
-  rubricVersion: string;
-  dimension:
-    | "FACTUALITY"
-    | "HARD_GATE"
-    | "SCENE"
-    | "VARIETY"
-    | "NATURALNESS"
-    | "TEMPLATING"
-    | "SEMANTIC_COHERENCE"
-    | "RISK";
-  unit: "CASE" | "CONTENT" | "PART" | "CLAIM" | "SCENE" | "JOB";
-  labels: readonly string[];
-  evidenceRequired: boolean;
-  blind: boolean;
-  adjudicationPolicyVersion: string;
-};
-```
-
-A rubric declara definição operacional, labels permitidos, `NOT_ANNOTATED` quando aplicável, evidência mínima, conflito, adjudicação, exemplos positivos/negativos/limítrofes e relação com hard gate/Judge. Nenhum número de anotadores, acordo, margem ou score é escolhido nesta SPEC.
-
-## 6. Seed, derivação e fingerprint
-
-O runtime atual não recebe alteração para introduzir seed nesta etapa. Um protocolo operacional futuro deve registrar antes da coleta:
-
-- `seedDerivationVersion`;
-- entrada canônica baseada no `jobId` lógico e contexto do par;
-- seed resultante por par/case;
-- algoritmo e hash da derivação;
-- seed de replay offline para fixtures e assignments.
-
-O mesmo `jobSeed` é usado nos dois braços do par. Não se usa timestamp, `Math.random`, UUID ou seed não verificável.
-
-Fingerprint mínimo do par:
+### 6.2 Seed e fingerprint
 
 ```text
 pairFingerprint = H(
@@ -229,27 +189,91 @@ pairFingerprint = H(
   datasetVersion + manifestHash,
   caseId + caseHash + inputHash,
   baselineCommit + candidateCommit,
-  engine/schema/gate/rubric policy versions,
-  platformSkillVersion + SkillBinding,
-  model/tier,
-  prompt/context hashes,
+  provider + modelVersion + tier + parameterHash,
+  skill + contract + policy hashes,
+  promptArtifactHash + contextArtifactHash,
   seedDerivationVersion + jobSeed,
   thresholdPolicyVersion
 )
 ```
 
-O fingerprint usa serialização canônica. Mismatch de dataset, case, input, policy, rubric, seed, commit, binding, modelo, tier, prompt, contexto ou threshold invalida o par antes do resultado.
+O mesmo `jobSeed` é usado no par quando a variável avaliada não é seed. Timestamp, UUID aleatório e `Math.random` não são seed reproduzível.
 
-## 7. Assignment cego e JudgeExecution
+## 7. Experimentos obrigatórios
 
-### 7.1 Assignment cego
+### 7.1 End-to-end
 
-O assignment é artefato offline independente:
+- ADR-029/`@1.2` por commit versus V2 final/`@1.3` por commit;
+- primeira geração e recorrência;
+- execução offline dos invariantes e execução com provider vivo das métricas operacionais/semânticas.
+
+### 7.2 Atribuição
+
+- Product Understanding/Strategy LLM versus Facts + Discovery + Strategy determinística;
+- Plan LLM versus Planner V2;
+- Scene Ideas versus Scene Skeleton;
+- Judge-all versus Risk-gated;
+- catálogo versus Blueprint;
+- recipe-backed versus composição livre;
+- Skill 1.2 versus 1.3;
+- tier por capability.
+
+Cada atribuição possui protocolo/fingerprint próprios. Resultado end-to-end não substitui atribuição e vice-versa.
+
+## 8. Rubricas subjetivas auditáveis
+
+```ts
+type GoldenRubricV2 = {
+  rubricId: string;
+  rubricVersion: string;
+  dimension: string;
+  unit: "CONTENT" | "PART" | "SCENE" | "CASE" | "JOB";
+  labels: readonly string[];
+  anchors: {
+    positive: readonly string[];
+    negative: readonly string[];
+    boundary: readonly string[];
+  };
+  evidenceRequired: boolean;
+  blind: true;
+  adjudicationPolicyVersion: string;
+  aggregationPolicyVersion: string;
+};
+```
+
+Dimensões mínimas:
+
+- naturalidade;
+- criatividade/originalidade;
+- especificidade ao Produto;
+- potencial persuasivo;
+- atenção;
+- integração do Produto;
+- realização do Blueprint;
+- diversidade psicológica e criativa;
+- perceived templating;
+- aderência à plataforma;
+- recipe coherence e free-composition coherence.
+
+Para cada dimensão, o protocolo fixa antes da coleta:
+
+1. pergunta e definição operacional;
+2. unidade de avaliação;
+3. labels/escala e âncoras;
+4. evidência mínima;
+5. população, categorias e denominador;
+6. regra de `NOT_ANNOTATED`;
+7. agregação e threshold.
+
+## 9. Cegamento, independência e adjudicação
+
+Cada unidade recebe no mínimo duas avaliações humanas independentes e cegas. O anotador não recebe braço, commit, provider, modelo, tier, reasoning, custo, latência, retries, Risk, Judge runtime ou resultado esperado.
 
 ```ts
 type BlindAssignmentV1 = {
   assignmentId: string;
   caseId: string;
+  evaluationUnitId: string;
   opaqueArmId: string;
   opaqueAnnotatorId: string;
   rubricVersion: string;
@@ -259,139 +283,122 @@ type BlindAssignmentV1 = {
 };
 ```
 
-O anotador não recebe braço, provider, modelo, tier, reasoning, custo, latência, retries, RiskAssessment, resultado esperado ou decisão runtime. O mapeamento de `opaqueArmId` fica fora da visão do anotador. Vazamento, duplicidade, rubric divergente, seed incompatível ou hash inválido torna o assignment `INVALID`.
-
-### 7.2 Judge runtime
-
-```text
-JudgeExecution = EXECUTED | NOT_EXECUTED | FAILED | NOT_APPLICABLE
-JudgeResult = PASS | REVIEW somente quando JudgeExecution=EXECUTED
-```
-
-Anotação cega nunca preenche `JudgeResult`. `NOT_EXECUTED` e `FAILED` entram na cobertura; não produzem `PASS`, `REVIEW`, finding semântico ou repair sintético. Quando `sources.judge=NOT_EXECUTED`, RiskAssessment deve ser `PARTIAL|UNAVAILABLE`, nunca `AVAILABLE` por síntese. Adjudicação offline não altera Brief, Content, Job, quota, D/F ou publicação.
-
-## 8. Missing data e fail-closed
-
-Estados permitidos:
-
-```text
-MISSING | NOT_APPLICABLE | UNAVAILABLE | PARTIAL |
-NOT_EXECUTED | FAILED | NOT_ANNOTATED | INVALID
-```
-
 Regras:
 
-- hash ausente/divergente de manifesto, case, input, fixture, policy, rubric, assignment, output ou threshold → `INVALID`;
-- seed ausente/divergente/não derivado pela versão registrada → `INVALID`;
-- assignment não cego, não adjudicado ou incompatível → `INVALID`;
-- custo incompleto, moeda incompatível ou `usage.cost` ausente → `UNAVAILABLE|PARTIAL`, nunca zero inventado;
-- `NOT_APPLICABLE` só é válido quando declarado no case e aceito pela policy anterior à coleta;
-- scenes ausentes, `FILTERED`, `ERROR` e backfill permanecem distintos;
-- missing crítico de Tenant, quota, idempotência, fencing, persistência, factualidade objetiva ou publicação falha fechado;
-- nenhuma exclusão de missing pode ser decidida após observar o resultado; denominador e regra devem estar em `ThresholdPolicyVersion`.
+- mapeamento do braço fica separado da anotação;
+- avaliação bruta nunca é sobrescrita;
+- conflito segue policy pré-registrada;
+- adjudicador não vê custo/latência nem deve receber o braço quando tecnicamente possível;
+- relatório preserva avaliações, conflito, exclusão e decisão adjudicada;
+- assignment vazado, duplicado ou incompatível é `INVALID`.
 
-Invalididade que comprometa o pareamento impede veredito do relatório. Missing não crítico é reportado por case, categoria, braço, motivo e denominador.
+Anotação/adjudicação nunca preenche `JudgeResult` nem altera Brief, Content, Job, D/F, quota ou publicação.
 
-## 9. ThresholdPolicyVersion
+O Judge runtime registra `JudgeExecution=EXECUTED|NOT_EXECUTED|FAILED|NOT_APPLICABLE`; `JudgeResult=PASS|REVIEW` existe somente quando `EXECUTED`. Falha ou ausência entram na cobertura e nunca criam `PASS`, `REVIEW` ou repair sintético. O RiskAssessment histórico ADR-029 baseado em `sources.judge=NOT_EXECUTED` fica `PARTIAL|UNAVAILABLE`; no alvo V2 a seleção de Risk pré-Judge não depende desse resultado.
 
-A policy é artefato obrigatório e versionado, mas esta SPEC não inventa valores numéricos.
+## 10. Agregação e categorias
+
+Antes da coleta, `AggregationPolicyVersion` fixa:
+
+- agregação dentro da unidade;
+- tratamento de múltiplas partes/cenas por Content;
+- agregação por case;
+- macro, micro ou ambas;
+- peso de case e categoria;
+- cobertura/tamanho mínimo por categoria;
+- estatística pareada e incerteza;
+- tratamento de empate, missing e unidade inválida;
+- regra de total e de cada categoria.
+
+O relatório mostra por braço e delta pareado:
+
+- amostra/denominador;
+- score/label agregado;
+- incerteza;
+- cobertura;
+- missing/inválidos;
+- resultado total e por categoria.
+
+Unidades, categorias, pesos, exclusões e função de agregação não mudam após observar resultados.
+
+## 11. ThresholdPolicyVersion
 
 ```ts
-type ThresholdPolicyVersionV1 = {
+type ThresholdPolicyVersionV2 = {
   policyVersion: string;
   datasetVersion: string;
   rubricVersion: string;
+  aggregationPolicyVersion: string;
   metricPolicies: readonly {
     metricId: string;
-    denominator: string;
-    population: string;
+    evidenceClass: "OFFLINE" | "LIVE_PROVIDER";
     unit: string;
+    population: string;
+    denominator: string;
+    categories: readonly string[];
     missingDataRule: string;
-    threshold: string;
     comparison: string;
+    threshold: string;
   }[];
-  categoryPolicy: readonly string[];
   regressionRule: "ANY_AGGREGATE_OR_CATEGORY_REGRESSION_REJECTS";
   approvalStatus: "DRAFT" | "APPROVED";
   policyHash: string;
 };
 ```
 
-Antes de qualquer coleta, a policy aprovada deve declarar valores, denominadores, categorias, unidade monetária, incerteza, exclusões, missing data, comparação e regra de reprovação para factualidade, gates, scenes, variety, naturalidade, templating, risco, partial/retry, chamadas, tokens, custo, completude e latência p50/p95.
+Valores numéricos são definidos no protocolo aprovado, nunca inventados nesta SPEC. A policy é aprovada antes da coleta. Economia isolada não aprova. Regressão no agregado ou em categoria reprova, salvo exceção explícita do usuário registrada antes da coleta.
 
-Regras já fixadas:
+## 12. Métricas
 
-- qualquer regressão no agregado ou em qualquer categoria reprova;
-- economia isolada não aprova;
-- ausência de policy aprovada invalida a execução;
-- `D=0` ou custo incompleto não vira zero para satisfazer threshold.
+### 12.1 Determinísticas/offline
 
-## 10. Protocolo pareado futuro
+- schema/cardinalidade/refs;
+- factualidade objetiva e hard-gate decisions;
+- scenes/gates/variety;
+- Planner/Blueprint/compatibilidade;
+- Risk policy/selection/fail-safe;
+- D/N, partial/retry, quota, fencing e idempotência;
+- hashes, seeds, coverage e reprodução.
 
-### 10.1 Baseline
+### 12.2 Provider vivo
 
-O baseline é ADR-029 por commit/engine version fixado, com `@1.2`, mesmo SkillBinding, `platformSkillVersion`, modelo/tier, prompts/context hashes, schema, gate, cardinalidade, scenes, hard gates, repairs, quota, Job/persistência, retries e seed do par.
+- todas as dimensões subjetivas da seção 8;
+- chamadas lógicas e tentativas;
+- coverage por capability/Judge;
+- input/output/cache/reasoning tokens quando reportados;
+- `usage.cost`, moeda, pricing source e completude;
+- custo por Content entregue;
+- latência por tentativa/capability e end-to-end, p50/p95;
+- timeout, retry, fallback, repair e failure.
 
-### 10.2 Candidato
+Ausência de usage/custo não é zero. Moedas incompatíveis não são somadas. `D_content=0` torna custo por Content `UNAVAILABLE`. Métrica live sem provider vivo é `UNAVAILABLE`, não inferida de fixture.
 
-O candidato declara exatamente uma variável independente: a regra de invocação/cobertura do `CONTENT_QUALITY_JUDGE` (Judge reduction). RiskAssessment, Blueprint/recipe, scenes, tier, SkillBinding, modelo, hard gates, repairs, inputs, memory, quota, retry e persistência permanecem constantes.
+## 13. Missing data e invalidade
 
-Não é permitido comparar `@1.2` com `@1.3` no A/B comum; `@1.3` permanece inativa. Mudança de tier, Skill, scenes, Blueprint, RiskAssessment ou repair exige protocolo separado, não é este candidato.
+Estados:
 
-Parte não chamada registra `JudgeExecution=NOT_EXECUTED`; não recebe resultado semântico, `PASS`, `REVIEW` ou repair por inferência.
+```text
+MISSING | NOT_APPLICABLE | UNAVAILABLE | PARTIAL |
+NOT_EXECUTED | FAILED | NOT_ANNOTATED | INVALID
+```
 
-### 10.3 Precheck
+Hash, seed, assignment, fingerprint ou control mismatch crítico produz `INVALID`. Missing não crítico é reportado por case, categoria, braço, motivo e denominador. Exclusão pós-hoc é proibida.
 
-Antes da coleta, cada par valida:
-
-- manifesto `FROZEN` e `manifestHash`;
-- case/input/fixture/policy/rubric hashes;
-- baseline/candidate commits;
-- mesmo SkillBinding, `@1.2`, modelo/tier e contexto;
-- seed derivation, job seed e fingerprint;
-- threshold/missing policies aprovadas;
-- assignment cego e mapping protegido.
-
-Qualquer falha é `PRECHECK_INVALID`, sem métrica de aprovação e sem relatório de resultados.
-
-## 11. Métricas e denominadores
-
-Toda métrica registra versão, case, categoria, braço, população, denominador, exclusões, missing data, policy hashes e unidade. O relatório futuro contém agregado e categoria; regressão de qualquer critério/categoria reprova conforme policy aprovada.
-
-Métricas mínimas:
-
-- factualidade: claims suportados, `UNSUPPORTED`, `CONTRADICTED`, refs órfãs e agreement adjudicado;
-- hard gates: decisões e códigos observados versus esperados;
-- scenes: status, mínimo, generated/dropped, backfill e errors;
-- variety: violações, duplicatas, buckets, `structureHash` e D revalidado;
-- naturalidade/templating/coerência: labels, agreement, adjudicação e `NOT_ANNOTATED`;
-- risco: coverage/status, findings e proveniência advisory;
-- partial/retry: D/N, F/CAP vigente, terminal state, residual, reservation, fencing e idempotência;
-- Judge: `EXECUTED`, `NOT_EXECUTED`, `FAILED`, `NOT_APPLICABLE`, `PASS|REVIEW` somente no executado, repairs efetivos;
-- custo/latência: chamadas lógicas/efetivas, tokens, `usage.cost` primário, moeda, custo por D, completude, timeout e p50/p95.
-
-Conforme ADR-013, ausência de `usage.cost` não é `USD 0`, moedas incompatíveis não são somadas e `cost_per_valid_content` usa `D_content` objetivo como denominador; D=0 é `UNAVAILABLE`. Cenas de backfill são reportadas separadamente e não entram em D_content.
-
-## 12. Relatório reproduzível e aprovação
-
-O relatório futuro é versionado, sanitizado e hashado. Deve reconstruir por referências/hashes: manifesto, cases, fixtures, rubricas, thresholds, inputs, Product Facts/evidence, creator/memory, commits, SkillBinding, modelo/tier, prompts/context, seed, assignments, adjudicações, JudgeExecution, outputs observados, métricas, denominadores, missing e custo/latência.
-
-Payload bruto de provider, segredo, token, cookie, PII desnecessária e dado cross-tenant não são persistidos no relatório.
-
-Envelope mínimo:
+## 14. Relatório e aprovação
 
 ```ts
-type EvalReportV1 = {
+type EvalReportV2 = {
   reportId: string;
   reportVersion: string;
   protocolVersion: string;
   datasetVersion: string;
   manifestHash: string;
   thresholdPolicyVersion: string;
+  aggregationPolicyVersion: string;
   baselineCommit: string;
   candidateCommit: string;
   pairFingerprints: readonly string[];
-  seedDerivationVersion: string;
+  evidenceClasses: readonly ("OFFLINE" | "LIVE_PROVIDER")[];
   metricsByCriterion: Record<string, unknown>;
   metricsByCategory: Record<string, unknown>;
   missingData: readonly unknown[];
@@ -399,42 +406,44 @@ type EvalReportV1 = {
   verdict: "PASS" | "REJECT" | "INVALID" | "INCOMPLETE";
   reportHash: string;
   approvalStatus: "DRAFT" | "REVIEWED" | "APPROVED" | "REJECTED";
-  reviewedBy?: string;
-  approvedByUser?: string;
 };
 ```
 
-`APPROVED` exige revisão do Software Architect e aprovação explícita do usuário. Sem ambos:
+O relatório referencia artefatos/hashes suficientes para reprodução e não persiste segredo, cookie, token, PII desnecessária, dado cross-tenant ou payload bruto não redacted.
 
-- o experimento não existe para supersede;
-- nenhum candidato entra no runtime;
-- nenhum tier, chamada, scene, gate, repair, Skill, Blueprint, quota, Job ou persistência muda;
-- ADR-029 e `@1.2` permanecem vigentes integralmente.
+`APPROVED` exige:
 
-## 13. Critérios de aceite
+1. protocolo e thresholds aprovados antes da coleta;
+2. evidence offline e live completas nos critérios correspondentes;
+3. revisão formal do Software Architect;
+4. Review sem findings bloqueantes;
+5. aceite explícito do usuário referenciando `reportHash`.
 
-- **AC6.1 — Identidade:** `etapa-6-golden-evals` é precondição documental do Slice 003; não há Slice 004 novo, renumerado ou reutilizado.
-- **AC6.2 — Artefatos:** manifesto, case, fixture, expectativa e rubric são versionados, redacted, hasháveis e separados de produção.
-- **AC6.3 — Determinismo:** seed Job/derivation, serialização canônica e fingerprint são obrigatórios; incompatibilidade falha fechado.
-- **AC6.4 — Cegamento:** assignment cego, anotação/adjudicação e `JudgeExecution` têm contratos e denominadores distintos.
-- **AC6.5 — Missing:** missing, hash, seed e assignment incompatíveis não produzem PASS, zero, veredito ou exclusão silenciosa.
-- **AC6.6 — Threshold:** `ThresholdPolicyVersion` é obrigatória e aprovada antes da coleta; esta SPEC não fixa números.
-- **AC6.7 — Par:** baseline ADR-029/`@1.2` é fixado por commit; candidato altera somente a cobertura/invocação do Judge reduction.
-- **AC6.8 — Métricas:** categorias, denominadores, custo ADR-013, D_content, moeda, p50/p95 e missing são reportados agregado e por categoria.
-- **AC6.9 — Relatório:** relatório reproduzível contém hashes, commits, seeds, métricas, missing, veredito e aprovação Architect+usuário.
-- **AC6.10 — Limites:** esta SPEC não executa dataset real, fixture/harness, provider, benchmark, A/B, relatório de resultados ou cutover; não altera ADR-029, `@1.2`, scenes, gates, Judge, repairs, quota, Tenant, Job, D/N, parcial ou retry.
+Esta SPEC não fornece nenhum desses resultados.
 
-## 14. Gate de avanço
+## 15. Critérios de aceite documental
 
-Antes de qualquer execução futura:
+- **AC6.1:** V2 default e aceitação pendente estão explícitos.
+- **AC6.2:** ADR-029/`@1.2` é baseline fixada por commit.
+- **AC6.3:** end-to-end e atribuições estão separados.
+- **AC6.4:** evidence offline e provider vivo têm capacidades distintas.
+- **AC6.5:** fixtures não satisfazem custo, latência ou qualidade semântica real.
+- **AC6.6:** cada métrica subjetiva possui rubrica, unidade, labels/âncoras e evidência.
+- **AC6.7:** há no mínimo duas avaliações independentes e cegas por unidade e adjudicação auditável.
+- **AC6.8:** agregação total/por categoria e thresholds são pré-registrados.
+- **AC6.9:** pares registram commit, provider/model/tier, params, prompts/contextos, seed, usage/custo/latência e cobertura.
+- **AC6.10:** nenhum resultado, aprovação, runtime ou teste é criado por esta SPEC.
 
-1. confirmar a nota imutável e resolver divergência contra ela;
-2. aprovar esta SPEC e o PLAN correspondente;
-3. redigir e congelar manifesto, cases, fixtures, rubricas, redaction e hashes;
-4. aprovar `ThresholdPolicyVersion` e missing policy antes da coleta;
-5. aprovar derivação de seed Job, fingerprint e assignment cego;
-6. fixar baseline por commit e candidato de variável única;
-7. separar eval estrutural, anotação cega e A/B operacional;
-8. obter revisão arquitetural, relatório reproduzível e aprovação explícita do usuário antes de qualquer efeito.
+## 16. Gate de avanço
 
-Até lá, o único runtime permitido é ADR-029 integral com `@1.2` e os contratos atuais.
+Antes de execução:
+
+1. Review aprova SPEC, PLAN e **novas versões full E6** de manifesto/cases, rubricas, aggregation e threshold policies, com hashes, pré-registro e diferenças explícitas para v1; o pacote Judge reduction v1 `FROZEN` permanece intacto e não supre esse gate;
+2. dataset e fixtures full E6 ficam `FROZEN` antes da coleta;
+3. protocolo e manifest de diferenças são hashados;
+4. provider/model/tier/params e artefatos de prompt/contexto são congelados;
+5. assignments/cegamento/adjudicação são validados;
+6. executor confirma separação offline/live;
+7. nenhuma coleta ocorreu antes do pré-registro.
+
+Até relatório e aceite explícito, o estado permanece `V2_DEFAULT_PENDING_ACCEPTANCE`.

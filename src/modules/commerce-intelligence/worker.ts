@@ -737,7 +737,14 @@ export async function finalizeGeneration(
         metadata: runDataWithPartial as never,
       },
     });
-    for (const [index, opportunity] of output.opportunities.entries())
+    for (const [index, opportunity] of output.opportunities.entries()) {
+      // Cutover E6 Stage 3: payload inclui blueprint canônico V2 (creativeDirection
+      // + opportunityContractVersion) quando o Planner V2 produziu o handoff.
+      // V1 jobs (sem plannedV2) persistem payload v1 inalterado.
+      const handoff = output.plannedV2?.[index];
+      const v2Payload = handoff
+        ? { opportunityContractVersion: "2", creativeDirection: handoff.creativeDirection }
+        : {};
       await tx.contentOpportunity.create({
         data: {
           id: String(opportunity.id),
@@ -753,9 +760,13 @@ export async function finalizeGeneration(
           noveltyTargets: JSON.parse(
             JSON.stringify(opportunity.noveltyTargets),
           ),
-          payload: JSON.parse(JSON.stringify(opportunity)),
+          payload: JSON.parse(JSON.stringify({
+            ...opportunity,
+            ...v2Payload,
+          })),
         },
       });
+    }
     for (const [index, brief] of output.briefs.entries()) {
       // ADR-021: briefs entregues mantêm a oportunidade do plano original.
       const opportunity = output.opportunities[output.briefOpportunityPositions?.[index] ?? index];
@@ -852,7 +863,13 @@ export async function finalizeGeneration(
         sourceJobId: job.id,
         signals: JSON.parse(
           JSON.stringify(
-            mergeMemorySignals(previousSnapshot?.signals, output.memorySignals),
+            Array.isArray(output.memorySignals.plannerSignals) && output.memorySignals.plannerSignals.length > 0
+              // Cutover E6: snapshot V2 é EXATAMENTE o envelope
+              // PLANNER_MEMORY_SIGNALS_V1 (sem arrays legacy, sem nesting,
+              // sem generatedCount, sem hooks).
+              ? { signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1", signals: output.memorySignals.plannerSignals }
+              // V1 backward compat: merge legado quando sem sinais canônicos.
+              : mergeMemorySignals(previousSnapshot?.signals, output.memorySignals),
           ),
         ),
       },

@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { GenerationError } from "./errors";
 import {
   assertEligibleFormat,
+  assertFreeCompositionCooccurrence,
   loadCreativeSystem,
   primitiveExists,
   recipeById,
@@ -218,6 +219,48 @@ test("resolveBlueprint aceita composição livre sem recipeId com primitives vá
   assert.deepEqual(bp.attentionMechanisms, ["visual_hook"]);
 });
 
+test("coocorrência pairwise: todo par entre dimensões coocorrendo em recipe é admitido (ADR-033 §4)", () => {
+  // Constraint set da recipe pov-identification-payoff sem recipeId: todos os
+  // pares entre dimensões coocorrem nela, então a composição é válida.
+  const bp: import("./creative-system").CreativeBlueprint = {
+    attentionMechanisms: ["curiosity"],
+    psychologicalEffects: ["identification", "desire"],
+    format: "pov",
+    narrativeMoves: ["setup", "product_entry", "payoff"],
+    productRole: "solution",
+  };
+  assert.doesNotThrow(() => assertFreeCompositionCooccurrence(cs(), bp));
+});
+
+test("coocorrência pairwise: par entre dimensões sem coocorrência em recipe falha GEN-CS-COMPAT (ADR-033 §4)", () => {
+  // format×papel (storytelling×solution) está no mapa explícito e os demais
+  // pares coocorrem — exceto failure×storytelling (att×fmt), que não ocorre
+  // conjuntamente em nenhuma recipe desta versão. Par sem coocorrência falha
+  // GEN-CS-COMPAT, mesmo com formato×papel válido.
+  assert.throws(
+    () => assertFreeCompositionCooccurrence(cs(), {
+      attentionMechanisms: ["failure"],
+      psychologicalEffects: ["identification"],
+      format: "storytelling",
+      narrativeMoves: ["setup"],
+      productRole: "solution",
+    }),
+    (error: unknown) => errorCode(error) === "GEN-CS-COMPAT",
+  );
+  // Variante com pares falhos envolvendo narrativeMove: identification×reveal
+  // (psy×mov) e pov×reveal (fmt×mov) nunca coocorrem em recipe.
+  assert.throws(
+    () => assertFreeCompositionCooccurrence(cs(), {
+      attentionMechanisms: ["curiosity"],
+      psychologicalEffects: ["identification"],
+      format: "pov",
+      narrativeMoves: ["reveal"],
+      productRole: "solution",
+    }),
+    (error: unknown) => errorCode(error) === "GEN-CS-COMPAT",
+  );
+});
+
 test("composição livre exige par formato×papel declarado na compatibilidade versionada", () => {
   // Todos os IDs existem na taxonomia; o par (unboxing, proof) não é declarado —
   // enum válido não é compatibilidade. Falha estável, sem substituição.
@@ -288,4 +331,73 @@ test("elegibilidade de formato respeita allowlist e falha GEN-CS-ELIGIBILITY", (
   const bp = resolveBlueprint(cs(), validRecipeBacked());
   assertEligibleFormat(cs(), bp, new Set(["sketch", "pov"]));
   assert.throws(() => assertEligibleFormat(cs(), bp, new Set(["pov"])), (error: unknown) => errorCode(error) === "GEN-CS-ELIGIBILITY");
+});
+
+test("chave própria desconhecida no sistema falha GEN-CS-SCHEMA (fail-closed, ADR-033 decisão 9)", () => {
+  const fields = () => ({
+    attentionMechanisms: ["curiosity"],
+    psychologicalEffects: ["trust"],
+    formats: ["unboxing", "pov"],
+    narrativeMoves: ["reveal"],
+    productRoles: ["discovery_object", "solution"],
+    recipes: [],
+    compatibility: { formatsByProductRole: { solution: ["pov"] } },
+  });
+  assert.throws(
+    () => validateCreativeSystem({ ...fields(), unknownTopLevel: "x" }),
+    (error: unknown) => errorCode(error) === "GEN-CS-SCHEMA",
+  );
+});
+
+test("chave própria desconhecida em recipe falha GEN-CS-SCHEMA", () => {
+  const fields = () => ({
+    attentionMechanisms: ["curiosity"],
+    psychologicalEffects: ["trust"],
+    formats: ["unboxing", "pov"],
+    narrativeMoves: ["reveal"],
+    productRoles: ["discovery_object", "solution"],
+    recipes: [{
+      id: "r1",
+      attentionMechanisms: ["curiosity"],
+      psychologicalEffects: ["trust"],
+      formats: ["pov"],
+      narrativeMoves: ["reveal"],
+      productRoles: ["solution"],
+      unknownRecipeKey: true,
+    }],
+    compatibility: { formatsByProductRole: { solution: ["pov"] } },
+  });
+  assert.throws(
+    () => validateCreativeSystem(fields()),
+    (error: unknown) => errorCode(error) === "GEN-CS-SCHEMA",
+  );
+});
+
+test("chave própria desconhecida no objeto de compatibilidade falha GEN-CS-SCHEMA", () => {
+  assert.throws(
+    () => validateCreativeSystem({
+      attentionMechanisms: ["curiosity"],
+      psychologicalEffects: ["trust"],
+      formats: ["unboxing", "pov"],
+      narrativeMoves: ["reveal"],
+      productRoles: ["discovery_object", "solution"],
+      recipes: [],
+      compatibility: { formatsByProductRole: { solution: ["pov"] }, unknownCompatKey: "x" },
+    }),
+    (error: unknown) => errorCode(error) === "GEN-CS-SCHEMA",
+  );
+});
+
+test("chave própria desconhecida na entrada do resolveBlueprint falha GEN-CS-SCHEMA", () => {
+  assert.throws(
+    () => resolveBlueprint(cs(), {
+      attentionMechanisms: ["curiosity"],
+      psychologicalEffects: ["identification", "desire"],
+      format: "pov",
+      narrativeMoves: ["setup", "product_entry", "payoff"],
+      productRole: "solution",
+      unknownBlueprintKey: 1,
+    }),
+    (error: unknown) => errorCode(error) === "GEN-CS-SCHEMA",
+  );
 });

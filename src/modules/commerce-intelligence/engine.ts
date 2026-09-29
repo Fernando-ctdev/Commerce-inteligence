@@ -77,6 +77,7 @@ import {
   buildSceneSkeletonSets,
   contentOpportunitiesFromPortfolio,
   parseBriefBatchEnvelopeV2,
+  parseDiscoveryEnvelopeV2,
   parseBriefRepairDraftV2,
   parseStructuredBriefDraftV2,
   plannedHandoffV2,
@@ -200,6 +201,7 @@ export type EngineResult = {
   // E5: cobertura do Judge + evidência server-owned para risk assessment.
   judgeExecutionRecords: JudgeExecutionRecord[];
   evidenceRefs: string[];
+  discoveryV2?: Record<string, unknown>;
   v2Policy?: { plannerPolicyVersion: "PLANNER_POLICY_V1"; briefPolicyVersion: "BRIEF_GENERATION_POLICY_V1"; creativeSystemVersion: "1.3" };
   partial: EnginePartial | null;
 };
@@ -981,7 +983,7 @@ export async function runFirstGeneration(
     // Mapping envelope do provider é não confiável: um único retry de contrato re-solicita
     // opportunities quando o corpo veio sem elas (200 com prosa/arrays vazios). Falha fechada
     // depois do retry — sem inventar oportunidades.
-    let envelope: CommercialOpportunityMappingEnvelope;
+    let envelope: Record<string, unknown>;
     const mappingCall = (onMetrics?: (metrics: ProviderCallMetrics) => void) =>
       callCapability(
         input.router!,
@@ -990,15 +992,20 @@ export async function runFirstGeneration(
         input.signal,
         onMetrics,
       );
-    const validateMapping = (output: Record<string, unknown>) =>
-      validateCommercialOpportunityMappingEnvelope(output, mappingEvidence);
+    // Cutover E6 Stage 2: Discovery V2 — envelope versionado com hypotheses
+    // (commercialEffects/angle/coreMessage por oportunidade) validadas
+    // contra o evidenceRefsCatalog. Fail-closed.
+    const validateMapping = (output: Record<string, unknown>) => {
+      const discovery = parseDiscoveryEnvelopeV2(output, mappingEvidence);
+      return discovery;
+    };
     try {
       envelope = await track(
         "COMMERCIAL_OPPORTUNITY_MAPPING",
         mappingContext,
         mappingCall,
         validateMapping,
-      );
+      ) as Record<string, unknown>;
     } catch (error) {
       // Retry único e específico: envelope 200 sem `opportunities` é re-solicitado uma vez
       // com o mesmo contexto; qualquer outro erro segue fail-closed. Sem inventar dados.
@@ -1014,8 +1021,12 @@ export async function runFirstGeneration(
         validateMapping,
       );
     }
-    // IDs de oportunidade comercial são server-derived.
-    envelope.opportunities.forEach((opportunity, index) => {
+    // Cutover E6 Stage 2: IDs de oportunidade comercial são server-derived.
+    // O envelope V2 tem hypotheses[]; mapeia para CommercialOpportunity (v1 shape)
+    // com commercialEffects preservados para o planner diversity.
+    const discoveryEnvelope = envelope as unknown as { hypotheses?: Array<Record<string, unknown>> };
+    const discoveryOpportunities: Record<string, unknown>[] = (discoveryEnvelope.hypotheses ?? envelope.opportunities ?? []) as Record<string, unknown>[];
+    discoveryOpportunities.forEach((opportunity: Record<string, unknown>, index: number) => {
       commercialOpportunities.push({
         ...opportunity,
         id: `${input.jobId}-commercial-${index + 1}`,
@@ -1033,10 +1044,10 @@ export async function runFirstGeneration(
       ),
     };
     await emit("BUILDING_STRATEGY");
+    // Cutover E6 Stage 2: Strategy V2 determinística — agregação/ranking das
+    // oportunidades do mapping, sem LLM. reuseStrategy (ADR-021) preservado.
     strategyOutput = input.reuseStrategy
-      ? // ADR-021: retry dos faltantes reutiliza a Strategy ACTIVE (decisões
-        // preservadas; vínculo canônico re-carimbado para o job atual).
-        validateProductStrategy(
+      ? validateProductStrategy(
           {
             ...input.reuseStrategy,
             id: `${input.jobId}-strategy`,
@@ -1050,32 +1061,28 @@ export async function runFirstGeneration(
           },
           mappingEvidence,
         )
-      : await track(
-      "STRATEGY_SYNTHESIS",
-      strategyContext,
-      (onMetrics) =>
-        callCapability(
-          input.router!,
-          "STRATEGY_SYNTHESIS",
-          project("STRATEGY_SYNTHESIS", strategyContext, {}),
-          input.signal,
-          onMetrics,
-        ),
-      (output) => validateProductStrategy(
-        {
-          ...output,
-          id: `${input.jobId}-strategy`,
-          productId: input.productId,
-          jobId: input.jobId,
-          version: 1,
-          status: "ACTIVE",
-          platformId: skill.id,
-          platformSkillVersion: skill.version,
-          opportunities: commercialOpportunities,
-        },
-        mappingEvidence,
-      ),
-    );
+      : validateProductStrategy(
+          {
+            id: `${input.jobId}-strategy`,
+            productId: input.productId,
+            jobId: input.jobId,
+            version: 1,
+            status: "ACTIVE",
+            platformId: skill.id,
+            platformSkillVersion: skill.version,
+            primaryPositioning: commercialOpportunities
+              .map((o) => String(o.coreMessage ?? ""))
+              .sort((a, b) => b.length - a.length)[0] ?? String(understanding.functionalBenefits[0] ?? input.description),
+            audiences: [...new Set(commercialOpportunities.flatMap((o) => Array.isArray(o.benefits) ? o.benefits.map(String).filter(s => s.trim()) : []))].slice(0, 10),
+            priorityBenefits: [...new Set(commercialOpportunities.flatMap((o) => Array.isArray(o.benefits) ? o.benefits.map(String).filter(s => s.trim()) : []))].slice(0, 10),
+            priorityObjections: [...new Set((understanding.purchaseBarriers ?? []).map(String).filter(s => s.trim()))].slice(0, 10),
+            priorityArguments: [...new Set(commercialOpportunities.map((o) => String(o.coreMessage ?? "")).filter(s => s.trim()))].slice(0, 10),
+            priorityAngles: [...new Set(commercialOpportunities.map((o) => String(o.angle ?? "")).filter(s => s.trim()))].slice(0, 10),
+            communicationPrinciples: ["estratégia separada da fala", "cenas simples", "linguagem oral", "script não literal", "produção de creator solo"],
+            opportunities: commercialOpportunities,
+          },
+          mappingEvidence,
+        );
     const strategy = strategyOutput;
     // Cutover E6: Planner determinístico (harness Etapa 3) é o plano de
     // produção — CONTENT_PLAN_GENERATION foi removido. Falhas de seleção são
@@ -1894,6 +1901,23 @@ export async function runFirstGeneration(
       deliveredHookMechanisms: delivered.map((i) => String(hard[i].opportunity.hookMechanism)),
       deliveredCtaFunctions: delivered.map((i) => classifyCtaFunction(hard[i].brief.cta)),
       deliveredAngles: delivered.map((i) => String(hard[i].opportunity.angle)),
+      // Cutover E6 Stage 3: sinais multidimensionais canônicos a partir do
+      // blueprint dos entregues — consumidos pelo planner V2 via
+      // mergeMemorySignalsCanonical (dedup idempotente).
+      plannerSignals: delivered.flatMap((i) => {
+        const planned = plannedV2.find((p) => p.sourceOpportunityId === hard[i].opportunity.sourceOpportunityId);
+        if (!planned) return [];
+        return [{
+          signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1" as const,
+          ...(planned.blueprint.blueprint.recipeId !== undefined ? { recipeId: planned.blueprint.blueprint.recipeId } : {}),
+          attentionMechanisms: [...planned.blueprint.blueprint.attentionMechanisms],
+          psychologicalEffects: [...planned.blueprint.blueprint.psychologicalEffects],
+          ...(planned.blueprint.blueprint.format !== undefined ? { format: planned.blueprint.blueprint.format } : {}),
+          ...(planned.blueprint.blueprint.productRole !== undefined ? { productRole: planned.blueprint.blueprint.productRole } : {}),
+          narrativeShape: [...planned.blueprint.blueprint.narrativeMoves],
+          commercialEffects: [hard[i].opportunity.coreMessage],
+        }];
+      }),
     },
     stage: "FINALIZING",
     capabilities,
@@ -1909,6 +1933,7 @@ export async function runFirstGeneration(
     ...(plannedV2 ? { plannedV2: plannedHandoffV2(plannedV2) } : {}),
     judgeExecutionRecords,
     evidenceRefs: [...evidence.refs],
+    ...(plannedV2.length > 0 ? { discoveryV2: { hypotheses: plannedV2.length } } : {}),
     ...(plannedV2
       ? {
           v2Policy: {

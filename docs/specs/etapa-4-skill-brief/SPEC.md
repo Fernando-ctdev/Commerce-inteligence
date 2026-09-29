@@ -4,9 +4,9 @@
 
 **Natureza:** precondição documental e técnica do Slice 003 — não é um Slice de produto e não reutiliza o Slice 004.
 
-**Status:** `DOCUMENTATION_ONLY` — autorização arquitetural recebida para congelar contratos e gates; nenhuma implementação, execução de A/B, ativação de runtime ou cutover é autorizada por esta SPEC.
+**Status:** `DOCUMENTATION_ONLY` — coordena contratos com a Engine V2 default; não autoriza código, provider, A/B, E6 ou aceitação formal.
 
-**Runtime vigente:** ADR-029, com `tiktok-commerce@1.2` em produção. A foundation/harness `tiktok-commerce@1.3` permanece inativa.
+**Runtime atual:** Engine V2 default em `V2_DEFAULT_PENDING_ACCEPTANCE`. ADR-029/`@1.2` permanece histórico e baseline E6; ADR-033 define `@1.3` como binding operacional alvo, cuja consistência ainda precisa ser comprovada.
 
 ## 1. Objetivo e fronteira
 
@@ -22,7 +22,7 @@ Código → valida schema, evidência, factualidade, cardinalidade, gates,
           estado, quota, persistência, autorização e tenant
 ```
 
-Nenhum contrato desta SPEC altera chamadas, tiers, cenas, gates, repairs, `ROUTER_MAP`, quota, persistência ou writer de `creativeDirection` do runtime ADR-029.
+Esta SPEC não altera runtime. Distingue o que está em produção por ADR-033 das pendências: writer canônico de `creativeDirection`, binding/proveniência 1.3 coerentes, memória V2, contexto sem `selectedPatterns`, Scene Skeleton e Risk pré-Judge.
 
 ## 2. Fontes e precedência
 
@@ -66,17 +66,17 @@ Fontes documentais:
 - Congelar a fronteira Planner → Brief Generator sem mover autoridade de seleção para o LLM.
 - Registrar `ContentSceneSet` como contrato separado do Brief novo.
 - Congelar a medição de tentativas efetivas, `cost_job_total` e custo por Content entregue.
-- Fixar `HIGH` como tier canônico do runtime ADR-029 para Brief, cenas, Judge e repairs.
-- Pré-registrar o protocolo A/B futuro sem executá-lo.
-- Registrar o contrato futuro de `CreativeBlueprint`/`ContentOpportunity` v2 sem writer operacional.
-- Registrar o teste futuro contra vazamento de catálogo literal no contexto Blueprint-driven.
+- Preservar a matriz `HIGH` do ADR-029 como baseline E6, sem tratá-la como mapa corrente da Engine V2.
+- Pré-registrar comparações futuras sem executá-las.
+- Registrar `CreativeBlueprint`/`ContentOpportunity` v2 como contrato canônico alvo sem presumir writer operacional.
+- Registrar o gate contra `selectedPatterns` e catálogo literal no contexto V2.
 - Repetir, como gates documentais, as invariantes de factualidade, tenant, Job, quota, persistência, Judge e repairs que não podem ser relaxadas por uma futura implementação.
 
 ## 4. B4-01 — Brief sem `scenes`; `ContentSceneSet` separado
 
 ### 4.1 Contrato
 
-Para geração nova, `ContentBriefVersion` contém o Brief textual e **não contém `scenes`**. Cenas são responsabilidade da capability `CONTENT_SCENE_IDEAS` e persistem em `ContentSceneSet`, uma unidade separada por `(tenantId, briefVersionId)`, conforme ADR-019.
+Para geração nova, `ContentBriefVersion` contém o Brief textual e **não contém `scenes`**. Cenas persistem em `ContentSceneSet` separado. ADR-029 usa `CONTENT_SCENE_IDEAS` na baseline; o alvo V2 usa Scene Skeleton determinístico. Esta SPEC não presume que a substituição esteja integralmente comprovada.
 
 O envelope e o item de cena usam exclusivamente o contrato vigente do [ADR-019](../../architecture/adr-019-gate-versionada-e-cenas.md) e de [`src/modules/commerce-intelligence/contract.ts`](../../../src/modules/commerce-intelligence/contract.ts):
 
@@ -115,6 +115,8 @@ A entrada de cenas recebe o Brief inteiro sem `scenes`, fatos/evidências projet
 - Backfill de sets elegíveis permanece separado do denominador de Contents novos e segue a idempotência existente.
 
 ## 5. B4-02 — Custo por tentativa efetiva e Content entregue
+
+As fórmulas abaixo descrevem a baseline ADR-029. No runtime V2, `cost_job_total` soma somente as tentativas efetivamente observadas no call graph versionado; capability removida não é estimada, e capability nova não pode ser omitida. Fixture/replay offline não comprova usage, custo ou latência reais.
 
 ### 5.1 Definições
 
@@ -192,48 +194,49 @@ Política de custo:
 
 Nenhuma redução de custo, chamada ou latência é declarada sem o A/B pré-registrado, relatório reproduzível e aprovação exigidos pelo ADR-033.
 
-## 6. B4-03 — HIGH como tier canônico
+## 6. B4-03 — tiers da baseline e registro efetivo V2
 
-O runtime ADR-029 permanece como baseline. As capabilities abaixo permanecem em `HIGH`:
+A tabela abaixo preserva ADR-029 para E6:
 
-| Capability | Tier | Regra vigente |
+| Capability da baseline | Tier | Regra histórica |
 |---|---:|---|
-| `CONTENT_BRIEF_GENERATION` | `HIGH` | retry de contrato por batch; sem fallback acima de HIGH |
-| `CONTENT_BRIEF_REPAIR` | `HIGH` | até `GENERATION_MAX_REPAIRS`; sem fallback acima de HIGH |
-| `CONTENT_SCENE_IDEAS` | `HIGH` | até duas tentativas por Content; sem fallback acima de HIGH |
-| `CONTENT_QUALITY_JUDGE` | `HIGH` | sem retry semântico; falha não vira `PASS` |
-| `CONTENT_PART_REPAIR` | `HIGH` | uma passagem por parte `REVIEW`; sem re-Judge/fallback semântico |
+| `CONTENT_BRIEF_GENERATION` | `HIGH` | retry de contrato por batch |
+| `CONTENT_BRIEF_REPAIR` | `HIGH` | até `GENERATION_MAX_REPAIRS` |
+| `CONTENT_SCENE_IDEAS` | `HIGH` | até duas tentativas por Content |
+| `CONTENT_QUALITY_JUDGE` | `HIGH` | sem retry semântico |
+| `CONTENT_PART_REPAIR` | `HIGH` | uma passagem por parte `REVIEW` |
 
-`reasoning.effort` é dimensão independente, server-side e registrada por tentativa. Não é tier, não é substituto de gate e não é selecionável pelo creator, plano comercial ou LLM. Qualquer avaliação de `MID` é A/B isolado; sem relatório aprovado, `HIGH` permanece vigente.
+O runtime V2 registra tier/provider/model/params efetivos por capability. Esta SPEC não afirma que a matriz histórica seja o mapa corrente nem autoriza alteração.
 
-## 7. B4-04 — SkillBinding, Blueprint futuro e A/B pendente
+## 7. B4-04 — SkillBinding, Blueprint e aceitação pendente
 
 ### 7.1 Estado atual
 
-- `tiktok-commerce@1.2` é produção e baseline operacional.
-- `tiktok-commerce@1.3` é foundation/harness inativa; não é carregada pelo runtime default.
-- Esta SPEC não escreve `creativeDirection`, não ativa Blueprint e não altera o `ROUTER_MAP`.
-- O mesmo `SkillBinding` deve ser usado dentro de cada par A/B operacional.
+- Engine V2 é o runtime default.
+- ADR-029/`@1.2` permanece histórico e baseline E6.
+- ADR-033 define `@1.3` como binding operacional alvo; coerência entre Strategy, Plan, `IntelligenceRun`, Planner e Creative System continua gate de `V2_ACCEPTED`.
+- `ContentOpportunity.creativeDirection` v2 é a fonte canônica alvo; esta SPEC não declara que o writer esteja concluído.
 
 ### 7.2 Protocolo pré-registrado, não executado
 
-O A/B futuro fica pré-registrado apenas como protocolo documental:
+Cada comparação deve registrar, antes da coleta:
 
-- Cada par usa os mesmos `SkillBinding`, `platformSkillVersion`, modelo/provider lógico, seed, dataset/Golden Dataset, Product Facts/evidências, `creatorContext` e `ProductMemorySnapshot` por bytes.
-- O tier também permanece igual por par, salvo no protocolo específico em que **tier é a única variável previamente declarada**.
-- Não se combinam mudanças de Skill, tier, Planner, batch, cenas, Judge, repair, quota, memória, catálogo ou persistência.
-- O protocolo registra engine commit, task, prompt/context hash, versão de gates, versão de schema, timeout, retries e quota simulada/autorizada.
-- Antes de executar, fixa thresholds, categorias, métricas, regra de reprovação, Golden Dataset e formato do relatório.
-- Mede agregado e por categoria: factualidade, variedade, naturalidade/criatividade conforme rubrica cega, hard-gate failure, repair rate, partial/failure rate, chamadas, custo, tokens e latência p50/p95.
-- Execução, coleta de resultados, relatório aprovado e cutover não fazem parte desta Etapa 4.
+- commits/engine versions, Skill/binding e Creative System de cada braço;
+- provider/model/tier e parâmetros efetivos;
+- Product Facts/evidências, creator context, memória, prompt e contexto por bytes/hash;
+- dataset/case/category, seed e policies;
+- usage/custo/latência, retries e cobertura;
+- manifest prévio de diferenças entre baseline e candidato.
+
+Experimento de atribuição altera uma variável. A comparação end-to-end permite as diferenças inerentes ao pipeline, desde que listadas previamente. Evidence offline/replay não satisfaz custo, latência ou qualidade semântica real; essas métricas exigem provider vivo pareado.
+
+Critérios subjetivos exigem rubrica e unidade explícitas, avaliações cegas independentes, adjudicação, agregação por unidade/case/categoria/total, missing policy e thresholds pré-registrados. Esta Etapa não executa nem aprova o experimento.
 
 ### 7.3 Comparação `@1.2` versus `@1.3`
 
-Comparar `@1.2` com `@1.3` muda o `SkillBinding`/`platformSkillVersion`; portanto, **não é o A/B operacional comum**. Exige ADR e protocolo experimental próprios, com variável única declarada como bundle versionado de `SkillBinding`, registro de hashes/bytes completos e aprovação antes de qualquer execução. Esse protocolo separado não autoriza cutover, ativação do Creative System, mudança do runtime ADR-029 ou escrita de `creativeDirection`.
+`@1.2` versus `@1.3` é uma atribuição de Skill/bundle dentro da E6, não mudança silenciosa. O protocolo congela o restante ou declara previamente toda diferença inseparável. Nenhuma conclusão é inferida da presença de fixtures ou do binding no repositório.
 
-### 7.4 Contrato futuro sem writer operacional
-
-O alvo futuro, condicionado a SPEC/PLAN de cutover e eval aprovados, é um `CreativeBlueprint` versionado dentro do próprio `ContentOpportunity`:
+### 7.4 Contrato canônico alvo sem afirmação de writer
 
 ```ts
 type CreativeBlueprint = {
@@ -246,19 +249,18 @@ type CreativeBlueprint = {
 };
 ```
 
-`ContentOpportunity` v1 permanece sem `creativeDirection`; o contrato futuro v2 pode carregar o Blueprint validado, sem aggregate, tabela, serviço ou entidade paralela. Nesta Etapa:
+Novos registros V2 devem persistir o Blueprint em `ContentOpportunity.creativeDirection`, sem aggregate, tabela, serviço ou entidade paralela. Até a evidência do writer:
 
-- não existe writer de `creativeDirection`;
-- não há promoção ou reescrita de histórico v1;
+- metadata `plannedV2` não satisfaz o contrato;
+- histórico v1 não recebe Blueprint fabricado;
 - provider, repair e Content Operations não escrevem Blueprint;
-- a futura construção do Blueprint pertence ao Planner determinístico, após gate aprovado;
-- a projeção creator-facing não muda.
+- esta documentação não afirma implementação.
 
-## 8. Teste futuro de não vazamento do catálogo literal
+## 8. Gate de não vazamento do catálogo literal
 
-O caminho Blueprint-driven futuro deve possuir um contract test que falhe se qualquer texto literal de hook/CTA do catálogo, inclusive texto alcançável por `selectBriefPatterns`, atravessar o contexto enviado ao provider.
+O contexto V2 deve falhar contract test se `selectedPatterns` ou qualquer texto literal de hook/CTA do catálogo atravessar o provider.
 
-O teste deve verificar a projeção allowlisted do contexto e comparar contra o corpus literal conhecido. Não deve criar fallback, substituir copy nem testar o resultado textual. O caminho vigente ADR-029, incluindo o uso atual de catálogo, permanece intacto como exceção até eval e cutover aprovados. O teste é gate de uma futura implementação Blueprint-driven; não é executado nem criado nesta mudança documental.
+O teste verifica somente a projeção allowlisted e o corpus conhecido. Fixtures ADR-029/catalog permanecem isoladas para baseline E6; não são exceção no runtime V2. Esta SPEC não afirma que o teste ou a correção já estejam implementados.
 
 ## 9. Gates e invariantes preservados
 
@@ -311,21 +313,20 @@ Brief Generator
 - ADR-019 fornece o contrato separado e versionado de cenas.
 - ADR-021 fornece parcial, reconciliação de quota e retry explícito dos faltantes.
 - [`ADR-013 — Model Router e IntelligenceTier`](../../architecture/adr-013-model-router-e-intelligence-tier.md#decisão) fornece a política de `usage.cost`, moeda explícita, `UNAVAILABLE`/`PARTIAL` e custo por Content entregue a partir de tentativas efetivas.
-- ADR-029 fornece runtime, ordem, tiers, Judge e repairs vigentes.
+- ADR-029 documenta, como baseline histórico/experimental, ordem, tiers, Judge e repairs do runtime anterior; a Engine V2 é o runtime default atual, com aceitação formal pendente conforme ADR-033.
 - ADR-033 fornece a matriz de autoridade, Creative System versionado, catálogo fora do prompt novo e gate A/B/cutover.
 - O Slice 004 permanece dependente do Slice 003 e não é dependência nem destino da Etapa 4.
 
 ## 11. Out of scope
 
 - Qualquer alteração em código, schema, migration, provider, prompt de produção, Skill operacional, `ROUTER_MAP`, tier, batch, retry, quota, Job ou persistência.
-- Execução de A/B, coleta de Golden Dataset, relatório, aprovação de candidato ou cutover.
-- Ativação de `tiktok-commerce@1.3`, Creative System, Blueprint ou escrita de `creativeDirection`.
-- Writer, migração, promoção ou reescrita de `ContentOpportunity` v1 para v2.
-- Alteração de PRD, ADR-029, ADR-033, SYSTEM-DESIGN, PRINCIPLES, DESIGN ou nota imutável.
-- Revisão, edição, regeneração, aprovação, descarte, versionamento operacional, lotes, Agenda ou Estúdio do Slice 004/005.
+- Execução de E6, provider vivo, coleta, relatório, aprovação ou declaração de não-regressão.
+- Implementação/correção de binding 1.3, writer Blueprint, memória V2, Scene Skeleton ou Risk pré-Judge.
+- Migração, promoção ou reescrita de `ContentOpportunity` v1.
+- Alteração de PRD, ADR-029, ADR-033, PRINCIPLES, DESIGN ou nota imutável.
+- Revisão, edição, regeneração, aprovação, descarte, lotes, Agenda ou Estúdio.
 - Novo domínio, aggregate, serviço, agente, workflow, repositório ou capability de produto.
-- Catálogo literal no prompt normal, fallback criativo, template de cenas ou copy determinística.
-- Otimização declarada de custo, latência ou qualidade sem protocolo e relatório aprovado.
+- Alegação de economia, qualidade, equivalência, latência ou aceitação sem E6 aprovada.
 
 ## 12. Riscos e controles
 
@@ -333,9 +334,9 @@ Brief Generator
 |---|---|
 | PRD legado mantém `scenes` dentro do Brief | ADR-019 e esta SPEC fixam `ContentSceneSet` separado; payload legado permanece read-only. |
 | Fórmula curta omite Judge, repairs, cenas ou retries | `cost_job_total` soma cada tentativa efetiva por capability; `D_content` é o denominador entregue. |
-| A/B mistura Skill, tier ou contexto | Pré-registro fixa binding, versão, modelo, seed, dataset, contexto e memória por par; mudanças de Skill usam ADR/protocolo separado. |
-| `@1.3` é ativada por harness | Estado operacional explícito: `@1.2` produção, `@1.3` inativa; sem writer/cutover. |
-| Catálogo literal ancora geração futura | Contract test futuro bloqueia vazamento no caminho Blueprint-driven; runtime ADR-029 não é alterado. |
+| E6 mistura variáveis ou classes de evidência | Protocolo congela controles, lista diferenças e separa offline de provider vivo. |
+| Binding 1.3 ou writer é presumido pela documentação | Estado pendente explícito; somente evidência de execução satisfaz o gate. |
+| Catálogo literal ancora o contexto V2 | Contract test bloqueia `selectedPatterns` e copy literal; fixtures ADR-029 ficam no runner E6. |
 | LLM recebe autoridade sobre regra de sistema ou tenant | Handoff allowlisted e validação server-side de schema, factualidade, ownership, quota, estado e persistência. |
 | Etapa 4 invade Slice 004 | Identidade é precondição documental do Slice 003; revisão/controle permanecem no Slice 004. |
 
@@ -343,14 +344,14 @@ Brief Generator
 
 - **AC-04.1:** `ContentBriefVersion` novo não contém `scenes`; `ContentSceneSet` é o contrato separado de cenas.
 - **AC-04.2:** `cost_job_total` soma tentativas efetivas de capabilities fundacionais, Brief, repairs, cenas, Judge e Semantic Part Repair; `cost_per_valid_content` usa D Contents entregues.
-- **AC-04.3:** `HIGH` permanece canônico para Brief, cenas, Judge e repairs; qualquer `MID` depende de A/B isolado aprovado.
-- **AC-04.4:** A/B comum exige o mesmo `SkillBinding` por par e congela `platformSkillVersion`, modelo, seed, dataset, contexto e memória; tier só varia no protocolo específico que o declarar como única variável.
-- **AC-04.5:** comparação `@1.2`/`@1.3` está registrada como pendência de ADR/protocolo separado e não autoriza execução, ativação ou cutover.
-- **AC-04.6:** o contrato futuro de Blueprint/`ContentOpportunity` v2 existe sem writer, sem promoção de v1 e sem `creativeDirection` operacional.
-- **AC-04.7:** o teste futuro de não vazamento de catálogo literal está definido para o caminho Blueprint-driven, mantendo o caminho ADR-029 intacto.
-- **AC-04.8:** gates, Judge, repairs, factualidade, Job, tenant, quota e persistência permanecem server-side e conforme Slice 003/ADR-019/021/029.
-- **AC-04.9:** nenhum A/B foi executado e nenhum cutover foi realizado por esta documentação.
-- **AC-04.10:** nenhuma fonte canônica fora dos três arquivos autorizados foi alterada.
+- **AC-04.3:** tiers do ADR-029 permanecem identificados como baseline; runtime V2 registra valores efetivos.
+- **AC-04.4:** cada par registra commit, provider/model/tier, parâmetros, prompts/contextos, seed, usage/custo/latência e cobertura.
+- **AC-04.5:** `@1.2`/`@1.3` é atribuição pré-registrada; nenhum resultado ou aprovação é declarado.
+- **AC-04.6:** `ContentOpportunity.creativeDirection` v2 é canônica sem presumir writer nem promover v1.
+- **AC-04.7:** o gate bloqueia `selectedPatterns` e catálogo literal no contexto V2; fixture ADR-029 é apenas baseline.
+- **AC-04.8:** gates, repairs, factualidade, Job, tenant, quota e persistência permanecem server-side.
+- **AC-04.9:** evidence offline não satisfaz custo, latência ou qualidade semântica real.
+- **AC-04.10:** nenhum código, teste ou runtime é alterado por esta SPEC.
 
 ## 14. Arquivos futuros — não editar nesta etapa
 
