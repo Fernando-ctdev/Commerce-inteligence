@@ -1,9 +1,6 @@
 // Slice 011 (ADR-018/SPEC): contratos da projeção CreatorContext por capability.
 // Prova chaves exatas por capability e que userId, tenantId, quota, targetContentCount
 // e comissão nunca chegam ao provider. Executar: npx tsx --test src/modules/commerce-intelligence/creator-context.test.ts
-// Suite de regressão V1 (ADR-029): roteamento fixado em ENGINE_V2=0 — o
-// caminho V2 tem suíte própria (engine-v2-routing / engine-v2-contract).
-
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runFirstGeneration, projectCreatorContext } from "./engine";
@@ -34,8 +31,6 @@ const PLAN = { language: "pt-BR", market: "Brasil", preferredDurationSeconds: 45
 // Slice 011: arrays de enums do Brief preservados intactos pela projeção allowlisted.
 const BRIEF = { ...PLAN, appearsOnCamera: true, prefersVoiceOver: false, tone: "direto", recordingEquipment: ["phone", "camera"], recordingSupport: ["tripod", "handheld"], notes: ["foco no benefício"] };
 
-test.beforeEach(() => { process.env.ENGINE_V2 = "0"; });
-test.afterEach(() => { process.env.ENGINE_V2 = "0"; });
 
 test("projectCreatorContext devolve exatamente a allowlist de cada capability", () => {
   assert.deepEqual(projectCreatorContext("PRODUCT_UNDERSTANDING", creatorFull), {});
@@ -51,10 +46,10 @@ test("projectCreatorContext tolera contexto ausente ou inválido", () => {
 
 // Fixtures do pipeline (mesmas do engine-pipeline): evidência suficiente exige 3 oportunidades.
 const understanding = { productId: "p", category: undefined, coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["preço"], evidenceRefs: ["fact-1"] };
-const commercial = { relevantCapabilities: ["cap"], benefits: ["benefício"], proofOptions: ["fact-1"], sellingArgument: "argumento", confidence: 0.9, evidenceRefs: ["fact-1"] };
-const envelope = { audiences: ["público"], situations: ["situação"], pains: ["dor"], desires: ["desejo"], objections: ["objeção"], opportunities: [commercial, commercial, commercial] };
-const strategyPayload = { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.0", primaryPositioning: "posicionamento", audiences: ["público"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["arg"], priorityAngles: ["ângulo"], communicationPrinciples: ["cp"] };
-const contentOpportunity = { commercialObjective: "vender", angle: "demonstração", coreMessage: "benefício", hookMechanism: "demonstration", noveltyTargets: ["angle"] };
+const commercial = { commercialObjective: "argumento", angle: "benefício", coreMessage: "argumento", relevantCapabilities: ["cap"], benefits: ["benefício"], proofOptions: ["fact-1"], commercialEffects: ["argumento"], evidenceRefs: ["fact-1"], confidence: 0.9 };
+// Fixture V2: pools legados (audiences/situations/...) não são vinculados a
+// hipótese — opcionais por hipótese ficam ausentes (sem inferência).
+const envelope = { discoveryContractVersion: "2", hypotheses: [commercial, { ...commercial, angle: "confiança" }, { ...commercial, angle: "resultado" }] };
 const qualityAudit = { parts: [
   { part: "hook", status: "PASS", criterion: "hook_clarity", reason: "meets_criteria" },
   { part: "development", status: "PASS", criterion: "development_coherence", reason: "meets_criteria" },
@@ -69,7 +64,6 @@ test("pipeline entrega a projeção exata por capability, sem creatorContext no 
   // determinístico); a projeção pura da allowlist continua pinada no teste 1.
   const expected: Record<string, Record<string, unknown>> = {
     COMMERCIAL_OPPORTUNITY_MAPPING: MAPPING,
-    STRATEGY_SYNTHESIS: STRATEGY,
     CONTENT_BRIEF_GENERATION: BRIEF,
   };
   const contexts = new Map<string, Record<string, unknown>>();
@@ -79,7 +73,6 @@ test("pipeline entrega a projeção exata por capability, sem creatorContext no 
       contexts.set(task, input.trustedContext as Record<string, unknown>);
       if (task === "PRODUCT_UNDERSTANDING") return understanding;
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
-      if (task === "STRATEGY_SYNTHESIS") return strategyPayload;
       if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [{ angle: "a", hook: "h", development: [{ text: "Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido duna leve e macio porque o toque do tecido duna macio importa no uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "O tecido duna leve e macio", cta: "c" }] };
       if (task === "CONTENT_QUALITY_JUDGE") {
         // ADR-025: judge em lote — o fake ecoa o conjunto exato de contentIds recebidos.

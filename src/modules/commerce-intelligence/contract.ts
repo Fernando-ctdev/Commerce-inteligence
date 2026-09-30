@@ -143,7 +143,7 @@ const strings = (v: unknown, field: string, evidence?: EvidenceSnapshot): string
 const id = (v: unknown, field: string): string => { const value = text(v, field, 100); if (!/^[a-zA-Z0-9_-]+$/.test(value)) throw new ContractError("GEN-SCHEMA", `${field} inválido`); return value; };
 export type EvidenceSnapshot = { facts: readonly string[]; refs: readonly string[] };
 // Rejeita quaisquer campos de ownership/persistência/controle que o provider não pode atribuir.
-const FORBIDDEN_OWNERSHIP: Record<string, true> = { tenantId: true, status: true, quota: true, provider: true, model: true, tier: true, prompt: true, id: true, contentId: true, briefVersionId: true, jobId: true, planId: true, position: true };
+export const FORBIDDEN_OWNERSHIP: Record<string, true> = { tenantId: true, status: true, quota: true, provider: true, model: true, tier: true, prompt: true, id: true, contentId: true, briefVersionId: true, jobId: true, planId: true, position: true };
 function rejectForbiddenFields(v: Record<string, unknown>, label: string): void {
   for (const key of Object.keys(v)) if (FORBIDDEN_OWNERSHIP[key]) throw new ContractError("GEN-SCHEMA", `${label} contém campo não permitido: ${key}`);
 }
@@ -177,36 +177,6 @@ export function validateContentOpportunity(value: unknown, allowedSourceOpportun
   const sourceOpportunityId = v.sourceOpportunityId === undefined ? undefined : id(v.sourceOpportunityId, "sourceOpportunityId");
   if (sourceOpportunityId !== undefined && allowedSourceOpportunityIds && !allowedSourceOpportunityIds.has(sourceOpportunityId)) throw new ContractError("GEN-SCHEMA", `sourceOpportunityId órfão: ${sourceOpportunityId}`);
   return { id: id(v.id, "id"), commercialObjective: text(v.commercialObjective, "commercialObjective"), angle: text(v.angle, "angle"), coreMessage: text(v.coreMessage, "coreMessage"), hookMechanism: text(v.hookMechanism, "hookMechanism"), noveltyTargets: strings(v.noveltyTargets, "noveltyTargets"), audience: optional("audience"), pain: optional("pain"), desire: optional("desire"), objection: optional("objection"), benefit: optional("benefit"), proof: optional("proof"), narrativePattern: optional("narrativePattern"), desiredViewerResponse: optional("desiredViewerResponse"), sourceOpportunityId };
-}
-export type CommercialOpportunityMappingEnvelope = { audiences: string[]; situations: string[]; pains: string[]; desires: string[]; objections: string[]; opportunities: CommercialOpportunity[] };
-// Valida a estrutura de uma oportunidade comercial como vinda do provider, sem exigir `id`
-// (id persistente é sempre derivado pelo servidor; o provider não atribui).
-export function validateCommercialOpportunityDraft(value: unknown, evidence?: EvidenceSnapshot): Omit<CommercialOpportunity, "id"> {
-  if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Oportunidade inválida");
-  const v = value as Record<string, unknown>;
-  rejectForbiddenFields(v, "Oportunidade");
-  if (typeof v.confidence !== "number" || v.confidence < 0 || v.confidence > 1) throw new ContractError("GEN-SCHEMA", "confidence inválido");
-  const evidenceRefs = strings(v.evidenceRefs, "evidenceRefs", evidence);
-  validateEvidenceRefs(evidenceRefs, evidence, "Oportunidade");
-  return { audience: optionalText(v.audience, "audience"), situation: optionalText(v.situation, "situation"), pain: optionalText(v.pain, "pain"), desire: optionalText(v.desire, "desire"), desiredOutcome: optionalText(v.desiredOutcome, "desiredOutcome"), objection: optionalText(v.objection, "objection"), relevantCapabilities: strings(v.relevantCapabilities, "relevantCapabilities", evidence), benefits: strings(v.benefits, "benefits", evidence), proofOptions: strings(v.proofOptions, "proofOptions", evidence), sellingArgument: text(v.sellingArgument, "sellingArgument"), confidence: v.confidence, evidenceRefs };
-}
-export function validateCommercialOpportunityMappingEnvelope(value: unknown, evidence?: EvidenceSnapshot): CommercialOpportunityMappingEnvelope {
-  if (!value || typeof value !== "object") throw new ContractError("GEN-SCHEMA", "Envelope de oportunidades inválido");
-  const v = value as Record<string, unknown>;
-  rejectForbiddenFields(v, "Envelope");
-  for (const key of ["audiences", "situations", "pains", "desires", "objections"]) if (key in v && !Array.isArray((v as Record<string, unknown>)[key])) throw new ContractError("GEN-SCHEMA", `${key} inválido`);
-  const opportunities = Array.isArray(v.opportunities) ? v.opportunities.map((item) => ({ ...validateCommercialOpportunityDraft(item, evidence), id: "" })) : [];
-  const opportunityRule = cardinalityRule("opportunities");
-  // Três oportunidades só são exigidas quando o catálogo tem evidência suficiente
-  // (refs DISTINTAS: refs citadas pelo understanding são anexadas ao catálogo base e
-  // repetem-se; menções repetidas não criam evidência nova) para sustentá-las;
-  // evidência escassa mantém o mínimo estrutural de uma.
-  const distinctEvidenceRefs = evidence ? new Set(evidence.refs.map((ref) => ref.trim())).size : 0;
-  const minimumOpportunities = distinctEvidenceRefs >= 3 ? opportunityRule.minWithEvidence : opportunityRule.min;
-  // Mensagem de mínimo preservada: é a âncora do retry único de contrato no engine.
-  if (opportunities.length < minimumOpportunities) throw new ContractError("GEN-SCHEMA", minimumOpportunities === 1 ? "Envelope sem oportunidades comerciais" : `cardinalidade de oportunidades fora da política (min ${minimumOpportunities}, max ${opportunityRule.max})`);
-  if (opportunities.length > opportunityRule.max) throw new ContractError("GEN-SCHEMA", `cardinalidade de oportunidades fora da política (max ${opportunityRule.max})`);
-  return { audiences: strings(v.audiences, "audiences"), situations: strings(v.situations, "situations"), pains: strings(v.pains, "pains"), desires: strings(v.desires, "desires"), objections: strings(v.objections, "objections"), opportunities };
 }
 export type ContentPlan = { id: string; productId: string; strategyVersion: 1; targetContentCount: number; platformId: string; platformSkillVersion: string; opportunities: ContentOpportunity[] };
 // Task 1 (deterministic plan skeleton): o provider retorna SOMENTE os campos

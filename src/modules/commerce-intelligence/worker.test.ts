@@ -248,11 +248,11 @@ test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlist
   const understanding = { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["barreira"], evidenceRefs: ["product:name"] };
   // Cutover V2: mapeamento com pool diverso (requisito do Planner determinístico)
   // e creatorContext explícito — mesma receita do engine-v2-routing.
-  const envelope = { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [
-    { relevantCapabilities: ["cap"], benefits: ["praticidade no dia a dia"], proofOptions: ["product:description"], sellingArgument: "resolve o dia a dia", confidence: 0.9, evidenceRefs: ["product:description"] },
-    { relevantCapabilities: ["cap"], benefits: ["acabamento reforçado"], proofOptions: ["product:description"], sellingArgument: "durabilidade real", confidence: 0.9, evidenceRefs: ["product:description"] },
-    { relevantCapabilities: ["cap"], benefits: ["conforto térmico"], proofOptions: ["product:description"], sellingArgument: "conforto em qualquer hora", confidence: 0.9, evidenceRefs: ["product:description"] },
-    { relevantCapabilities: ["cap"], benefits: ["leveza no uso"], proofOptions: ["product:description"], sellingArgument: "leve para carregar todo dia", confidence: 0.9, evidenceRefs: ["product:description"] },
+  const envelope = { discoveryContractVersion: "2", hypotheses: [
+    { commercialObjective: "resolve o dia a dia", angle: "praticidade no dia a dia", coreMessage: "resolve o dia a dia", relevantCapabilities: ["cap"], benefits: ["praticidade no dia a dia"], proofOptions: ["product:description"], commercialEffects: ["resolve o dia a dia"], evidenceRefs: ["product:description"], confidence: 0.9 },
+    { commercialObjective: "durabilidade real", angle: "acabamento reforçado", coreMessage: "durabilidade real", relevantCapabilities: ["cap"], benefits: ["acabamento reforçado"], proofOptions: ["product:description"], commercialEffects: ["durabilidade real"], evidenceRefs: ["product:description"], confidence: 0.9 },
+    { commercialObjective: "conforto em qualquer hora", angle: "conforto térmico", coreMessage: "conforto em qualquer hora", relevantCapabilities: ["cap"], benefits: ["conforto térmico"], proofOptions: ["product:description"], commercialEffects: ["conforto em qualquer hora"], evidenceRefs: ["product:description"], confidence: 0.9 },
+    { commercialObjective: "leve para carregar todo dia", angle: "leveza no uso", coreMessage: "leve para carregar todo dia", relevantCapabilities: ["cap"], benefits: ["leveza no uso"], proofOptions: ["product:description"], commercialEffects: ["leve para carregar todo dia"], evidenceRefs: ["product:description"], confidence: 0.9 },
   ] };
   const strategy = { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.3", primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
   // Bullet com claim objetivo sem suporte ("999 kg") — falha o hard gate por item.
@@ -276,7 +276,6 @@ test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlist
   const router = { describe: () => ({ provider: "test", model: "m", instructionVersion: "i" }), complete: async (task: string, input?: { trustedContext?: unknown }) => {
     if (task === "PRODUCT_UNDERSTANDING") return understanding;
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return envelope;
-    if (task === "STRATEGY_SYNTHESIS") return strategy;
     if (task === "CONTENT_PLAN_GENERATION" || task === "CONTENT_SCENE_IDEAS") throw new Error(`capability proibida no caminho V2: ${task}`);
     if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [
       { angle: "a1", hook: "h1", development: [badBullet, badBullet], script: "Fale sobre o produto", cta: "c1" },

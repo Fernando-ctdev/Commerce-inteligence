@@ -1,10 +1,9 @@
-// Etapa 4 V2 — testes de roteamento do runFirstGeneration (ENGINE_V2 default-on).
-// Cobre: Planner determinístico no lugar de CONTENT_PLAN_GENERATION, contexto
-// real do provider allowlisted (sem IDs/catálogo/selectedPatterns), Scene
-// Skeleton no lugar de CONTENT_SCENE_IDEAS, handoff no EngineResult e fallback
-// V1 apenas por incompatibilidade de pré-condição com telemetria sanitizada.
-// Suíte V2: roteamento ENGINE_V2=1 explícito por teste (default de produção é
-// V1); hooks restauram o ambiente para não vazar entre arquivos no runner.
+// Etapa 4 V2 — testes de roteamento do runFirstGeneration (Engine V2 é o
+// call graph default; ADR-033). Cobre: Planner determinístico no lugar de
+// CONTENT_PLAN_GENERATION, contexto real do provider allowlisted (sem IDs/
+// catálogo/selectedPatterns), Scene Skeleton no lugar de CONTENT_SCENE_IDEAS,
+// handoff no EngineResult e fail-closed de pré-condições com telemetria
+// sanitizada (sem fallback V1 neste checkout).
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -189,11 +188,12 @@ test("pool V2 sem diversidade é fail-closed (sem fallback V1)", async () => {
     complete: async (task: string, input?: { trustedContext?: unknown }) => {
       taskCalls.push(task);
       // Evidência fora do catálogo do Planner V2: pré-condição incompatível
-      // → fail-closed (cutover removeu o fallback V1).
+      // → fail-closed (cutover removeu o fallback V1). Fixture em envelope V2:
+      // benefits/commercialEffects idênticos ⇒ pool sem diversidade.
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING")
-        return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [
-          { relevantCapabilities: ["cap"], benefits: ["mesmo benefício"], proofOptions: ["product:description"], sellingArgument: "s1", confidence: 0.9, evidenceRefs: ["product:description"] },
-          { relevantCapabilities: ["cap"], benefits: ["mesmo benefício"], proofOptions: ["product:description"], sellingArgument: "s2", confidence: 0.9, evidenceRefs: ["product:description"] },
+        return { discoveryContractVersion: "2", hypotheses: [
+          { commercialObjective: "c1", angle: "a1", coreMessage: "s1", desiredViewerResponse: null, audience: null, situation: null, desire: null, identification: null, curiosity: null, aspiration: null, humorPotential: null, visualPotential: null, pain: null, objection: null, desiredOutcome: null, relevantCapabilities: ["cap"], benefits: ["mesmo benefício"], proofOptions: ["product:description"], commercialEffects: ["mesmo efeito"], evidenceRefs: ["product:description"], confidence: 0.9 },
+          { commercialObjective: "c2", angle: "a2", coreMessage: "s2", desiredViewerResponse: null, audience: null, situation: null, desire: null, identification: null, curiosity: null, aspiration: null, humorPotential: null, visualPotential: null, pain: null, objection: null, desiredOutcome: null, relevantCapabilities: ["cap"], benefits: ["mesmo benefício"], proofOptions: ["product:description"], commercialEffects: ["mesmo efeito"], evidenceRefs: ["product:description"], confidence: 0.9 },
         ] };
       return base.complete(task, input);
     },

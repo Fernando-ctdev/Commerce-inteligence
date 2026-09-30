@@ -12,19 +12,20 @@ O loader de Skill da V2 no commit `8d1833b` usa `@1.2`; `@1.3` no Planner prové
 
 ## 1. Objetivo e fronteira
 
-E6 deve produzir evidência auditável para:
+E6 deve produzir evidência auditável, após concluir as Etapas 2–6, para:
 
-1. comparar end-to-end ADR-029/`@1.2` e V2/`@1.3`;
-2. atribuir efeito às migrações individuais do ADR-033;
-3. avaliar primeira geração e recorrência;
-4. medir invariantes, qualidade, custo, latência e cobertura;
-5. permitir ao Review reprovar protocolo, execução, relatório ou candidato antes de qualquer correção de runtime.
+1. comparar end-to-end ADR-029/`@1.2` e V2 final/`@1.3`, em A/B conduzida pelo usuário contra todas as premissas da nota conectada;
+2. avaliar primeira geração e recorrência;
+3. medir invariantes, qualidade, custo, latência e cobertura, inclusive o efeito agregado das migrações LLM → código;
+4. permitir ao Review reprovar protocolo, execução, relatório ou candidato antes de qualquer correção de runtime.
+
+Nenhuma A/B será executada por nós agora. Atribuições individuais podem ser solicitadas depois pelo usuário para diagnóstico, mas não integram o gate obrigatório de `V2_ACCEPTED`.
 
 Esta SPEC não cria capability, endpoint, estado de Job, worker, serviço, tabela, migration, adapter, flag ou persistência. Não corrige writer, memória, Skill, prompt, Risk ou Judge.
 
 ## 2. Fontes e precedência
 
-1. Nota imutável “Plano de recalibração da commerce inteligence”.
+1. Nota imutável “Plano de recalibração da commerce inteligence”, com a instrução expressa mais recente do usuário prevalecendo apenas quanto ao momento e à obrigatoriedade do A/B individual: nenhuma A/B por nós agora; A/B end-to-end pelo usuário após as Etapas 2–6.
 2. PRDs vigentes.
 3. [SYSTEM-DESIGN](../../architecture/SYSTEM-DESIGN.md).
 4. [ADR-013](../../architecture/adr-013-model-router-e-intelligence-tier.md), [ADR-019](../../architecture/adr-019-gate-versionada-e-cenas.md), [ADR-021](../../architecture/adr-021-geracao-parcial-declarada-e-retry-de-faltantes.md), [ADR-029](../../architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md) e [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md).
@@ -86,7 +87,7 @@ Provider vivo não substitui testes determinísticos. As classes são complement
 
 **Artefatos existentes preservados:** [`manifest.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/manifest.json) declara `golden-dataset.v1`/`golden-case.v1`, rubrica `golden-rubric.v1`, threshold `THRESHOLD_POLICY_GOLDEN_V1` e `FROZEN`; [`rubrics.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/rubrics.json) cobre somente `NATURALNESS` por `CONTENT`; [`threshold-policy.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/threshold-policy.json) usa `risk-assessment.v1`, `JUDGE_EXECUTED_CONTENTS` e thresholds de Judge reduction. Esse congelamento preserva apenas a evidência offline parcial do experimento de atribuição do Judge; não congela o pacote full E6, não contém execução live e não aprova o pipeline. Nenhum artefato v1 é reescrito ou revalidado retroativamente pelo contrato abaixo.
 
-**Diferença de contrato para E6 integral:** versionar e hashar novos manifesto/cases/fixtures, rubricas por dimensão/unidade com âncoras e dupla anotação cega, aggregation policy por categoria, threshold policy para end-to-end e atribuições, protocolo/comparabilidade de provider e classes de evidência. Aprovar e congelar esse **novo conjunto** antes da coleta; registrar relação e diferenças explícitas com v1. `FROZEN` de v1 não é herança de cobertura, thresholds ou aprovação full.
+**Diferença de contrato para E6 integral:** versionar e hashar novos manifesto/cases/fixtures, rubricas por dimensão/unidade com âncoras e dupla anotação cega, aggregation policy por categoria, threshold policy para end-to-end, protocolo/comparabilidade de provider e classes de evidência. Aprovar e congelar esse **novo conjunto** antes da coleta; registrar relação e diferenças explícitas com v1. `FROZEN` de v1 não é herança de cobertura, thresholds ou aprovação full.
 
 O shape a seguir descreve o alvo documental de E6 integral, não a representação já congelada de `golden-dataset.v1`:
 
@@ -179,7 +180,7 @@ Cada braço registra:
 
 Na comparação end-to-end, controles externos ao pipeline permanecem iguais. Diferenças inerentes entre ADR-029 e V2 são listadas antes da coleta em um manifest de diferenças.
 
-Experimentos de atribuição alteram uma única variável declarada. Diferença não pré-registrada, mudança de provider/model/version/params, prompt/contexto ausente, seed divergente ou cobertura incompatível invalida o par ou a métrica afetada conforme policy.
+Se o usuário solicitar experimentos de atribuição após a avaliação do conjunto, cada um altera uma única variável declarada e possui protocolo próprio. Diferença não pré-registrada, mudança de provider/model/version/params, prompt/contexto ausente, seed divergente ou cobertura incompatível invalida o par ou a métrica afetada conforme policy.
 
 ### 6.2 Seed e fingerprint
 
@@ -199,26 +200,16 @@ pairFingerprint = H(
 
 O mesmo `jobSeed` é usado no par quando a variável avaliada não é seed. Timestamp, UUID aleatório e `Math.random` não são seed reproduzível.
 
-## 7. Experimentos obrigatórios
+## 7. Avaliação A/B end-to-end final
 
-### 7.1 End-to-end
+Após concluir todas as Etapas 2–6, o usuário fará a comparação A/B:
 
 - ADR-029/`@1.2` por commit versus V2 final/`@1.3` por commit;
 - primeira geração e recorrência;
-- execução offline dos invariantes e execução com provider vivo das métricas operacionais/semânticas.
+- execução offline dos invariantes e execução com provider vivo das métricas operacionais/semânticas;
+- todas as premissas da nota conectada, inclusive qualidade comercial e criativa, diversidade, ausência de dor obrigatória e templating, factualidade, redução de chamadas, custo, latência, repairs e falhas.
 
-### 7.2 Atribuição
-
-- Product Understanding/Strategy LLM versus Facts + Discovery + Strategy determinística;
-- Plan LLM versus Planner V2;
-- Scene Ideas versus Scene Skeleton;
-- Judge-all versus Risk-gated;
-- catálogo versus Blueprint;
-- recipe-backed versus composição livre;
-- Skill 1.2 versus 1.3;
-- tier por capability.
-
-Cada atribuição possui protocolo/fingerprint próprios. Resultado end-to-end não substitui atribuição e vice-versa.
+Antes disso, apenas validações comportamentais por etapa e preparação do protocolo; nenhuma A/B por migração ou A/B executada por nós agora. Atribuições de PU/Strategy, Plan, cenas, Judge, catálogo/Blueprint, recipe/free composition, Skill ou tiers são diagnósticos opcionais posteriores, se solicitados pelo usuário. A/B end-to-end é gate de aceite; atribuição individual não a substitui nem é condição obrigatória.
 
 ## 8. Rubricas subjetivas auditáveis
 
@@ -425,7 +416,7 @@ Esta SPEC não fornece nenhum desses resultados.
 
 - **AC6.1:** V2 default e aceitação pendente estão explícitos.
 - **AC6.2:** ADR-029/`@1.2` é baseline fixada por commit.
-- **AC6.3:** end-to-end e atribuições estão separados.
+- **AC6.3:** A/B end-to-end final é obrigatória após concluir as Etapas 2–6; atribuições individuais são diagnósticos opcionais, não gate de aceite.
 - **AC6.4:** evidence offline e provider vivo têm capacidades distintas.
 - **AC6.5:** fixtures não satisfazem custo, latência ou qualidade semântica real.
 - **AC6.6:** cada métrica subjetiva possui rubrica, unidade, labels/âncoras e evidência.

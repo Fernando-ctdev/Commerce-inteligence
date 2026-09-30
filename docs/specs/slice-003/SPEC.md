@@ -27,7 +27,7 @@ O [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md) re
 
 O contrato-alvo separa descoberta e realização criativas do trabalho determinístico de organização, combinação, seleção, restrição, distribuição, memória e validação. V2 default não equivale à conclusão desse alvo: writer canônico de `creativeDirection`, memória multidimensional, Risk pré-Judge, binding/proveniência 1.3, contexto sem `selectedPatterns` e E6 integral continuam pendências até evidência correspondente.
 
-Nesta feature branch, a instrução expressa do usuário autoriza implementar e avaliar esse alvo como **candidata**, sem declarar que já existe no runtime: Etapa 2 Discovery V2 + Strategy determinística (A/B individual para retirar Product Understanding/Strategy LLM); Etapa 3 Planner harness existente intacto com integração externa de Blueprint canônico, Discovery, Strategy e memória conforme ADR-033; Etapa 4 Skill/prompt; Etapa 5 Risk pré-Judge seletivo; Etapa 6 E6 integral. `@1.2` é o loader real do runtime observado em `8d1833b`; `@1.3` é fixture do harness e binding operacional alvo, não fato operacional atual.
+Nesta feature branch, a instrução expressa do usuário autoriza implementar esse alvo como **candidata**, sem declarar que já existe no runtime: Etapa 2 Discovery V2 + Strategy determinística; Etapa 3 Planner harness existente intacto com integração externa de Blueprint canônico, Discovery, Strategy e memória conforme ADR-033; Etapa 4 Skill/prompt; Etapa 5 Risk pré-Judge seletivo; Etapa 6 preparação da E6 integral. Nenhuma A/B individual precede as migrações e nenhuma A/B será executada por nós agora. Após concluir todas as Etapas 2–6, o usuário fará A/B end-to-end do conjunto contra todas as premissas da nota conectada. `@1.2` é o loader real do runtime observado em `8d1833b`; `@1.3` é fixture do harness e binding operacional alvo, não fato operacional atual.
 
 Fontes de autoridade:
 
@@ -96,7 +96,7 @@ A ação explícita `Analisar produto` sobre um Product salvo precisa levar dire
 - Confirmação ou liberação transacional da reserva mensal de conteúdos no mês UTC de origem.
 - Preservação do Product e dos fatos confirmados em falhas, com recuperação explícita.
 - Exclusão Big Bang de Product por mutação autenticada: remoção transacional, tenant-scoped e completa do Product e de todos os dados relacionados.
-- Integração e avaliação **candidatas na feature branch** das Etapas 2–6 descritas acima, preservando o Planner harness puro, fixtures, policies e testes congelados; alterações de engine/worker/persistência ocorrem fora desse harness e usam os contratos existentes do ADR-033. A avaliação por variável e a E6 integral precedem qualquer aceitação ou promoção.
+- Integração **candidata na feature branch** das Etapas 2–6 descritas acima, preservando o Planner harness puro, fixtures, policies e testes congelados; alterações de engine/worker/persistência ocorrem fora desse harness e usam os contratos existentes do ADR-033. Validações comportamentais por etapa continuam exigidas; a avaliação A/B end-to-end fica reservada ao usuário após concluir o conjunto, antes de qualquer aceitação ou promoção.
 
 ### 3.3B Etapa 2 — fronteiras de fatos, Mapping e Strategy
 
@@ -171,7 +171,7 @@ Schemas estritos rejeitam os campos explicitamente proibidos; na canonicalizaç�
 | Creative System | `CreativePrimitive`, `CreativeRecipe` e compatibilidade são dados declarativos versionados da `PlatformSkill`; o contrato é `load → validate → freeze → expose` e falha fechado | Mantém conhecimento criativo dentro da Skill sem criar nova fronteira arquitetural | Sim, ADR-033 |
 | CreativeBlueprint | `ContentOpportunity.creativeDirection` v2 é a fonte canônica alvo; esta SPEC não presume conclusão do writer nem fabrica Blueprint em histórico v1 | Evita duplicação de domínio e afirmação de implementação inexistente | Sim, ADR-033 |
 | Catálogo literal | Permanece corpus de referência/benchmark/eval; no alvo V2 não entra no prompt normal. A remoção efetiva de `selectedPatterns` continua gate de `V2_ACCEPTED` | Separa contrato alvo de evidência operacional | Sim, ADR-033 |
-| Gate de aceitação | Cada migração LLM → código exige experimento de atribuição; E6 integral exige comparação end-to-end offline e com provider vivo | Economia isolada ou fixture não autoriza aceitação | Sim, ADR-033 |
+| Gate de aceitação | Não executar A/B individual por migração LLM → código antes de concluir as Etapas 2–6; o usuário fará A/B end-to-end do conjunto final contra todas as premissas da nota conectada | Calls menores ou evidência offline isolada não autorizam aceite; qualidade, diversidade, naturalidade, criatividade, factualidade, custo, latência e falhas continuam sujeitos ao protocolo E6 com provider vivo quando cabível | Sim, instrução expressa mais recente do usuário; substitui o gate individual anterior do ADR-033 |
 
 
 | Decisão | Padrão adotado | Racional | Confirmada? |
@@ -581,9 +581,9 @@ Requisitos de responsividade e acessibilidade:
 4. **Gate de persistência:** `ContentOpportunity.creativeDirection` v2 é a fonte canônica alvo; a documentação não presume writer completo nem promove histórico v1.
 5. **Gate de contexto:** o caminho V2 deve excluir `selectedPatterns` e texto literal do catálogo; contract test e telemetria precisam comprovar isso.
 6. **Gate de memória/qualidade:** memória multidimensional, Risk pré-Judge e seleção fail-safe do Judge precisam de implementação e observabilidade; gates, partial, quota, tenant e idempotência permanecem preservados.
-7. **Gate E6:** comparação end-to-end e experimentos de atribuição separam evidence offline de provider vivo; rubricas, unidades, cegamento, adjudicação, agregação/categoria e thresholds são pré-registrados.
+7. **Gate E6:** após concluir todas as Etapas 2–6, o usuário conduzirá A/B end-to-end da baseline com o conjunto V2 final; evidência offline e de provider vivo permanece separada, com rubricas, unidades, cegamento, adjudicação, agregação/categorias e thresholds pré-registrados. Atribuições individuais só ocorrerão se o usuário solicitar diagnóstico; não são condição de `V2_ACCEPTED`.
 
-Estes gates autorizam implementação e avaliação **somente da candidata nesta feature branch**, por instrução expressa do usuário; não declaram implementação concluída, resultado, não-regressão, deploy, merge ou `V2_ACCEPTED`.
+Estes gates autorizam implementação candidata e validações comportamentais por etapa nesta feature branch, por instrução expressa do usuário; não autorizam A/B por nós agora nem declaram implementação concluída, resultado, não-regressão, deploy, merge ou `V2_ACCEPTED`.
 
 ## Acceptance Criteria
 **Acceptance Criteria**
@@ -664,11 +664,11 @@ Os critérios 18–20 e 25 abaixo descrevem a baseline ADR-029/`@1.2` somente; n
 
 ## Aceite da integração candidata Etapas 2–6
 
-1. **Etapa 2:** Discovery V2 validada e persistida como envelope JSON-safe com hash reprodutível; cada hipótese fornece `commercialObjective`, `angle`, `coreMessage` textuais e `commercialEffects` próprios, com ID server-owned e referências autorizadas. Strategy determinística seleciona somente IDs/referências autorizados, agrega `audiences` só de `audience` e `priorityBenefits` só de `benefits`, sem fabricar copy, inclusive no retry de faltantes. A retirada de Product Understanding e Strategy LLM exige A/B individual de atribuição, sem supor ganho por menor número de calls.
+1. **Etapa 2:** Discovery V2 validada e persistida como envelope JSON-safe com hash reprodutível; cada hipótese fornece `commercialObjective`, `angle`, `coreMessage` textuais e `commercialEffects` próprios, com ID server-owned e referências autorizadas. Strategy determinística seleciona somente IDs/referências autorizados, agrega `audiences` só de `audience` e `priorityBenefits` só de `benefits`, sem fabricar copy, inclusive no retry de faltantes. A retirada de Product Understanding e Strategy LLM não exige A/B individual agora; a equivalência de qualidade e a redução mensurável de chamadas serão avaliadas no A/B end-to-end final, sem supor ganho por menor número de calls.
 2. **Etapa 3:** Planner harness existente mantém contratos, fixtures, policies e testes exatos. Fora dele, engine/worker resolvem Discovery/Strategy pelo `sourceDiscoveryRef` tenant-scoped, verificam versão/hash/refs e projetam somente hipóteses selecionadas ao `CommercialDiscoveryPool`, preservando `commercialObjective`, `angle`, `coreMessage`, `commercialEffects` e `sourceOpportunityId`; persistem `ContentOpportunity.creativeDirection` como Blueprint canônico, com memória estruturada V1 e sinais conforme ADR-033, sem fabricar Blueprint em histórico ou usar benefits/effects como audiences.
 3. **Etapa 4:** Skill `@1.3` efetiva e provenance coerente em Strategy/Plan/Run/Planner/Creative System; prompt V2 não recebe `selectedPatterns` nem texto literal do catálogo. `@1.2` permanece baseline real observado, não se confunde com a fixture `@1.3` do harness.
 4. **Etapa 5:** hard gates determinísticos precedem Risk; Risk pré-Judge seleciona Judge de modo fail-safe e não decide publicação, D/F ou quota. Repair semântico preserva as regras existentes.
-5. **Etapa 6:** E6 integral compara baseline ADR-029 fixada por commit e candidata final, com experimentos individuais, critérios pré-registrados e evidências offline separadas das medições com provider vivo. Somente relatório revisado pelo Software Architect e aceite expresso do usuário permitem propor merge/deploy e registrar `V2_ACCEPTED`; falha mantém V2 default pendente, sem rollback implícito.
+5. **Etapa 6:** após concluir todas as Etapas 2–6, o usuário conduzirá A/B end-to-end do conjunto V2 final contra a baseline ADR-029 fixada por commit, avaliando todas as premissas da nota conectada com critérios pré-registrados e evidências offline separadas das medições com provider vivo. Atribuições individuais não são gate obrigatório. Somente relatório revisado pelo Software Architect e aceite expresso do usuário permitem propor merge/deploy e registrar `V2_ACCEPTED`; falha mantém V2 default pendente, sem rollback implícito. Nenhuma A/B será executada por nós agora.
 
 ## Edge Cases
 
@@ -773,7 +773,7 @@ Os critérios 18–20 e 25 abaixo descrevem a baseline ADR-029/`@1.2` somente; n
 - O Creative System é conhecimento declarativo/versionado da `PlatformSkill`, com `CreativePrimitive`, `CreativeRecipe`, `CreativeBlueprint`, compatibilidade fail-closed e fluxo `load → validate → freeze → expose`; não controla workflow, persistência ou quota.
 - `ContentOpportunity.creativeDirection` v2 é a fonte canônica alvo; esta SPEC não afirma que o writer, a memória multidimensional ou a leitura V2 estejam completos e não fabrica dados no histórico.
 - O catálogo literal permanece corpus de referência/benchmark/eval; `selectedPatterns` e copy literal são proibidos no contexto V2 alvo, com comprovação ainda exigida.
-- E6 end-to-end e atribuições por variável são exigidas para `V2_ACCEPTED`; fixtures offline não comprovam custo, latência ou qualidade semântica real.
+- Para `V2_ACCEPTED`, a A/B end-to-end do conjunto final será conduzida pelo usuário após concluir as Etapas 2–6; atribuições por variável são diagnósticos opcionais, somente se solicitados. Fixtures offline não comprovam custo, latência ou qualidade semântica real: essas métricas exigem provider vivo pareado.
 - O App Shell usa Global Activity Indicator persistente entre navegação e reentrada, sem página permanente de Análise.
 - Strategy e Plan são consultáveis na página/contexto do Product depois de `SUCCEEDED`, mas não são gate intermediário para Briefings.
 - Product, job, resultados e Entitlements são escopados ao Tenant da sessão; mutações exigem proteção CSRF e erros públicos são sanitizados.

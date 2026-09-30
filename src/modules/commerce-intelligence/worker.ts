@@ -8,6 +8,7 @@ import { extractJobCreatorContext } from "../creator-preferences/service";
 import {
   buildEvidenceCatalog,
   createCapabilityTracker,
+  discoveryHashV2,
   ENGINE_VERSION,
   runFirstGeneration,
   type EngineResult,
@@ -126,6 +127,60 @@ export function fenceMatches(
   attempt: number,
 ) {
   return job.leaseOwnerId === ownerId && job.attempt === attempt;
+}
+
+export type ReusedDiscoveryV2 = {
+  envelope: Record<string, unknown>;
+  discoveryHash: string;
+  sourceDiscoveryRef: { intelligenceRunId: string; discoveryContractVersion: "2"; discoveryHash: string };
+};
+
+// Etapa 2 candidata (ADR-033 §3/§12) — reader da Discovery persistida: resolve
+// o run de origem no MESMO tenant E MESMO product do job (Strategy/complete),
+// valida o envelope canônico v2 e a consistência metadata.discoveryHash =
+// hash recalculado = ref.discoveryHash. A versão canônica vive no envelope
+// (discoveryContractVersion) — não existe metadata.version separado.
+// Divergência, ausência ou cross-tenant/product falha fechado (GEN-SCHEMA).
+export async function loadReusedDiscovery(
+  strategyPayload: Record<string, unknown>,
+  tenantId: string,
+  productId: string,
+): Promise<ReusedDiscoveryV2> {
+  const ref = strategyPayload.sourceDiscoveryRef as ReusedDiscoveryV2["sourceDiscoveryRef"] | undefined;
+  if (
+    !ref || typeof ref !== "object" ||
+    typeof ref.intelligenceRunId !== "string" ||
+    ref.discoveryContractVersion !== "2" ||
+    typeof ref.discoveryHash !== "string"
+  )
+    throw new GenerationError("GEN-SCHEMA", "Strategy reutilizada sem sourceDiscoveryRef válido");
+  const origin = await prisma.intelligenceRun.findFirst({
+    where: { id: ref.intelligenceRunId, tenantId, productId },
+    select: { metadata: true },
+  });
+  if (!origin)
+    throw new GenerationError("GEN-SCHEMA", "Discovery de origem não encontrada neste tenant/produto");
+  const metadata = (origin.metadata ?? {}) as Record<string, unknown>;
+  const envelope = metadata.discoveryV2;
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope))
+    throw new GenerationError("GEN-SCHEMA", "Run de origem sem discoveryV2 canônico");
+  const envelopeRecord = envelope as Record<string, unknown>;
+  if (envelopeRecord.discoveryContractVersion !== "2" || !Array.isArray(envelopeRecord.hypotheses))
+    throw new GenerationError("GEN-SCHEMA", "Run de origem com discoveryV2 fora do contrato v2");
+  const recomputed = discoveryHashV2(envelope);
+  if (recomputed !== ref.discoveryHash)
+    throw new GenerationError("GEN-SCHEMA", "discoveryHash divergente do run de origem");
+  if (typeof metadata.discoveryHash !== "string" || metadata.discoveryHash !== ref.discoveryHash)
+    throw new GenerationError("GEN-SCHEMA", "metadata.discoveryHash divergente do sourceDiscoveryRef");
+  return {
+    envelope: envelopeRecord,
+    discoveryHash: ref.discoveryHash,
+    sourceDiscoveryRef: {
+      intelligenceRunId: ref.intelligenceRunId,
+      discoveryContractVersion: "2",
+      discoveryHash: ref.discoveryHash,
+    },
+  };
 }
 
 export function internalFailureMetadata(code: string, stage: string | null, detail: unknown): Record<string, unknown> {
@@ -686,6 +741,76 @@ export async function finalizeGeneration(
       : null;
     if (reusedStrategyId && !reusedStrategy)
       throw new GenerationError("GEN-PERSISTENCE", "Strategy ACTIVE do job parcial não encontrada para reuso", false);
+    // Etapa 2 candidata (ADR-033 §3/§12): metadata do run recebe o envelope
+    // canônico + discoveryHash (fresh) ou apenas sourceDiscoveryRef (reuso);
+    // o run é persistido ANTES da Strategy para o payload referenciar o runId.
+    const discovery = output.discoveryCanonicalV2;
+    const runDataFinal: Record<string, unknown> =
+      discovery?.origin === "fresh"
+        ? { ...runDataWithPartial, discoveryV2: discovery.envelope, discoveryHash: discovery.discoveryHash }
+        : discovery?.origin === "reused"
+          ? { ...runDataWithPartial, sourceDiscoveryRef: discovery.sourceDiscoveryRef }
+          : { ...runDataWithPartial };
+    // ADR-033 §12: reentrada/upsert preserva o mesmo envelope JSON-safe e
+    // discoveryHash; divergência falha fechado. O state machine ordinário não
+    // alcança segunda finalização (fence CAS + terminal no mesmo tx), mas o
+    // upsert do run por (tenantId, jobId) É o caminho de reescrita — o invariante
+    // é protegido aqui: run ausente cria; par canônico existente igual preserva
+    // envelope/hash originais (metadata operacional atualiza); par divergente
+    // (ou internamente inconsistente) → GEN-SCHEMA, rollback da transação.
+    const existingRun = await tx.intelligenceRun.findUnique({
+      where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } },
+      select: { metadata: true },
+    });
+    const canonicalPairOf = (metadata: unknown): { discoveryV2: unknown; discoveryHash: string } | null => {
+      const record = (metadata ?? {}) as Record<string, unknown>;
+      if (record.discoveryV2 === undefined && record.discoveryHash === undefined) return null;
+      if (!record.discoveryV2 || typeof record.discoveryV2 !== "object" || typeof record.discoveryHash !== "string")
+        throw new GenerationError("GEN-SCHEMA", "Run existente com discoveryV2/discoveryHash incompletos");
+      const recomputedExisting = discoveryHashV2(record.discoveryV2);
+      if (recomputedExisting !== record.discoveryHash)
+        throw new GenerationError("GEN-SCHEMA", "Run existente com par canônico internamente inconsistente");
+      return { discoveryV2: record.discoveryV2, discoveryHash: record.discoveryHash };
+    };
+    const existingPair = canonicalPairOf(existingRun?.metadata);
+    if (existingPair) {
+      if (discovery?.origin === "fresh" && discovery.discoveryHash !== existingPair.discoveryHash)
+        throw new GenerationError("GEN-SCHEMA", "discoveryV2 divergente na reentrada do run");
+      // Par existente igual (ou novo run sem envelope): preserva os originais.
+      runDataFinal.discoveryV2 = existingPair.discoveryV2;
+      runDataFinal.discoveryHash = existingPair.discoveryHash;
+    }
+    // ADR-021: run idempotente por job — persistido também em SUCCEEDED_PARTIAL.
+    const run = await tx.intelligenceRun.upsert({
+      where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } },
+      create: {
+        tenantId: job.tenantId,
+        jobId: job.id,
+        productId: job.productId,
+        engineVersion: ENGINE_VERSION,
+        platformSkillVersion: String(output.strategy.platformSkillVersion),
+        metadata: runDataFinal as never,
+        inputMemorySnapshot: {},
+      },
+      update: {
+        engineVersion: ENGINE_VERSION,
+        platformSkillVersion: String(output.strategy.platformSkillVersion),
+        metadata: runDataFinal as never,
+      },
+    });
+    const strategyPayload: Record<string, unknown> =
+      discovery?.origin === "fresh"
+        ? {
+            ...output.strategy,
+            // Proveniência da Strategy (ADR-033 §3): ref para o run canônico
+            // do MESMO job/tenant; o pool permanece apenas em discoveryV2.
+            sourceDiscoveryRef: {
+              intelligenceRunId: run.id,
+              discoveryContractVersion: "2",
+              discoveryHash: discovery.discoveryHash,
+            },
+          }
+        : { ...output.strategy };
     const strategy = reusedStrategy ?? await tx.productStrategy.create({
       data: {
         id: String(output.strategy.id),
@@ -694,7 +819,7 @@ export async function finalizeGeneration(
         jobId: job.id,
         platformId: String(output.strategy.platformId),
         platformSkillVersion: String(output.strategy.platformSkillVersion),
-        payload: JSON.parse(JSON.stringify(output.strategy)),
+        payload: JSON.parse(JSON.stringify(strategyPayload)),
       },
     });
     const plan = await tx.contentPlan.create({
@@ -717,24 +842,6 @@ export async function finalizeGeneration(
         productId: job.productId,
         jobId: job.id,
         payload: JSON.parse(JSON.stringify(output.productUnderstanding)),
-      },
-    });
-    // ADR-021: run idempotente por job — persistido também em SUCCEEDED_PARTIAL.
-    await tx.intelligenceRun.upsert({
-      where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } },
-      create: {
-        tenantId: job.tenantId,
-        jobId: job.id,
-        productId: job.productId,
-        engineVersion: ENGINE_VERSION,
-        platformSkillVersion: String(output.strategy.platformSkillVersion),
-        metadata: runDataWithPartial as never,
-        inputMemorySnapshot: {},
-      },
-      update: {
-        engineVersion: ENGINE_VERSION,
-        platformSkillVersion: String(output.strategy.platformSkillVersion),
-        metadata: runDataWithPartial as never,
       },
     });
     for (const [index, opportunity] of output.opportunities.entries()) {
@@ -1052,6 +1159,12 @@ export async function processGeneration(jobId: string, ownerId: string, deps?: {
       : null;
     const reuseStrategy = reuseStrategyRow?.payload as Record<string, unknown> | undefined;
     const memorySignals = (memoryRow?.signals as Record<string, unknown> | undefined) ?? {};
+    // Etapa 2 candidata (ADR-033 §3/§12): no modo complete a Discovery de
+    // origem é resolvida e validada ANTES do engine — resultado intermediário
+    // persistido é reutilizado; Mapping não é re-chamado. Falha fechado.
+    const reusedDiscovery = reuseStrategyRow?.payload
+      ? await loadReusedDiscovery(reuseStrategyRow.payload as Record<string, unknown>, job.tenantId, job.productId)
+      : undefined;
     const output = await runFirstGeneration({
       productId: product.id,
       jobId: job.id,
@@ -1085,6 +1198,7 @@ export async function processGeneration(jobId: string, ownerId: string, deps?: {
       creatorContext: extractJobCreatorContext(job.inputSnapshot),
       memory: memorySignals,
       ...(reuseStrategy ? { reuseStrategy } : {}),
+      ...(reusedDiscovery ? { reusedDiscovery } : {}),
     });
     if (!(await checkFence()))
       throw new GenerationError(

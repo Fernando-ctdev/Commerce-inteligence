@@ -18,7 +18,7 @@
 - O [call map estático da Etapa 1](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/baseline-call-map.md) documenta essas superfícies e chamadas lógicas; chamadas físicas, tokens, custo e latência observados seguem `UNAVAILABLE` sem execução real.
 - [`manifest.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/manifest.json) `FROZEN` `golden-dataset.v1`, [`rubrics.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/rubrics.json) `golden-rubric.v1` e [`threshold-policy.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/threshold-policy.json) `THRESHOLD_POLICY_GOLDEN_V1` pertencem somente ao experimento offline parcial Judge reduction; não são o pacote nem aprovação full E6. Preservá-los sem alteração.
 - Falha/incompletude de E6 não faz rollback implícito.
-- End-to-end e atribuições por variável são ambos obrigatórios.
+- A/B end-to-end do conjunto final, conduzida pelo usuário após concluir as Etapas 2–6, é obrigatória para `V2_ACCEPTED`; atribuições por variável são opcionais e somente se o usuário solicitar diagnóstico. Nenhuma A/B será executada por nós agora.
 - Fixtures/replay offline não satisfazem custo, latência, usage ou qualidade semântica real.
 - Provider vivo pareado é obrigatório para essas métricas.
 - Quota, Tenant, Job, D/N, partial, retry, fencing e idempotência permanecem invariantes.
@@ -98,22 +98,16 @@ Para cada dimensão subjetiva:
 
 Métrica live sem provider vivo é `UNAVAILABLE`; não imputar zero.
 
-### Task 6 — Pré-registrar experimentos
+### Task 6 — Pré-registrar a avaliação A/B end-to-end final
 
-- [ ] End-to-end ADR-029 versus V2.
-- [ ] Product Understanding/Strategy LLM versus Facts + Discovery + Strategy determinística.
-- [ ] Plan LLM versus Planner V2.
-- [ ] Scene Ideas versus Scene Skeleton.
-- [ ] Judge-all versus Risk-gated.
-- [ ] Catálogo versus Blueprint.
-- [ ] Recipe-backed versus composição livre.
-- [ ] Skill 1.2 versus 1.3.
-- [ ] Tiers por capability.
-- [ ] Primeira geração e recorrência.
+- [ ] Após concluir as Etapas 2–6, fixar o protocolo da A/B end-to-end ADR-029 versus V2 final para execução pelo usuário.
+- [ ] Cobrir primeira geração e recorrência, qualidade comercial/criativa e diversidade, invariantes, chamadas, tiers, custo, latência, retries, repairs e falhas contra todas as premissas da nota conectada.
+- [ ] Separar validações offline de métricas semânticas e operacionais com provider vivo pareado; pré-registrar controles, rubricas, unidades, cegamento, adjudicação, agregação/categorias e thresholds antes da coleta.
+- [ ] Apenas se o usuário solicitar diagnóstico posterior, pré-registrar atribuições individuais (PU/Strategy, Plan, cenas, Judge, catálogo/Blueprint, recipes, Skill ou tiers), cada qual com variável única e controles próprios.
 
-Cada atribuição fixa variável única e controles. Nenhum experimento é executado por este plano.
+Validações comportamentais por etapa continuam exigidas; nenhuma A/B é executada por este plano ou por nós agora.
 
-### Task 7 — Definir relatório e gate de revisão
+### Task 7 — Definir relatório da A/B end-to-end e gate de revisão
 
 O relatório futuro deve conter:
 
@@ -127,14 +121,14 @@ O relatório futuro deve conter:
 - missing/invalid pairs;
 - verdict e report hash.
 
-Review pode rejeitar protocolo, par, categoria, resultado ou relatório incompleto. `V2_ACCEPTED` exige revisão formal do Software Architect e aceite explícito do usuário com `reportHash`. Este PLAN não os presume.
+Review pode rejeitar protocolo, par, categoria, resultado ou relatório incompleto. `V2_ACCEPTED` exige A/B end-to-end conduzida pelo usuário após concluir as Etapas 2–6, revisão formal do Software Architect e aceite explícito do usuário com `reportHash`; atribuições individuais não são requisito. Este PLAN não presume execução nem aprovação.
 
 ## 3. Critérios de conclusão documental
 
 - [ ] Runtime V2 default e aceitação pendente registrados.
 - [ ] ADR-029/`@1.2` preservado somente como baseline.
 - [ ] Artefatos v1 `FROZEN` preservados como evidência parcial Judge reduction, com diferenças de contrato e novas versões full E6 pré-registradas; não há aprovação herdada.
-- [ ] End-to-end e atribuições por variável separados no protocolo full E6.
+- [ ] A/B end-to-end final sob responsabilidade do usuário após as Etapas 2–6 registrada como gate; atribuições individuais apenas para diagnóstico solicitado, sem execução agora.
 - [ ] Evidence offline e provider vivo separados.
 - [ ] Fixtures não satisfazem métricas live.
 - [ ] Provider/model/tier/params/prompts/contextos/seed e coverage comparáveis.

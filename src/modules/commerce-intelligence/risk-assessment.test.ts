@@ -106,7 +106,7 @@ test("pré-Judge V2: repetições de mechanism/effect/recipe/structure viram fin
     memory: { status: "AVAILABLE", priorMechanisms: ["demonstração"], priorEffects: ["confiança"], priorRecipes: ["recipe-1"], priorStructures: ["gancho>payoff"] },
   });
   const codes = repeats.assessment.findings.map(({ code }) => code);
-  for (const expected of ["ATTENTION_MECHANISM_REPEAT", "PSYCHOLOGICAL_EFFECT_REPEAT", "RECIPE_SATURATION", "STRUCTURE_REPEAT"]) {
+  for (const expected of ["ATTENTION_MECHANISM_REPEAT", "PSYCHOLOGICAL_EFFECT_REPEAT", "RECIPE_SATURATION", "STRUCTURE_REPEAT"] as const) {
     assert.ok(codes.includes(expected), `esperado ${expected}`);
   }
   assert.equal(new Set(codes).size, codes.length, "findings deduplicados");

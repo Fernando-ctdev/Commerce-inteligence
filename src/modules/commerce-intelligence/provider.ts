@@ -1,5 +1,5 @@
 import { GenerationError } from "./errors";
-import { CARDINALITY_POLICY } from "./contract";
+import { CARDINALITY_POLICY, FORBIDDEN_OWNERSHIP } from "./contract";
 import {
   assertProviderOutput,
   instructionHash,
@@ -101,67 +101,6 @@ export const PRODUCT_UNDERSTANDING_JSON_SCHEMA_FORMAT = {
   },
 } as const;
 
-// Campos opcionais do ContentOpportunity ficam de fora (additionalProperties:false
-// os impede; ausência é aceita pelo validador), como category em PU.
-
-// ADR-033 §3 (contrato canônico atualizado): Commercial + Creative Discovery V2 —
-// envelope {discoveryContractVersion:"2", hypotheses:[…]}: 3 campos obrigatórios
-// LLM-owned, 12 opcionais (string|null), 5 arrays + confidence. sourceOpportunityId
-// é SERVER-owned pós-validação e NUNCA cruza o schema do provider. Opcional sem
-// evidência vira null (nunca string vazia); refs apenas do evidenceRefsCatalog.
-export const COMMERCIAL_DISCOVERY_V2_JSON_SCHEMA_FORMAT = {
-  type: "json_schema",
-  json_schema: {
-    name: "commercial_creative_discovery_v2",
-    strict: true,
-    schema: {
-      type: "object",
-      properties: {
-        discoveryContractVersion: { type: "string", enum: ["2"] },
-        hypotheses: {
-          type: "array",
-          minItems: 1,
-          items: {
-            type: "object",
-            properties: {
-              commercialObjective: { type: "string" },
-              angle: { type: "string" },
-              coreMessage: { type: "string" },
-              desiredViewerResponse: { type: ["string", "null"] },
-              audience: { type: ["string", "null"] },
-              situation: { type: ["string", "null"] },
-              desire: { type: ["string", "null"] },
-              identification: { type: ["string", "null"] },
-              curiosity: { type: ["string", "null"] },
-              aspiration: { type: ["string", "null"] },
-              humorPotential: { type: ["string", "null"] },
-              visualPotential: { type: ["string", "null"] },
-              pain: { type: ["string", "null"] },
-              objection: { type: ["string", "null"] },
-              desiredOutcome: { type: ["string", "null"] },
-              relevantCapabilities: { type: "array", items: { type: "string" } },
-              benefits: { type: "array", items: { type: "string" } },
-              proofOptions: { type: "array", items: { type: "string" } },
-              commercialEffects: { type: "array", items: { type: "string" } },
-              evidenceRefs: { type: "array", items: { type: "string" }, minItems: 1 },
-              confidence: { type: "number", minimum: 0, maximum: 1 },
-            },
-            required: [
-              "commercialObjective", "angle", "coreMessage", "desiredViewerResponse", "audience",
-              "situation", "desire", "identification", "curiosity", "aspiration", "humorPotential",
-              "visualPotential", "pain", "objection", "desiredOutcome", "relevantCapabilities",
-              "benefits", "proofOptions", "commercialEffects", "evidenceRefs", "confidence",
-            ],
-            additionalProperties: false,
-          },
-        },
-      },
-      required: ["discoveryContractVersion", "hypotheses"],
-      additionalProperties: false,
-    },
-  },
-} as const;
-
 const UNDERSTANDING_LIMITS = UNDERSTANDING_FIELDS.map(
   (field) => `${field}: ≤ ${CARDINALITY_POLICY[field].max}`,
 ).join(", ");
@@ -218,11 +157,17 @@ export function validateCommercialDiscoveryV2Output(value: Record<string, unknow
   const fail = (issue: string, item?: number): never => {
     throw new GenerationError("GEN-SCHEMA", `Discovery V2 inválida: ${issue}`, true, { task: "COMMERCIAL_OPPORTUNITY_MAPPING" as const, ...(item === undefined ? {} : { item }), issue });
   };
-  for (const key of Object.keys(value))
-    if (key !== "discoveryContractVersion" && key !== "hypotheses") fail(`chave raiz desconhecida: ${key}`);
+  for (const key of Object.keys(value)) {
+    if (key === "discoveryContractVersion" || key === "hypotheses") continue;
+    // SPEC §3.3B/AC12: campos proibidos/server-owned falham fechado (sourceOpportunityId
+    // é server-owned apenas no boundary Discovery); demais desconhecidos são descartados
+    // na canonicalização, nunca propagados ao retorno.
+    if (FORBIDDEN_OWNERSHIP[key] || key === "sourceOpportunityId") fail(`campo proibido/server-owned: ${key}`);
+    delete value[key];
+  }
   if (value.discoveryContractVersion !== "2") fail("discoveryContractVersion deve ser '2'");
-  const hypotheses = value.hypotheses;
-  if (!Array.isArray(hypotheses) || hypotheses.length === 0) fail("hypotheses[] não vazio");
+  const hypotheses: unknown[] = Array.isArray(value.hypotheses) ? value.hypotheses : [];
+  if (hypotheses.length === 0) fail("hypotheses[] não vazio");
   if (hypotheses.length > context.maxOpportunities) fail(`hypotheses excede maxOpportunities (${hypotheses.length} > ${context.maxOpportunities})`);
   const catalog = new Set(context.catalog);
   hypotheses.forEach((raw, index) => {
@@ -230,8 +175,10 @@ export function validateCommercialDiscoveryV2Output(value: Record<string, unknow
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail("hypothesis inválida", item);
     const hypothesis = raw as Record<string, unknown>;
     const allowed = [...DISCOVERY_V2_REQUIRED, ...DISCOVERY_V2_OPTIONAL, ...DISCOVERY_V2_ARRAYS, "confidence"];
-    for (const key of Object.keys(hypothesis))
-      if (!allowed.includes(key)) fail(`campo desconhecido/server-owned: ${key}`, item);
+    for (const key of Object.keys(hypothesis)) {
+      if (FORBIDDEN_OWNERSHIP[key] || key === "sourceOpportunityId") fail(`campo proibido/server-owned: ${key}`, item);
+      if (!allowed.includes(key)) delete hypothesis[key];
+    }
     for (const key of DISCOVERY_V2_REQUIRED)
       if (typeof hypothesis[key] !== "string" || !(hypothesis[key] as string).trim()) fail(`${key} obrigatório não vazio`, item);
     for (const key of DISCOVERY_V2_OPTIONAL) {
@@ -528,12 +475,13 @@ export function createHttpProvider(config = configFromEnv()): ModelRouter {
         model,
         temperature: 0.2,
         reasoning: { effort: REASONING_BY_TASK[task] },
+        // ADR-033 adendo: só PU mantém strict json_schema (maxItems); MAPPING usa
+        // json_object genérico — o strict schema impedia o descarte de desconhecidos;
+        // a fronteira do Discovery V2 é o validador local (SPEC §3.3B).
         response_format:
           task === "PRODUCT_UNDERSTANDING"
             ? PRODUCT_UNDERSTANDING_JSON_SCHEMA_FORMAT
-            : task === "COMMERCIAL_OPPORTUNITY_MAPPING"
-              ? COMMERCIAL_DISCOVERY_V2_JSON_SCHEMA_FORMAT
-              : { type: "json_object" },
+            : { type: "json_object" },
         messages: [
           {
             role: "system",

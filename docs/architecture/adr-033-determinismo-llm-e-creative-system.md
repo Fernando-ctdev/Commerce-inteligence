@@ -34,7 +34,7 @@ Esta emenda resolve explicitamente a tensão:
 
 `V2_DEFAULT_PENDING_ACCEPTANCE` e `V2_ACCEPTED` são estados documentais deste ADR; não são estados de Job, campos de API ou enums de produto.
 
-**Autorização de implementação candidata:** por instrução expressa do usuário, as [SPEC](../specs/slice-003/SPEC.md) e [PLAN](../plans/slice-003/PLAN.md) canônicas do Slice 003 autorizam implementar e avaliar nesta feature branch as Etapas 2–6: Discovery V2/Strategy determinística com A/B individual; Planner harness puro inalterado com Blueprint/Discovery/Strategy/memória integrados externamente; Skill/prompt; Risk pré-Judge seletivo; E6 integral. Esta autorização não é merge, deploy, rollback nem aceitação V2. O default de produção permanece V2 (`8d1833b`) em `V2_DEFAULT_PENDING_ACCEPTANCE` até relatório E6 integral, revisão Architect e aceite expresso do usuário.
+**Autorização de implementação candidata:** por instrução expressa do usuário, as [SPEC](../specs/slice-003/SPEC.md) e [PLAN](../plans/slice-003/PLAN.md) canônicas do Slice 003 autorizam implementar as Etapas 2–6 nesta feature branch: Discovery V2/Strategy determinística; Planner harness puro inalterado com Blueprint/Discovery/Strategy/memória integrados externamente; Skill/prompt; Risk pré-Judge seletivo; preparação da E6 integral. A instrução mais recente do usuário substitui o requisito anterior de A/B individual antes de cada migração: **nenhuma A/B será executada por nós agora**. Somente após concluir todas as Etapas 2–6, o usuário fará avaliação A/B end-to-end do conjunto final contra todas as premissas da nota conectada. Esta autorização não é merge, deploy, rollback nem aceitação V2. O default de produção permanece V2 (`8d1833b`) em `V2_DEFAULT_PENDING_ACCEPTANCE` até relatório E6 integral, revisão Architect e aceite expresso do usuário.
 
 ## Decisão
 
@@ -114,7 +114,7 @@ type CommercialCreativeDiscoveryV2 = {
 };
 ```
 
-Dor, objeção e necessidade prévia são opcionais. Discovery pode propor hipóteses; não pode inventar atributos do Produto. `commercialObjective`, `angle` e `coreMessage` são **hipóteses textuais obrigatórias da LLM Discovery**, não copy fabricada pela Strategy/Planner; `desiredViewerResponse` é hipótese opcional. O parser rejeita ausência, vazio, referência factual inválida ou IDs de origem repetidos. `sourceOpportunityId` é atribuído pelo servidor por hipótese após validação e permanece estável na Discovery persistida, Strategy, Planner e Opportunity. `ProductStrategyV2` agrega, seleciona, ordena e projeta deterministicamente a Discovery validada. A retirada de Product Understanding e Strategy LLM exige A/B específico da Etapa 6 antes de alterar essas duas chamadas no runtime padrão.
+Dor, objeção e necessidade prévia são opcionais. Discovery pode propor hipóteses; não pode inventar atributos do Produto. `commercialObjective`, `angle` e `coreMessage` são **hipóteses textuais obrigatórias da LLM Discovery**, não copy fabricada pela Strategy/Planner; `desiredViewerResponse` é hipótese opcional. O parser rejeita ausência, vazio, referência factual inválida ou IDs de origem repetidos. `sourceOpportunityId` é atribuído pelo servidor por hipótese após validação e permanece estável na Discovery persistida, Strategy, Planner e Opportunity. `ProductStrategyV2` agrega, seleciona, ordena e projeta deterministicamente a Discovery validada. A retirada de Product Understanding e Strategy LLM exige validação comportamental na etapa; o efeito agregado será avaliado na A/B end-to-end conduzida pelo usuário após concluir as Etapas 2–6, sem A/B individual obrigatória.
 
 **Persistência canônica, sem tabela nova:** o parser primeiro valida e normaliza `CommercialCreativeDiscoveryV2` em forma JSON-safe, omitindo chaves opcionais ausentes ou `undefined` (não as converte em `null` nem em string vazia), e preservando todas as hipóteses, dimensões presentes, `confidence`, `evidenceRefs` e IDs server-owned, inclusive as não selecionadas. Esse envelope normalizado é a fonte imutável por job em `IntelligenceRun.metadata.discoveryV2`. `discoveryHash = sha256Hex(canonicalSerialization(discoveryV2))`: SHA-256 dos bytes UTF-8 de `CANONICAL_SERIALIZATION_V1` sobre **o mesmo envelope normalizado/validado persistido, sem o próprio hash**, usando as funções existentes [`canonicalSerialization`/`sha256Hex`](../../src/modules/commerce-intelligence/planner-harness/canonical.ts). O hash fica separado do envelope; releitura JSON-safe recalcula exatamente o mesmo hash ou falha fechado, sem nova normalização que altere bytes ou introduza opcionais.
 
@@ -330,13 +330,9 @@ O Judge recebe objetivo, resposta desejada, Blueprint, fatos/evidências, Brief,
 
 ### 11. Etapa 6 — avaliação integral
 
-Os artefatos existentes `golden-dataset.v1` (`manifest.json` `FROZEN`), `golden-rubric.v1` (`rubrics.json`) e `THRESHOLD_POLICY_GOLDEN_V1` (`threshold-policy.json`) formam **somente evidência offline parcial do experimento Judge reduction**: a rubrica v1 cobre `NATURALNESS` por `CONTENT` e a policy v1 usa `risk-assessment.v1`, `JUDGE_EXECUTED_CONTENTS` e thresholds de redução/cobertura do Judge. Permanecem preservados sob suas versões; `FROZEN` significa imutabilidade daquele escopo, não pacote ou aprovação de E6 integral. Eles não incluem as rubricas subjetivas multidimensionais, agregação por categoria, comparações end-to-end/atribuições completas nem observações live requeridas abaixo.
+Os artefatos existentes `golden-dataset.v1` (`manifest.json` `FROZEN`), `golden-rubric.v1` (`rubrics.json`) e `THRESHOLD_POLICY_GOLDEN_V1` (`threshold-policy.json`) formam **somente evidência offline parcial do experimento Judge reduction**: a rubrica v1 cobre `NATURALNESS` por `CONTENT` e a policy v1 usa `risk-assessment.v1`, `JUDGE_EXECUTED_CONTENTS` e thresholds de redução/cobertura do Judge. Permanecem preservados sob suas versões; `FROZEN` significa imutabilidade daquele escopo, não pacote ou aprovação de E6 integral. Eles não incluem rubricas subjetivas multidimensionais, agregação por categoria, comparação end-to-end nem observações live requeridas abaixo.
 
-A Etapa 6 final possui:
-
-1. **Comparação end-to-end:** baseline ADR-029/`@1.2`, fixada por commit, versus pipeline V2 final/`@1.3`.
-2. **Experimentos de atribuição por variável:** Product Understanding/Strategy LLM versus Facts + Discovery + Strategy determinística; Plan LLM versus Planner V2; Scene Ideas versus Scene Skeleton; Judge-all versus Risk-gated; catálogo versus Blueprint; recipe-backed versus composição livre; Skill 1.2 versus 1.3; e tiers por capability.
-3. **Primeira geração e recorrência:** inclui reutilização de Strategy e memória.
+A Etapa 6 final, após concluir as Etapas 2–6, exige comparação A/B end-to-end da baseline ADR-029/`@1.2`, fixada por commit, com o pipeline V2 final/`@1.3`, abrangendo primeira geração e recorrência com reutilização de Strategy e memória. O usuário conduzirá essa avaliação contra todas as premissas da nota conectada; não haverá A/B por migração durante a implementação nem A/B executada por nós agora. Experimentos de atribuição por variável (PU/Strategy, Plan, cenas, Judge, catálogo/Blueprint, recipes, Skill e tiers) deixam de ser gate obrigatório; podem ser solicitados pelo usuário depois para diagnóstico, com protocolo próprio e sem substituir a comparação end-to-end.
 
 A baseline deverá ser executada a partir do commit fixado em runner de avaliação isolado; código legado não volta ao runtime default de produção. O [call map da Etapa 1](../../src/modules/commerce-intelligence/evaluation/golden-dataset/baseline-call-map.md) é auditoria estática, não observação de custo, latência ou tokens.
 
@@ -366,7 +362,7 @@ Antes da coleta, cada braço registra e congela:
 - usage/tokens, moeda, pricing source/snapshot, custo e completude;
 - latência por tentativa/capability e end-to-end, retries, repairs, timeout e erro.
 
-No end-to-end, controles externos ao pipeline comparado permanecem iguais entre os braços. Diferenças inerentes ao baseline/candidato são listadas antes da coleta em um manifest de diferenças; alteração não pré-registrada invalida o par. Experimentos de atribuição alteram uma única variável declarada. Ausência de provider/model/version/params, prompt/context artifact, seed, usage/custo/latência ou cobertura torna a métrica afetada `PARTIAL`, `UNAVAILABLE` ou o par `INVALID` conforme a threshold policy; nunca autoriza imputação pós-hoc.
+No end-to-end, controles externos ao pipeline comparado permanecem iguais entre os braços. Diferenças inerentes ao baseline/candidato são listadas antes da coleta em um manifest de diferenças; alteração não pré-registrada invalida o par. Se o usuário solicitar atribuições posteriores, cada uma altera uma única variável declarada e segue protocolo próprio. Ausência de provider/model/version/params, prompt/context artifact, seed, usage/custo/latência ou cobertura torna a métrica afetada `PARTIAL`, `UNAVAILABLE` ou o par `INVALID` conforme a threshold policy; nunca autoriza imputação pós-hoc.
 
 #### 11.3 Auditoria de critérios subjetivos
 
@@ -470,7 +466,7 @@ Estas fontes exigiam coordenação por descreverem, total ou parcialmente, ADR-0
 Todos são obrigatórios:
 
 1. Auditoria da Etapa 1 e call map versionados: o [call map estático de `8d1833b`](../../src/modules/commerce-intelligence/evaluation/golden-dataset/baseline-call-map.md) registra o baseline e as divergências, mas não conclui a auditoria live; chamadas físicas, tokens, custo e latência observados permanecem `UNAVAILABLE` até coleta real.
-2. Discovery/Strategy alvo especificado e cada migração LLM → código coberta por A/B próprio.
+2. Discovery/Strategy alvo especificado e migrações LLM → código cobertas pela avaliação A/B end-to-end final do conjunto, sem A/B individual obrigatória por migração.
 3. `ContentOpportunity` v2 persistida com `creativeDirection` canônica.
 4. Nenhuma segunda fonte persistida de Blueprint/hook/narrative em novos registros.
 5. Memória `PLANNER_MEMORY_SIGNALS_V1` multidimensional, idempotente e consumida pelo Planner.
@@ -481,7 +477,7 @@ Todos são obrigatórios:
 10. Registry de risco cobrindo todos os sinais mínimos desta decisão.
 11. Falha de Risk selecionando Judge; `NOT_EXECUTED` nunca sintetizado como `PASS`.
 12. Hard gates, partial, quota, tenant, fencing, idempotência e repair semântico sem regressão.
-13. E6 end-to-end e experimentos de atribuição executados com thresholds prévios, separando evidência offline de provider vivo.
+13. E6 end-to-end executada pelo usuário após concluir as Etapas 2–6, com thresholds prévios e evidências offline e de provider vivo separadas; atribuições por variável não são requisito de aceite.
 14. Critérios subjetivos auditáveis por rubrica, unidade, cegamento, avaliações independentes, adjudicação, agregação, categoria e threshold pré-registrados; custo/latência/qualidade semântica real comprovados somente com provider vivo pareado.
 15. Relatório e approval versionados, reproduzíveis e pertencentes aos commits, com provider/model/tier, parâmetros, prompts/contextos, seed, usage/custo/latência e cobertura comparáveis.
 16. Revisão formal do Software Architect.
@@ -525,7 +521,7 @@ Positivas:
 - Blueprint passa a possuir uma fonte canônica.
 - Memória e variedade passam a operar sobre dimensões criativas reais.
 - Judge pode cair sem assumir autoridade de entrega.
-- E6 mede qualidade, custo e latência do produto final e atribui cada migração.
+- E6 mede qualidade, custo e latência e o efeito agregado das migrações no conjunto final; atribuição individual ocorre somente para diagnóstico, se solicitada pelo usuário.
 
 Custos e riscos:
 
@@ -588,4 +584,10 @@ Chamadas lógicas, tentativas físicas, retries de contrato, fallback de disponi
 ### D6–D9 — Referências normativas
 
 D6, contexto allowlisted de Hard Gate Repair e Semantic Part Repair, é detalhado no ADR-025. D7, grounding factual/racional e sua autoridade hard ou advisory, é detalhado no ADR-019. D8, tiers provisórios e separação entre tier e reasoning, é detalhado no ADR-029. D9, separação entre runtime V2, baseline histórica e E6, é detalhado no mapa estático da Etapa 1.
+
+## Adendo — formato de resposta da Discovery V2 (Etapa 2)
+
+Somente `COMMERCIAL_OPPORTUNITY_MAPPING` solicita ao provider `response_format: { type: "json_object" }`, em vez de JSON Schema estrito com `additionalProperties: false`. A validação local rejeita chaves explicitamente proibidas e campos server-owned (incluindo `sourceOpportunityId` na saída da LLM); descarta outras chaves desconhecidas na raiz e nas hipóteses antes da canonicalização. Valida localmente versão e shape do envelope, campos obrigatórios e opcionais suportados, quantidade não vazia de hipóteses até `maxOpportunities` do contexto e `evidenceRefs` pertencentes ao catálogo autorizado. Falhas de contrato continuam fail-closed; campos descartados não entram no envelope canônico nem no hash.
+
+Esta mudança alinha a fronteira do provider à SPEC slice-003 §3.3B/AC12: o schema estrito rejeita campos desconhecidos antes que a aplicação possa descartá-los. `PRODUCT_UNDERSTANDING` mantém seu JSON Schema estrito; formato e validação das demais tasks não mudam. Não altera o contrato do Planner, a baseline ADR-029 nem autoriza aceite V2.
 

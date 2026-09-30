@@ -569,13 +569,12 @@ test("COMMERCIAL_OPPORTUNITY_MAPPING impõe o contrato Discovery V2 no boundary 
     result = await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext });
   } finally { restore(); }
   assert.deepEqual(result, valid, "output real do boundary é o parsed do provider");
-  assert.equal(recordOf(bodies[0].response_format)?.type, "json_schema");
 
   // Rejeições fail-closed no MESMO boundary (cada caso via provider.complete real).
   const rejects = async (name: string, payload: unknown) => {
     await assert.rejects(
       () => completeWith(payload),
-      (error: unknown) => error instanceof GenerationError && error.code === "GEN-SCHEMA" && (error as GenerationError).detail?.task === "COMMERCIAL_OPPORTUNITY_MAPPING",
+      (error: unknown) => error instanceof GenerationError && error.code === "GEN-SCHEMA" && typeof error.detail === "object" && error.detail !== null && "task" in error.detail && error.detail.task === "COMMERCIAL_OPPORTUNITY_MAPPING",
       `deveria rejeitar: ${name}`,
     );
   };
@@ -587,11 +586,54 @@ test("COMMERCIAL_OPPORTUNITY_MAPPING impõe o contrato Discovery V2 no boundary 
   await rejects("evidenceRefs fora do catálogo", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), evidenceRefs: ["fact:inexistente"] }] });
   await rejects("sourceOpportunityId é server-owned", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), sourceOpportunityId: "commercial-1" }] });
   await rejects("contractVersion divergente", { discoveryContractVersion: "1", hypotheses: [hypothesis()] });
-  await rejects("chave raiz desconhecida", { discoveryContractVersion: "2", hypotheses: [hypothesis()], audiences: [] });
+  await rejects("campo proibido no envelope", { discoveryContractVersion: "2", hypotheses: [hypothesis()], jobId: "job-1" });
   await rejects("confidence fora de [0,1]", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), confidence: 1.5 }] });
   await rejects("hypotheses vazio", { discoveryContractVersion: "2", hypotheses: [] });
   await rejects("opcional com tipo inválido", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), audience: 7 }] });
   await rejects("array com item não-string", { discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), benefits: [1] }] });
+});
+
+// ADR-033 adendo: MAPPING usa response_format json_object genérico — o strict schema
+// (additionalProperties:false) impedia o descarte de campos desconhecidos. O validador
+// local rejeita proibidos/server-owned e descarta os demais antes do retorno.
+test("Discovery V2 usa json_object genérico, descarta desconhecidos comuns e rejeita proibidos", async () => {
+  const trustedContext = { product: { name: "Calça" }, understanding: {}, evidenceRefsCatalog: ["product:description"], maxOpportunities: 3, creatorContext: {} };
+  const hypothesis = () => ({
+    commercialObjective: "vender",
+    angle: "demonstração",
+    coreMessage: "tecido respirável que resolve o calor no uso diário",
+    pain: null,
+    objection: null,
+    relevantCapabilities: ["cap"],
+    benefits: ["respira no calor"],
+    proofOptions: ["tecido respirável em uso"],
+    commercialEffects: ["demonstra o tecido respirável aliviando o calor durante o uso"],
+    evidenceRefs: ["product:description"],
+    confidence: 0.9,
+  });
+  const payload = {
+    discoveryContractVersion: "2",
+    audiences: [],
+    hypotheses: [{ ...hypothesis(), workflowHint: "descarte-me" }],
+  };
+  const provider = createHttpProvider({ baseUrl: "http://localhost:1/v1", apiKey: "k", models: { MID: "m" }, timeoutMs: 5000 });
+  const bodies: Array<Record<string, unknown>> = [];
+  const restore = captureProviderBodies(bodies, () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(payload) } }] }), { status: 200, headers: { "content-type": "application/json" } }));
+  let result: unknown;
+  try {
+    result = await provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext });
+  } finally { restore(); }
+  assert.deepEqual(bodies[0]?.response_format, { type: "json_object" }, "request Discovery usa formato genérico json_object (ADR-033 adendo)");
+  assert.deepEqual(result, { discoveryContractVersion: "2", hypotheses: [hypothesis()] }, "campos desconhecidos comuns são descartados na canonicalização");
+
+  const rejectRestore = captureProviderBodies([], () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ discoveryContractVersion: "2", hypotheses: [{ ...hypothesis(), sourceOpportunityId: "commercial-1" }] }) } }] }), { status: 200, headers: { "content-type": "application/json" } }));
+  try {
+    await assert.rejects(
+      () => provider.complete("COMMERCIAL_OPPORTUNITY_MAPPING", { trustedContext }),
+      (error: unknown) => error instanceof GenerationError && error.code === "GEN-SCHEMA",
+      "campo server-owned continua rejeitado sob o formato genérico",
+    );
+  } finally { rejectRestore(); }
 });
 
 test("non-PU tasks keep generic json_object response_format", async () => {

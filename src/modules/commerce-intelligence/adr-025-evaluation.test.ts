@@ -41,9 +41,7 @@ test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, parcial 3/
   let briefCalls = 0;
   const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
     if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["barreira"], evidenceRefs: ["product:name"] };
-      if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: Array.from({ length: 5 }, (_, i) => ({ relevantCapabilities: ["cap"], benefits: [`benefício distinto ${i + 1}`], proofOptions: ["product:description"], sellingArgument: `argumento ${i + 1}`, confidence: 0.9, evidenceRefs: ["product:description"] })) };
-      if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "p", audiences: ["a"], priorityBenefits: ["b"], priorityObjections: ["o"], priorityArguments: ["a"], priorityAngles: ["an"], communicationPrinciples: ["cp"] };
-    if (task === "CONTENT_PLAN_GENERATION") return { platformId: "tiktok-commerce", platformSkillVersion: "tiktok-commerce@1.3", targetContentCount: 5, opportunities: Array.from({ length: 5 }, (_, i) => ({ commercialObjective: "c", angle: `a${i + 1}`, coreMessage: "m", hookMechanism: ["demonstration", "problem", "discovery", "price-value", "other"][i], noveltyTargets: ["n"] })) };
+      if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { discoveryContractVersion: "2", hypotheses: Array.from({ length: 5 }, (_, i) => ({ commercialObjective: `argumento ${i + 1}`, angle: `benefício distinto ${i + 1}`, coreMessage: `argumento ${i + 1}`, relevantCapabilities: ["cap"], benefits: [`benefício distinto ${i + 1}`], proofOptions: ["product:description"], commercialEffects: [`argumento ${i + 1}`], evidenceRefs: ["product:description"], confidence: 0.9 })) };
     if (task === "CONTENT_BRIEF_GENERATION") {
       briefCalls += 1;
       const size = [4, 1][briefCalls - 1];
@@ -65,7 +63,6 @@ test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, parcial 3/
       // Contrato do repair (adendo 2): development estruturado {text, action, factRef, rationale}.
       return { developmentSchemaVersion: 2, angle: "a2", hook: "Gancho 2", development: [{ text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }, { text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }], script: "Tecido respiravel", cta: "cta 2" };
     }
-    if (task === "CONTENT_SCENE_IDEAS") return { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
     if (task === "CONTENT_QUALITY_JUDGE") {
       const items = judgeItems(input);
       judgeCallSizes.push(items.length);

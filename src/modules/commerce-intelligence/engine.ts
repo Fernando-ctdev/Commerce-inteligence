@@ -3,18 +3,17 @@ import {
   CARDINALITY_POLICY_VERSION,
   CARDINALITY_POLICY,
   PARTIAL_FAILURE_CAP,
-  validateCommercialOpportunityMappingEnvelope,
   validateContentBriefDraft,
   validateContentOpportunity,
   validateContentPlan,
   validatePlanCreativeOpportunity,
   validateContentSceneSetDraft,
+  validateCommercialOpportunity,
   validateProductStrategy,
   validateProductUnderstanding,
   validateTargetContentCount,
   ContractError,
   normalizeForVariety,
-  type CommercialOpportunityMappingEnvelope,
   type CommercialOpportunity,
   type ContentBriefDraft,
   type ContentBriefVersion,
@@ -29,6 +28,7 @@ import {
   type SceneIdea,
 } from "./contract";
 import { buildPlanSkeleton, PLAN_POLICY_VERSION, type PlanSkeleton } from "./planner";
+import { canonicalSerialization, sha256Hex } from "./planner-harness/canonical";
 import {
   loadPlatformSkill,
   projectPlatformSkillSlice,
@@ -86,6 +86,7 @@ import {
   v2NeutralConstraints,
   v2ProductFactsProjection,
 } from "./engine-v2";
+import type { DiscoveryEnvelopeV2 } from "./engine-v2";
 import type { PlannedOpportunityV2 } from "./planner-harness/types";
 import type { PlannedOpportunityHandoffV2 } from "./engine-v2";
 import type { JudgeExecutionRecord } from "./risk-assessment";
@@ -108,6 +109,18 @@ export type EngineInput = {
   // ADR-021: sinais de memória do último snapshot (retry dos faltantes) e
   // estratégia ACTIVE reutilizada — pula STRATEGY_SYNTHESIS quando presente.
   reuseStrategy?: Record<string, unknown>;
+  // Etapa 2 candidata (ADR-033 §3/§12): Discovery persistida resolvida pelo
+  // worker (mesmo tenant, hash íntegro). Presente ⇒ Mapping NÃO é re-chamado
+  // (resultado intermediário persistido é a fonte); PU permanece no candidato.
+  reusedDiscovery?: {
+    envelope: Record<string, unknown>;
+    discoveryHash: string;
+    sourceDiscoveryRef: {
+      intelligenceRunId: string;
+      discoveryContractVersion: "2";
+      discoveryHash: string;
+    };
+  };
   targetContentCount: number;
   onStage?: (stage: GenerationStage) => Promise<void> | void;
   signal?: AbortSignal;
@@ -202,6 +215,9 @@ export type EngineResult = {
   judgeExecutionRecords: JudgeExecutionRecord[];
   evidenceRefs: string[];
   discoveryV2?: Record<string, unknown>;
+  // Etapa 2 candidata (ADR-033 §3/§12): envelope canônico + discoveryHash +
+  // IDs server-owned, ou apenas sourceDiscoveryRef no reuso.
+  discoveryCanonicalV2?: DiscoveryCanonicalV2;
   v2Policy?: { plannerPolicyVersion: "PLANNER_POLICY_V1"; briefPolicyVersion: "BRIEF_GENERATION_POLICY_V1"; creativeSystemVersion: "1.3" };
   partial: EnginePartial | null;
 };
@@ -231,6 +247,262 @@ function mappingOpportunityLimit(): number {
   const raw = Number(process.env.GENERATION_MAPPING_MAX_OPPORTUNITIES ?? 4);
   return Number.isInteger(raw) && raw >= 1 && raw <= 10 ? raw : 4;
 }
+
+// ─── Etapa 2 candidata (ADR-033 §3; SPEC §3.3B; PLAN Task 5B-1) ─────────────
+// Discovery V2 canônica + Strategy determinística versionada com proveniência.
+// CANDIDATA nesta branch autorizada: runtime default/produção, merge, deploy e
+// V2_ACCEPTED NÃO são promovidos por este código; a baseline ADR-029 (E6)
+// permanece intocada. Sem capability, agente, serviço, stage público, tabela
+// ou migration nova — a capability vigente é COMMERCIAL_OPPORTUNITY_MAPPING.
+
+export const STRATEGY_CONTRACT_VERSION_V2 = "2" as const;
+export const STRATEGY_POLICY_VERSION_V1 = "STRATEGY_POLICY_V1" as const;
+
+// Resultado canônico da Etapa 2 no EngineResult: fresh = envelope normalizado
+// + hash + IDs server-owned; reused = apenas referência à origem (ADR-033 §12:
+// "o run novo pode registrar somente referência à origem").
+export type DiscoveryCanonicalV2 =
+  | { origin: "fresh"; envelope: Record<string, unknown>; discoveryHash: string; sourceOpportunityIds: string[] }
+  | {
+      origin: "reused";
+      sourceDiscoveryRef: { intelligenceRunId: string; discoveryContractVersion: "2"; discoveryHash: string };
+    };
+
+// discoveryHash = sha256Hex(canonicalSerialization(envelope)) — CANONICAL_-
+// SERIALIZATION_V1 sobre o MESMO envelope normalizado persistido, sem o hash.
+export function discoveryHashV2(envelope: unknown): string {
+  return sha256Hex(canonicalSerialization(envelope));
+}
+
+// Chaves canônicas da hipótese normalizada: as do parser V2 + sourceOpportunityId
+// (server-owned — o parser já rejeita a chave no envelope do provider).
+const CANONICAL_HYPOTHESIS_KEYS_V2: readonly string[] = [
+  "sourceOpportunityId",
+  "commercialObjective", "angle", "coreMessage", "desiredViewerResponse",
+  "audience", "situation", "desire", "identification", "curiosity",
+  "aspiration", "humorPotential", "visualPotential", "pain", "objection",
+  "desiredOutcome", "relevantCapabilities", "benefits", "proofOptions",
+  "commercialEffects", "evidenceRefs", "confidence",
+];
+const CANONICAL_NULLABLE_KEYS_V2: readonly string[] = [
+  "desiredViewerResponse", "audience", "situation", "desire",
+  "identification", "curiosity", "aspiration", "humorPotential",
+  "visualPotential", "pain", "objection", "desiredOutcome",
+];
+
+type CanonicalHypothesisV2 = Record<string, unknown> & {
+  sourceOpportunityId: string;
+  commercialObjective: string;
+  angle: string;
+  coreMessage: string;
+  relevantCapabilities: string[];
+  benefits: string[];
+  proofOptions: string[];
+  commercialEffects: string[];
+  evidenceRefs: string[];
+  confidence: number;
+};
+
+const canonicalText = (value: unknown, field: string): string => {
+  if (typeof value !== "string" || !value.trim())
+    throw new ContractError("GEN-SCHEMA", `Discovery canônica: ${field} obrigatório`, field);
+  return value;
+};
+
+// Valida a forma canônica do envelope (persistido ou reutilizado): versão,
+// chaves exatas, obrigatórios não vazios, commercialEffects ≥1, refs citáveis
+// e IDs server-owned não repetidos. Falha fechado (GEN-SCHEMA).
+function canonicalHypothesesOf(envelope: unknown): CanonicalHypothesisV2[] {
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope))
+    throw new ContractError("GEN-SCHEMA", "Discovery canônica deve ser um objeto");
+  const record = envelope as Record<string, unknown>;
+  if (record.discoveryContractVersion !== "2")
+    throw new ContractError("GEN-SCHEMA", "Discovery canônica exige discoveryContractVersion=2", "discoveryContractVersion");
+  if (!Array.isArray(record.hypotheses) || record.hypotheses.length === 0)
+    throw new ContractError("GEN-SCHEMA", "Discovery canônica sem hypotheses", "hypotheses");
+  const seen = new Set<string>();
+  return record.hypotheses.map((raw, index) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw))
+      throw new ContractError("GEN-SCHEMA", `Discovery canônica: hypothesis ${index + 1} inválida`, "hypotheses");
+    const h = raw as Record<string, unknown>;
+    for (const key of Object.keys(h))
+      if (!CANONICAL_HYPOTHESIS_KEYS_V2.includes(key))
+        throw new ContractError("GEN-SCHEMA", `Discovery canônica: campo desconhecido "${key}" na hypothesis ${index + 1}`, key);
+    const sourceOpportunityId = canonicalText(h.sourceOpportunityId, "sourceOpportunityId");
+    if (seen.has(sourceOpportunityId))
+      throw new ContractError("GEN-SCHEMA", `Discovery canônica: sourceOpportunityId repetido ${sourceOpportunityId}`, "sourceOpportunityId");
+    seen.add(sourceOpportunityId);
+    for (const key of ["commercialObjective", "angle", "coreMessage"] as const)
+      canonicalText(h[key], key);
+    if (!Array.isArray(h.commercialEffects) || h.commercialEffects.length === 0 || !h.commercialEffects.every((e) => typeof e === "string" && e.trim()))
+      throw new ContractError("GEN-SCHEMA", `Discovery canônica: hypothesis ${index + 1} sem commercialEffects`, "commercialEffects");
+    if (!Array.isArray(h.evidenceRefs) || h.evidenceRefs.length === 0 || !h.evidenceRefs.every((r) => typeof r === "string" && r.trim()))
+      throw new ContractError("GEN-SCHEMA", `Discovery canônica: hypothesis ${index + 1} sem evidenceRefs`, "evidenceRefs");
+    if (typeof h.confidence !== "number" || h.confidence < 0 || h.confidence > 1)
+      throw new ContractError("GEN-SCHEMA", `Discovery canônica: hypothesis ${index + 1} com confidence inválido`, "confidence");
+    for (const key of ["relevantCapabilities", "benefits", "proofOptions"] as const)
+      if (!Array.isArray(h[key]) || !h[key].every((v) => typeof v === "string" && v.trim()))
+        throw new ContractError("GEN-SCHEMA", `Discovery canônica: hypothesis ${index + 1} com ${key} inválido`, key);
+    for (const key of CANONICAL_NULLABLE_KEYS_V2)
+      if (h[key] !== undefined && (typeof h[key] !== "string" || !(h[key] as string).trim()))
+        throw new ContractError("GEN-SCHEMA", `Discovery canônica: ${key} presente deve ser string não vazia (ausente é omitido)`, key);
+    return h as CanonicalHypothesisV2;
+  });
+}
+
+// Normaliza o envelope validado do parser em forma JSON-safe (ADR-033 §3):
+// opcionais ausentes/undefined são OMITIDOS (nunca null/string vazia);
+// todas as hipóteses, dimensões presentes, confidence, refs e IDs
+// server-owned são preservados. IDs são atribuídos por posição e estáveis na
+// Discovery persistida, Strategy, Planner e Opportunity.
+export function normalizeDiscoveryEnvelopeV2(parsed: DiscoveryEnvelopeV2, jobId: string): {
+  envelope: Record<string, unknown>;
+  discoveryHash: string;
+  sourceOpportunityIds: string[];
+  hypotheses: CanonicalHypothesisV2[];
+} {
+  const hypotheses: CanonicalHypothesisV2[] = parsed.hypotheses.map((h, index) => {
+    const canonical: Record<string, unknown> = { sourceOpportunityId: `${jobId}-commercial-${index + 1}` };
+    canonical.commercialObjective = h.commercialObjective;
+    canonical.angle = h.angle;
+    canonical.coreMessage = h.coreMessage;
+    for (const key of CANONICAL_NULLABLE_KEYS_V2) {
+      const value = h[key as keyof typeof h] as string | null | undefined;
+      if (typeof value === "string" && value.trim()) canonical[key] = value;
+    }
+    canonical.relevantCapabilities = [...h.relevantCapabilities];
+    canonical.benefits = [...h.benefits];
+    canonical.proofOptions = [...h.proofOptions];
+    canonical.commercialEffects = [...h.commercialEffects];
+    canonical.evidenceRefs = [...h.evidenceRefs];
+    canonical.confidence = h.confidence;
+    return canonical as CanonicalHypothesisV2;
+  });
+  const envelope: Record<string, unknown> = { discoveryContractVersion: "2", hypotheses };
+  return {
+    envelope,
+    discoveryHash: discoveryHashV2(envelope),
+    sourceOpportunityIds: hypotheses.map((h) => h.sourceOpportunityId),
+    hypotheses,
+  };
+}
+
+// Ponte canônica v1↔v2: coreMessage é o sellingArgument canônico (a mesma
+// ponte usada pelo adapter do Planner) — não é troca de papéis semânticos.
+// refs fora do catálogo autorizado e obrigatórios vazios falham fechado.
+export function commercialOpportunitiesFromDiscoveryV2(envelope: unknown, evidence: EvidenceSnapshot): CommercialOpportunity[] {
+  const hypotheses = canonicalHypothesesOf(envelope);
+  const allowedRefs = new Set(evidence.refs);
+  return hypotheses.map((h) => {
+    for (const ref of h.evidenceRefs)
+      if (!allowedRefs.has(ref))
+        throw new ContractError("GEN-SCHEMA", `Discovery canônica cita evidência fora do catálogo autorizado: ${ref}`, "evidenceRefs");
+    return validateCommercialOpportunity(
+      {
+        id: h.sourceOpportunityId,
+        ...(typeof h.audience === "string" ? { audience: h.audience } : {}),
+        ...(typeof h.situation === "string" ? { situation: h.situation } : {}),
+        ...(typeof h.pain === "string" ? { pain: h.pain } : {}),
+        ...(typeof h.desire === "string" ? { desire: h.desire } : {}),
+        ...(typeof h.desiredOutcome === "string" ? { desiredOutcome: h.desiredOutcome } : {}),
+        ...(typeof h.objection === "string" ? { objection: h.objection } : {}),
+        relevantCapabilities: [...h.relevantCapabilities],
+        benefits: [...h.benefits],
+        proofOptions: [...h.proofOptions],
+        sellingArgument: h.coreMessage,
+        confidence: h.confidence,
+        evidenceRefs: [...h.evidenceRefs],
+      },
+      evidence,
+    );
+  });
+}
+
+// Strategy V2 determinística versionada (ADR-033 §3): agrega, seleciona,
+// ordena e projeta a Discovery validada. Policy STRATEGY_POLICY_V1: seleção =
+// todas as hipóteses validadas, na ordem da Discovery (determinística);
+// subsetting/ranking futuro exige bump de STRATEGY_POLICY_VERSION. Não copia
+// o pool: payload carrega IDs selecionados + projeções normativas.
+export function buildDeterministicStrategyV2(input: {
+  envelope: Record<string, unknown>;
+  jobId: string;
+  productId: string;
+  platformId: string;
+  platformSkillVersion: string;
+  // Fonte versionada da Skill (skill.principles) — sem hardcode na engine.
+  principles: readonly string[];
+  evidence: EvidenceSnapshot;
+}): {
+  strategy: ProductStrategy;
+  strategyContractVersion: typeof STRATEGY_CONTRACT_VERSION_V2;
+  strategyPolicyVersion: typeof STRATEGY_POLICY_VERSION_V1;
+  sourceOpportunityIds: string[];
+} {
+  const hypotheses = canonicalHypothesesOf(input.envelope);
+  const dedupeStable = (values: string[]): string[] => [...new Set(values)];
+  const strategy = validateProductStrategy(
+    {
+      id: `${input.jobId}-strategy`,
+      productId: input.productId,
+      jobId: input.jobId,
+      version: 1,
+      status: "ACTIVE",
+      platformId: input.platformId,
+      platformSkillVersion: input.platformSkillVersion,
+      // primaryPositioning = coreMessage da PRIMEIRA hipótese selecionada.
+      primaryPositioning: canonicalText(hypotheses[0]!.coreMessage, "coreMessage"),
+      // Projeções normativas: cada campo de UMA fonte semântica, dedup estável
+      // na ordem selecionada; campo opcional sem sustentação vira [].
+      audiences: dedupeStable(hypotheses.flatMap((h) => (typeof h.audience === "string" ? [h.audience] : []))),
+      priorityBenefits: dedupeStable(hypotheses.flatMap((h) => [...h.benefits])),
+      priorityObjections: dedupeStable(hypotheses.flatMap((h) => (typeof h.objection === "string" ? [h.objection] : []))),
+      priorityArguments: dedupeStable(hypotheses.map((h) => h.coreMessage)),
+      priorityAngles: dedupeStable(hypotheses.map((h) => h.angle)),
+      // Deriva dos principles versionados da Skill (sem effects/copy inventada).
+      communicationPrinciples: [...input.principles],
+      opportunities: commercialOpportunitiesFromDiscoveryV2(input.envelope, input.evidence),
+    },
+    input.evidence,
+  );
+  return {
+    strategy,
+    strategyContractVersion: STRATEGY_CONTRACT_VERSION_V2,
+    strategyPolicyVersion: STRATEGY_POLICY_VERSION_V1,
+    sourceOpportunityIds: hypotheses.map((h) => h.sourceOpportunityId),
+  };
+}
+
+// Reader canônico de reuso (ADR-033 §3): valida versão/hash/IDs/refs da
+// Discovery persistida contra o estado atual — divergência falha fechado.
+export function validateDiscoveryReuseV2(
+  reuse: { envelope: unknown; discoveryHash: string; sourceOpportunityIds: readonly unknown[] },
+  evidence: EvidenceSnapshot,
+): { envelope: Record<string, unknown>; discoveryHash: string; sourceOpportunityIds: string[]; opportunities: CommercialOpportunity[] } {
+  const hypotheses = canonicalHypothesesOf(reuse.envelope);
+  if (typeof reuse.discoveryHash !== "string" || reuse.discoveryHash !== discoveryHashV2(reuse.envelope))
+    throw new ContractError("GEN-SCHEMA", "Discovery reutilizada: discoveryHash divergente do envelope", "discoveryHash");
+  const knownIds = new Set(hypotheses.map((h) => h.sourceOpportunityId));
+  const selected = reuse.sourceOpportunityIds.map((id, index) => {
+    if (typeof id !== "string" || !id.trim())
+      throw new ContractError("GEN-SCHEMA", `Discovery reutilizada: sourceOpportunityIds[${index}] inválido`, "sourceOpportunityIds");
+    return id;
+  });
+  if (new Set(selected).size !== selected.length)
+    throw new ContractError("GEN-SCHEMA", "Discovery reutilizada: sourceOpportunityIds repetidos", "sourceOpportunityIds");
+  for (const id of selected)
+    if (!knownIds.has(id))
+      throw new ContractError("GEN-SCHEMA", `Discovery reutilizada: id selecionado fora do envelope: ${id}`, "sourceOpportunityIds");
+  const opportunities = commercialOpportunitiesFromDiscoveryV2(reuse.envelope, evidence);
+  const selectedSet = new Set(selected);
+  return {
+    envelope: reuse.envelope as Record<string, unknown>,
+    discoveryHash: reuse.discoveryHash,
+    sourceOpportunityIds: selected,
+    opportunities: opportunities.filter((opportunity) => selectedSet.has(opportunity.id)),
+  };
+}
+
+// ─── Fim da seção Etapa 2 candidata ─────────────────────────────────────────
 
 export function normalizeUnderstandingCardinality(
   output: unknown,
@@ -877,7 +1149,11 @@ export async function runFirstGeneration(
     attempt,
     router: input.router,
   });
-  let strategyOutput: ProductStrategy | null = null;
+  // Etapa 2: payload carrega campos versionados além do canônico ProductStrategy.
+  let strategyOutput: (ProductStrategy & Record<string, unknown>) | null = null;
+  // Etapa 2 candidata: seleção de Discovery e resultado canônico do run.
+  let strategySourceOpportunityIds: string[] = [];
+  let discoveryCanonicalResult: DiscoveryCanonicalV2 | undefined;
   const understandingReductions: UnderstandingCardinalityReduction[] = [];
   const commercialOpportunities: Record<string, unknown>[] = [];
 
@@ -980,74 +1256,92 @@ export async function runFirstGeneration(
       ),
     };
     await emit("MAPPING_COMMERCIAL_OPPORTUNITIES");
-    // Mapping envelope do provider é não confiável: um único retry de contrato re-solicita
-    // opportunities quando o corpo veio sem elas (200 com prosa/arrays vazios). Falha fechada
-    // depois do retry — sem inventar oportunidades.
-    let envelope: Record<string, unknown>;
-    const mappingCall = (onMetrics?: (metrics: ProviderCallMetrics) => void) =>
-      callCapability(
-        input.router!,
-        "COMMERCIAL_OPPORTUNITY_MAPPING",
-        project("COMMERCIAL_OPPORTUNITY_MAPPING", mappingContext, {}),
-        input.signal,
-        onMetrics,
+    // Etapa 2 candidata (ADR-033 §12): com Discovery persistida resolvida pelo
+    // worker, a fonte é o resultado intermediário — Mapping NÃO é re-chamado.
+    // PU permanece no candidato (retirada exige A/B da Etapa 6).
+    if (input.reusedDiscovery) {
+      const selectedIds = Array.isArray(input.reuseStrategy?.sourceOpportunityIds)
+        ? (input.reuseStrategy!.sourceOpportunityIds as readonly unknown[])
+        : [];
+      const reuse = validateDiscoveryReuseV2(
+        {
+          envelope: input.reusedDiscovery.envelope,
+          discoveryHash: input.reusedDiscovery.discoveryHash,
+          sourceOpportunityIds: selectedIds,
+        },
+        mappingEvidence,
       );
-    // Cutover E6 Stage 2: Discovery V2 — envelope versionado com hypotheses
-    // (commercialEffects/angle/coreMessage por oportunidade) validadas
-    // contra o evidenceRefsCatalog. Fail-closed.
-    const validateMapping = (output: Record<string, unknown>) => {
-      const discovery = parseDiscoveryEnvelopeV2(output, mappingEvidence);
-      return discovery;
-    };
-    try {
-      envelope = await track(
-        "COMMERCIAL_OPPORTUNITY_MAPPING",
-        mappingContext,
-        mappingCall,
-        validateMapping,
-      ) as Record<string, unknown>;
-    } catch (error) {
-      // Retry único e específico: envelope 200 sem `opportunities` é re-solicitado uma vez
-      // com o mesmo contexto; qualquer outro erro segue fail-closed. Sem inventar dados.
-      // Decisão Arquiteto: qualquer violação de contrato no mapping (envelope
-      // sem opportunities OU campo malformado, ex.: objection inválido) tem UMA
-      // re-solicitação com o mesmo contexto; segunda falha segue fail-closed,
-      // sem sanitizar nem inventar dados.
-      if (!(isMissingOpportunitiesError(error) || error instanceof ContractError)) throw error;
-      envelope = await track(
-        "COMMERCIAL_OPPORTUNITY_MAPPING",
-        mappingContext,
-        mappingCall,
-        validateMapping,
-      );
+      commercialOpportunities.push(...reuse.opportunities);
+      strategySourceOpportunityIds = reuse.sourceOpportunityIds;
+      discoveryCanonicalResult = { origin: "reused", sourceDiscoveryRef: input.reusedDiscovery.sourceDiscoveryRef };
+    } else {
+      // Mapping envelope do provider é não confiável: um único retry de contrato re-solicita
+      // opportunities quando o corpo veio sem elas (200 com prosa/arrays vazios). Falha fechada
+      // depois do retry — sem inventar oportunidades.
+      let envelope: Record<string, unknown>;
+      const mappingCall = (onMetrics?: (metrics: ProviderCallMetrics) => void) =>
+        callCapability(
+          input.router!,
+          "COMMERCIAL_OPPORTUNITY_MAPPING",
+          project("COMMERCIAL_OPPORTUNITY_MAPPING", mappingContext, {}),
+          input.signal,
+          onMetrics,
+        );
+      // Cutover E6 Stage 2: Discovery V2 — envelope versionado com hypotheses
+      // (commercialEffects/angle/coreMessage por oportunidade) validadas
+      // contra o evidenceRefsCatalog. Fail-closed.
+      const validateMapping = (output: Record<string, unknown>) => {
+        const discovery = parseDiscoveryEnvelopeV2(output, mappingEvidence);
+        return discovery;
+      };
+      try {
+        envelope = await track(
+          "COMMERCIAL_OPPORTUNITY_MAPPING",
+          mappingContext,
+          mappingCall,
+          validateMapping,
+        ) as Record<string, unknown>;
+      } catch (error) {
+        // Retry único e específico: envelope 200 sem `opportunities` é re-solicitado uma vez
+        // com o mesmo contexto; qualquer outro erro segue fail-closed. Sem inventar dados.
+        // Decisão Arquiteto: qualquer violação de contrato no mapping (envelope
+        // sem opportunities OU campo malformado, ex.: objection inválido) tem UMA
+        // re-solicitação com o mesmo contexto; segunda falha segue fail-closed,
+        // sem sanitizar nem inventar dados.
+        if (!(isMissingOpportunitiesError(error) || error instanceof ContractError)) throw error;
+        envelope = await track(
+          "COMMERCIAL_OPPORTUNITY_MAPPING",
+          mappingContext,
+          mappingCall,
+          validateMapping,
+        );
+      }
+      // Etapa 2 candidata: normalização JSON-safe com IDs server-owned estáveis,
+      // Opportunities validadas contra a evidência autorizada (fail-closed) e
+      // hash canônico do envelope persistido (ADR-033 §3).
+      const normalized = normalizeDiscoveryEnvelopeV2(envelope as unknown as DiscoveryEnvelopeV2, input.jobId);
+      commercialOpportunities.push(...commercialOpportunitiesFromDiscoveryV2(normalized.envelope, mappingEvidence));
+      strategySourceOpportunityIds = normalized.sourceOpportunityIds;
+      discoveryCanonicalResult = {
+        origin: "fresh",
+        envelope: normalized.envelope,
+        discoveryHash: normalized.discoveryHash,
+        sourceOpportunityIds: normalized.sourceOpportunityIds,
+      };
     }
-    // Cutover E6 Stage 2: IDs de oportunidade comercial são server-derived.
-    // O envelope V2 tem hypotheses[]; mapeia para CommercialOpportunity (v1 shape)
-    // com commercialEffects preservados para o planner diversity.
-    const discoveryEnvelope = envelope as unknown as { hypotheses?: Array<Record<string, unknown>> };
-    const discoveryOpportunities: Record<string, unknown>[] = (discoveryEnvelope.hypotheses ?? envelope.opportunities ?? []) as Record<string, unknown>[];
-    discoveryOpportunities.forEach((opportunity: Record<string, unknown>, index: number) => {
-      commercialOpportunities.push({
-        ...opportunity,
-        id: `${input.jobId}-commercial-${index + 1}`,
-      });
-    });
-    const strategyContext = {
-      productId: input.productId,
-      understanding,
-      commercialOpportunities,
-      skill: skill.validationRules,
-      evidenceRefsCatalog: mappingEvidence.refs,
-      creatorContext: projectCreatorContext(
-        "STRATEGY_SYNTHESIS",
-        input.creatorContext,
-      ),
-    };
     await emit("BUILDING_STRATEGY");
-    // Cutover E6 Stage 2: Strategy V2 determinística — agregação/ranking das
-    // oportunidades do mapping, sem LLM. reuseStrategy (ADR-021) preservado.
-    strategyOutput = input.reuseStrategy
-      ? validateProductStrategy(
+    // Etapa 2 candidata: Strategy determinística versionada (ADR-033 §3) —
+    // projeções normativas com proveniência de Discovery; sem LLM.
+    // reuseStrategy (ADR-021) preservado: payload de origem + IDs selecionados.
+    if (input.reusedDiscovery && input.reuseStrategy) {
+      // A linha ACTIVE é reutilizada intacta no finalize; estes campos só
+      // alimentam telemetria do run novo (referência, não reescrita).
+      const reuseContractVersion = STRATEGY_CONTRACT_VERSION_V2;
+      const reusePolicyVersion = typeof input.reuseStrategy.strategyPolicyVersion === "string" && input.reuseStrategy.strategyPolicyVersion
+        ? input.reuseStrategy.strategyPolicyVersion
+        : STRATEGY_POLICY_VERSION_V1;
+      strategyOutput = {
+        ...validateProductStrategy(
           {
             ...input.reuseStrategy,
             id: `${input.jobId}-strategy`,
@@ -1060,29 +1354,31 @@ export async function runFirstGeneration(
             opportunities: commercialOpportunities,
           },
           mappingEvidence,
-        )
-      : validateProductStrategy(
-          {
-            id: `${input.jobId}-strategy`,
-            productId: input.productId,
-            jobId: input.jobId,
-            version: 1,
-            status: "ACTIVE",
-            platformId: skill.id,
-            platformSkillVersion: skill.version,
-            primaryPositioning: commercialOpportunities
-              .map((o) => String(o.coreMessage ?? ""))
-              .sort((a, b) => b.length - a.length)[0] ?? String(understanding.functionalBenefits[0] ?? input.description),
-            audiences: [...new Set(commercialOpportunities.flatMap((o) => Array.isArray(o.benefits) ? o.benefits.map(String).filter(s => s.trim()) : []))].slice(0, 10),
-            priorityBenefits: [...new Set(commercialOpportunities.flatMap((o) => Array.isArray(o.benefits) ? o.benefits.map(String).filter(s => s.trim()) : []))].slice(0, 10),
-            priorityObjections: [...new Set((understanding.purchaseBarriers ?? []).map(String).filter(s => s.trim()))].slice(0, 10),
-            priorityArguments: [...new Set(commercialOpportunities.map((o) => String(o.coreMessage ?? "")).filter(s => s.trim()))].slice(0, 10),
-            priorityAngles: [...new Set(commercialOpportunities.map((o) => String(o.angle ?? "")).filter(s => s.trim()))].slice(0, 10),
-            communicationPrinciples: ["estratégia separada da fala", "cenas simples", "linguagem oral", "script não literal", "produção de creator solo"],
-            opportunities: commercialOpportunities,
-          },
-          mappingEvidence,
-        );
+        ),
+        strategyContractVersion: reuseContractVersion,
+        strategyPolicyVersion: reusePolicyVersion,
+        sourceOpportunityIds: strategySourceOpportunityIds,
+      };
+    } else {
+      const built = buildDeterministicStrategyV2({
+        envelope: discoveryCanonicalResult && discoveryCanonicalResult.origin === "fresh"
+          ? discoveryCanonicalResult.envelope
+          : {},
+        jobId: input.jobId,
+        productId: input.productId,
+        platformId: skill.id,
+        platformSkillVersion: skill.version,
+        principles: skill.principles,
+        evidence: mappingEvidence,
+      });
+      strategyOutput = {
+        ...built.strategy,
+        strategyContractVersion: built.strategyContractVersion,
+        strategyPolicyVersion: built.strategyPolicyVersion,
+        sourceOpportunityIds: built.sourceOpportunityIds,
+      };
+      strategySourceOpportunityIds = built.sourceOpportunityIds;
+    }
     const strategy = strategyOutput;
     // Cutover E6: Planner determinístico (harness Etapa 3) é o plano de
     // produção — CONTENT_PLAN_GENERATION foi removido. Falhas de seleção são
@@ -1934,6 +2230,7 @@ export async function runFirstGeneration(
     judgeExecutionRecords,
     evidenceRefs: [...evidence.refs],
     ...(plannedV2.length > 0 ? { discoveryV2: { hypotheses: plannedV2.length } } : {}),
+    ...(discoveryCanonicalResult ? { discoveryCanonicalV2: discoveryCanonicalResult } : {}),
     ...(plannedV2
       ? {
           v2Policy: {

@@ -16,9 +16,9 @@
 A Etapa 0 é uma pré-condição transversal documentada neste PLAN; não cria `slice-000` nem `stage-0`. O [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md) registra a Engine V2 como runtime default em `V2_DEFAULT_PENDING_ACCEPTANCE`. O [ADR-029](../../architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md) permanece baseline histórico/experimental reproduzível.
 
 Este PLAN não presume como implementados `creativeDirection` canônica, memória multidimensional, Risk pré-Judge, binding/proveniência 1.3 coerentes, contexto sem `selectedPatterns` ou E6 integral. Também não autoriza rollback para ADR-029.
-**Gate da candidata:** a instrução expressa do usuário autoriza a implementação e avaliação na feature branch, com rastreabilidade por etapa abaixo; não aprova antecipadamente o resultado nem altera a produção.
+**Gate da candidata:** a instrução expressa mais recente do usuário autoriza a implementação na feature branch, com rastreabilidade e validações comportamentais por etapa; não aprova antecipadamente o resultado nem altera a produção. Nenhuma A/B individual precede as migrações e nenhuma A/B será executada por nós agora.
 
-**Gate E6:** comparação end-to-end e atribuições por variável devem pré-registrar rubricas, unidades, cegamento, adjudicação, agregação/categorias e thresholds. Evidência offline não satisfaz custo, latência ou qualidade semântica real; essas métricas exigem provider vivo pareado. Sem E6 integral, revisão Architect e aceite expresso do usuário, não há merge, deploy ou `V2_ACCEPTED`.
+**Gate E6:** após concluir todas as Etapas 2–6, o usuário fará A/B end-to-end do conjunto final contra todas as premissas da nota conectada. Rubricas, unidades, cegamento, adjudicação, agregação/categorias e thresholds devem ser pré-registrados. Evidência offline não satisfaz custo, latência ou qualidade semântica real; essas métricas exigem provider vivo pareado. Sem E6 integral, revisão Architect e aceite expresso do usuário, não há merge, deploy ou `V2_ACCEPTED`. Atribuições individuais ficam opcionais para diagnóstico posterior.
 
 **Status desta etapa:** autorização para candidata, não aceitação formal V2.
 
@@ -38,7 +38,7 @@ Este PLAN não presume como implementados `creativeDirection` canônica, memóri
 - Indicador global no App Shell, readiness do Product, reentrada pelo backend, retry explícito e cancelamento seguro somente se suportado pelo worker.
 - Preservação de Product por archive operacional e DELETE Big Bang tenant-scoped transacional, conforme códigos e rollback definidos na SPEC.
 - Testes comportamentais, contract tests de capabilities, testes de concorrência/lease/quota e smoke autenticado.
-- Candidata Etapas 2–6 na feature branch: Discovery V2/Strategy determinística com A/B individual; integração externa ao Planner harness congelado com Blueprint canônico, Discovery/Strategy e memória V1; Skill/prompt V2; Risk pré-Judge seletivo; E6 integral. Contratos e critérios: [SPEC](../../specs/slice-003/SPEC.md), [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md), [Etapa 4](../../specs/etapa-4-skill-brief/SPEC.md), [Etapa 5](../../specs/etapa-5-risk-quality/SPEC.md) e [Etapa 6](../../specs/etapa-6-golden-evals/SPEC.md).
+- Candidata Etapas 2–6 na feature branch: Discovery V2/Strategy determinística; integração externa ao Planner harness congelado com Blueprint canônico, Discovery/Strategy e memória V1; Skill/prompt V2; Risk pré-Judge seletivo; preparação da E6 integral. Nenhuma A/B será executada por nós agora; ao final o usuário fará A/B end-to-end. Contratos e critérios: [SPEC](../../specs/slice-003/SPEC.md), [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md), [Etapa 4](../../specs/etapa-4-skill-brief/SPEC.md), [Etapa 5](../../specs/etapa-5-risk-quality/SPEC.md) e [Etapa 6](../../specs/etapa-6-golden-evals/SPEC.md).
 
 ### Não incluído
 
@@ -331,15 +331,15 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto (complet
 
 
 
-### Tarefa 5A — Executar E6 antes de `V2_ACCEPTED`
-**Arquivos:** artefatos versionados de protocolo, thresholds, Golden Dataset, captures e relatório da candidata; execução autorizada nesta feature branch sob o protocolo aprovado, sem promover produção.
+### Tarefa 5A — Preparar E6 para avaliação do usuário após as Etapas 2–6
+**Arquivos:** artefatos versionados de protocolo, thresholds e Golden Dataset da candidata; esta tarefa não executa A/B nem promove produção.
 
 - Fixar baseline ADR-029/`@1.2` e candidato V2/`@1.3` por commit/engine version.
 - Separar evidence offline/replay de execução pareada com provider vivo.
-- Congelar provider/model/tier, parâmetros, prompts/contextos, seed, usage/custo/latência e cobertura; registrar diferenças inerentes entre os braços antes da coleta.
+- Pré-registrar provider/model/tier, parâmetros, prompts/contextos, seed, regras de coleta de usage/custo/latência e cobertura; registrar diferenças inerentes entre os braços antes da coleta.
 - Pré-registrar rubrica, unidade, avaliações cegas independentes, adjudicação, agregação/categorias, missing e thresholds para cada critério subjetivo.
-- Executar end-to-end e atribuições por variável; preservar avaliações brutas, deltas pareados, incerteza e cobertura.
-- Persistir relatório reproduzível sem inventar resultado, não-regressão ou aprovação.
+- Preparar a comparação end-to-end para execução futura pelo usuário; atribuições individuais são diagnósticos opcionais posteriores, não requisito de aceitação. O relatório futuro preservará avaliações brutas, deltas pareados, incerteza e cobertura.
+- Especificar relatório reproduzível para a avaliação futura, sem inventar resultado, não-regressão ou aprovação.
 
 **Gate:** sem relatório revisado e aceite explícito do usuário, V2 permanece default pendente; ADR-029 permanece baseline e não volta a ser default implicitamente.
 
@@ -347,11 +347,11 @@ A finalização usa `prisma.$transaction` curta para inserir o conjunto (complet
 
 **Dependências:** [SPEC Slice 003](../../specs/slice-003/SPEC.md), [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md), [Etapa 4 SPEC](../../specs/etapa-4-skill-brief/SPEC.md) e [PLAN](../etapa-4-skill-brief/PLAN.md), [Etapa 5 SPEC](../../specs/etapa-5-risk-quality/SPEC.md) e [PLAN](../etapa-5-risk-quality/PLAN.md), [Etapa 6 SPEC](../../specs/etapa-6-golden-evals/SPEC.md) e [PLAN](../etapa-6-golden-evals/PLAN.md). Não ampliar o MVP nem alterar o mapa SLICES.
 
-1. **Etapa 2:** projetar fatos allowlisted em Discovery V2 dentro de Mapping, validar/persistir pool JSON-safe com hash estável; selecionar Strategy determinística com proveniência. A/B individual atribui o efeito da retirada de PU e Strategy LLM antes de mudar essas chamadas no runtime padrão.
+1. **Etapa 2:** projetar fatos allowlisted em Discovery V2 dentro de Mapping, validar/persistir pool JSON-safe com hash estável; selecionar Strategy determinística com proveniência. Validar comportamento nesta etapa sem A/B; redução de chamadas e qualidade serão avaliadas pelo usuário na A/B end-to-end após concluir todas as Etapas 2–6. Atribuição individual só se solicitada como diagnóstico posterior.
 2. **Etapa 3:** reutilizar o Planner harness e suas policies/fixtures/testes congelados sem modificação. Fora do harness, adaptar engine/worker/persistência para entradas validadas Discovery/Strategy, persistir Blueprint canônico em `ContentOpportunity.creativeDirection`, manter Strategy e memória estruturada V1 com sinais multidimensionais; releitura tenant-scoped valida versão/hash/refs. Não criar segunda fonte em metadata.
 3. **Etapa 4:** integrar Skill/prompt segundo SPEC/PLAN próprios, excluir `selectedPatterns` e catálogo literal do contexto V2 e registrar binding/proveniência operacional `@1.3` consistente; manter `@1.2` reproduzível no baseline E6.
 4. **Etapa 5:** integrar Risk determinístico antes do Judge seletivo, com seleção fail-safe e sem transferir a Risk autoridade de hard gates, D/F, quota ou publicação.
-5. **Etapa 6:** executar E6 integral e A/B por variável, com baseline ADR-029 fixada por commit e candidato final fixado por commit, evidência offline separada de provider vivo, relatório reproduzível e revisão Architect. Falha mantém V2 produção default pendente; somente aceite expresso do usuário após E6 integral e revisão permite propor merge/deploy e `V2_ACCEPTED`.
+5. **Etapa 6:** preparar E6 integral, com baseline ADR-029 fixada por commit e candidato final fixado por commit, evidência offline separada de provider vivo e protocolo pré-registrado. Após concluir todas as Etapas 2–6, o usuário executará A/B end-to-end e avaliará o conjunto contra todas as premissas da nota conectada. Falha mantém V2 produção default pendente; somente relatório, revisão Architect e aceite expresso do usuário permitem propor merge/deploy e `V2_ACCEPTED`.
 
 **Gate de implementação:** validações comportamentais de cada etapa antes de avançar, sem afirmar resultados não coletados. **Gate de promoção:** nenhum merge/deploy/aceitação formal antes de E6 integral, revisão Architect e aceite expresso do usuário.
 

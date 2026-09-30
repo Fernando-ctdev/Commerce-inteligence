@@ -1,5 +1,3 @@
-// Suite de regressão V1 (ADR-029): força ENGINE_V2=0 por teste — hooks vencem
-// qualquer ordem de carregamento/eval de módulos no runner.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runFirstGeneration } from "./engine";
@@ -24,11 +22,8 @@ function routerFor(overrides: Partial<{ judge: (context: Record<string, unknown>
     complete: async (task: string, input?: { trustedContext?: unknown }) => {
       const context = input?.trustedContext as Record<string, unknown> | undefined;
       if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["respiravel"], functionalBenefits: ["conforto"], emotionalBenefits: ["confianca"], desiredOutcomes: ["uso"], purchaseTriggers: ["uso"], purchaseBarriers: ["preco"], evidenceRefs: ["product:description"] };
-      if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { audiences: ["creator"], situations: ["uso"], pains: ["calor"], desires: ["conforto"], objections: ["preco"], opportunities: Array.from({ length: 3 }, () => ({ relevantCapabilities: ["respiravel"], benefits: ["conforto"], proofOptions: ["respiravel"], sellingArgument: "uso confortavel", confidence: 0.9, evidenceRefs: ["product:description"] })) };
-      if (task === "STRATEGY_SYNTHESIS") return { primaryPositioning: "uso", audiences: ["creator"], priorityBenefits: ["conforto"], priorityObjections: ["preco"], priorityArguments: ["uso"], priorityAngles: ["demonstracao"], communicationPrinciples: ["natural"] };
-      if (task === "CONTENT_PLAN_GENERATION") return { opportunities: [{ commercialObjective: "demonstrar", angle: "demonstracao", coreMessage: "tecido respiravel", hookMechanism: "demonstration", noveltyTargets: ["demonstracao"] }] };
+      if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { discoveryContractVersion: "2", hypotheses: Array.from({ length: 3 }, () => ({ commercialObjective: "uso confortavel", angle: "conforto", coreMessage: "uso confortavel", relevantCapabilities: ["respiravel"], benefits: ["conforto"], proofOptions: ["respiravel"], commercialEffects: ["uso confortavel"], evidenceRefs: ["product:description"], confidence: 0.9 })) };
       if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [{ angle: "demonstracao", hook: "Hook original", development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto" }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto" }], script: "Demonstre o tecido respiravel no produto", cta: "Confira o produto" }] };
-      if (task === "CONTENT_SCENE_IDEAS") return overrides.scenes?.() ?? { scenes: [{ description: "Mostre o tecido respiravel em uso" }, { description: "Pegue o tecido respiravel e aproxime para demonstrar" }] };
       if (task === "CONTENT_QUALITY_JUDGE") {
         // ADR-025: judge em lote — a resposta ecoa o conjunto exato de contentIds.
         const items = (Array.isArray(context?.items) ? context.items : []) as Array<{ contentId: string }>;

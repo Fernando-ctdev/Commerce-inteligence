@@ -1,26 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateTargetContentCount, validateContentBrief, validateContentOpportunity, validateProductStrategy, validateProductUnderstanding, validateCommercialOpportunityDraft, structureHash, normalizeForVariety, validateCommercialOpportunityMappingEnvelope, CARDINALITY_POLICY, CARDINALITY_POLICY_VERSION } from "./contract";
+import { validateTargetContentCount, validateContentBrief, validateContentOpportunity, validateProductStrategy, validateProductUnderstanding, structureHash, normalizeForVariety, CARDINALITY_POLICY, CARDINALITY_POLICY_VERSION, validateCommercialOpportunity } from "./contract";
 test("accepts only integer quantity from 1 through 10", () => { assert.equal(validateTargetContentCount(1), 1); assert.equal(validateTargetContentCount(10), 10); for (const value of [0, 11, 16, 30, 1.5, "2", null]) assert.throws(() => validateTargetContentCount(value)); });
 // AC Etapa 2 15: hipótese de desejo/curiosidade é oportunidade válida SEM pain
-// e SEM objection — nenhum campo racional é pré-condição artificial. A fixture
-// mantém proofOptions e evidenceRefs porque são dados obrigatórios do contrato
-// (não são "prova" no sentido comercial); o que está ausente é só pain/objection.
+// e SEM objection — nenhum campo racional é pré-condição artificial. Migração
+// V2: a semântica vive em validateCommercialOpportunity (campo ativo); a
+// descoberta sem dor/objeção é coberta pelos testes Discovery V2 (stage2-v2).
 test("accepts a desire-first opportunity without pain and objection (proofOptions/evidenceRefs permanecem como dados obrigatórios)", () => {
-  const envelope = validateCommercialOpportunityMappingEnvelope({ audiences: [], situations: [], pains: [], desires: ["querer praticidade"], objections: [], opportunities: [{ relevantCapabilities: ["compacto"], benefits: ["praticidade no dia a dia"], proofOptions: ["product:description"], sellingArgument: "o próprio conteúdo cria curiosidade e desejo", confidence: 0.8, evidenceRefs: ["product:name"] }] }, { facts: ["Produto"], refs: ["product:name"] });
-  const opportunity = envelope.opportunities[0]!;
+  const opportunity = validateCommercialOpportunity({ id: "j-commercial-1", relevantCapabilities: ["compacto"], benefits: ["praticidade no dia a dia"], proofOptions: ["product:description"], sellingArgument: "o próprio conteúdo cria curiosidade e desejo", confidence: 0.8, evidenceRefs: ["product:name"] }, { facts: ["Produto"], refs: ["product:name"] });
   assert.equal(opportunity.pain, undefined);
   assert.equal(opportunity.objection, undefined);
   assert.equal(opportunity.audience, undefined);
   assert.equal(opportunity.situation, undefined);
-  assert.deepEqual(envelope.pains, []);
-  assert.deepEqual(envelope.objections, []);
 });
 test("requires a complete brief, keeps strategic development as string[] and drops legacy scene data", () => { const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: ["Destaque Fone Space S1", "Reforce drivers de 40 mm"], script: "s", scenes: ["legado"], cta: "c" }; const brief = validateContentBrief(base); assert.equal(brief.version, 1); assert.deepEqual(brief.development, base.development); assert.equal("scenes" in brief, false); assert.equal(structureHash(brief), structureHash({ structure: undefined, development: base.development, cta: base.cta })); assert.throws(() => validateContentBrief({ ...base, development: undefined })); assert.throws(() => validateContentBrief({ ...base, development: "ponto" })); assert.throws(() => validateContentBrief({ ...base, development: [] })); assert.throws(() => validateContentBrief({ ...base, development: ["a", "b", "c", "d", "e", "f", "g"] })); });
 test("normalizes equivalent variety text", () => assert.equal(normalizeForVariety("  Hook  Forte "), "hook forte"));
-test("mapping envelope missing opportunities yields typed GEN-SCHEMA, not generic failure", () => { const envelope = { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], analysis: "longo texto sem oportunidades" }; assert.throws(() => validateCommercialOpportunityMappingEnvelope(envelope), (error: unknown) => { const e = error as { name?: string; code?: string; message?: string }; return e.name === "ContractError" && e.code === "GEN-SCHEMA" && /sem oportunidades/.test(e.message ?? ""); }); });
-test("mapping envelope with one opportunity passes and preserves canonical shape", () => { const commercial = { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] }; const envelope = { audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [commercial] }; const result = validateCommercialOpportunityMappingEnvelope(envelope, { facts: ["Produto"], refs: ["product:name"] }); assert.equal(result.opportunities.length, 1); assert.equal(result.opportunities[0].sellingArgument, "s"); });
-test("optional opportunity fields accept null and empty string as absence", () => { const commercial = { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"], objection: null, pain: "" }; const result = validateCommercialOpportunityMappingEnvelope({ audiences: ["a"], situations: ["s"], pains: ["p"], desires: ["d"], objections: ["o"], opportunities: [commercial] }, { facts: ["Produto"], refs: ["product:name"] }); assert.equal(result.opportunities[0].objection, undefined); assert.equal(result.opportunities[0].pain, undefined); });
 test("content opportunity sourceOpportunityId must exist in the allowed server-derived set", () => {
   const valid = { id: "p", commercialObjective: "c", angle: "a", coreMessage: "m", hookMechanism: "h", noveltyTargets: ["n"], sourceOpportunityId: "j-commercial-1" };
   const allowed = new Set(["j-commercial-1", "j-commercial-2"]);
@@ -65,8 +59,8 @@ test("cardinality policy is versioned and uses MVP limits", () => {
   assert.equal(CARDINALITY_POLICY.noveltyTargets.max, 4);
 });
 test("strict maximums fail closed without truncation", () => {
-  const commercial = { relevantCapabilities: Array.from({ length: 11 }, (_, i) => `cap${i}`), benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] };
-  assert.throws(() => validateCommercialOpportunityDraft(commercial), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /cardinalidade de relevantCapabilities/.test(e.message ?? ""); });
+  const commercial = { id: "j-commercial-1", relevantCapabilities: Array.from({ length: 11 }, (_, i) => `cap${i}`), benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] };
+  assert.throws(() => validateCommercialOpportunity(commercial), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /cardinalidade de relevantCapabilities/.test(e.message ?? ""); });
   const base = { contentId: "c1", briefVersionId: "b1", version: 1, angle: "a", hook: "h", development: Array.from({ length: 7 }, (_, i) => `c${i}`), script: "s", cta: "c" };
   assert.throws(() => validateContentBrief(base), (error: unknown) => { const e = error as { code?: string }; return e.code === "GEN-SCHEMA"; });
 });
@@ -99,19 +93,6 @@ test("PU v3: estratégicos vazios sempre passam; núcleo segue non-empty; max co
   assert.throws(() => validateProductUnderstanding(acima, { facts: ["Tecido leve"], refs: ["product:name", "fact:features"] }), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /cardinalidade de functionalBenefits/.test(e.message ?? ""); });
 });
 
-test("mapping envelope opportunity count is capped by policy", () => {
-  const commercial = { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["product:name"] };
-  const envelope = { audiences: [], situations: [], pains: [], desires: [], objections: [], opportunities: Array.from({ length: CARDINALITY_POLICY.opportunities.max + 1 }, () => commercial) };
-  assert.throws(() => validateCommercialOpportunityMappingEnvelope(envelope), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /cardinalidade de oportunidades/.test(e.message ?? ""); });
-});
-test("minimum of 3 opportunities requires DISTINCT evidence refs (repeated mentions add nothing)", () => {
-  const commercial = { relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["p"], sellingArgument: "s", confidence: 0.9, evidenceRefs: ["r1"] };
-  const single = { audiences: [], situations: [], pains: [], desires: [], objections: [], opportunities: [commercial] };
-  // refs do understanding repetem refs do catálogo base: 2 evidências distintas → mínimo 1.
-  assert.doesNotThrow(() => validateCommercialOpportunityMappingEnvelope(single, { facts: ["f"], refs: ["r1", "r2", "r1"] }));
-  // 3 evidências distintas sustentam o mínimo de 3: uma só oportunidade falha.
-  assert.throws(() => validateCommercialOpportunityMappingEnvelope(single, { facts: ["f"], refs: ["r1", "r2", "r3"] }), (error: unknown) => { const e = error as { code?: string; message?: string }; return e.code === "GEN-SCHEMA" && /min 3/.test(e.message ?? ""); });
-});
 test("development permanece entre 2 e 6 bullets e cenas não entram no contrato", () => {
   const base = { contentId: "c1", briefVersionId: "b1", version: 1 as const, angle: "a", hook: "h", development: ["ponto 1", "ponto 2"], script: "s", cta: "c" };
   assert.deepEqual(validateContentBrief(base).development, ["ponto 1", "ponto 2"]);

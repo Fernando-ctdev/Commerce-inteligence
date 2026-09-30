@@ -6,6 +6,7 @@
 // persistência fora do ContentSceneSet existente.
 import {
   CARDINALITY_POLICY,
+  FORBIDDEN_OWNERSHIP,
   ContractError,
   validateContentBrief,
   validateContentBriefDraft,
@@ -378,23 +379,6 @@ export function parseBriefRepairDraftV2(output: unknown, evidence: EvidenceSnaps
 // Valida o envelope do LLM Discovery: allowlist exata, refs ⊆ catálogo,
 // commercialEffects obrigatórios para diversidade do planner. Fail-closed.
 
-const DISCOVERY_ENVELOPE_KEYS = ["discoveryContractVersion", "opportunities"] as const;
-const DISCOVERY_OPPORTUNITY_KEYS = ["commercialObjective", "angle", "coreMessage", "commercialEffects", "evidenceRefs"] as const;
-
-const DISCOVERY_ENVELOPE_KEYS_V2 = ["discoveryContractVersion", "hypotheses"] as const;
-const DISCOVERY_HYPOTHESIS_KEYS_V2 = [
-  "commercialObjective", "angle", "coreMessage", "desiredViewerResponse",
-  "audience", "situation", "desire", "identification", "curiosity",
-  "aspiration", "humorPotential", "visualPotential", "pain", "objection",
-  "desiredOutcome", "relevantCapabilities", "benefits", "proofOptions",
-  "commercialEffects", "evidenceRefs", "confidence",
-] as const;
-const DISCOVERY_NULLABLE_FIELDS: readonly string[] = [
-  "desiredViewerResponse", "audience", "situation", "desire",
-  "identification", "curiosity", "aspiration", "humorPotential",
-  "visualPotential", "pain", "objection", "desiredOutcome",
-];
-
 export function parseDiscoveryEnvelopeV2(
   raw: unknown,
   evidence: EvidenceSnapshot,
@@ -402,9 +386,15 @@ export function parseDiscoveryEnvelopeV2(
   if (typeof raw !== "object" || raw === null || Array.isArray(raw))
     throw new ContractError("GEN-SCHEMA", "Discovery V2 deve ser um objeto");
   const envelope = raw as Record<string, unknown>;
+  // SPEC §3.3B/AC12: chaves server-owned/proibidas rejeitadas; demais
+  // desconhecidas são DESCARTADAS na canonicalização (não propagadas).
+  // sourceOpportunityId é server-owned do Discovery (AC16/ADR-033) e rejeitada
+  // explicitamente aqui — não pode entrar em FORBIDDEN_OWNERSHIP global porque
+  // validateContentOpportunity a aceita legitimamente.
+  const DISCOVERY_SERVER_OWNED_V2: Record<string, true> = { ...FORBIDDEN_OWNERSHIP, sourceOpportunityId: true };
   for (const key of Object.keys(envelope))
-    if (!(DISCOVERY_ENVELOPE_KEYS_V2 as readonly string[]).includes(key))
-      throw new ContractError("GEN-SCHEMA", `Discovery V2: campo desconhecido "${key}" no envelope`, key);
+    if (DISCOVERY_SERVER_OWNED_V2[key])
+      throw new ContractError("GEN-SCHEMA", `Discovery V2: campo não permitido "${key}" no envelope`, key);
   if (envelope.discoveryContractVersion !== "2")
     throw new ContractError("GEN-SCHEMA", "Discovery V2 exige discoveryContractVersion=2", "discoveryContractVersion");
   if (!Array.isArray(envelope.hypotheses))
@@ -415,8 +405,8 @@ export function parseDiscoveryEnvelopeV2(
       throw new ContractError("GEN-SCHEMA", `Discovery V2 hypothesis ${index + 1} inválida`, "hypotheses");
     const h = item as Record<string, unknown>;
     for (const key of Object.keys(h))
-      if (!(DISCOVERY_HYPOTHESIS_KEYS_V2 as readonly string[]).includes(key))
-        throw new ContractError("GEN-SCHEMA", `Discovery V2: campo desconhecido "${key}" na hypothesis ${index + 1}`, key);
+      if (DISCOVERY_SERVER_OWNED_V2[key])
+        throw new ContractError("GEN-SCHEMA", `Discovery V2: campo não permitido "${key}" na hypothesis ${index + 1}`, key);
     for (const key of ["commercialObjective", "angle", "coreMessage"] as const)
       if (typeof h[key] !== "string" || !(h[key] as string).trim())
         throw new ContractError("GEN-SCHEMA", `Discovery V2 hypothesis ${index + 1}: ${key} obrigatório`, key);
@@ -426,7 +416,17 @@ export function parseDiscoveryEnvelopeV2(
       throw new ContractError("GEN-SCHEMA", `Discovery V2 hypothesis ${index + 1}: evidenceRefs fora do catálogo autorizado`, "evidenceRefs");
     if (typeof h.confidence !== "number" || h.confidence < 0 || h.confidence > 1)
       throw new ContractError("GEN-SCHEMA", `Discovery V2 hypothesis ${index + 1}: confidence inválido`, "confidence");
-    const nullable = (key: string): string | null => (typeof h[key] === "string" && (h[key] as string).trim() ? (h[key] as string) : null);
+    // ADR-033 §3: opcional PRESENTE vazio ou com tipo inválido falha antes do
+    // retorno; null (permitido pelo schema do provider) é ausência no
+    // envelope JSON-safe — nunca vira string vazia nem é inventado.
+    const nullable = (key: string): string | null => {
+      if (!(key in h)) return null;
+      const value = h[key];
+      if (value === null) return null;
+      if (typeof value !== "string" || !(value as string).trim())
+        throw new ContractError("GEN-SCHEMA", `Discovery V2 hypothesis ${index + 1}: ${key} presente deve ser string não vazia`, key);
+      return (value as string).trim();
+    };
     return {
       commercialObjective: h.commercialObjective as string,
       angle: h.angle as string,
@@ -454,49 +454,6 @@ export function parseDiscoveryEnvelopeV2(
   if (hypotheses.length === 0)
     throw new ContractError("GEN-SCHEMA", "Discovery V2 sem hypotheses", "hypotheses");
   return { discoveryContractVersion: "2", hypotheses };
-}
-
-// ─── Stage 2: ProductStrategy V2 determinística ─────────────────────────────
-
-export function synthesizeStrategyV2(
-  opportunities: readonly DiscoveryHypothesisV2[],
-  understanding: ProductUnderstanding,
-  ids: { jobId: string; productId: string },
-): ProductStrategy {
-  const primaryPositioning = opportunities
-    .map((o) => o.coreMessage)
-    .sort((a, b) => b.length - a.length)[0] ?? understanding.functionalBenefits[0] ?? "produto";
-  const audiences = [...new Set(opportunities.flatMap((o) => o.commercialEffects))];
-  const priorityBenefits = [...new Set(opportunities.flatMap((o) => [o.commercialObjective]))];
-  const priorityObjections = [...new Set(understanding.purchaseBarriers)];
-  const priorityArguments = [...new Set(opportunities.map((o) => o.coreMessage))];
-  const priorityAngles = [...new Set(opportunities.map((o) => o.angle))];
-  const communicationPrinciples = ["estratégia separada da fala", "cenas simples", "linguagem oral", "script não literal", "produção de creator solo"];
-  return {
-    id: `${ids.jobId}-strategy`,
-    productId: ids.productId,
-    jobId: ids.jobId,
-    version: 1,
-    status: "ACTIVE",
-    platformId: "tiktok-commerce",
-    platformSkillVersion: loadPlatformSkill().version,
-    primaryPositioning,
-    audiences,
-    priorityBenefits,
-    priorityObjections,
-    priorityArguments,
-    priorityAngles,
-    communicationPrinciples,
-    opportunities: opportunities.map((o, index) => ({
-      id: `commercial-${index + 1}`,
-      relevantCapabilities: understanding.capabilities,
-      benefits: [...o.commercialEffects],
-      proofOptions: o.proofOptions.length > 0 ? [...o.proofOptions] : ["demonstração observável"],
-      sellingArgument: o.coreMessage,
-      confidence: 0.9,
-      evidenceRefs: [...o.evidenceRefs],
-    })),
-  };
 }
 
 // Ponte versionada para o harness frozen — CommercialDiscoveryPool.
