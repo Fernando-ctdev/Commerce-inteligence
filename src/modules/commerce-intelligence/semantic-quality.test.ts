@@ -23,7 +23,7 @@ function routerFor(overrides: Partial<{ judge: (context: Record<string, unknown>
       const context = input?.trustedContext as Record<string, unknown> | undefined;
       if (task === "PRODUCT_UNDERSTANDING") return { productId: "p", coreUseCases: ["uso"], capabilities: ["respiravel"], functionalBenefits: ["conforto"], emotionalBenefits: ["confianca"], desiredOutcomes: ["uso"], purchaseTriggers: ["uso"], purchaseBarriers: ["preco"], evidenceRefs: ["product:description"] };
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { discoveryContractVersion: "2", hypotheses: Array.from({ length: 3 }, () => ({ commercialObjective: "uso confortavel", angle: "conforto", coreMessage: "uso confortavel", relevantCapabilities: ["respiravel"], benefits: ["conforto"], proofOptions: ["respiravel"], commercialEffects: ["uso confortavel"], evidenceRefs: ["product:description"], confidence: 0.9 })) };
-      if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [{ angle: "demonstracao", hook: "Hook original", development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto" }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto" }], script: "Demonstre o tecido respiravel no produto", cta: "Confira o produto" }] };
+      if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [{ angle: "demonstracao", hook: "Hook original", development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto" }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto" }], script: "Mostre o produto", cta: "Confira o produto" }] };
       if (task === "CONTENT_QUALITY_JUDGE") {
         // ADR-025: judge em lote — a resposta ecoa o conjunto exato de contentIds.
         const items = (Array.isArray(context?.items) ? context.items : []) as Array<{ contentId: string }>;
@@ -150,7 +150,7 @@ test("one initial Judge: REVIEW repairs once, PASS parts stay untouched, no re-J
   assert.equal(seen.length, 1, "exatamente uma passada de Judge");
   assert.deepEqual(seen[0], [...QUALITY_PARTS]);
   assert.equal(result.briefs[0].hook, "Veja o tecido respiravel");
-  assert.equal(result.briefs[0].script, "Demonstre o tecido respiravel no produto", "parte PASS permanece intacta");
+  assert.equal(result.briefs[0].script, "Mostre o produto", "parte PASS permanece intacta");
   assert.equal(result.qualityRepairs.length, 1);
   assert.equal(result.qualityRepairs[0].part, "hook");
   assert.equal(result.partial, null, "REVIEW nunca cria faltante");

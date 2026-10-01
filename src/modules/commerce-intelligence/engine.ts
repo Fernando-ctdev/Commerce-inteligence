@@ -81,15 +81,26 @@ import {
   parseBriefRepairDraftV2,
   parseStructuredBriefDraftV2,
   plannedHandoffV2,
+  projectMemorySignalsForPlanner,
+  memorySnapshotV2,
   runPlannerV2,
   v2ConstraintsFromCreatorContext,
   v2NeutralConstraints,
   v2ProductFactsProjection,
 } from "./engine-v2";
 import type { DiscoveryEnvelopeV2 } from "./engine-v2";
-import type { PlannedOpportunityV2 } from "./planner-harness/types";
+import type { CommercialDiscoveryPool, CreativeBlueprint, PlannedOpportunityV2, PlannerMemorySignals } from "./planner-harness/types";
 import type { PlannedOpportunityHandoffV2 } from "./engine-v2";
-import type { JudgeExecutionRecord } from "./risk-assessment";
+import {
+  buildPreJudgeRiskAssessment,
+  PRE_JUDGE_RISK_CONTRACT_VERSION,
+  PRE_JUDGE_SELECTION_POLICY_V2,
+  selectForJudge,
+  validateJudgeSelectionDecision,
+  type JudgeExecutionRecord,
+  type JudgeSelectionDecisionV1,
+  type PreJudgeRiskAssessmentV2,
+} from "./risk-assessment";
 
 // ADR-019: versão real da engine — substitui o literal estático "slice-003" do
 // IntelligenceRun. Bump junto com mudanças comportamentais da engine.
@@ -213,12 +224,28 @@ export type EngineResult = {
   plannedV2?: PlannedOpportunityHandoffV2[];
   // E5: cobertura do Judge + evidência server-owned para risk assessment.
   judgeExecutionRecords: JudgeExecutionRecord[];
+  judgeSelectionDecisions: JudgeSelectionDecisionV1[];
+  preJudgeRiskAssessments: PreJudgeRiskAssessmentV2[];
   evidenceRefs: string[];
   discoveryV2?: Record<string, unknown>;
   // Etapa 2 candidata (ADR-033 §3/§12): envelope canônico + discoveryHash +
   // IDs server-owned, ou apenas sourceDiscoveryRef no reuso.
   discoveryCanonicalV2?: DiscoveryCanonicalV2;
-  v2Policy?: { plannerPolicyVersion: "PLANNER_POLICY_V1"; briefPolicyVersion: "BRIEF_GENERATION_POLICY_V1"; creativeSystemVersion: "1.3" };
+  v2Policy?: {
+    plannerPolicyVersion: "PLANNER_POLICY_V2";
+    briefPolicyVersion: "BRIEF_GENERATION_POLICY_V1";
+    creativeSystemVersion: "1.3";
+    compatibilityPolicyVersion: "CREATIVE_COMPATIBILITY_V2";
+    creativeSystemHash: string;
+    /** sha256 hex-64 — seed derivada do Planner (PLANNER_SEED_V1). */
+    plannerSeed: string;
+    /** sha256 hex-64 — hash canônico das oportunidades planejadas. */
+    plannerOutputHash: string;
+    /** sha256 hex-64 — canonicalSerialization do PlannerInput efetivo (D3). */
+    plannerInputHash: string;
+    /** Binding efetivo do Planner, sem source. */
+    plannerBinding: { platformSkillVersion: string; creativeSystemVersion: string };
+  };
   partial: EnginePartial | null;
 };
 
@@ -243,9 +270,13 @@ function batchSize(): number {
   const raw = Number(process.env.GENERATION_BRIEF_BATCH_SIZE ?? 4);
   return Number.isInteger(raw) && raw >= 4 && raw <= 8 ? raw : 4;
 }
-function mappingOpportunityLimit(): number {
+function mappingOpportunityLimit(targetContentCount: number): number {
+  // Etapa 3: o pool da Discovery precisa suportar N sourceOpportunityIds
+  // distintos (SPEC 1–10); o env é TETO opcional, nunca cap silencioso a 4
+  // para N válido. Sem geração de hipóteses: só o limite informado ao provider.
   const raw = Number(process.env.GENERATION_MAPPING_MAX_OPPORTUNITIES ?? 4);
-  return Number.isInteger(raw) && raw >= 1 && raw <= 10 ? raw : 4;
+  const configured = Number.isInteger(raw) && raw >= 1 && raw <= 10 ? raw : 4;
+  return Math.min(10, Math.max(configured, targetContentCount));
 }
 
 // ─── Etapa 2 candidata (ADR-033 §3; SPEC §3.3B; PLAN Task 5B-1) ─────────────
@@ -472,8 +503,151 @@ export function buildDeterministicStrategyV2(input: {
   };
 }
 
+// Reuso só aceita a projeção produzida pela policy que gravou a Strategy.
+// Um hash válido da Discovery sozinho não autentica IDs nem agregados da linha ACTIVE.
+function assertReusedStrategyV2(
+  payload: Record<string, unknown>,
+  envelope: Record<string, unknown>,
+  sourceRef: { intelligenceRunId: string; discoveryContractVersion: "2"; discoveryHash: string },
+  productId: string,
+  skill: PlatformSkill,
+  evidence: EvidenceSnapshot,
+): void {
+  if (payload.strategyContractVersion !== STRATEGY_CONTRACT_VERSION_V2
+    || payload.strategyPolicyVersion !== STRATEGY_POLICY_VERSION_V1
+    || payload.productId !== productId
+    || payload.platformId !== skill.id
+    || payload.platformSkillVersion !== skill.version
+    || typeof payload.jobId !== "string" || !payload.jobId
+    || !payload.sourceDiscoveryRef
+    || canonicalSerialization(payload.sourceDiscoveryRef) !== canonicalSerialization(sourceRef))
+    throw new ContractError("GEN-SCHEMA", "Strategy reutilizada com contrato ou origem divergente");
+  const expected = buildDeterministicStrategyV2({
+    envelope, jobId: payload.jobId, productId, platformId: skill.id,
+    platformSkillVersion: skill.version, principles: skill.principles, evidence,
+  });
+  if (canonicalSerialization(payload.sourceOpportunityIds) !== canonicalSerialization(expected.sourceOpportunityIds))
+    throw new ContractError("GEN-SCHEMA", "Strategy reutilizada com seleção divergente", "sourceOpportunityIds");
+  for (const field of [
+    "primaryPositioning", "audiences", "priorityBenefits", "priorityObjections",
+    "priorityArguments", "priorityAngles", "communicationPrinciples", "opportunities",
+  ] as const)
+    if (canonicalSerialization(payload[field]) !== canonicalSerialization(expected.strategy[field]))
+      throw new ContractError("GEN-SCHEMA", `Strategy reutilizada com ${field} divergente`, field);
+}
+
+// Ponte Etapa 3 (ADR-033 §3): CommercialDiscoveryPool EXATO — somente os
+// sourceOpportunityIds selecionados pela Strategy, na ordem persistida, com
+// cópia fiel de commercialObjective/angle/coreMessage/commercialEffects;
+// audienceContext/proofPattern somente quando a hipótese os traz. Refs são
+// convertidas a EvidenceRef do catálogo autorizado — ref fora dele falha
+// fechado, sem hash sintético. Sem pool parcial silencioso.
+export function discoveryPoolFromSelectedV2(
+  envelope: unknown,
+  selectedIds: readonly string[],
+  evidence: EvidenceSnapshot,
+): CommercialDiscoveryPool {
+  const hypotheses = canonicalHypothesesOf(envelope);
+  const byId = new Map(hypotheses.map((h) => [h.sourceOpportunityId, h]));
+  const allowedRefs = new Set(evidence.refs);
+  const factByRef = new Map(evidence.refs.map((ref, index) => [ref, String(evidence.facts[index] ?? "")]));
+  const opportunities = selectedIds.map((id) => {
+    const hypothesis = byId.get(id);
+    if (hypothesis === undefined)
+      throw new ContractError("GEN-SCHEMA", `Discovery pool: id selecionado fora do envelope: ${id}`, "sourceOpportunityIds");
+    const evidenceRefs = (hypothesis.evidenceRefs as string[]).map((ref) => {
+      if (!allowedRefs.has(ref))
+        throw new ContractError("GEN-SCHEMA", `Discovery pool cita evidência fora do catálogo autorizado: ${ref}`, "evidenceRefs");
+      const separator = ref.indexOf(":");
+      return { id: ref, field: separator === -1 ? ref : ref.slice(separator + 1), valueHash: sha256Hex(factByRef.get(ref) ?? "") };
+    });
+    const audienceContext = typeof hypothesis.audience === "string"
+      ? hypothesis.audience
+      : typeof hypothesis.situation === "string" ? hypothesis.situation : undefined;
+    const desiredViewerResponse = typeof hypothesis.desiredViewerResponse === "string" ? hypothesis.desiredViewerResponse : undefined;
+    return {
+      sourceOpportunityId: hypothesis.sourceOpportunityId,
+      commercialObjective: hypothesis.commercialObjective,
+      angle: hypothesis.angle,
+      coreMessage: hypothesis.coreMessage,
+      commercialEffects: [...hypothesis.commercialEffects],
+      ...(audienceContext !== undefined ? { audienceContext } : {}),
+      ...(desiredViewerResponse !== undefined && desiredViewerResponse !== ""
+        ? { desiredViewerResponse }
+        : {}),
+      ...(hypothesis.proofOptions.length > 0 ? { proofPattern: hypothesis.proofOptions[0] } : {}),
+      evidenceRefs,
+    };
+  });
+  return {
+    evidenceCatalog: {
+      refs: evidence.refs.map((ref) => {
+        const separator = ref.indexOf(":");
+        return { id: ref, field: separator === -1 ? ref : ref.slice(separator + 1), valueHash: sha256Hex(factByRef.get(ref) ?? "") };
+      }),
+    },
+    opportunities,
+  };
+}
+
+// Etapa 3: blueprint canônico do planned correspondente — entregue sem
+// correspondência em plannedV2 falha fechado (nunca TypeError genérico).
+export function plannedBlueprintForV2(
+  planned: readonly PlannedOpportunityV2[],
+  sourceOpportunityId: string,
+): CreativeBlueprint {
+  const match = planned.find((p) => p.sourceOpportunityId === sourceOpportunityId);
+  if (match === undefined)
+    throw new ContractError("GEN-SCHEMA", `Content entregue sem planned correspondente: ${sourceOpportunityId}`);
+  return match.blueprint.blueprint;
+}
+
+// Sinais de memória dos Contents ENTREGUES (D4): resolução 1:1 por
+// sourceOpportunityId — entregue sem hipótese Discovery correspondente falha
+// fechado (nunca flatMap silencioso). commercialEffects/audienceContext/
+// proofPattern vêm da hipótese; commercialEffects NUNCA é derivado de
+// coreMessage. Merge/dedup posterior é papel do mergeMemorySignalsCanonical.
+export function plannerSignalsForDeliveredContents(
+  delivered: ReadonlyArray<{
+    sourceOpportunityId: string;
+    blueprint: {
+      recipeId?: string;
+      attentionMechanisms: readonly string[];
+      psychologicalEffects: readonly string[];
+      format: string;
+      productRole: string;
+      narrativeMoves: readonly string[];
+    };
+  }>,
+  hypothesesById: ReadonlyMap<string, Record<string, unknown>>,
+): PlannerMemorySignals[] {
+  return projectMemorySignalsForPlanner(delivered.map((item) => {
+    const hypothesis = hypothesesById.get(item.sourceOpportunityId);
+    if (hypothesis === undefined)
+      throw new ContractError("GEN-SCHEMA", `Content entregue sem hipótese Discovery correspondente: ${item.sourceOpportunityId}`);
+    return {
+      blueprint: {
+        // RecipeId vem do CreativeBlueprint planejado/entregue — nunca da
+        // hipótese Discovery (que não o governa).
+        ...(item.blueprint.recipeId !== undefined && item.blueprint.recipeId !== "" ? { recipeId: item.blueprint.recipeId } : {}),
+        attentionMechanisms: item.blueprint.attentionMechanisms,
+        psychologicalEffects: item.blueprint.psychologicalEffects,
+        format: item.blueprint.format,
+        productRole: item.blueprint.productRole,
+        narrativeMoves: item.blueprint.narrativeMoves,
+      },
+      commercialEffects: [...(hypothesis.commercialEffects as string[])],
+      ...(typeof hypothesis.audience === "string" || typeof hypothesis.situation === "string"
+        ? { audienceContext: (hypothesis.audience ?? hypothesis.situation) as string }
+        : {}),
+      ...(Array.isArray(hypothesis.proofOptions) && hypothesis.proofOptions.length > 0
+        ? { proofPattern: hypothesis.proofOptions[0] as string }
+        : {}),
+    };
+  }));
+}
+
 // Reader canônico de reuso (ADR-033 §3): valida versão/hash/IDs/refs da
-// Discovery persistida contra o estado atual — divergência falha fechado.
 export function validateDiscoveryReuseV2(
   reuse: { envelope: unknown; discoveryHash: string; sourceOpportunityIds: readonly unknown[] },
   evidence: EvidenceSnapshot,
@@ -481,7 +655,8 @@ export function validateDiscoveryReuseV2(
   const hypotheses = canonicalHypothesesOf(reuse.envelope);
   if (typeof reuse.discoveryHash !== "string" || reuse.discoveryHash !== discoveryHashV2(reuse.envelope))
     throw new ContractError("GEN-SCHEMA", "Discovery reutilizada: discoveryHash divergente do envelope", "discoveryHash");
-  const knownIds = new Set(hypotheses.map((h) => h.sourceOpportunityId));
+  if (!Array.isArray(reuse.sourceOpportunityIds) || reuse.sourceOpportunityIds.length === 0)
+    throw new ContractError("GEN-SCHEMA", "Discovery reutilizada: seleção vazia", "sourceOpportunityIds");
   const selected = reuse.sourceOpportunityIds.map((id, index) => {
     if (typeof id !== "string" || !id.trim())
       throw new ContractError("GEN-SCHEMA", `Discovery reutilizada: sourceOpportunityIds[${index}] inválido`, "sourceOpportunityIds");
@@ -489,39 +664,20 @@ export function validateDiscoveryReuseV2(
   });
   if (new Set(selected).size !== selected.length)
     throw new ContractError("GEN-SCHEMA", "Discovery reutilizada: sourceOpportunityIds repetidos", "sourceOpportunityIds");
+  const opportunitiesById = new Map(commercialOpportunitiesFromDiscoveryV2(reuse.envelope, evidence).map((opportunity) => [opportunity.id, opportunity]));
   for (const id of selected)
-    if (!knownIds.has(id))
+    if (!opportunitiesById.has(id))
       throw new ContractError("GEN-SCHEMA", `Discovery reutilizada: id selecionado fora do envelope: ${id}`, "sourceOpportunityIds");
-  const opportunities = commercialOpportunitiesFromDiscoveryV2(reuse.envelope, evidence);
-  const selectedSet = new Set(selected);
   return {
     envelope: reuse.envelope as Record<string, unknown>,
     discoveryHash: reuse.discoveryHash,
     sourceOpportunityIds: selected,
-    opportunities: opportunities.filter((opportunity) => selectedSet.has(opportunity.id)),
+    opportunities: selected.map((id) => opportunitiesById.get(id)!),
   };
 }
 
 // ─── Fim da seção Etapa 2 candidata ─────────────────────────────────────────
 
-export function normalizeUnderstandingCardinality(
-  output: unknown,
-): { output: Record<string, unknown>; reductions: UnderstandingCardinalityReduction[] } {
-  if (!output || typeof output !== "object" || Array.isArray(output))
-    return { output: output as Record<string, unknown>, reductions: [] };
-  const record = output as Record<string, unknown>;
-  const reductions: UnderstandingCardinalityReduction[] = [];
-  const normalized: Record<string, unknown> = { ...record };
-  for (const [field, value] of Object.entries(normalized)) {
-    if (!Array.isArray(value)) continue;
-    const max = CARDINALITY_POLICY[field]?.max ?? 0;
-    if (value.length > max) {
-      normalized[field] = value.slice(0, max);
-      reductions.push({ field, received: value.length, kept: max });
-    }
-  }
-  return { output: normalized, reductions };
-}
 
 export type UnderstandingCardinalityReduction = {
   field: string;
@@ -757,38 +913,6 @@ function isMissingOpportunitiesError(error: unknown): boolean {
     (error as { code?: unknown }).code === "GEN-SCHEMA" &&
     /sem oportunidades/.test(error.message)
   );
-}
-// Retry único de contrato para PRODUCT_UNDERSTANDING: SÓ violação GEN-SCHEMA da
-// validação server-side (ContractError cru emitido pelo validate no track —
-// erros de validador não passam por callCapability, logo não são embrulhados)
-// é re-solicitada. GenerationError GEN-SCHEMA (raiz do provider via
-// assertProviderOutput/adapter) é falha do provider: uma única chamada e
-// propaga — fail-closed. GEN-FACT, provider e abort idem (blocker do Arquiteto).
-function isUnderstandingSchemaError(error: unknown): error is ContractError {
-  return error instanceof ContractError && error.code === "GEN-SCHEMA";
-}
-// contractRepair determinístico para o retry de PU: field do erro (fallback
-// purchaseBarriers, campo do incidente d0545503), limites da CARDINALITY_POLICY
-// vigente e received medido do output bruto da tentativa — nada fabricado.
-function contractRepairDetail(
-  error: unknown,
-  rawOutput: unknown,
-): { field: string; min: number | null; max: number; received: number | null } {
-  const field =
-    error instanceof ContractError && typeof error.field === "string" && error.field
-      ? error.field
-      : "purchaseBarriers";
-  const rule = CARDINALITY_POLICY[field];
-  const record = rawOutput && typeof rawOutput === "object" && !Array.isArray(rawOutput)
-    ? rawOutput as Record<string, unknown>
-    : undefined;
-  const received = record && Array.isArray(record[field]) ? record[field].length : null;
-  return {
-    field,
-    min: rule ? rule.minWithEvidence : null,
-    max: rule ? rule.max : 0,
-    received,
-  };
 }
 
 // Checklist determinístico por item do repair de briefings (especificação
@@ -1142,7 +1266,6 @@ export async function runFirstGeneration(
     emitJobEvent("stage.completed", { jobId: input.jobId, attempt, stage });
   };
   const facts = stripCommission(input.facts ?? {}) as Record<string, unknown>;
-  let understanding: ProductUnderstanding | null = null;
   const attempt = input.attempt ?? 1;
   const { track, capabilities } = createCapabilityTracker({
     jobId: input.jobId,
@@ -1154,6 +1277,13 @@ export async function runFirstGeneration(
   // Etapa 2 candidata: seleção de Discovery e resultado canônico do run.
   let strategySourceOpportunityIds: string[] = [];
   let discoveryCanonicalResult: DiscoveryCanonicalV2 | undefined;
+  let plannerSeedResult: string | undefined;
+  let plannerOutputHashResult: string | undefined;
+  let plannerInputHashResult: string | undefined;
+  let plannerBindingResult: { platformSkillVersion: string; creativeSystemVersion: string } | undefined;
+  let compatibilityPolicyVersionResult: "CREATIVE_COMPATIBILITY_V2" | undefined;
+  let creativeSystemHashResult: string | undefined;
+  let reuseEnvelopeForSignals: Record<string, unknown> | undefined;
   const understandingReductions: UnderstandingCardinalityReduction[] = [];
   const commercialOpportunities: Record<string, unknown>[] = [];
 
@@ -1169,64 +1299,15 @@ export async function runFirstGeneration(
   const judgeFailureCodes = new Map<number, "GEN-SCHEMA" | "GEN-PROVIDER">();
   let currentQualityAudits: Array<QualityAudit | undefined> = [];
   if (input.router) {
-    const understandingContext = {
-      productId: input.productId,
-      facts,
-      evidenceRefsCatalog: baseEvidence.refs,
-    };
-    await emit("UNDERSTANDING_PRODUCT");
-    // Retry único de contrato para PU: cada tentativa normaliza cardinalidade
-    // deterministicamente antes da validação; outros GEN-SCHEMA podem re-solicitar
-    // uma vez em outro track com contractRepair {field,min,max,received}.
-    // GEN-FACT, provider e abort não retentam — fail-closed imediato (ADR-012).
-    let lastPuOutput: unknown;
-    const understandingCall = (context: unknown) => (onMetrics?: (metrics: ProviderCallMetrics) => void) =>
-      callCapability(
-        input.router!,
-        "PRODUCT_UNDERSTANDING",
-        project("PRODUCT_UNDERSTANDING", context, {}),
-        input.signal,
-        onMetrics,
-      );
-    try {
-      understanding = await track(
-        "PRODUCT_UNDERSTANDING",
-        understandingContext,
-        understandingCall(understandingContext),
-        (output) => {
-          lastPuOutput = output;
-          const normalized = normalizeUnderstandingCardinality(output);
-          understandingReductions.push(...normalized.reductions);
-          return validateProductUnderstanding(normalized.output, baseEvidence);
-        },
-      );
-    } catch (error) {
-      if (!isUnderstandingSchemaError(error)) throw error;
-      const retryContext = {
-        ...understandingContext,
-        contractRepair: contractRepairDetail(error, lastPuOutput),
-      };
-      understanding = await track(
-        "PRODUCT_UNDERSTANDING",
-        retryContext,
-        understandingCall(retryContext),
-        (output) => {
-          // ADR-020 adendo 5: violação de cardinalidade persistindo após o retry
-          // → redução determinística first-N (loud), depois validator revalida;
-          // falhas NÃO-cardinalidade continuam fail-closed.
-          const normalized = normalizeUnderstandingCardinality(output);
-          understandingReductions.push(...normalized.reductions);
-          return validateProductUnderstanding(normalized.output, baseEvidence);
-        },
-      );
-    }
+    const mappingEntries = new Map<string, string>();
+    baseEvidence.refs.forEach((ref, index) => {
+      if (!mappingEntries.has(ref)) mappingEntries.set(ref, String(baseEvidence.facts[index] ?? ""));
+    });
     mappingEvidence = {
-      facts: [...baseEvidence.facts, ...(understanding?.evidenceRefs ?? [])],
-      refs: [...baseEvidence.refs, ...(understanding?.evidenceRefs ?? [])],
+      facts: [...mappingEntries.values()],
+      refs: [...mappingEntries.keys()],
     };
-    // Projeção compacta e allowlisted para o mapping: fatos essenciais do Product,
-    // catálogo de evidências e campos necessários do understanding. Sem agregado bruto
-    // de facts, Strategy, Plan, Skill completa ou memória histórica.
+    // Discovery recebe os fatos confirmados e o catálogo factual diretamente.
     const mappingContext = {
       productId: input.productId,
       product: {
@@ -1238,27 +1319,18 @@ export async function runFirstGeneration(
         priceCurrency: facts.priceCurrency,
         // Desconto (ADR-031): fora do contrato ativo — não projetado.
       },
-      understanding: {
-        category: understanding?.category,
-        coreUseCases: understanding?.coreUseCases,
-        functionalBenefits: understanding?.functionalBenefits,
-        emotionalBenefits: understanding?.emotionalBenefits,
-        desiredOutcomes: understanding?.desiredOutcomes,
-        purchaseTriggers: understanding?.purchaseTriggers,
-        purchaseBarriers: understanding?.purchaseBarriers,
-        evidenceRefs: understanding?.evidenceRefs,
-      },
+      productFacts: [...mappingEntries]
+        .filter(([ref]) => /^fact:(?:category|brand|priceAmount|priceCurrency|variants|seller)(?::\d+)?$/.test(ref))
+        .map(([ref, value]) => ({ ref, value })),
       evidenceRefsCatalog: mappingEvidence.refs,
-      maxOpportunities: mappingOpportunityLimit(),
+      maxOpportunities: mappingOpportunityLimit(count),
       creatorContext: projectCreatorContext(
         "COMMERCIAL_OPPORTUNITY_MAPPING",
         input.creatorContext,
       ),
     };
     await emit("MAPPING_COMMERCIAL_OPPORTUNITIES");
-    // Etapa 2 candidata (ADR-033 §12): com Discovery persistida resolvida pelo
-    // worker, a fonte é o resultado intermediário — Mapping NÃO é re-chamado.
-    // PU permanece no candidato (retirada exige A/B da Etapa 6).
+    // A Discovery persistida é resolvida no worker; Mapping não é re-chamado.
     if (input.reusedDiscovery) {
       const selectedIds = Array.isArray(input.reuseStrategy?.sourceOpportunityIds)
         ? (input.reuseStrategy!.sourceOpportunityIds as readonly unknown[])
@@ -1271,9 +1343,16 @@ export async function runFirstGeneration(
         },
         mappingEvidence,
       );
+      if (!input.reuseStrategy)
+        throw new ContractError("GEN-SCHEMA", "Discovery reutilizada sem Strategy de origem");
+      assertReusedStrategyV2(
+        input.reuseStrategy, reuse.envelope, input.reusedDiscovery.sourceDiscoveryRef,
+        input.productId, skill, mappingEvidence,
+      );
       commercialOpportunities.push(...reuse.opportunities);
       strategySourceOpportunityIds = reuse.sourceOpportunityIds;
       discoveryCanonicalResult = { origin: "reused", sourceDiscoveryRef: input.reusedDiscovery.sourceDiscoveryRef };
+      reuseEnvelopeForSignals = reuse.envelope;
     } else {
       // Mapping envelope do provider é não confiável: um único retry de contrato re-solicita
       // opportunities quando o corpo veio sem elas (200 com prosa/arrays vazios). Falha fechada
@@ -1328,6 +1407,7 @@ export async function runFirstGeneration(
         discoveryHash: normalized.discoveryHash,
         sourceOpportunityIds: normalized.sourceOpportunityIds,
       };
+      reuseEnvelopeForSignals = normalized.envelope;
     }
     await emit("BUILDING_STRATEGY");
     // Etapa 2 candidata: Strategy determinística versionada (ADR-033 §3) —
@@ -1337,9 +1417,7 @@ export async function runFirstGeneration(
       // A linha ACTIVE é reutilizada intacta no finalize; estes campos só
       // alimentam telemetria do run novo (referência, não reescrita).
       const reuseContractVersion = STRATEGY_CONTRACT_VERSION_V2;
-      const reusePolicyVersion = typeof input.reuseStrategy.strategyPolicyVersion === "string" && input.reuseStrategy.strategyPolicyVersion
-        ? input.reuseStrategy.strategyPolicyVersion
-        : STRATEGY_POLICY_VERSION_V1;
+      const reusePolicyVersion = STRATEGY_POLICY_VERSION_V1;
       strategyOutput = {
         ...validateProductStrategy(
           {
@@ -1386,16 +1464,28 @@ export async function runFirstGeneration(
     {
       const v2CreatorConstraints = v2ConstraintsFromCreatorContext(input.creatorContext);
       try {
+        const discoveryPool = discoveryPoolFromSelectedV2(
+          reuseEnvelopeForSignals ?? {},
+          strategySourceOpportunityIds,
+          mappingEvidence,
+        );
         const portfolio = runPlannerV2({
           jobId: input.jobId,
           productId: input.productId,
           targetContentCount: count,
-          commercialOpportunities: commercialOpportunities as CommercialOpportunity[],
+          discoveryPool,
           evidence: mappingEvidence,
           memory: input.memory,
           creatorConstraints: v2CreatorConstraints,
         });
         plannedV2 = portfolio.planned;
+        plannerSeedResult = portfolio.seed;
+        // pertence à enumeração do harness ou se a Skill @1.3 muda.
+        plannerOutputHashResult = portfolio.outputHash;
+        plannerInputHashResult = portfolio.plannerInputHash;
+        plannerBindingResult = portfolio.plannerBinding;
+        compatibilityPolicyVersionResult = portfolio.compatibilityPolicyVersion;
+        creativeSystemHashResult = portfolio.creativeSystemHash;
         emitJobEvent("v2.planner.completed", {
           jobId: input.jobId,
           attempt,
@@ -1787,19 +1877,83 @@ export async function runFirstGeneration(
   // Etapa 4 V2: Scene Skeleton determinístico cobre a mesma função de
   // CONTENT_SCENE_IDEAS por Content — nenhuma chamada de provider no caminho V2;
   // o set continua separado do brief e persiste somente em ContentSceneSet.
+  const hardBlueprints = hard.map((candidate) => plannedBlueprintForV2(plannedV2, candidate.opportunity.sourceOpportunityId!));
   const sceneSets = buildSceneSkeletonSets(
     hard.map(({ brief }) => brief),
     evidence,
     input.creatorContext ?? {},
+    hardBlueprints,
   );
-    const qualityAudits: QualityAudit[] = [];
+  const objectiveFailureIdx = new Set<number>();
+  const sceneDiagnostics: GateReport[] = [];
+  sceneSets.forEach((set, index) => {
+    if (set.status !== "AVAILABLE" || set.scenes.length < 2) {
+      objectiveFailureIdx.add(index);
+      sceneDiagnostics.push({
+        briefId: `${hard[index].brief.contentId}:${hard[index].brief.briefVersionId}`,
+        gateVersion: GATE_POLICY_VERSION,
+        factualStatus: "SUPPORTED",
+        claimType: "objetivo",
+        evidenceRefs: [],
+        structuralStatus: "PASS",
+        platformStatus: "PASS",
+        varietyStatus: "PASS",
+        issues: ["scene_set_invalid"],
+        decision: "REJECT",
+      });
+    }
+  });
+  const riskMemory = memorySnapshotV2(input.memory);
+  const priorSignals = "signals" in riskMemory && Array.isArray(riskMemory.signals) ? riskMemory.signals : [];
+  const memoryStatus = priorSignals.length ? "AVAILABLE" : "EMPTY";
+  const priorEffects = priorSignals.flatMap((signal) => signal.commercialEffects ?? []);
+  const priorMechanisms = priorSignals.flatMap((signal) => signal.attentionMechanisms);
+  const priorRecipes = priorSignals.flatMap((signal) => signal.recipeId ? [signal.recipeId] : []);
+  const priorStructures = priorSignals.map((signal) => signal.narrativeShape.join(">"));
+  const productTerms = evidence.facts.flatMap(developmentGroundingTerms).filter((term) => term !== "produto" && term !== "product").slice(0, 30);
+  const preJudgeRiskAssessments: PreJudgeRiskAssessmentV2[] = [];
+  const judgeSelectionDecisions: JudgeSelectionDecisionV1[] = [];
+  for (const [index, candidate] of hard.entries()) {
+    const scene = sceneSets[index]!;
+    const blueprint = hardBlueprints[index]!;
+    try {
+      const { assessment } = buildPreJudgeRiskAssessment({
+        policyVersion: PRE_JUDGE_SELECTION_POLICY_V2.version,
+        subject: { jobId: input.jobId, contentId: candidate.brief.contentId },
+        brief: candidate.brief,
+        blueprint,
+        // Skeleton só fornece cobertura estrutural; indícios no brief/script
+        // são avaliados pelo Risk e ausência deles ativa o fail-safe.
+        blueprintStructureCovered: scene.status === "AVAILABLE"
+          && scene.scenes.length === blueprint.narrativeMoves.length
+          && scene.dropped === 0,
+        scenes: { status: scene.status },
+        memory: { status: memoryStatus, priorMechanisms, priorEffects, priorRecipes, priorStructures },
+        productTerms,
+        production: { signals: scene.status === "AVAILABLE" ? [] : [scene.status] },
+        selectionPolicy: PRE_JUDGE_SELECTION_POLICY_V2,
+      });
+      preJudgeRiskAssessments.push(assessment);
+      judgeSelectionDecisions.push(validateJudgeSelectionDecision(selectForJudge(assessment, PRE_JUDGE_SELECTION_POLICY_V2)));
+    } catch (error) {
+      if (input.signal?.aborted) throw error;
+      // Risk não decide entrega; indisponibilidade seleciona Judge se o item passou o scene gate.
+      const assessment: PreJudgeRiskAssessmentV2 = {
+        contractVersion: PRE_JUDGE_RISK_CONTRACT_VERSION, policyVersion: PRE_JUDGE_SELECTION_POLICY_V2.version,
+        subject: { jobId: input.jobId, contentId: candidate.brief.contentId },
+        assessmentStatus: "UNAVAILABLE", riskBand: "NONE", findings: [],
+        sources: { hardGate: "AVAILABLE", blueprint: "UNAVAILABLE", scenes: scene.status, memory: "UNAVAILABLE" },
+      };
+      preJudgeRiskAssessments.push(assessment);
+      judgeSelectionDecisions.push(validateJudgeSelectionDecision(selectForJudge(assessment, PRE_JUDGE_SELECTION_POLICY_V2)));
+    }
+  }
+  const qualityAudits: QualityAudit[] = [];
   const qualityRepairs: Array<{ contentId: string; part: QualityPart; round: number; criterion: string; outcome: "REPAIRED" }> = [];
   // ADR-021: partições declaradas — índices do subconjunto hard (cenas/judge).
-  const objectiveFailureIdx = new Set<number>();
   const compositionFailed = new Set<number>();
   const varietyDropped = new Set<number>();
   const compositionDiagnostics: GateReport[] = [];
-  const sceneDiagnostics: GateReport[] = [];
   if (input.router) {
     // ADR-025: curadoria em lote — transporte apenas, nunca mudança semântica; a
     // unidade de decisão permanece Content + QualityPart + round. O lote é
@@ -1818,10 +1972,13 @@ export async function runFirstGeneration(
           part,
           content: part === "scenes" ? scenes.scenes.map(({ description }) => description) : candidate.brief[part],
         })),
+        blueprint: hardBlueprints[index],
+        triggerCodes: judgeSelectionDecisions[index]?.triggerCodes ?? [],
         opportunity: {
           angle: candidate.opportunity.angle,
           commercialObjective: candidate.opportunity.commercialObjective,
           coreMessage: candidate.opportunity.coreMessage,
+          desiredViewerResponse: plannedV2[hardIdx[index]]?.desiredViewerResponse ?? null,
         },
       };
     };
@@ -2025,7 +2182,7 @@ export async function runFirstGeneration(
     // REVIEW do audit inicial, sem re-Judge. Itens sem audit (lote isolado) ou
     // com REVIEW/reparo em fallback seguem para a validação objetiva final,
     // única autoridade de bloqueio pós-repair; semântica nunca cria faltante.
-    await judgeBatch(hard.map((_, index) => index), 0);
+    await judgeBatch(hard.map((_, index) => index).filter((index) => !objectiveFailureIdx.has(index) && judgeSelectionDecisions[index]?.selected), 0);
     const modified = new Set<number>();
     for (const part of QUALITY_PARTS) {
       const pending = currentQualityAudits.flatMap((audit, index) =>
@@ -2044,30 +2201,15 @@ export async function runFirstGeneration(
   const judgeExecutionRecords: JudgeExecutionRecord[] = candidates.map((candidate, index) => {
     const contentId = candidate.brief.contentId;
     if (!input.router) return { contentId, round: 1, execution: "NOT_APPLICABLE", parts: [] };
-    if (!hardIdx.includes(index)) return { contentId, round: 1, execution: "NOT_EXECUTED", parts: [] };
-    if (judgeBatchFailed.has(index))
-      return { contentId, round: 1, execution: "FAILED", parts: [], errorCode: judgeFailureCodes.get(index) ?? "GEN-PROVIDER" };
-    const audit = currentQualityAudits[index];
+    const hardIndex = hardIdx.indexOf(index);
+    if (hardIndex < 0 || objectiveFailureIdx.has(hardIndex) || !judgeSelectionDecisions[hardIndex]?.selected)
+      return { contentId, round: 1, execution: "NOT_EXECUTED", parts: [] };
+    if (judgeBatchFailed.has(hardIndex))
+      return { contentId, round: 1, execution: "FAILED", parts: [], errorCode: judgeFailureCodes.get(hardIndex) ?? "GEN-PROVIDER" };
+    const audit = currentQualityAudits[hardIndex];
     return audit
       ? { contentId, round: audit.round + 1, execution: "EXECUTED", parts: audit.parts.map(({ part }) => part) }
       : { contentId, round: 1, execution: "NOT_EXECUTED", parts: [] };
-  });
-  sceneSets.forEach((set, index) => {
-    if (set.status !== "AVAILABLE" || set.scenes.length < 2) {
-      objectiveFailureIdx.add(index);
-      sceneDiagnostics.push({
-        briefId: `${hard[index].brief.contentId}:${hard[index].brief.briefVersionId}`,
-        gateVersion: GATE_POLICY_VERSION,
-        factualStatus: "SUPPORTED",
-        claimType: "objetivo",
-        evidenceRefs: [],
-        structuralStatus: "PASS",
-        platformStatus: "PASS",
-        varietyStatus: "PASS",
-        issues: ["scene_set_invalid"],
-        decision: "REJECT",
-      });
-    }
   });
   // ADR-021 decisão 3: variedade do subconjunto entregue com teto ceil(D/K) —
   // mesmos classificadores do gate; drop determinístico do mais fraco até fechar.
@@ -2177,8 +2319,42 @@ export async function runFirstGeneration(
     })),
   ];
   await emit("FINALIZING");
+  // Etapa 3: sinais de memória dos entregues — resolução 1:1 por
+  // sourceOpportunityId contra a Discovery canônica (fresh ou reutilizada);
+  // lacuna falha fechado (nunca flatMap silencioso).
+  const signalEnvelope = discoveryCanonicalResult?.origin === "fresh"
+    ? discoveryCanonicalResult.envelope
+    : reuseEnvelopeForSignals ?? { hypotheses: [] };
+  const hypothesesById = new Map(
+    (signalEnvelope as { hypotheses: Array<Record<string, unknown>> }).hypotheses.map(
+      (h) => [h.sourceOpportunityId as string, h],
+    ),
+  );
+  const plannerSignalsResult = plannerSignalsForDeliveredContents(
+    delivered.map((i) => {
+      const sourceOpportunityId = hard[i].opportunity.sourceOpportunityId;
+      if (sourceOpportunityId === undefined)
+        throw new ContractError("GEN-SCHEMA", `Content entregue sem sourceOpportunityId: ${hard[i].brief.contentId}`);
+      return { sourceOpportunityId, blueprint: plannedBlueprintForV2(plannedV2, sourceOpportunityId) };
+    }),
+    hypothesesById,
+  );
+  // D3: v2Policy só existe quando o Planner rodou — campos obrigatórios garantidos pelo guard.
+  const v2PolicyResult: EngineResult["v2Policy"] = plannedV2.length > 0 && plannerSeedResult && plannerOutputHashResult && plannerInputHashResult && plannerBindingResult && compatibilityPolicyVersionResult && creativeSystemHashResult
+    ? {
+        plannerPolicyVersion: "PLANNER_POLICY_V2",
+        briefPolicyVersion: BRIEF_GENERATION_POLICY_V2,
+        creativeSystemVersion: "1.3",
+        compatibilityPolicyVersion: compatibilityPolicyVersionResult,
+        creativeSystemHash: creativeSystemHashResult,
+        plannerSeed: plannerSeedResult,
+        plannerOutputHash: plannerOutputHashResult,
+        plannerInputHash: plannerInputHashResult,
+        plannerBinding: plannerBindingResult,
+      }
+    : undefined;
   return {
-    productUnderstanding: understanding ?? {},
+    productUnderstanding: {},
     strategy,
     plan,
     planPolicyVersion: PLAN_POLICY_VERSION,
@@ -2200,21 +2376,7 @@ export async function runFirstGeneration(
       // Cutover E6 Stage 3: sinais multidimensionais canônicos a partir do
       // blueprint dos entregues — consumidos pelo planner V2 via
       // mergeMemorySignalsCanonical (dedup idempotente).
-      plannerSignals: delivered.flatMap((i) => {
-        const planned = plannedV2.find((p) => p.sourceOpportunityId === hard[i].opportunity.sourceOpportunityId);
-        if (!planned) return [];
-        return [{
-          signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1" as const,
-          ...(planned.blueprint.blueprint.recipeId !== undefined ? { recipeId: planned.blueprint.blueprint.recipeId } : {}),
-          attentionMechanisms: [...planned.blueprint.blueprint.attentionMechanisms],
-          psychologicalEffects: [...planned.blueprint.blueprint.psychologicalEffects],
-          ...(planned.blueprint.blueprint.format !== undefined ? { format: planned.blueprint.blueprint.format } : {}),
-          ...(planned.blueprint.blueprint.productRole !== undefined ? { productRole: planned.blueprint.blueprint.productRole } : {}),
-          narrativeShape: [...planned.blueprint.blueprint.narrativeMoves],
-          commercialEffects: [hard[i].opportunity.coreMessage],
-        }];
-      }),
-    },
+      plannerSignals: plannerSignalsResult,    },
     stage: "FINALIZING",
     capabilities,
     repairs: repairCount,
@@ -2228,18 +2390,12 @@ export async function runFirstGeneration(
       .filter((entry): entry is { contentId: string; bullets: DevelopmentBullet[] } => Array.isArray(entry.bullets) && entry.bullets.length > 0),
     ...(plannedV2 ? { plannedV2: plannedHandoffV2(plannedV2) } : {}),
     judgeExecutionRecords,
+    judgeSelectionDecisions,
+    preJudgeRiskAssessments,
     evidenceRefs: [...evidence.refs],
     ...(plannedV2.length > 0 ? { discoveryV2: { hypotheses: plannedV2.length } } : {}),
     ...(discoveryCanonicalResult ? { discoveryCanonicalV2: discoveryCanonicalResult } : {}),
-    ...(plannedV2
-      ? {
-          v2Policy: {
-            plannerPolicyVersion: "PLANNER_POLICY_V1",
-            briefPolicyVersion: BRIEF_GENERATION_POLICY_V2,
-            creativeSystemVersion: "1.3",
-          },
-        }
-      : {}),
+    ...(v2PolicyResult ? { v2Policy: v2PolicyResult } : {}),
     partial: failedCount > 0 ? { expectedCount: count, deliveredCount: delivered.length, failedCount, failedItems } : null,
   };
 }

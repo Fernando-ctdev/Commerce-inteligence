@@ -40,26 +40,6 @@ function withInternalCuration(router: ModelRouter): ModelRouter {
   };
 }
 
-test("fails closed when provider understanding violates contract", async () => { const router = { describe, complete: async () => ({ tenantId: "forbidden" }) }; await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }), /Resposta inválida/); });
-test("Product Understanding normalizes cardinality before validation", async () => {
-  resetJobEvents();
-  let puCalls = 0;
-  const router = { describe, complete: async (task: string) => {
-    if (task === "PRODUCT_UNDERSTANDING") {
-      puCalls += 1;
-      return puBase({ purchaseBarriers: Array.from({ length: 9 }, (_, index) => `barrier-${index}`), evidenceRefs: ["product:name"] });
-    }
-    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { discoveryContractVersion: "2", hypotheses: [{ commercialObjective: "s", angle: "b", coreMessage: "s", relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], commercialEffects: ["s"], evidenceRefs: ["product:name"], confidence: 0.9 }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [briefOk] };
-    return {};
-  } };
-  const result = await runFirstGeneration({ productId: "p", jobId: "j-contract", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router: withInternalCuration(router) });
-  assert.equal(puCalls, 1, "cardinality overflow is reduced without a provider retry");
-  assert.deepEqual(result.understandingReductions, [{ field: "purchaseBarriers", received: 9, kept: 8 }]);
-  const events = collectJobEvents().map((line) => JSON.parse(line) as Record<string, unknown>);
-  const puEvents = events.filter((event) => event.task === "PRODUCT_UNDERSTANDING" && event.event === "capability.completed");
-  assert.equal(puEvents.length, 1);
-});
 test("includes non-empty string arrays as stable fact evidence with 1:1 facts-to-refs", () => {
   const catalog = buildEvidenceCatalog({ facts: { features: ["Leve", "Compacto"], empty: [], mixed: ["Veloz", 3] } });
   assert.deepEqual(catalog.refs, ["fact:features", "fact:features:2"]);
@@ -198,7 +178,7 @@ test("capability events carry cardinality policy version on success", async () =
     return {};
   } };
   const result = await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router: withInternalCuration(router) });
-  assert.deepEqual([...new Set(result.capabilities.map((cap) => cap.task))].sort(), ["COMMERCIAL_OPPORTUNITY_MAPPING", "CONTENT_BRIEF_GENERATION", "CONTENT_QUALITY_JUDGE", "PRODUCT_UNDERSTANDING"]);
+  assert.deepEqual([...new Set(result.capabilities.map((cap) => cap.task))].sort(), ["COMMERCIAL_OPPORTUNITY_MAPPING", "CONTENT_BRIEF_GENERATION", "CONTENT_QUALITY_JUDGE"]);
   assert.ok(result.capabilities.every((cap) => cap.cardinalityPolicyVersion === CARDINALITY_POLICY_VERSION), "todo CapabilityEvent persistido carrega a versão da política");
 });
 test("failed capability record and event carry cardinality policy version", async () => {
@@ -207,70 +187,6 @@ test("failed capability record and event carry cardinality policy version", asyn
   await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }));
   const failed = collectJobEvents().map((line) => JSON.parse(line) as Record<string, unknown>).find((event) => event.event === "capability.failed");
   assert.equal(failed?.cardinalityPolicyVersion, CARDINALITY_POLICY_VERSION, "falha de capability registra a versão da política");
-});
-test("PRODUCT_UNDERSTANDING retries other GEN-SCHEMA and normalizes the retry response", async () => {
-  let puCalls = 0;
-  const retryContexts: unknown[] = [];
-  const router = { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
-    if (task === "PRODUCT_UNDERSTANDING") {
-      puCalls += 1;
-      retryContexts.push(input?.trustedContext);
-      return puCalls === 1
-        ? puBase({ purchaseBarriers: "inválido" })
-        : puBase({ purchaseBarriers: Array.from({ length: 9 }, (_, i) => `b${i}`) });
-    }
-    if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { discoveryContractVersion: "2", hypotheses: [{ commercialObjective: "s", angle: "b", coreMessage: "s", relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], commercialEffects: ["s"], evidenceRefs: ["product:name"], confidence: 0.9 }, { commercialObjective: "s", angle: "b", coreMessage: "s", relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], commercialEffects: ["s"], evidenceRefs: ["product:name"], confidence: 0.9 }, { commercialObjective: "s", angle: "b", coreMessage: "s", relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], commercialEffects: ["s"], evidenceRefs: ["product:name"], confidence: 0.9 }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [briefOk] };
-    return {};
-  } };
-  const result = await runFirstGeneration({ productId: "p", jobId: "j-pu1", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router: withInternalCuration(router) });
-  assert.equal(puCalls, 2, "exactly one contract retry for PU");
-  const repairField = recordOf(recordOf(retryContexts[1])?.contractRepair);
-  assert.equal(repairField?.field, "purchaseBarriers");
-  assert.equal(repairField?.max, 8);
-  assert.equal(repairField?.received, null);
-  assert.equal((result.productUnderstanding as { purchaseBarriers: string[] }).purchaseBarriers.length, 8);
-  assert.deepEqual(result.understandingReductions, [{ field: "purchaseBarriers", received: 9, kept: 8 }]);
-  assert.equal(result.briefs.length, 1);
-  const puEvents = result.capabilities.filter((cap) => cap.task === "PRODUCT_UNDERSTANDING");
-  assert.equal(puEvents.length, 2, "separate capability event per attempt");
-  assert.ok(puEvents.every((event) => event.tier === "HIGH"), "ADR-020 adendo 3: PU roteado em HIGH");
-  assert.equal(puEvents[0].ok, false);
-  assert.equal(puEvents[1].ok, true);
-});
-
-test("GEN-FACT from understanding does not retry", async () => {
-  let puCalls = 0;
-  const router = { describe, complete: async (task: string) => {
-    if (task === "PRODUCT_UNDERSTANDING") {
-      puCalls += 1;
-      return { ...puBase({ evidenceRefs: ["product:name"] }), evidenceRefs: ["fact-inexistente"] };
-    }
-    return {};
-  } };
-  await assert.rejects(() => runFirstGeneration({ productId: "p", jobId: "j-pu3", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }));
-  assert.equal(puCalls, 1, "GEN-FACT is fail-closed without retry");
-});
-
-test("GenerationError GEN-SCHEMA from provider does not retry PU (fail-closed, single call)", async () => {
-  let puCalls = 0;
-  const router = { describe, complete: async (task: string) => {
-    if (task === "PRODUCT_UNDERSTANDING") {
-      puCalls += 1;
-      throw new GenerationError("GEN-SCHEMA", "Resposta do provider deve ser um objeto JSON");
-    }
-    return {};
-  } };
-  await assert.rejects(
-    () => runFirstGeneration({ productId: "p", jobId: "j-pu4", name: "Produto", description: "Tecido respirável", targetContentCount: 1, router }),
-    (error: unknown) => {
-      const e = error as { code?: string; message?: string };
-      assert.equal(e.code, "GEN-SCHEMA");
-      assert.match(e.message ?? "", /provider/);
-      return true;
-    },
-  );
-  assert.equal(puCalls, 1, "provider GEN-SCHEMA is fail-closed without retry");
 });
 
 test("brief repair context carries per-item repairChecklist (Duna c1/c3 distinct)", async () => {
@@ -405,7 +321,7 @@ test("semantic REVIEW sem repair preserva o item e mantém DRAFT completo", asyn
     angle: `a${position}`,
     hook: ["O problema do tecido respiravel no uso diario", "Descubra o conforto do tecido respiravel", "Demonstre como o tecido respiravel funciona", "Veja o valor pratico do tecido respiravel", "Um novo angulo para usar o tecido respiravel"][position - 1],
     development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }],
-    script: "Tecido respiravel",
+    script: "Mostre o Produto",
     cta: position === 1 ? checkoutCtas[0] : position === 5 ? "Confira os detalhes do produto antes de decidir." : `cta ${position}`,
   });
   const judgeReview = {
@@ -456,7 +372,7 @@ test("dois REVIEW: repair inválido deixa somente o candidato objetivo inválido
         { commercialObjective: "conforto em qualquer hora", angle: "conforto térmico", coreMessage: "conforto em qualquer hora", relevantCapabilities: ["cap"], benefits: ["conforto térmico"], proofOptions: ["product:description"], commercialEffects: ["conforto em qualquer hora"], evidenceRefs: ["product:description"], confidence: 0.9 },
         { commercialObjective: "leve para carregar todo dia", angle: "leveza no uso", coreMessage: "leve para carregar todo dia", relevantCapabilities: ["cap"], benefits: ["leveza no uso"], proofOptions: ["product:description"], commercialEffects: ["leve para carregar todo dia"], evidenceRefs: ["product:description"], confidence: 0.9 },
       ] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [1, 2].map((i) => ({ angle: `a${i}`, hook: `Gancho ${i}`, development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "Tecido respiravel", cta: `cta ${i}` })) };
+    if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [1, 2].map((i) => ({ angle: `a${i}`, hook: `Gancho ${i}`, development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "Mostre o Produto", cta: `cta ${i}` })) };
     if (task === "CONTENT_QUALITY_JUDGE") {
       const items = recordOf(input?.trustedContext)?.items as Array<Record<string, unknown>>;
       return { audits: items.map(({ contentId }) => ({ contentId, parts: qualityPass.parts.map((part) => part.part === "hook" ? { ...part, status: "REVIEW", reason: "unclear" } : part) })) };
@@ -483,7 +399,7 @@ test("ADR-025: judge em lote (3+2) com identidade por contentId; lote malformado
     angle: `a${position}`,
     hook: `Gancho ${position}`,
     development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }],
-    script: "Tecido respiravel",
+    script: "Mostre o Produto",
     cta: `cta ${position}`,
   });
   const judgeCallSizes: number[] = [];
@@ -521,7 +437,7 @@ test("ADR-025: repair em lote da mesma parte (hook 3+2), sem re-judge", async ()
     angle: `a${position}`,
     hook: `Gancho ${position}`,
     development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }],
-    script: "Tecido respiravel",
+    script: "Mostre o Produto",
     cta: `cta ${position}`,
   });
   const judgeCallSizes: number[] = [];
@@ -557,7 +473,7 @@ test("ADR-025: repair em lote da mesma parte (hook 3+2), sem re-judge", async ()
   assert.ok(result.briefs.every(({ hook }) => String(hook).startsWith("Gancho reparado do j-content-")));
   assert.deepEqual(
     result.briefs.map(({ development, script, cta }) => ({ development, script, cta })),
-    Array.from({ length: 5 }, (_, i) => ({ development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Tecido respiravel", cta: `cta ${i + 1}` })),
+    Array.from({ length: 5 }, (_, i) => ({ development: ["Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso"], script: "Mostre o Produto", cta: `cta ${i + 1}` })),
     "somente a parte marcada é reparada; partes PASS permanecem intactas",
   );
   assert.equal(result.qualityRepairs.filter(({ part }) => part === "hook").length, 5);
@@ -570,7 +486,7 @@ test("ADR-025: envelope de repair malformado preserva fallback sem partial", asy
     angle: `a${position}`,
     hook: `Gancho ${position}`,
     development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }],
-    script: "Tecido respiravel",
+    script: "Mostre o Produto",
     cta: `cta ${position}`,
   });
   const judgeCallSizes: number[] = [];
@@ -618,7 +534,7 @@ test("ADR-025: repair de development agrupa 2+1 e scenes é individual", async (
     angle: `a${position}`,
     hook: `Gancho ${position}`,
     development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }],
-    script: "Tecido respiravel",
+    script: "Mostre o Produto",
     cta: `cta ${position}`,
   });
   const judgeCallSizes: number[] = [];
@@ -661,7 +577,7 @@ test("ADR-025: erro fatal do judge (não isolável) repropaga fail-closed", asyn
   const router = { describe, complete: async (task: string) => {
     if (task === "PRODUCT_UNDERSTANDING") return puBase({ evidenceRefs: ["product:name"] });
     if (task === "COMMERCIAL_OPPORTUNITY_MAPPING") return { discoveryContractVersion: "2", hypotheses: [{ commercialObjective: "s", angle: "b", coreMessage: "s", relevantCapabilities: ["cap"], benefits: ["b"], proofOptions: ["product:name"], commercialEffects: ["s"], evidenceRefs: ["product:name"], confidence: 0.9 }] };
-    if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [{ angle: "a", hook: "h", development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "Tecido respiravel", cta: "c" }] };
+    if (task === "CONTENT_BRIEF_GENERATION") return { developmentSchemaVersion: 2, items: [{ angle: "a", hook: "h", development: [{ text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }, { text: "Destaque o tecido respiravel para explicar como o tecido respiravel afeta o uso", action: "Destaque", rationale: "para o uso no dia a dia", factRefs: ["product:description"], cta: "Confira o produto na página." }], script: "Mostre o Produto", cta: "c" }] };
     if (task === "CONTENT_QUALITY_JUDGE") throw Object.assign(new Error("falha de datasource no judge"), { code: "GEN-DATASOURCE" });
     return {};
   } };

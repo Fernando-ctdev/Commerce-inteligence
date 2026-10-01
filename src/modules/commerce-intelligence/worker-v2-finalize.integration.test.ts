@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { runFirstGeneration, discoveryHashV2 } from "./engine";
+import { runFirstGeneration, discoveryHashV2, type EngineResult } from "./engine";
 import { claimGeneration, finalizeGeneration, loadReusedDiscovery } from "./worker";
 import { monthUtc } from "../entitlements/generation";
 
@@ -142,6 +142,32 @@ test("V2 real finaliza atomically com handoff planejado, bullets V2 e ContentSce
     assert.equal(sceneSet.status, "AVAILABLE");
     assert.ok(Array.isArray((sceneSet.payload as Record<string, unknown>).scenes));
 
+    // Etapa 3 (ADR-033 D2/D3): Blueprint canônico SOMENTE em
+    // ContentOpportunity.payload; metadata do run sem plannedV2/creativeDirection
+    // e com proveniência do Planner (seed/hash/policy).
+    const opportunityRow = await prisma.contentOpportunity.findFirstOrThrow({ where: { tenantId: tenant.id, jobId: job.id } });
+    const opportunityPayload = opportunityRow.payload;
+    assert.ok(opportunityPayload !== null && typeof opportunityPayload === "object" && !Array.isArray(opportunityPayload));
+    assert.ok("opportunityContractVersion" in opportunityPayload && opportunityPayload.opportunityContractVersion === "2", "payload da opportunity é V2 versionado");
+    assert.ok("creativeDirection" in opportunityPayload && opportunityPayload.creativeDirection !== null && typeof opportunityPayload.creativeDirection === "object", "blueprint canônico no payload da opportunity");
+    assert.ok("sourceOpportunityId" in opportunityPayload && typeof opportunityPayload.sourceOpportunityId === "string", "sourceOpportunityId server-owned no payload");
+    const runRow = await prisma.intelligenceRun.findUniqueOrThrow({ where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } } });
+    const storedMetadata = runRow.metadata;
+    assert.ok(storedMetadata !== null && typeof storedMetadata === "object" && !Array.isArray(storedMetadata));
+    assert.ok(!("plannedV2" in storedMetadata), "metadata não persiste plannedV2");
+    assert.ok(!JSON.stringify(storedMetadata).includes("creativeDirection"), "metadata não persiste Blueprint");
+    assert.ok("plannerProvenance" in storedMetadata, "proveniência do Planner no metadata");
+    const storedProvenance = storedMetadata.plannerProvenance;
+    assert.ok(storedProvenance !== null && typeof storedProvenance === "object" && !Array.isArray(storedProvenance));
+    assert.ok("plannerSeed" in storedProvenance && typeof storedProvenance.plannerSeed === "string", "plannerSeed persistido");
+    assert.ok("plannerOutputHash" in storedProvenance && typeof storedProvenance.plannerOutputHash === "string", "plannerOutputHash persistido");
+    assert.ok("plannerInputHash" in storedProvenance && typeof storedProvenance.plannerInputHash === "string", "plannerInputHash persistido");
+    assert.ok("plannerBinding" in storedProvenance && storedProvenance.plannerBinding !== null && typeof storedProvenance.plannerBinding === "object" && !Array.isArray(storedProvenance.plannerBinding), "plannerBinding persistido");
+    const storedBinding = storedProvenance.plannerBinding;
+    assert.ok("platformSkillVersion" in storedBinding && typeof storedBinding.platformSkillVersion === "string", "binding com platformSkillVersion");
+    assert.ok("creativeSystemVersion" in storedBinding && typeof storedBinding.creativeSystemVersion === "string", "binding com creativeSystemVersion");
+    assert.ok(storedBinding.platformSkillVersion !== "frozen-harness-fixture", "proveniência operacional, nunca fixture de harness");
+
     await assert.rejects(
       () => finalizeGeneration(job, "v2-finalize-owner", claim.attempt, output, output.sceneSets, { integration: "worker-v2-finalize" }),
       (error: unknown) => (error as { code?: string }).code === "GEN-FENCED",
@@ -156,6 +182,101 @@ test("V2 real finaliza atomically com handoff planejado, bullets V2 e ContentSce
     await prisma.content.updateMany({ where: { jobId: job.id }, data: { currentBriefVersionId: null, approvedBriefVersionId: null } });
     await prisma.contentSceneSet.deleteMany({ where: { jobId: job.id } });
     await prisma.contentBriefVersion.deleteMany({ where: { jobId: job.id } });
+    await prisma.content.deleteMany({ where: { jobId: job.id } });
+    await prisma.contentOpportunity.deleteMany({ where: { jobId: job.id } });
+    await prisma.contentPlan.deleteMany({ where: { jobId: job.id } });
+    await prisma.productStrategy.deleteMany({ where: { jobId: job.id } });
+    await prisma.productUnderstanding.deleteMany({ where: { jobId: job.id } });
+    await prisma.intelligenceRun.deleteMany({ where: { jobId: job.id } });
+    await prisma.productMemorySnapshot.deleteMany({ where: { sourceJobId: job.id } });
+    await prisma.commerceIntelligenceJob.deleteMany({ where: { id: job.id } });
+    await prisma.product.deleteMany({ where: { id: product.id } });
+    await prisma.tenant.deleteMany({ where: { id: tenant.id } });
+    await prisma.user.deleteMany({ where: { id: user.id } });
+  }
+});
+
+// Etapa 3 (ADR-033 D2): runData é metadata allowlisted — plannedV2/creativeDirection
+// nunca entram no IntelligenceRun; chamada não padrão com metadata forjada falha
+// fechado (GEN-SCHEMA) sem persistir NADA.
+test("finalize rejeita runData com plannedV2 ou creativeDirection e não persiste resultado", async (t) => {
+  try {
+    await prisma.$queryRaw`select 1`;
+  } catch {
+    t.skip("DATABASE_URL inacessível — integração V2 pulada");
+    return;
+  }
+  const user = await prisma.user.create({ data: { email: `v2-forge-${randomUUID()}@teste.local`, passwordHash: "test" } });
+  const tenant = await prisma.tenant.create({ data: { userId: user.id } });
+  const product = await prisma.product.create({
+    data: { tenantId: tenant.id, name: "Produto V2", description: "Tecido respirável", images: [], provenance: {}, targetContentCount: 1 },
+  });
+  const job = await prisma.commerceIntelligenceJob.create({
+    data: {
+      tenantId: tenant.id,
+      userId: user.id,
+      productId: product.id,
+      idempotencyKey: randomUUID(),
+      fingerprint: randomUUID(),
+      targetContentCount: 1,
+      generatedContentsMonth: monthUtc(),
+      status: "QUEUED",
+      stage: "UNDERSTANDING_PRODUCT",
+      nextAttemptAt: new Date(Date.now() - 60_000),
+    },
+  });
+  await prisma.generationUsageReservation.create({
+    data: { tenantId: tenant.id, jobId: job.id, generatedContentsMonth: monthUtc(), quantity: 1 },
+  });
+  try {
+    const claim = await claimGeneration(new Date(), "v2-forge-owner", job.id);
+    assert.ok(claim, "claim adquirido");
+    // Output mínimo: a rejeição acontece na entrada do finalize, antes de
+    // qualquer leitura/escrita — nada deve persistir.
+    const output: EngineResult = {
+      productUnderstanding: {},
+      strategy: { id: `s-${job.id}`, platformId: "tiktok", platformSkillVersion: "test" },
+      plan: { id: `p-${job.id}`, platformId: "tiktok", platformSkillVersion: "test" },
+      planPolicyVersion: 1,
+      opportunities: [],
+      briefs: [],
+      reports: [],
+      patternReplacements: [],
+      understandingReductions: [],
+      sceneSets: [],
+      judgeExecutionRecords: [],
+      judgeSelectionDecisions: [],
+      preJudgeRiskAssessments: [],
+      evidenceRefs: ["product:name"],
+      memorySignals: {},
+      stage: "FINALIZING",
+      capabilities: [],
+      repairs: 0,
+      repairCauses: [],
+      qualityAudits: [],
+      qualityRepairs: [],
+      validated: 0,
+      briefOpportunityPositions: [],
+      partial: null,
+    };
+    await assert.rejects(
+      () => finalizeGeneration(job, "v2-forge-owner", claim.attempt, output, [], { plannedV2: [{ sourceOpportunityId: "commercial-1" }] }),
+      (error: unknown) => (error as { code?: string }).code === "GEN-SCHEMA",
+      "runData com plannedV2 é rejeitado fail-closed",
+    );
+    await assert.rejects(
+      () => finalizeGeneration(job, "v2-forge-owner", claim.attempt, output, [], { creativeDirection: { recipeId: "r" } }),
+      (error: unknown) => (error as { code?: string }).code === "GEN-SCHEMA",
+      "runData com creativeDirection é rejeitado fail-closed",
+    );
+    assert.equal(await prisma.intelligenceRun.count({ where: { jobId: job.id } }), 0, "run não persistido com metadata forjada");
+    assert.equal(await prisma.contentOpportunity.count({ where: { jobId: job.id } }), 0, "opportunities não persistidas");
+    assert.equal(await prisma.contentPlan.count({ where: { jobId: job.id } }), 0, "plano não persistido");
+    assert.equal(await prisma.content.count({ where: { jobId: job.id } }), 0, "conteúdos não persistidos");
+    const untouched = await prisma.commerceIntelligenceJob.findUniqueOrThrow({ where: { id: job.id } });
+    assert.equal(untouched.status, "RUNNING", "job segue RUNNING após rejeição (nada publicado)");
+  } finally {
+    await prisma.generationUsageReservation.deleteMany({ where: { jobId: job.id } });
     await prisma.content.deleteMany({ where: { jobId: job.id } });
     await prisma.contentOpportunity.deleteMany({ where: { jobId: job.id } });
     await prisma.contentPlan.deleteMany({ where: { jobId: job.id } });

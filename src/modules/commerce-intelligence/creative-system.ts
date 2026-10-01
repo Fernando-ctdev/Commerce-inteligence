@@ -22,8 +22,10 @@ export type CreativeDimension =
   | "narrativeMove"
   | "productRole";
 
-// Constraint set criativo: combinação conhecidamente coerente de primitives
-// (ADR-033 decisão 5). IDs referem-se às dimensões correspondentes.
+// Constraint set: cada cruzamento entre IDs de dimensões distintas declarados
+// na mesma recipe é permitido. narrativeMoves é sequência integral ordenada,
+// não lista de alternativas. Restrições intrarecipe exigem dividir o set;
+// não há combinações proibidas implícitas nem cases de Blueprints completos.
 export type CreativeRecipe = {
   id: string;
   attentionMechanisms: string[];
@@ -216,14 +218,15 @@ const PAIR_DIMENSIONS: ReadonlyArray<readonly [CreativeDimension, CreativeDimens
     DIMENSIONS.slice(index + 1).map((b) => [a, b] as const),
 );
 
-// ADR-033 §4 (emenda Architect): gate pairwise FORA do resolveBlueprint. Esta
-// regra versionada é chamada explicitamente pelo caller da integração
-// candidata do runtime quando ele consumir composição livre; o
-// resolveBlueprint compartilhado decide somente estrutura/schema/eligibility
-// e o mapa explícito format×productRole. Nesta etapa não existe caller runtime
-// de composição livre (o planner é recipe-backed), então a regra fica
-// exportada e testada sem forçar integração das Etapas 1–6.
-export function assertFreeCompositionCooccurrence(system: CreativeSystem, blueprint: CreativeBlueprint): void {
+// Policy V2: caller do Planner aplica o gate antes do ranking. O resolvedor
+// compartilhado preserva a baseline V1; formato×papel continua no mapa explícito.
+export function assertFreeCompositionCooccurrence(system: CreativeSystem, blueprint: {
+  readonly attentionMechanisms: readonly string[];
+  readonly psychologicalEffects: readonly string[];
+  readonly format: string;
+  readonly narrativeMoves: readonly string[];
+  readonly productRole: string;
+}): void {
   const members: Record<CreativeDimension, readonly string[]> = {
     attention: blueprint.attentionMechanisms,
     psychologicalEffect: blueprint.psychologicalEffects,

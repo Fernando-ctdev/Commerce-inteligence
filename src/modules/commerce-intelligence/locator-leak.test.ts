@@ -33,14 +33,11 @@ function bumped(calls: Record<string, number>, task: string): void {
 }
 // Fixtures canônicas de 1 conteúdo (mesma família factual da suíte).
 function oneContentCalls(): Record<string, number> {
-  // Cutover V2: sem STRATEGY_SYNTHESIS (Strategy determinística), sem
-  // CONTENT_PLAN_GENERATION (Planner determinístico) e sem
-  // CONTENT_SCENE_IDEAS (Scene Skeleton); judge continua no fluxo.
+  // Detecção é hard gate determinístico; PU retirado e Risk não seleciona Judge
+  // após o repair limpo deste fixture.
   return {
-    PRODUCT_UNDERSTANDING: 1,
     COMMERCIAL_OPPORTUNITY_MAPPING: 1,
     CONTENT_BRIEF_GENERATION: 1,
-    CONTENT_QUALITY_JUDGE: 1,
   };
 }
 

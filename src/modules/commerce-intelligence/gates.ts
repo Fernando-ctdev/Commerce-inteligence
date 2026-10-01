@@ -751,9 +751,6 @@ export function parseStructuredDevelopment(
       throw new ContractError("GEN-SCHEMA", "bullet estruturado inválido", "development");
     const bullet = item as Record<string, unknown>;
     const text = typeof bullet.text === "string" ? bullet.text.trim() : "";
-    // Contrato "rationale apenas espelha text": sem conector no campo, o espelho
-    // determinístico é o PRÓPRIO trecho de text após o conector (nada inventado).
-    // Sem conector em AMBOS → violação estrutural real (GEN-SCHEMA abaixo).
     if (!Array.isArray(bullet.factRefs) || bullet.factRefs.some((ref) => typeof ref !== "string" || !ref.trim()))
       throw new ContractError("GEN-SCHEMA", "factRefs inválidos", "development");
     const factRefs = bullet.factRefs.map((ref) => ref.trim());
@@ -765,8 +762,8 @@ export function parseStructuredDevelopment(
     if (!cta) throw new ContractError("GEN-SCHEMA", "bullet sem cta", "development");
     // Qualidade: diagnóstico sanitizado por bullet — TODOS os bullets são
     // diagnosticados (sem curto-circuito); texto é projetado e o GATE decide.
-    // Ancoragem factRefs: cada fato citado aplicável exige ≥2 termos próprios no
-    // trecho após o conector; contagem do bullet = MÍNIMO entre os factRefs.
+    // Ancoragem lexical após conector é diagnóstico advisory, nunca causa
+    // de rejeição estrutural nem autorização de claim objetivo.
     const checked = diagnoseStructuredDevelopmentBullet({ text, factRefs, cta }, index, evidence);
     diagnostics.push(checked.diagnostic);
     texts.push(text);

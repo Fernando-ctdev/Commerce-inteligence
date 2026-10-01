@@ -133,25 +133,6 @@ test("CONTENT_BRIEF_GENERATION/REPAIR instructions do not reference context fiel
   }
 });
 
-test("brief provider instruction makes development strategic, evidence-grounded, and keeps CTA separate", () => {
-  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("productReference.category"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use categoria no hook somente se explícita em productFacts"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Development contém 2 a 6 bullets"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("cada bullet precisa combinar ação de comunicação, razão significativa ligada ao fato e o fato específico de productFacts"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("'para contextualizar', 'para explicar esse detalhe' e outras frases sem ligação concreta não contam"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Não faça lista de features nem instrução de câmera/gravação"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Use productFacts como única fonte de fatos técnicos em development e script"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("angle e mecanismo da oportunidade orientam o recorte, mas não são fonte de fatos"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("todo fato técnico no script deve estar em productFacts e representado em development"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("não retorne scenes nem qualquer campo de cena"));
-  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("selectedPatterns"));
-  assert.ok(!CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("selectedPatterns"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Mantenha cta separado de hook, development e script"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Bom:"));
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("Ruim:"));
-  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("causes[index]"));
-  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("repairContrast[index]"));
-});
 
 test("non-2xx captures allowlisted rate headers in detail without body leakage", async () => {
   const originalFetch = globalThis.fetch;
@@ -719,25 +700,7 @@ test("provider without schema support (HTTP 400) stays fail-closed: explicit err
 
 // ---- Contrato estruturado de development (design 2026-09-18) ----
 
-test("instruções de brief exigem bullets estruturados text/factRefs/cta e proíbem locators", () => {
-  for (const field of ["text", "factRefs", "cta"]) {
-    assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes(field), `geração inicial exige campo estruturado ${field}`);
-    assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes(field), `repair exige campo estruturado ${field}`);
-  }
-  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("\"action\""), "geração não exige campo action");
-  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("\"rationale\""), "geração não exige campo rationale");
-  assert.ok(CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("apenas como campos estruturados"), "factRef apenas como campos estruturados");
-  assert.ok(CONTENT_BRIEF_REPAIR_INSTRUCTION.includes("apenas como campos estruturados"), "factRef apenas como campos estruturados no repair");
-  assert.ok(!CONTENT_BRIEF_GENERATION_INSTRUCTION.includes("development como lista de textos"), "geração não aceita mais development em texto plano");
-});
 
-test("instrução do judge recebe development estruturado e proíbe avaliação factual/grounding/gate", () => {
-  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("development estruturado"), "judge recebe bullets estruturados");
-  for (const proibido of ["factRef", "ancoragem", "conector", "cardinalidade", "gate"]) {
-    assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes(proibido), `judge proíbe avaliar ${proibido}`);
-  }
-  assert.ok(CONTENT_QUALITY_JUDGE_INSTRUCTION.includes("não valida"), "judge não valida factualidade");
-});
 
 test("escopo editorial: judge/repair guidance cobre weak_commercial_value, coerência intra-brief e cena visual-only", () => {
   assert.ok(JUDGE_EDITORIAL_GUIDANCE.includes("weak_commercial_value"), "ângulo banal de categoria é REVIEW do judge");

@@ -52,6 +52,8 @@ function syntheticOutput(strategyId = `strat-${randomUUID()}`, opts: { includeBr
     sceneSets: [],
     // V2: handoff do judge (E5) e refs de evidência são obrigatórios no resultado.
     judgeExecutionRecords: [],
+    judgeSelectionDecisions: [],
+    preJudgeRiskAssessments: [],
     evidenceRefs: ["product:name", "product:description"],
     memorySignals: { generatedCount: 0 },
     stage: "FINALIZING",

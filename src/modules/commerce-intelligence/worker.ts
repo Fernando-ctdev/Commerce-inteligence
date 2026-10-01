@@ -20,7 +20,7 @@ import { GATE_POLICY_VERSION } from "./gates";
 import type { ContentBriefVersion, DevelopmentBullet } from "./contract";
 import { createHttpProvider } from "./provider";
 import type { ModelRouter } from "./model-router";
-import { briefPayloadSchemaOf, buildSceneSkeletonSets, readBriefPayload } from "./engine-v2";
+import { briefPayloadSchemaOf, buildPlannerMemorySnapshot, buildSceneSkeletonSets, readBriefPayload, type PlannedOpportunityHandoffV2 } from "./engine-v2";
 import { buildRiskAssessment, validateRiskAssessment, type JudgeExecutionRecord } from "./risk-assessment";
 import { buildCategoryMetricsV1, buildDeliveryMetricsV1 } from "./observability";
 import { instructionDigests } from "./provider";
@@ -591,9 +591,6 @@ export function runMetadata(
   qualityRepairs: Array<{ contentId: string; part: QualityPart; round: number; criterion: string; outcome: "REPAIRED" }> = [],
   understandingReductions: UnderstandingCardinalityReduction[] = [],
   planPolicyVersion?: number,
-  // Etapa 4 V2: handoff allowlisted (ordem/source/evidence/blueprint resolvido)
-  // persistido no metadata do run — rastreabilidade sem provider IDs/catálogo.
-  plannedV2?: unknown,
   // E5: snapshots sanitizados de política/métricas/cobertura do Judge/risk.
   snapshots?: {
     policySnapshot: RunPolicySnapshotV1;
@@ -601,6 +598,8 @@ export function runMetadata(
     categories: CategoryMetricsV1[];
     judgeCoverage: readonly JudgeExecutionRecord[];
     riskAssessments: readonly unknown[];
+    judgeSelections?: readonly unknown[];
+    preJudgeRisks?: readonly unknown[];
   },
 ): Record<string, unknown> {
   const snapshotBlock = snapshots
@@ -610,6 +609,8 @@ export function runMetadata(
         categories: snapshots.categories,
         judgeCoverage: snapshots.judgeCoverage,
         riskAssessments: snapshots.riskAssessments,
+        judgeSelections: snapshots.judgeSelections ?? [],
+        preJudgeRisks: snapshots.preJudgeRisks ?? [],
       }
     : {};
   const scenes = {
@@ -632,7 +633,6 @@ export function runMetadata(
       engineVersion: ENGINE_VERSION,
       gateVersion: GATE_POLICY_VERSION,
       ...(planPolicyVersion === undefined ? {} : { planPolicyVersion }),
-      ...(plannedV2 ? { plannedV2 } : {}),
       ...snapshotBlock,
       capabilities,
       repairs,
@@ -645,7 +645,7 @@ export function runMetadata(
       qualityRepairs,
     };
   } catch {
-    return { attempt, engineVersion: ENGINE_VERSION, gateVersion: GATE_POLICY_VERSION, ...(planPolicyVersion === undefined ? {} : { planPolicyVersion }), ...(plannedV2 ? { plannedV2 } : {}), ...snapshotBlock, capabilities, repairs, repairCauses: repairCauses.map(({ briefId }) => ({ briefId, causes: ["deterministic_gate_repair"] })), validated, scenes, patternReplacements, understandingReductions, qualityAudits: qualityAudits.map(({ contentId, round, parts }) => ({ contentId, round, parts: parts.map(({ part, status, criterion, reason }) => ({ part, status, criterion, reason: reasonText(reason) })) })), qualityRepairs };
+    return { attempt, engineVersion: ENGINE_VERSION, gateVersion: GATE_POLICY_VERSION, ...(planPolicyVersion === undefined ? {} : { planPolicyVersion }), ...snapshotBlock, capabilities, repairs, repairCauses: repairCauses.map(({ briefId }) => ({ briefId, causes: ["deterministic_gate_repair"] })), validated, scenes, patternReplacements, understandingReductions, qualityAudits: qualityAudits.map(({ contentId, round, parts }) => ({ contentId, round, parts: parts.map(({ part, status, criterion, reason }) => ({ part, status, criterion, reason: reasonText(reason) })) })), qualityRepairs };
   }
 }
 
@@ -681,6 +681,80 @@ export function mergeMemorySignals(
   };
 }
 
+// Etapa 3 (ADR-033 D3): proveniência do Planner para o metadata do run — policy,
+// seed, hashes de input/output e binding (versões). NUNCA plannedV2/Blueprint:
+// a fonte canônica é ContentOpportunity.payload.creativeDirection.
+export function plannerProvenanceOf(output: EngineResult): Record<string, unknown> | undefined {
+  const policy = output.v2Policy;
+  if (!policy) return undefined;
+  const provenance: Record<string, unknown> = { plannerPolicyVersion: policy.plannerPolicyVersion };
+  provenance.compatibilityPolicyVersion = policy.compatibilityPolicyVersion;
+  provenance.creativeSystemHash = policy.creativeSystemHash;
+  // Campos expostos pela engine (BackDev): hashes/versões operacionais —
+  // nunca Blueprint nem proveniência de harness fixture.
+  if ("plannerSeed" in policy) provenance.plannerSeed = policy.plannerSeed;
+  if ("plannerOutputHash" in policy) provenance.plannerOutputHash = policy.plannerOutputHash;
+  if ("plannerInputHash" in policy) provenance.plannerInputHash = policy.plannerInputHash;
+  if ("plannerBinding" in policy) {
+    const binding = policy.plannerBinding;
+    if (binding !== null && typeof binding === "object" && !Array.isArray(binding))
+      provenance.plannerBinding = {
+        ...("platformSkillVersion" in binding ? { platformSkillVersion: binding.platformSkillVersion } : {}),
+        ...("creativeSystemVersion" in binding ? { creativeSystemVersion: binding.creativeSystemVersion } : {}),
+      };
+  }
+  return provenance;
+}
+
+// Etapa 3 (ADR-033 D2): no caminho V2, handoff↔opportunity em correspondência
+// 1:1 por sourceOpportunityId + posição — nunca pelo índice dos arrays. Falha
+// fechado (rollback atômico da transação) para handoff ausente, duplicado,
+// ID/posição divergentes ou Blueprint ausente: oportunidade V2 nunca persiste
+// sem creativeDirection. Sem v2Policy (V1) não há handoff exigido.
+export function assertHandoffAlignmentV2(output: EngineResult): Map<string, PlannedOpportunityHandoffV2> {
+  const handoffs = output.plannedV2;
+  if (!Array.isArray(handoffs))
+    throw new GenerationError("GEN-SCHEMA", "Job V2 sem plannedV2: handoff do Planner é obrigatório");
+  if (handoffs.length !== output.opportunities.length)
+    throw new GenerationError("GEN-SCHEMA", `plannedV2 (${handoffs.length}) diverge de opportunities (${output.opportunities.length})`);
+  const bySourceId = new Map<string, PlannedOpportunityHandoffV2>();
+  for (const handoff of handoffs) {
+    if (bySourceId.has(handoff.sourceOpportunityId))
+      throw new GenerationError("GEN-SCHEMA", `plannedV2 com sourceOpportunityId duplicado: ${handoff.sourceOpportunityId}`);
+    bySourceId.set(handoff.sourceOpportunityId, handoff);
+  }
+  for (const [index, opportunity] of output.opportunities.entries()) {
+    const sourceOpportunityId = opportunity.sourceOpportunityId;
+    if (typeof sourceOpportunityId !== "string")
+      throw new GenerationError("GEN-SCHEMA", "ContentOpportunity V2 sem sourceOpportunityId");
+    const handoff = bySourceId.get(sourceOpportunityId);
+    if (!handoff)
+      throw new GenerationError("GEN-SCHEMA", `handoff ausente para sourceOpportunityId ${sourceOpportunityId}`);
+    if (handoff.position !== index + 1)
+      throw new GenerationError("GEN-SCHEMA", `posição divergente para ${sourceOpportunityId}: handoff ${handoff.position} ≠ opportunity ${index + 1}`);
+    if (!handoff.creativeDirection || typeof handoff.creativeDirection !== "object")
+      throw new GenerationError("GEN-SCHEMA", `blueprint canônico ausente no handoff ${sourceOpportunityId}`);
+  }
+  return bySourceId;
+}
+
+// Etapa 3 (ADR-033 D4): no caminho V2 o snapshot de memória é o canônico
+// cumulativo — buildPlannerMemorySnapshot faz merge deduplicado/idempotente com
+// o snapshot anterior, trata envelope legado como vazio e falha fechado para
+// schema V1 explícito inválido; exige os sinais canônicos dos Contents
+// entregues. O fallback legado (mergeMemorySignals) permanece SOMENTE fora de V2.
+export function plannerMemorySignalsFor(previousSignals: unknown, output: EngineResult): Record<string, unknown> {
+  const delivered = output.memorySignals.plannerSignals;
+  if (output.v2Policy) {
+    if (!Array.isArray(delivered))
+      throw new GenerationError("GEN-SCHEMA", "caminho V2 exige sinais canônicos (memorySignals.plannerSignals)");
+    return buildPlannerMemorySnapshot(previousSignals, delivered);
+  }
+  return Array.isArray(delivered) && delivered.length > 0
+    ? { signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1", signals: delivered }
+    : mergeMemorySignals(previousSignals, output.memorySignals);
+}
+
 // RI-003-24: leitura do lifecycle com lock de linha (SELECT FOR UPDATE) —
 // serializa com transitionTenantProduct/archiveTenantProduct (o UPDATE do
 // archive adquire o mesmo lock): ou o archive commita antes e a leitura vê
@@ -707,8 +781,20 @@ export async function finalizeGeneration(
   runData: Record<string, unknown>,
   reusedStrategyId?: string | null,
 ): Promise<void> {
+  // Etapa 3 (ADR-033 D2): runData é metadata allowlisted — plannedV2/creativeDirection
+  // nunca entram no IntelligenceRun; chamada não padrão com esses campos falha
+  // fechado antes de qualquer escrita.
+  for (const key of Object.keys(runData))
+    if (key === "plannedV2" || key === "creativeDirection")
+      throw new GenerationError("GEN-SCHEMA", `metadata do run não aceita "${key}" (fonte canônica do Blueprint: ContentOpportunity.payload)`);
   // ADR-021: assinatura residual do parcial vai no metadado do run.
-  const runDataWithPartial = output.partial ? { ...runData, partial: output.partial } : runData;
+  // Etapa 3 (ADR-033 D3): proveniência do Planner (seed/hash/policy) entra no
+  // metadata; NUNCA plannedV2/Blueprint — fonte canônica: ContentOpportunity.payload.
+  const plannerProvenance = plannerProvenanceOf(output);
+  const runDataWithPartial = {
+    ...(plannerProvenance ? { plannerProvenance } : {}),
+    ...(output.partial ? { ...runData, partial: output.partial } : runData),
+  };
   await prisma.$transaction(async (tx) => {
     const fenced = await tx.commerceIntelligenceJob.updateMany({
       where: {
@@ -836,22 +922,32 @@ export async function finalizeGeneration(
         payload: JSON.parse(JSON.stringify(output.plan)),
       },
     });
-    await tx.productUnderstanding.create({
-      data: {
-        tenantId: job.tenantId,
-        productId: job.productId,
-        jobId: job.id,
-        payload: JSON.parse(JSON.stringify(output.productUnderstanding)),
-      },
-    });
+    // ProductUnderstanding é histórico; o runtime V2 obtém fatos do Product e
+    // não persiste uma análise fictícia quando a capability não executou.
+    if (Object.keys(output.productUnderstanding).length > 0)
+      await tx.productUnderstanding.create({
+        data: {
+          tenantId: job.tenantId,
+          productId: job.productId,
+          jobId: job.id,
+          payload: JSON.parse(JSON.stringify(output.productUnderstanding)),
+        },
+      });
+    // Etapa 3 (ADR-033 D2): no caminho V2 (v2Policy), handoff↔opportunity 1:1
+    // por sourceOpportunityId + posição — falha fechado antes de qualquer
+    // escrita. Sem v2Policy (V1) persiste payload v1 inalterado.
+    const handoffBySourceId = output.v2Policy ? assertHandoffAlignmentV2(output) : null;
     for (const [index, opportunity] of output.opportunities.entries()) {
-      // Cutover E6 Stage 3: payload inclui blueprint canônico V2 (creativeDirection
-      // + opportunityContractVersion) quando o Planner V2 produziu o handoff.
-      // V1 jobs (sem plannedV2) persistem payload v1 inalterado.
-      const handoff = output.plannedV2?.[index];
-      const v2Payload = handoff
-        ? { opportunityContractVersion: "2", creativeDirection: handoff.creativeDirection }
-        : {};
+      // Cutover E6 Stage 3: payload inclui blueprint canônico V2 resolvido por
+      // identidade; oportunidade V2 nunca persiste sem creativeDirection.
+      let v2Payload: Record<string, unknown> = {};
+      if (handoffBySourceId) {
+        const sourceOpportunityId = opportunity.sourceOpportunityId;
+        const handoff = typeof sourceOpportunityId === "string" ? handoffBySourceId.get(sourceOpportunityId) : undefined;
+        if (!handoff || !handoff.creativeDirection)
+          throw new GenerationError("GEN-SCHEMA", "oportunidade V2 sem blueprint canônico (handoff não resolvido)");
+        v2Payload = { opportunityContractVersion: "2", creativeDirection: handoff.creativeDirection };
+      }
       await tx.contentOpportunity.create({
         data: {
           id: String(opportunity.id),
@@ -968,17 +1064,9 @@ export async function finalizeGeneration(
         tenantId: job.tenantId,
         productId: job.productId,
         sourceJobId: job.id,
-        signals: JSON.parse(
-          JSON.stringify(
-            Array.isArray(output.memorySignals.plannerSignals) && output.memorySignals.plannerSignals.length > 0
-              // Cutover E6: snapshot V2 é EXATAMENTE o envelope
-              // PLANNER_MEMORY_SIGNALS_V1 (sem arrays legacy, sem nesting,
-              // sem generatedCount, sem hooks).
-              ? { signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1", signals: output.memorySignals.plannerSignals }
-              // V1 backward compat: merge legado quando sem sinais canônicos.
-              : mergeMemorySignals(previousSnapshot?.signals, output.memorySignals),
-          ),
-        ),
+        // Etapa 3 (ADR-033 D4): snapshot V1 canônico cumulativo no caminho V2
+        // (merge dedup/idempotente); fallback legado somente fora de V2.
+        signals: JSON.parse(JSON.stringify(plannerMemorySignalsFor(previousSnapshot?.signals, output))),
       },
     });
     // ADR-021/ADR-006: parcial confirma D e libera N−D no mês de origem —
@@ -1380,8 +1468,8 @@ export async function processGeneration(jobId: string, ownerId: string, deps?: {
       output.qualityRepairs,
       output.understandingReductions,
       output.planPolicyVersion,
-      output.plannedV2,
-      { policySnapshot, delivery, categories, judgeCoverage: output.judgeExecutionRecords, riskAssessments },
+      { policySnapshot, delivery, categories, judgeCoverage: output.judgeExecutionRecords, riskAssessments,
+        judgeSelections: output.judgeSelectionDecisions, preJudgeRisks: output.preJudgeRiskAssessments },
     );
     emitJobEvent("job.finalizing", {
       jobId: job.id,

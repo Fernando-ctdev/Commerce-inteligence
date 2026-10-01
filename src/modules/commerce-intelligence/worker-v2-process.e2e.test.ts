@@ -14,6 +14,8 @@ import { claimGeneration, processGeneration } from "./worker.js";
 import { readBriefPayload } from "./engine-v2";
 import { monthUtc } from "../entitlements/generation.js";
 import { collectJobEvents, resetJobEvents } from "./observability.js";
+import { loadCreativeSystem } from "./creative-system";
+import { canonicalSerialization, sha256Hex } from "./planner-harness/canonical";
 
 const prisma = new PrismaClient();
 let dbUp = false;
@@ -139,9 +141,9 @@ async function criarJobQueued(targetContentCount: number) {
   return { job, tenant, product, limpar };
 }
 
-test("V2 processGeneration: persistência v2, cena separada, plannedV2 no run, replay idempotente e fence de owner", async (t) => {
+test("V2 processGeneration: persistência v2, cena separada, proveniência do Planner no run, replay idempotente e fence de owner", async (t) => {
   if (!dbUp) return t.skip();
-  const { job, tenant, limpar } = await criarJobQueued(3);
+  const { job, tenant, product, limpar } = await criarJobQueued(3);
   try {
     const claimed = await claimGeneration(new Date(), "v2-owner", job.id);
     assert.ok(claimed, "job claimed para o owner do teste");
@@ -183,15 +185,42 @@ test("V2 processGeneration: persistência v2, cena separada, plannedV2 no run, r
     assert.equal(typeof setPayload.dropped, "number");
     assert.ok(setPayload.dropped >= 0);
 
-    // Handoff V2 allowlisted no metadata do run (ordem/source/blueprint/evidência).
+    // Etapa 3 (ADR-033 D2/D3): Blueprint canônico vive SOMENTE em
+    // ContentOpportunity.payload.creativeDirection; metadata guarda proveniência
+    // do Planner (seed/hash/policy) e nunca plannedV2/Blueprint.
     const run = await prisma.intelligenceRun.findUniqueOrThrow({ where: { tenantId_jobId: { tenantId: job.tenantId, jobId: job.id } } });
-    const metadata = run.metadata as { plannedV2?: Array<Record<string, unknown>> };
-    assert.ok(Array.isArray(metadata.plannedV2) && metadata.plannedV2.length === 3, "plannedV2 persistido no run");
-    assert.equal(metadata.plannedV2?.[0]?.opportunityContractVersion, "2");
-    assert.ok(metadata.plannedV2?.[0]?.creativeDirection, "creativeDirection resolvida no handoff persistido");
+    const metadata = run.metadata;
+    assert.ok(metadata !== null && typeof metadata === "object" && !Array.isArray(metadata), "metadata do run é objeto");
+    assert.ok(!("plannedV2" in metadata), "metadata não persiste plannedV2");
+    assert.ok(!JSON.stringify(metadata).includes("creativeDirection"), "metadata não persiste Blueprint");
+    assert.ok("plannerProvenance" in metadata, "proveniência do Planner presente no metadata");
+    const provenance = metadata.plannerProvenance;
+    assert.ok(provenance !== null && typeof provenance === "object" && !Array.isArray(provenance));
+    assert.equal(provenance.plannerPolicyVersion, "PLANNER_POLICY_V2");
+    assert.equal(provenance.compatibilityPolicyVersion, "CREATIVE_COMPATIBILITY_V2");
+    assert.equal(provenance.creativeSystemHash, sha256Hex(canonicalSerialization(loadCreativeSystem("tiktok-commerce@1.3"))));
+    assert.ok("plannerSeed" in provenance && typeof provenance.plannerSeed === "string", "plannerSeed persistido");
+    assert.ok("plannerOutputHash" in provenance && typeof provenance.plannerOutputHash === "string", "plannerOutputHash persistido");
+    assert.ok("plannerInputHash" in provenance && typeof provenance.plannerInputHash === "string", "plannerInputHash persistido");
+    assert.ok("plannerBinding" in provenance && provenance.plannerBinding !== null && typeof provenance.plannerBinding === "object" && !Array.isArray(provenance.plannerBinding), "plannerBinding persistido");
+    const provenanceBinding = provenance.plannerBinding;
+    assert.ok("platformSkillVersion" in provenanceBinding && typeof provenanceBinding.platformSkillVersion === "string", "binding com platformSkillVersion");
+    assert.ok("creativeSystemVersion" in provenanceBinding && typeof provenanceBinding.creativeSystemVersion === "string", "binding com creativeSystemVersion");
+    assert.ok(provenanceBinding.platformSkillVersion !== "frozen-harness-fixture", "proveniência operacional, nunca fixture de harness");
 
     // Isolamento por tenant: mesma PK não é visível em outro tenant.
     assert.equal(await prisma.content.count({ where: { jobId: job.id, tenantId: "tenant-inexistente" } }), 0);
+
+    // Etapa 3 (ADR-033 D4): snapshot de memória V1 canônico — somente sinais
+    // dos Contents entregues, sem duplicatas, sem arrays legados.
+    const snapshot = await prisma.productMemorySnapshot.findFirstOrThrow({ where: { tenantId: tenant.id, productId: product.id } });
+    const signalsEnvelope = snapshot.signals;
+    assert.ok(signalsEnvelope !== null && typeof signalsEnvelope === "object" && !Array.isArray(signalsEnvelope), "snapshot é o envelope canônico");
+    assert.ok("signalsSchemaVersion" in signalsEnvelope && signalsEnvelope.signalsSchemaVersion === "PLANNER_MEMORY_SIGNALS_V1", "envelope PLANNER_MEMORY_SIGNALS_V1");
+    const deliveredSignals = "signals" in signalsEnvelope ? signalsEnvelope.signals : undefined;
+    assert.ok(Array.isArray(deliveredSignals) && deliveredSignals.length >= 1, "sinais somente dos Contents entregues");
+    const signalKeys = deliveredSignals.map((signal) => JSON.stringify(signal));
+    assert.equal(new Set(signalKeys).size, signalKeys.length, "sinais deduplicados no snapshot");
 
     // Replay idempotente: job terminal → processGeneration não reexecuta nem duplica.
     assert.equal(await processGeneration(job.id, "v2-owner", { router: v2Router(validBriefs) }), false);

@@ -161,6 +161,9 @@ export function validateRiskAssessment(value: unknown, allowedEvidenceRefs: read
 // seleciona o Judge (nunca pula avaliação em silêncio). V1 acima permanece
 // read-only como registro histórico pós-Judge.
 import type { CreativeBlueprint } from "./creative-system";
+import { normalizeForVariety } from "./contract";
+import { DEVELOPMENT_ACTION_STEMS, developmentGroundingTerms } from "./gates";
+import { classifyHookMechanism } from "./platform-skill";
 
 export const PRE_JUDGE_RISK_CONTRACT_VERSION = "risk-assessment.v2" as const;
 export const JUDGE_SELECTION_DECISION_VERSION = "judge-selection.v1" as const;
@@ -208,13 +211,19 @@ export type PreJudgeRiskAssessmentV2 = {
 };
 export type JudgeSelectionPolicyV1 = { version: string; judgeIfRiskBandAtLeast: "LOW" | "MEDIUM" | "HIGH"; scriptMaxChars: number };
 export type JudgeSelectionDecisionV1 = { policyVersion: string; contentId: string; selected: boolean; triggerCodes: readonly JudgeSelectionTriggerCode[] };
+export const PRE_JUDGE_SELECTION_POLICY_V2: JudgeSelectionPolicyV1 = Object.freeze({
+  version: "risk-policy.prejudge.v2",
+  judgeIfRiskBandAtLeast: "MEDIUM",
+  scriptMaxChars: 400,
+});
 
 export type PreJudgeRiskInputV2 = {
   policyVersion: string;
   subject: { jobId: string; contentId: string };
   brief: { hook: string; development: readonly string[]; script: string; cta: string };
-  blueprint: CreativeBlueprint | undefined;
-  blueprintRealized: boolean | undefined;
+  blueprint: (Readonly<Omit<CreativeBlueprint, "attentionMechanisms" | "psychologicalEffects" | "narrativeMoves">>
+    & { readonly attentionMechanisms: readonly string[]; readonly psychologicalEffects: readonly string[]; readonly narrativeMoves: readonly string[] }) | undefined;
+  blueprintStructureCovered: boolean | undefined;
   scenes: { status: "AVAILABLE" | "FILTERED" | "ERROR" };
   memory: { status: "AVAILABLE" | "EMPTY" | "UNAVAILABLE"; priorMechanisms?: readonly string[]; priorEffects?: readonly string[]; priorRecipes?: readonly string[]; priorStructures?: readonly string[] };
   productTerms: readonly string[] | undefined;
@@ -227,6 +236,52 @@ const addFinding = (found: PreJudgeRiskFindingV2[], code: PreJudgeFindingCode): 
   if (!found.some((item) => item.code === code)) found.push({ code, ...PRE_JUDGE_RISK_REGISTRY[code] });
 };
 
+// ponytail: cues lexicais são indícios de roteamento, não prova semântica.
+// Classificadores existentes + ações/grounding observados cobrem narrativas
+// faladas simples; humor, qualidade do payoff e realização visual não são
+// provados. Move/atenção sem cue => UNKNOWN/Judge; nunca gate ou template.
+function hasLowRiskRealizationCues(input: PreJudgeRiskInputV2): boolean {
+  const { blueprint, brief, productTerms } = input;
+  if (!blueprint || input.blueprintStructureCovered !== true || !productTerms?.length) return false;
+  if (!blueprint.attentionMechanisms.length || !blueprint.narrativeMoves.length) return false;
+  const terms = new Set(productTerms.flatMap(developmentGroundingTerms));
+  const hookMatches = developmentGroundingTerms(brief.hook).filter((term) => terms.has(term));
+  if (hookMatches.length < 2) return false;
+  const script = normalizeForVariety(brief.script);
+  const clauses = script.split(/[.!?;]+/).map((clause) => clause.trim())
+    .filter((clause) => clause && clause !== normalizeForVariety(brief.cta).replace(/[.!?;]+$/, ""));
+  if (clauses.length < 2) return false;
+  const buckets = clauses.map(classifyHookMechanism);
+  const failure = buckets.includes("problem");
+  const reaction = buckets.includes("discovery");
+  const contrast = buckets.includes("objection") && reaction;
+  const groundedClauses = clauses.filter((clause) => developmentGroundingTerms(clause).filter((term) => terms.has(term)).length >= 2);
+  const productEntry = groundedClauses.some((clause) => clause.split(/\s+/)
+    .some((word) => DEVELOPMENT_ACTION_STEMS.some((stem) => word.startsWith(stem))));
+  const payoff = groundedClauses.includes(clauses[clauses.length - 1]!);
+  const attentionObserved = blueprint.attentionMechanisms.every((attention) => {
+    switch (attention) {
+      case "curiosity": return brief.hook.trim().endsWith("?") || classifyHookMechanism(brief.hook) === "discovery";
+      case "failure": return classifyHookMechanism(brief.hook) === "problem" && failure;
+      case "reaction": return reaction;
+      case "pattern_interrupt":
+      case "contrast": return contrast;
+      default: return false;
+    }
+  });
+  return attentionObserved && blueprint.narrativeMoves.every((move) => {
+    switch (move) {
+      case "setup": return brief.hook.trim().length > 0;
+      case "failure": return failure;
+      case "reaction": return reaction;
+      case "product_entry": return productEntry;
+      case "resolution": return productEntry && groundedClauses.length >= 2;
+      case "payoff": return payoff;
+      default: return false;
+    }
+  });
+}
+
 // Avaliação PURA: findings derivam deterministicamente dos insumos; nada de
 // provider, relógio ou aleatoriedade. Indeterminável ⇒ PARTIAL; Blueprint
 // ausente ⇒ UNAVAILABLE; ambos falham SAFE para seleção do Judge.
@@ -238,15 +293,16 @@ export function buildPreJudgeRiskAssessment(input: PreJudgeRiskInputV2): { asses
   if (blueprint) {
     const incomplete = blueprint.attentionMechanisms.length === 0 || blueprint.narrativeMoves.length === 0 || ("recipeId" in blueprint && blueprint.recipeId !== undefined && !String(blueprint.recipeId).trim());
     if (incomplete) addFinding(findings, "BLUEPRINT_INCOMPLETE");
-    if (input.blueprintRealized === false) addFinding(findings, "BLUEPRINT_UNREALIZED");
+    if (input.blueprintStructureCovered === false) addFinding(findings, "BLUEPRINT_UNREALIZED");
   }
 
   const terms = input.productTerms;
   if (terms !== undefined && terms.length > 0) {
-    const haystacks = { hook: fold(brief.hook), body: fold([...brief.development, brief.script].join(" ")) };
-    if (!terms.some((term) => haystacks.hook.includes(fold(term)))) addFinding(findings, "GENERIC_HOOK");
-    if (!terms.some((term) => haystacks.body.includes(fold(term)))) addFinding(findings, "WEAK_PRODUCT_INTEGRATION");
-    if (!haystacks.body.includes(fold(brief.cta)) && brief.cta.trim() === brief.hook.trim()) addFinding(findings, "CTA_GOAL_MISMATCH");
+    const hook = fold(brief.hook);
+    const script = fold(brief.script);
+    if (!terms.some((term) => hook.includes(fold(term)))) addFinding(findings, "GENERIC_HOOK");
+    if (!terms.some((term) => script.includes(fold(term)))) addFinding(findings, "WEAK_PRODUCT_INTEGRATION");
+    if (!script.includes(fold(brief.cta)) && brief.cta.trim() === brief.hook.trim()) addFinding(findings, "CTA_GOAL_MISMATCH");
   }
 
   if (!brief.script.trim()) addFinding(findings, "PAYOFF_ABSENT");
@@ -262,7 +318,7 @@ export function buildPreJudgeRiskAssessment(input: PreJudgeRiskInputV2): { asses
     if (blueprint.psychologicalEffects.some((effect) => priorEffects.has(fold(effect)))) addFinding(findings, "PSYCHOLOGICAL_EFFECT_REPEAT");
     const recipeId = (blueprint as { recipeId?: string }).recipeId;
     if (recipeId && priorRecipes.has(fold(recipeId))) addFinding(findings, "RECIPE_SATURATION");
-    const structureKey = [...blueprint.narrativeMoves].sort().join(">");
+    const structureKey = blueprint.narrativeMoves.join(">");
     if (structureKey && priorStructures.has(fold(structureKey))) addFinding(findings, "STRUCTURE_REPEAT");
   }
 
@@ -272,7 +328,7 @@ export function buildPreJudgeRiskAssessment(input: PreJudgeRiskInputV2): { asses
 
   const undetermined =
     blueprintSource === "UNAVAILABLE" ? "UNAVAILABLE"
-      : input.blueprintRealized === undefined || terms === undefined || production === undefined || input.memory.status === "UNAVAILABLE"
+      : !hasLowRiskRealizationCues(input) || terms === undefined || production === undefined || input.memory.status === "UNAVAILABLE"
         ? "PARTIAL" : "AVAILABLE";
   const ordered = [...findings].sort((a, b) => a.code.localeCompare(b.code));
   const riskBand = ordered.reduce<PreJudgeRiskBand>((band, item) => band === "NONE" || severityRank[item.severity] > severityRank[band] ? item.severity : band, "NONE");
@@ -304,7 +360,7 @@ const TRIGGER_CODES: Record<string, true> = Object.fromEntries([...Object.keys(P
 export function validateJudgeSelectionDecision(value: unknown): JudgeSelectionDecisionV1 {
   const root = record(value); exactKeys(root, ["policyVersion", "contentId", "selected", "triggerCodes"]);
   if (typeof root.selected !== "boolean") throw new ContractError("GEN-SCHEMA", "selected inválido");
-  if (!Array.isArray(root.triggerCodes) || root.triggerCodes.length === 0 || root.triggerCodes.some((code) => typeof code !== "string" || !TRIGGER_CODES[code])) throw new ContractError("GEN-SCHEMA", "triggerCodes inválidos");
+  if (!Array.isArray(root.triggerCodes) || (root.selected && root.triggerCodes.length === 0) || root.triggerCodes.some((code) => typeof code !== "string" || !TRIGGER_CODES[code])) throw new ContractError("GEN-SCHEMA", "triggerCodes inválidos");
   const codes = [...new Set(root.triggerCodes as string[])].sort();
   if (codes.length !== (root.triggerCodes as string[]).length) throw new ContractError("GEN-SCHEMA", "triggerCodes duplicados");
   return { policyVersion: nonEmpty(root.policyVersion, "policyVersion"), contentId: nonEmpty(root.contentId, "contentId"), selected: root.selected, triggerCodes: codes as JudgeSelectionTriggerCode[] };

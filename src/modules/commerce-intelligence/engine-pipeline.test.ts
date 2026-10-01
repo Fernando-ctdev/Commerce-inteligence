@@ -20,8 +20,8 @@ const sb = (text: string, action = "Destaque", factRef = "product:description") 
   return { text: `${text}`, action, factRefs: [factRef], rationale: `${anchor}`, cta: "Confira o produto na página." };
 };
 const sbPair = (text: string, action?: string) => [sb(text, action), sb(text, action)];
-const understanding = { productId: "p", category: undefined, coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["preço"], evidenceRefs: ["fact-1"] };
-const commercial = { commercialObjective: "argumento", angle: "benefício", coreMessage: "argumento", relevantCapabilities: ["cap"], benefits: ["benefício"], proofOptions: ["fact-1"], commercialEffects: ["argumento"], evidenceRefs: ["fact-1"], confidence: 0.9 };
+const understanding = { productId: "p", category: undefined, coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["preço"], evidenceRefs: ["product:description"] };
+const commercial = { commercialObjective: "argumento", angle: "benefício", coreMessage: "argumento", relevantCapabilities: ["cap"], benefits: ["benefício"], proofOptions: ["fact-1"], commercialEffects: ["argumento"], evidenceRefs: ["product:description"], confidence: 0.9 };
 // Pool diverso (requisito do Planner V2 determinístico): benefícios distintos
 // com refs de evidência do produto — mesma receita do engine-v2-routing.
 const envelope = { discoveryContractVersion: "2", hypotheses: [
@@ -87,10 +87,8 @@ test("composes validated provider outputs into the pipeline (4 foundational + ba
   assert.equal(strategy.opportunities[0].id, "j-commercial-1");
   assert.equal(result.briefs[0].contentId, "j-content-1");
   assert.equal(result.briefs[0].briefVersionId, "j-brief-1");
-  // ADR-019: cenas são obrigatórias para concluir a curadoria semântica.
-  // Cutover V2: sem CONTENT_PLAN_GENERATION (Planner determinístico) e sem
-  // CONTENT_SCENE_IDEAS (Scene Skeleton); judge segue no fluxo.
-  assert.deepEqual(calls, ["PRODUCT_UNDERSTANDING", "COMMERCIAL_OPPORTUNITY_MAPPING", "CONTENT_BRIEF_GENERATION", "CONTENT_QUALITY_JUDGE"]);
+  // V2 omite PU/Plan/cenas LLM; Judge só aparece quando Risk seleciona.
+  assert.deepEqual(calls, ["COMMERCIAL_OPPORTUNITY_MAPPING", "CONTENT_BRIEF_GENERATION", "CONTENT_QUALITY_JUDGE"]);
 });
 test("repairs only rejected briefs via per-item CONTENT_BRIEF_REPAIR/HIGH, preserving ids", async () => {
   const taskCalls: string[] = [];
@@ -116,8 +114,9 @@ test("repairs only rejected briefs via per-item CONTENT_BRIEF_REPAIR/HIGH, prese
   assert.deepEqual(context.repairChecklist, { removeUnsupportedClaim: true });
   // V2: a realização allowlisted substitui opportunity/selectedPattern/siblingSummary.
   const realization = context.realization as Record<string, unknown>;
-  // V2: angle é derivado do Planner (benefits[0] da oportunidade mapeada).
-  assert.equal(realization.angle, "praticidade no dia a dia");
+  // A oportunidade vem da Discovery selecionada pelo Planner, sem preferência
+  // fixa pela primeira hipótese do envelope.
+  assert.ok((result.strategy as { priorityAngles: string[] }).priorityAngles.includes(realization.angle as string));
   assert.ok((context.issues as string[]).length > 0);
   const relevantFacts = (realization.relevantFacts ?? context.relevantFacts) as Array<{ value: string; ref: string }> | undefined;
   if (Array.isArray(relevantFacts)) {
@@ -173,11 +172,11 @@ test("mapping context is compact and allowlisted without strategy plan skill or 
     if (task === "CONTENT_QUALITY_JUDGE") return judgeBatchPass(input);
     return {};
   } };
-  await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", facts: { features: ["x"], rawAggregate: ["não enviar"], memoryHistory: ["nada"], discount: "20% de desconto" }, targetContentCount: 1, router });
+  await runFirstGeneration({ productId: "p", jobId: "j", name: "Produto", description: "Tecido respirável", facts: { category: "Vestuário", variants: ["Azul", "Verde"], features: ["x"], rawAggregate: ["não enviar"], memoryHistory: ["nada"], discount: "20% de desconto", sourceUrl: "https://example.com/produto" }, targetContentCount: 1, router });
   assert.ok(capturedContext);
   const keys = Object.keys(capturedContext).sort();
   // Slice 011: creatorContext (projeção allowlisted) entra no contexto do mapping (ADR-018).
-  assert.deepEqual(keys, ["creatorContext", "evidenceRefsCatalog", "maxOpportunities", "product", "productId", "understanding"]);
+  assert.deepEqual(keys, ["creatorContext", "evidenceRefsCatalog", "maxOpportunities", "product", "productFacts", "productId"]);
   assert.ok(!("facts" in capturedContext));
   assert.ok(!("strategy" in capturedContext));
   assert.ok(!("skill" in capturedContext));
@@ -188,6 +187,16 @@ test("mapping context is compact and allowlisted without strategy plan skill or 
   const productContext = (capturedContext as { product: Record<string, unknown> }).product;
   assert.deepEqual(Object.keys(productContext).sort(), ["brand", "category", "description", "name", "priceAmount", "priceCurrency"]);
   assert.equal("discount" in productContext, false);
+  const factsContext: unknown = (capturedContext as Record<string, unknown>).productFacts;
+  assert.ok(Array.isArray(factsContext));
+  assert.ok(factsContext.some((item) => item && typeof item === "object" && "ref" in item && item.ref === "fact:category"
+    && "value" in item && item.value === "Vestuário"), "Discovery recebe fatos confirmados com suas refs");
+  assert.ok(factsContext.some((item) => item && typeof item === "object" && "ref" in item && item.ref === "fact:variants"
+    && "value" in item && item.value === "Azul"));
+  assert.ok(!JSON.stringify(factsContext).includes("não enviar"));
+  assert.ok(!JSON.stringify(factsContext).includes("20% de desconto"));
+  assert.ok(!JSON.stringify(factsContext).includes("https://example.com"));
+  assert.ok(!JSON.stringify(factsContext).includes('"fact:features"'));
 });
 
 // Fronteira prompt↔contexto (cutover V2): o prompt de cada capability só pode

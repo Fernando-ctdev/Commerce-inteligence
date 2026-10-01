@@ -45,8 +45,8 @@ test("projectCreatorContext tolera contexto ausente ou inválido", () => {
 });
 
 // Fixtures do pipeline (mesmas do engine-pipeline): evidência suficiente exige 3 oportunidades.
-const understanding = { productId: "p", category: undefined, coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["preço"], evidenceRefs: ["fact-1"] };
-const commercial = { commercialObjective: "argumento", angle: "benefício", coreMessage: "argumento", relevantCapabilities: ["cap"], benefits: ["benefício"], proofOptions: ["fact-1"], commercialEffects: ["argumento"], evidenceRefs: ["fact-1"], confidence: 0.9 };
+const understanding = { productId: "p", category: undefined, coreUseCases: ["uso"], capabilities: ["cap"], functionalBenefits: ["benefício"], emotionalBenefits: ["confiança"], desiredOutcomes: ["resultado"], purchaseTriggers: ["necessidade"], purchaseBarriers: ["preço"], evidenceRefs: ["product:description"] };
+const commercial = { commercialObjective: "argumento", angle: "benefício", coreMessage: "argumento", relevantCapabilities: ["cap"], benefits: ["benefício"], proofOptions: ["fact-1"], commercialEffects: ["argumento"], evidenceRefs: ["product:description"], confidence: 0.9 };
 // Fixture V2: pools legados (audiences/situations/...) não são vinculados a
 // hipótese — opcionais por hipótese ficam ausentes (sem inferência).
 const envelope = { discoveryContractVersion: "2", hypotheses: [commercial, { ...commercial, angle: "confiança" }, { ...commercial, angle: "resultado" }] };

@@ -7,8 +7,12 @@
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runFirstGeneration } from "./engine";
-import { runPlannerV2 } from "./engine-v2";
+import { runFirstGeneration, discoveryPoolFromSelectedV2 } from "./engine";
+import { buildPlannerInputV2, runPlannerV2, validateV2DevelopmentBullets } from "./engine-v2";
+import { planPortfolio } from "./planner-harness/plan-portfolio";
+import type { PlannerInput } from "./planner-harness/types";
+import { canonicalSerialization, sha256Hex } from "./planner-harness/canonical";
+import { loadCreativeSystem } from "./creative-system";
 import { collectJobEvents, resetJobEvents } from "./observability";
 import { CREATIVE_CATALOG } from "./creative-catalog";
 
@@ -115,12 +119,14 @@ const FORBIDDEN_IN_PROVIDER_CONTEXT = [
 test("V2 default-on: planner determinístico, contexto allowlisted e Scene Skeleton — sem plano nem cena por provider", async () => {
   resetJobEvents();
   const seenContexts: Record<string, unknown>[] = [];
+  let judgeContext: Record<string, unknown> | undefined;
   const taskCalls: string[] = [];
   const base = stubRouter({ onBrief: (context) => seenContexts.push(context) });
   const router = {
     describe: base.describe,
     complete: async (task: string, input?: { trustedContext?: unknown }) => {
       taskCalls.push(task);
+      if (task === "CONTENT_QUALITY_JUDGE") judgeContext = recordOf(input?.trustedContext);
       return base.complete(task, input);
     },
   };
@@ -143,6 +149,10 @@ test("V2 default-on: planner determinístico, contexto allowlisted e Scene Skele
   assert.ok(result.sceneSets.every((set) => set.status === "AVAILABLE" && set.scenes.length >= 2), "skeleton cobre a função de cenas");
   assert.equal(taskCalls.includes("CONTENT_PLAN_GENERATION"), false, "Plano V1 não executa no caminho V2");
   assert.equal(taskCalls.includes("CONTENT_SCENE_IDEAS"), false, "cenas por provider não executam no caminho V2");
+  const judged = (judgeContext?.items as Array<Record<string, unknown>> | undefined)?.[0];
+  assert.ok(judged, "risco seletivo envia item ao Judge");
+  assert.deepEqual(judged.blueprint, result.plannedV2[0]?.blueprint.blueprint);
+  assert.ok((judged.triggerCodes as string[]).includes("WEAK_PRODUCT_INTEGRATION"));
   // E5/Review: cobertura Judge EXECUTED apenas para itens julgados; itens fora
   // do hard subset permanecem NOT_EXECUTED (round mínimo 1).
   const executedRecords = result.judgeExecutionRecords.filter((record) => record.execution === "EXECUTED");
@@ -180,16 +190,111 @@ test("V2 default-on: planner determinístico, contexto allowlisted e Scene Skele
   assert.equal(events.some((event) => event.event === "v2.fallback"), false, "sem fallback no caminho principal");
 });
 
-test("pool V2 sem diversidade é fail-closed (sem fallback V1)", async () => {
+test("scene gate objetivo bloqueia Judge mesmo quando Risk selecionaria", async () => {
+  const calls: string[] = [];
+  const base = stubRouter({});
+  const router = {
+    describe: base.describe,
+    complete: async (task: string, input?: { trustedContext?: unknown }) => {
+      calls.push(task);
+      return base.complete(task, input);
+    },
+  };
+  await assert.rejects(
+    () => runFirstGeneration({ productId: "p", jobId: "scene-invalid", name: "Produto [fact:foo]",
+      description: "Tecido respirável", targetContentCount: 1, router }),
+    (error: unknown) => (error as { code?: string }).code === "GEN-REPAIR-EXHAUSTED",
+  );
+  assert.equal(calls.includes("CONTENT_BRIEF_GENERATION"), true);
+  assert.equal(calls.includes("CONTENT_QUALITY_JUDGE"), false);
+});
+
+test("setup/test automático com script genérico seleciona Judge por semântica desconhecida", async () => {
+  let judgeCalls = 0;
+  const base = stubRouter({ briefResponse: () => ({ developmentSchemaVersion: 2, items: [{
+    ...briefVariants[0], hook: "Tecido respirável", script: "Este produto tem tecido respirável.",
+    development: briefVariants[0]!.development.map((bullet) => ({ ...bullet, text: bullet.text.replaceAll("respiravel", "respirável") })),
+  }] }) });
+  const result = await runFirstGeneration({
+    productId: "p", jobId: "risk-setup-test", name: "Produto", description: "Tecido respirável",
+    targetContentCount: 1, creatorContext: { allowedFormats: ["comparison"], allowedProductRoles: ["transformer"] },
+    router: { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+      if (task === "CONTENT_QUALITY_JUDGE") judgeCalls++;
+      return base.complete(task, input);
+    } },
+  });
+  const moves = result.plannedV2![0]!.blueprint.blueprint.narrativeMoves;
+  assert.ok(moves.includes("setup") && moves.includes("test"), "planner determinístico realmente selecionou setup/test");
+  assert.equal(result.sceneSets[0]!.status, "AVAILABLE");
+  assert.equal(result.preJudgeRiskAssessments[0]!.assessmentStatus, "PARTIAL");
+  assert.equal(result.preJudgeRiskAssessments[0]!.riskBand, "NONE");
+  assert.deepEqual(result.judgeSelectionDecisions[0]!.triggerCodes, ["RISK_PARTIAL_FAILSAFE"]);
+  assert.equal(result.judgeSelectionDecisions[0]!.selected, true);
+  assert.equal(judgeCalls, 1);
+  assert.equal(result.judgeExecutionRecords[0]!.execution, "EXECUTED");
+  assert.equal(result.briefs[0]!.script, "Este produto tem tecido respirável.");
+});
+
+test("atenção e resposta sustentadas no script permitem zero seleções reais sem Judge universal", async () => {
+  let judgeCalls = 0;
+  const script = "Pegue o tecido respirável. Repare no tecido porque o tecido respirável é o detalhe da peça.";
+  const base = stubRouter({ briefResponse: () => ({ developmentSchemaVersion: 2, items: [{
+    ...briefVariants[0], hook: "Por que olhar o tecido respirável?", script,
+    development: briefVariants[0]!.development.map((bullet) => ({ ...bullet, text: bullet.text.replaceAll("respiravel", "respirável") })),
+  }] }) });
+  const result = await runFirstGeneration({
+    productId: "p", jobId: "risk-supported-skip", name: "Produto", description: "Tecido respirável",
+    targetContentCount: 1, creatorContext: { allowedFormats: ["pov"], allowedProductRoles: ["object_of_desire"] },
+    router: { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+      if (task === "CONTENT_QUALITY_JUDGE") judgeCalls++;
+      return base.complete(task, input);
+    } },
+  });
+  assert.equal(result.preJudgeRiskAssessments[0]!.assessmentStatus, "AVAILABLE");
+  assert.equal(result.preJudgeRiskAssessments[0]!.riskBand, "NONE");
+  assert.deepEqual(result.judgeSelectionDecisions.map(({ selected, triggerCodes }) => ({ selected, triggerCodes })),
+    [{ selected: false, triggerCodes: [] }]);
+  assert.equal(judgeCalls, 0);
+  assert.equal(result.judgeExecutionRecords[0]!.execution, "NOT_EXECUTED");
+  assert.deepEqual(result.qualityAudits, []);
+  assert.equal(result.briefs[0]!.script, script);
+});
+
+test("planner default mantém skip seletivo em recipe comum sustentada sem conector", async () => {
+  let judgeCalls = 0;
+  const script = "Eu achava que era só falar. O problema era essa apresentação. Que surpresa ao olhar de perto! Pegue o tecido respirável. Agora apresente o tecido respirável. O tecido respirável é o detalhe que eu queria destacar.";
+  const base = stubRouter({ briefResponse: () => ({ developmentSchemaVersion: 2, items: [{
+    ...briefVariants[0], hook: "Cansado de falar só do tecido respirável?", script,
+    development: briefVariants[0]!.development.map((bullet) => ({ ...bullet, text: bullet.text.replaceAll("respiravel", "respirável") })),
+  }] }) });
+  const result = await runFirstGeneration({
+    productId: "p", jobId: "risk-default-supported", name: "Produto", description: "Tecido respirável",
+    targetContentCount: 1,
+    router: { describe, complete: async (task: string, input?: { trustedContext?: unknown }) => {
+      if (task === "CONTENT_QUALITY_JUDGE") judgeCalls++;
+      return base.complete(task, input);
+    } },
+  });
+  assert.ok(result.plannedV2![0]!.blueprint.blueprint.attentionMechanisms.length > 1,
+    "seletividade exercitada com attention composta escolhida pelo planner default");
+  assert.equal(result.preJudgeRiskAssessments[0]!.assessmentStatus, "AVAILABLE");
+  assert.equal(result.preJudgeRiskAssessments[0]!.policyVersion, "risk-policy.prejudge.v2");
+  assert.deepEqual(result.judgeSelectionDecisions.map(({ selected, triggerCodes, policyVersion }) => ({ selected, triggerCodes, policyVersion })),
+    [{ selected: false, triggerCodes: [], policyVersion: "risk-policy.prejudge.v2" }]);
+  assert.equal(judgeCalls, 0);
+  assert.equal(result.judgeExecutionRecords[0]!.execution, "NOT_EXECUTED");
+  assert.equal(result.briefs[0]!.script, script);
+});
+
+test("pool V2 com menos origens que N falha fechado (sem fallback V1)", async () => {
   const taskCalls: string[] = [];
   const base = stubRouter({});
   const router = {
     describe: base.describe,
     complete: async (task: string, input?: { trustedContext?: unknown }) => {
       taskCalls.push(task);
-      // Evidência fora do catálogo do Planner V2: pré-condição incompatível
-      // → fail-closed (cutover removeu o fallback V1). Fixture em envelope V2:
-      // benefits/commercialEffects idênticos ⇒ pool sem diversidade.
+      // Duas origens Discovery para N=3: a composição V2 não deve inventar
+      // terceira origem nem cair no planner legado.
       if (task === "COMMERCIAL_OPPORTUNITY_MAPPING")
         return { discoveryContractVersion: "2", hypotheses: [
           { commercialObjective: "c1", angle: "a1", coreMessage: "s1", desiredViewerResponse: null, audience: null, situation: null, desire: null, identification: null, curiosity: null, aspiration: null, humorPotential: null, visualPotential: null, pain: null, objection: null, desiredOutcome: null, relevantCapabilities: ["cap"], benefits: ["mesmo benefício"], proofOptions: ["product:description"], commercialEffects: ["mesmo efeito"], evidenceRefs: ["product:description"], confidence: 0.9 },
@@ -199,7 +304,7 @@ test("pool V2 sem diversidade é fail-closed (sem fallback V1)", async () => {
     },
   };
   await assert.rejects(
-    () => runFirstGeneration({ productId: "p", jobId: "j-v2-failclosed", name: "Produto", description: "Tecido respirável", targetContentCount: 2, router }),
+    () => runFirstGeneration({ productId: "p", jobId: "j-v2-failclosed", name: "Produto", description: "Tecido respirável", targetContentCount: 3, router }),
     (error: unknown) => (error as { code?: string }).code === "GEN-PLANNER-DIVERSITY",
   );
   assert.equal(taskCalls.includes("CONTENT_PLAN_GENERATION"), false, "nenhum plano V1 no caminho V2");
@@ -207,23 +312,43 @@ test("pool V2 sem diversidade é fail-closed (sem fallback V1)", async () => {
 
 test("adapter V2: restrições explícitas do creator sustentam multi-seleção determinística", () => {
   const evidence = { facts: ["Produto", "Tecido respirável"], refs: ["product:name", "product:description"] };
-  const opportunities = Array.from({ length: 4 }, (_v, index) => ({
-    id: `o${index + 1}`,
+  // Etapa 3: pool EXATO da Discovery — hipóteses com sourceOpportunityId
+  // server-owned; Strategy seleciona 2 dos 4 na ordem persistida.
+  const hypotheses = Array.from({ length: 4 }, (_v, index) => ({
+    sourceOpportunityId: `o${index + 1}`,
+    commercialObjective: `argumento ${index + 1}`,
+    angle: `benefício distinto ${index + 1}`,
+    coreMessage: `argumento ${index + 1}`,
     relevantCapabilities: ["cap"],
     benefits: [`benefício distinto ${index + 1}`],
     proofOptions: ["p"],
-    sellingArgument: `argumento ${index + 1}`,
-    confidence: 0.9,
+    commercialEffects: [`argumento ${index + 1}`],
     evidenceRefs: ["product:description"],
-  })) as never;
-  const result = runPlannerV2({
+    confidence: 0.9,
+  }));
+  const envelope = { discoveryContractVersion: "2" as const, hypotheses };
+  const discoveryPool = discoveryPoolFromSelectedV2(envelope, ["o1", "o2", "o3", "o4"], evidence);
+  const source = {
     jobId: "j-constraints",
     productId: "p",
     targetContentCount: 2,
-    commercialOpportunities: opportunities,
+    discoveryPool,
     evidence,
     creatorConstraints: { allowedFormats: ["pov", "talk_first"], allowedProductRoles: ["solution"], disallowedFormats: [], disallowedProductRoles: [] },
-  });
+  };
+  const plannerInput = buildPlannerInputV2(source);
+  assert.equal(plannerInput.creativeSystemHash, sha256Hex(canonicalSerialization(loadCreativeSystem(plannerInput.skillBinding.platformSkillVersion))));
+  for (const mismatch of [
+    { compatibilityPolicyVersion: "CREATIVE_COMPATIBILITY_V1" },
+    { creativeSystemHash: "0".repeat(64) },
+    { compatibilityPolicyVersion: undefined },
+    { creativeSystemHash: undefined },
+  ]) {
+    const rejected = planPortfolio({ ...plannerInput, ...mismatch } as unknown as PlannerInput);
+    assert.equal(rejected.ok, false, "proveniência divergente ou ausente falha fechado");
+    if (!rejected.ok) assert.equal(rejected.error.code, "GEN-CS-VERSION");
+  }
+  const result = runPlannerV2(source);
   assert.equal(result.planned.length, 2, "multi-seleção exata com pool suportado");
   assert.ok(result.planned.every((item) => item.blueprint.blueprint && item.evidenceRefs.length > 0), "blueprint + evidência por oportunidade");
 });
@@ -256,3 +381,23 @@ for (const [label, build] of responseCases) {
     assert.equal(briefCalls, 2, "retry único antes do fail-closed");
   });
 }
+
+test("V2 aceita comunicação natural sem ação/conector e mantém bullets legíveis após persistência", async () => {
+  let calls = 0;
+  const router = stubRouter({ briefResponse: () => {
+    calls += 1;
+    const envelope = validEnvelope();
+    envelope.items[0]!.development = [
+      { text: "Tecido respirável na rotina.", action: "", rationale: "", factRefs: ["product:description"], cta: "Confira o produto na página." },
+      { text: "O tecido respirável é o detalhe deste produto.", action: "", rationale: "", factRefs: ["product:description"], cta: "Confira o produto na página." },
+    ];
+    return envelope;
+  } });
+  const result = await runFirstGeneration({ productId: randomUUID(), jobId: "j-natural-no-connector", name: "Produto", description: "Tecido respirável", targetContentCount: 1, creatorContext: {}, router });
+  assert.equal(calls, 1, "sinal advisory não provoca retry");
+  assert.equal(result.briefs.length, 1);
+  const bullets = result.developmentBullets?.[0]?.bullets;
+  assert.ok(bullets);
+  assert.deepEqual(validateV2DevelopmentBullets(bullets), bullets, "reader preserva comunicação sem inventar rationale");
+  assert.ok(bullets.every((bullet) => bullet.rationale === ""));
+});

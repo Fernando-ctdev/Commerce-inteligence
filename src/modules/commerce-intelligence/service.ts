@@ -57,7 +57,7 @@ export async function startCommerceIntelligence(input: { tenantId: string; userI
     // Slice 011 (ADR-018): snapshot autorizado das preferências no início do Job — gravado
     // no inputSnapshot; retry técnico reutiliza e mutação posterior não altera a execução.
     const { accountContext, creatorPreferences } = await captureJobPreferenceSnapshots(input.tenantId, tx);
-    const job = await tx.commerceIntelligenceJob.create({ data: { tenantId: input.tenantId, userId: input.userId, productId: product.id, idempotencyKey: input.idempotencyKey, fingerprint, targetContentCount: count, generatedContentsMonth: month, status: "QUEUED", stage: "UNDERSTANDING_PRODUCT", inputSnapshot: { accountContext, creatorPreferences }, ...(mode !== "standard" ? { metadata: { mode } } : {}) } });
+    const job = await tx.commerceIntelligenceJob.create({ data: { tenantId: input.tenantId, userId: input.userId, productId: product.id, idempotencyKey: input.idempotencyKey, fingerprint, targetContentCount: count, generatedContentsMonth: month, status: "QUEUED", stage: "MAPPING_COMMERCIAL_OPPORTUNITIES", inputSnapshot: { accountContext, creatorPreferences }, ...(mode !== "standard" ? { metadata: { mode } } : {}) } });
     await tx.generationUsageReservation.create({ data: { tenantId: input.tenantId, jobId: job.id, generatedContentsMonth: job.generatedContentsMonth, quantity: count } });
     return job;
   });

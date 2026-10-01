@@ -41,15 +41,15 @@ test("JudgeExecutionRecord permite audit apenas quando executado e falha fechado
 // silêncio); decisão persistível e reproduzível. Registry fechado ADR-033.
 import { buildPreJudgeRiskAssessment, selectForJudge, validateJudgeSelectionDecision, type PreJudgeRiskInputV2 } from "./risk-assessment";
 
-const blueprintOk = { recipeId: "recipe-1", attentionMechanisms: ["demonstração"], psychologicalEffects: ["confiança"], format: "pov", narrativeMoves: ["gancho", "payoff"], productRole: "hero" };
-const policy = { version: "risk-policy.prejudge.v1", judgeIfRiskBandAtLeast: "MEDIUM" as const, scriptMaxChars: 400 };
-const briefOk = { hook: "Tecido respirável no calor", development: ["Mostre o tecido respirável no calor"], script: "Sinta o tecido respirável aliviando o calor no uso.", cta: "Confira o tecido na página." };
+const blueprintOk = { attentionMechanisms: ["curiosity"], psychologicalEffects: ["identification"], format: "pov", narrativeMoves: ["setup", "product_entry", "payoff"], productRole: "solution" };
+const policy = { version: "risk-policy.prejudge.v2", judgeIfRiskBandAtLeast: "MEDIUM" as const, scriptMaxChars: 400 };
+const briefOk = { hook: "Por que olhar o tecido respirável?", development: ["Mostre o tecido respirável no calor"], script: "Pegue o tecido respirável. Repare no tecido porque o tecido respirável é o detalhe da peça.", cta: "Confira o tecido na página." };
 const baseInput: PreJudgeRiskInputV2 = {
-  policyVersion: "risk-policy.prejudge.v1",
+  policyVersion: "risk-policy.prejudge.v2",
   subject: { jobId: "job-1", contentId: "content-1" },
   brief: briefOk,
   blueprint: blueprintOk,
-  blueprintRealized: true,
+  blueprintStructureCovered: true,
   scenes: { status: "AVAILABLE" },
   memory: { status: "EMPTY" },
   productTerms: ["tecido", "respirável", "calor"],
@@ -60,15 +60,15 @@ const baseInput: PreJudgeRiskInputV2 = {
 test("pré-Judge V2: script sem payoff é HIGH e seleciona; repetição isolada é LOW e não seleciona", () => {
   const high = buildPreJudgeRiskAssessment({ ...baseInput, brief: { ...briefOk, script: "   " } });
   assert.equal(high.assessment.contractVersion, "risk-assessment.v2");
-  assert.equal(high.assessment.assessmentStatus, "AVAILABLE");
+  assert.equal(high.assessment.assessmentStatus, "PARTIAL");
   assert.equal(high.assessment.riskBand, "HIGH");
   assert.ok(high.assessment.findings.some(({ code }) => code === "PAYOFF_ABSENT"));
   const highDecision = selectForJudge(high.assessment, policy);
   assert.equal(highDecision.selected, true);
-  assert.deepEqual(highDecision.triggerCodes, ["PAYOFF_ABSENT"]);
+  assert.deepEqual(highDecision.triggerCodes, ["PAYOFF_ABSENT", "RISK_PARTIAL_FAILSAFE", "WEAK_PRODUCT_INTEGRATION"]);
   assert.deepEqual(validateJudgeSelectionDecision(highDecision), highDecision);
 
-  const low = buildPreJudgeRiskAssessment({ ...baseInput, memory: { status: "AVAILABLE", priorMechanisms: ["demonstração"] } });
+  const low = buildPreJudgeRiskAssessment({ ...baseInput, memory: { status: "AVAILABLE", priorMechanisms: ["curiosity"] } });
   assert.equal(low.assessment.riskBand, "LOW");
   assert.ok(low.assessment.findings.some(({ code }) => code === "ATTENTION_MECHANISM_REPEAT"));
   const lowDecision = selectForJudge(low.assessment, policy);
@@ -86,7 +86,7 @@ test("pré-Judge V2: Blueprint ausente é UNAVAILABLE com fail-safe selecionando
 });
 
 test("pré-Judge V2: fonte indeterminada é PARTIAL e fail-safe seleciona; determinável AVAILABLE não", () => {
-  const partial = buildPreJudgeRiskAssessment({ ...baseInput, blueprintRealized: undefined });
+  const partial = buildPreJudgeRiskAssessment({ ...baseInput, blueprintStructureCovered: undefined });
   assert.equal(partial.assessment.assessmentStatus, "PARTIAL");
   const partialDecision = selectForJudge(partial.assessment, policy);
   assert.equal(partialDecision.selected, true, "fail-safe: PARTIAL seleciona Judge");
@@ -97,13 +97,15 @@ test("pré-Judge V2: fonte indeterminada é PARTIAL e fail-safe seleciona; deter
   assert.equal(available.assessment.assessmentStatus, "AVAILABLE");
   assert.equal(available.assessment.riskBand, "NONE");
   assert.equal(selectForJudge(available.assessment, policy).selected, false);
+  assert.deepEqual(validateJudgeSelectionDecision(selectForJudge(available.assessment, policy)).triggerCodes, []);
   assert.deepEqual(available.assessment.findings, []);
 });
 
 test("pré-Judge V2: repetições de mechanism/effect/recipe/structure viram findings deduplicados; integração fraca e script longo são MEDIUM", () => {
   const repeats = buildPreJudgeRiskAssessment({
     ...baseInput,
-    memory: { status: "AVAILABLE", priorMechanisms: ["demonstração"], priorEffects: ["confiança"], priorRecipes: ["recipe-1"], priorStructures: ["gancho>payoff"] },
+    blueprint: { ...blueprintOk, recipeId: "recipe-1" },
+    memory: { status: "AVAILABLE", priorMechanisms: ["curiosity"], priorEffects: ["identification"], priorRecipes: ["recipe-1"], priorStructures: ["setup>product_entry>payoff"] },
   });
   const codes = repeats.assessment.findings.map(({ code }) => code);
   for (const expected of ["ATTENTION_MECHANISM_REPEAT", "PSYCHOLOGICAL_EFFECT_REPEAT", "RECIPE_SATURATION", "STRUCTURE_REPEAT"] as const) {
@@ -115,13 +117,65 @@ test("pré-Judge V2: repetições de mechanism/effect/recipe/structure viram fin
   const weak = buildPreJudgeRiskAssessment({ ...baseInput, brief: { ...briefOk, development: ["Mostre o diferencial na prática"], script: "Veja como funciona na prática." } });
   assert.ok(weak.assessment.findings.some(({ code, severity }) => code === "WEAK_PRODUCT_INTEGRATION" && severity === "MEDIUM"));
 
+  const onlyInInstructions = buildPreJudgeRiskAssessment({ ...baseInput, brief: { ...briefOk, script: "Mostre o produto." } });
+  assert.ok(onlyInInstructions.assessment.findings.some(({ code }) => code === "WEAK_PRODUCT_INTEGRATION"), "produto na instrução de desenvolvimento não prova integração no script");
+
   const long = buildPreJudgeRiskAssessment({ ...baseInput, brief: { ...briefOk, script: "x".repeat(401) } });
   assert.ok(long.assessment.findings.some(({ code }) => code === "SCRIPT_TOO_LONG"));
 
   const decision = selectForJudge(weak.assessment, policy);
-  assert.equal(decision.policyVersion, "risk-policy.prejudge.v1");
+  assert.equal(decision.policyVersion, "risk-policy.prejudge.v2");
   assert.equal(decision.contentId, "content-1");
   assert.equal(decision.selected, true);
   assert.throws(() => validateJudgeSelectionDecision({ ...decision, extra: true }));
   assert.throws(() => validateJudgeSelectionDecision({ ...decision, triggerCodes: ["INVENTADO"] }));
+});
+
+test("pré-Judge V2: repetição estrutural preserva a sequência narrativa, não apenas seus moves", () => {
+  const memory = { status: "AVAILABLE" as const, priorStructures: ["payoff>gancho"] };
+  const exact = buildPreJudgeRiskAssessment({
+    ...baseInput,
+    blueprint: { ...blueprintOk, narrativeMoves: ["payoff", "gancho"] },
+    memory,
+  }).assessment;
+  const reversed = buildPreJudgeRiskAssessment({ ...baseInput, memory }).assessment;
+  assert.ok(exact.findings.some(({ code }) => code === "STRUCTURE_REPEAT"));
+  assert.equal(reversed.findings.some(({ code }) => code === "STRUCTURE_REPEAT"), false);
+});
+
+test("cenas automáticas não sustentam realização: setup/test sem teste é PARTIAL, não rejeição lexical", () => {
+  const generic = { ...briefOk, hook: "Tecido respirável no calor", script: "Sinta o tecido respirável no uso." };
+  const input = { ...baseInput, brief: generic, blueprint: { ...blueprintOk, narrativeMoves: ["setup", "test"] } };
+  const { assessment } = buildPreJudgeRiskAssessment(input);
+  assert.equal(assessment.sources.scenes, "AVAILABLE");
+  assert.equal(assessment.assessmentStatus, "PARTIAL");
+  assert.equal(assessment.riskBand, "NONE");
+  assert.deepEqual(assessment.findings, []);
+  assert.deepEqual(selectForJudge(assessment, policy).triggerCodes, ["RISK_PARTIAL_FAILSAFE"]);
+  assert.equal(selectForJudge(assessment, policy).selected, true);
+});
+
+test("indício de baixo risco exige atenção e resposta no script, não apenas no development", () => {
+  for (const brief of [
+    { ...briefOk, hook: "Tecido respirável" },
+    { ...briefOk, development: [briefOk.script], script: "Pegue o tecido respirável." },
+  ]) {
+    const { assessment } = buildPreJudgeRiskAssessment({ ...baseInput, brief });
+    assert.equal(assessment.assessmentStatus, "PARTIAL");
+    assert.equal(selectForJudge(assessment, policy).selected, true);
+  }
+});
+
+test("recipe comum composta tem indícios sem exigir conector ou atenção única", () => {
+  const blueprint = { ...blueprintOk, attentionMechanisms: ["failure", "pattern_interrupt"],
+    narrativeMoves: ["setup", "failure", "reaction", "product_entry", "resolution", "payoff"] };
+  const brief = { ...briefOk, hook: "Cansado de falar só do tecido respirável?",
+    script: "Eu achava que era só falar. O problema era essa apresentação. Que surpresa ao olhar de perto! Pegue o tecido respirável. Agora apresente o tecido respirável. O tecido respirável é o detalhe que eu queria destacar." };
+  const { assessment } = buildPreJudgeRiskAssessment({ ...baseInput, blueprint, brief });
+  assert.equal(assessment.assessmentStatus, "AVAILABLE");
+  assert.equal(selectForJudge(assessment, policy).selected, false);
+  const missingReaction = buildPreJudgeRiskAssessment({ ...baseInput, blueprint,
+    brief: { ...brief, script: brief.script.replace("Que surpresa ao olhar de perto!", "") } }).assessment;
+  assert.equal(missingReaction.assessmentStatus, "PARTIAL");
+  assert.equal(selectForJudge(missingReaction, policy).selected, true);
 });

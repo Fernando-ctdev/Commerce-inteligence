@@ -1,9 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Prisma } from "@prisma/client";
-import { attemptDeadlineMsFor, briefPayloadForPersistence, callBudget, fallbackCallBudget, fenceMatches, heartbeatAction, internalFailureMetadata, mergeMemorySignals, projectEngineFacts, projectFailureDiagnostics, runMetadata, sceneBackfillLimitFor, sceneCallBudget, semanticQualityCallBudget } from "./worker";
-import { ENGINE_VERSION } from "./engine";
+import { assertHandoffAlignmentV2, attemptDeadlineMsFor, briefPayloadForPersistence, callBudget, fallbackCallBudget, fenceMatches, heartbeatAction, internalFailureMetadata, mergeMemorySignals, plannerMemorySignalsFor, plannerProvenanceOf, projectEngineFacts, projectFailureDiagnostics, runMetadata, sceneBackfillLimitFor, sceneCallBudget, semanticQualityCallBudget } from "./worker";
+import { ENGINE_VERSION, type EngineResult } from "./engine";
+import type { PlannedOpportunityHandoffV2 } from "./engine-v2";
 import { GATE_POLICY_VERSION } from "./gates";
+import { loadCreativeSystem } from "./creative-system";
+import { canonicalSerialization, sha256Hex } from "./planner-harness/canonical";
 import { collectJobEvents, emitJobEvent, resetJobEvents } from "./observability";
 
 // Gate 5 (item 3): a projeção de fatos é pura e determinística. Desconto,
@@ -303,4 +306,186 @@ test("failedItems carregam developmentDiagnostics e qualityDiagnostics allowlist
   for (const sentinel of ["Destaque o tecido", "Tecido respirável", "Suporta 999 kg", "para explicar o conforto", "999 kg"]) {
     assert.ok(!serialized.includes(sentinel), `sem texto de draft/fato no metadata: ${sentinel}`);
   }
+});
+
+// ─── Etapa 3 (ADR-033 D2/D3/D4): contratos worker-owned de handoff e memória ──
+
+// Literais exatos do contrato EngineResult.v2Policy (uniões literais — sem
+// alargamento para string, sem casts).
+const v2PolicyBase = {
+  plannerPolicyVersion: "PLANNER_POLICY_V2",
+  briefPolicyVersion: "BRIEF_GENERATION_POLICY_V1",
+  creativeSystemVersion: "1.3",
+  compatibilityPolicyVersion: "CREATIVE_COMPATIBILITY_V2",
+  creativeSystemHash: sha256Hex(canonicalSerialization(loadCreativeSystem("tiktok-commerce@1.3"))),
+} as const;
+const seed64 = "a".repeat(64);
+const inputHash64 = "c".repeat(64);
+const outputHash64 = "b".repeat(64);
+const v2PolicyWithProvenance = {
+  ...v2PolicyBase,
+  plannerSeed: seed64,
+  plannerInputHash: inputHash64,
+  plannerOutputHash: outputHash64,
+  plannerBinding: { platformSkillVersion: "tiktok-commerce@1.3", creativeSystemVersion: "1.3" },
+};
+
+const blueprintEnvelope = {
+  blueprintContractVersion: "1" as const,
+  creativeSystemVersion: "1.3" as const,
+  platformSkillVersion: "tiktok-commerce@1.3" as const,
+  blueprint: {
+    recipeId: "pov-identification-payoff",
+    attentionMechanisms: ["curiosity"],
+    psychologicalEffects: ["identification"],
+    format: "pov",
+    productRole: "solution",
+    narrativeMoves: ["setup", "payoff"],
+  },
+};
+
+const handoffOf = (sourceOpportunityId: string, position: number, overrides: Partial<PlannedOpportunityHandoffV2> = {}): PlannedOpportunityHandoffV2 => ({
+  opportunityContractVersion: "2",
+  position,
+  sourceOpportunityId,
+  candidateKey: `k-${position}`,
+  hookMechanism: "demonstration",
+  blueprint: blueprintEnvelope,
+  creativeDirection: blueprintEnvelope.blueprint,
+  evidenceRefs: [],
+  commercialObjective: "resolver o dia a dia",
+  angle: "praticidade",
+  coreMessage: "resolve o dia a dia",
+  ...overrides,
+});
+
+const engineResultOf = (overrides: Partial<EngineResult> = {}): EngineResult => ({
+  productUnderstanding: {},
+  strategy: { id: "s1", platformId: "tiktok", platformSkillVersion: "test" },
+  plan: { id: "p1", platformId: "tiktok", platformSkillVersion: "test" },
+  planPolicyVersion: 1,
+  opportunities: [],
+  briefs: [],
+  reports: [],
+  patternReplacements: [],
+  understandingReductions: [],
+  sceneSets: [],
+  judgeExecutionRecords: [],
+  judgeSelectionDecisions: [],
+  preJudgeRiskAssessments: [],
+  evidenceRefs: ["product:name"],
+  memorySignals: {},
+  stage: "FINALIZING",
+  capabilities: [],
+  repairs: 0,
+  repairCauses: [],
+  qualityAudits: [],
+  qualityRepairs: [],
+  validated: 0,
+  briefOpportunityPositions: [],
+  partial: null,
+  ...overrides,
+});
+
+const opportunityOf = (sourceOpportunityId: string): Record<string, unknown> => ({ id: `op-${sourceOpportunityId}`, sourceOpportunityId });
+
+test("plannerProvenanceOf: V2 expõe policy, seed, hashes e binding do Planner; nunca Blueprint; sem v2Policy → undefined", () => {
+  const provenance = plannerProvenanceOf(engineResultOf({ v2Policy: { ...v2PolicyWithProvenance } }));
+  assert.equal(provenance?.plannerPolicyVersion, "PLANNER_POLICY_V2");
+  assert.equal(provenance?.plannerSeed, seed64);
+  assert.equal(provenance?.plannerInputHash, inputHash64);
+  assert.equal(provenance?.plannerOutputHash, outputHash64);
+  assert.deepEqual(provenance?.plannerBinding, { platformSkillVersion: "tiktok-commerce@1.3", creativeSystemVersion: "1.3" }, "binding com versões persistido");
+  const binding = provenance?.plannerBinding;
+  assert.ok(binding !== null && typeof binding === "object" && !Array.isArray(binding));
+  assert.ok("platformSkillVersion" in binding && binding.platformSkillVersion !== "frozen-harness-fixture", "proveniência operacional, nunca fixture de harness");
+  assert.equal("plannedV2" in (provenance ?? {}), false, "proveniência nunca carrega plannedV2/Blueprint");
+  assert.equal(plannerProvenanceOf(engineResultOf()), undefined, "fora de V2 não há proveniência de Planner");
+});
+
+test("assertHandoffAlignmentV2: arrays em ordens diferentes alinham por sourceOpportunityId + posição", () => {
+  const output = engineResultOf({
+    v2Policy: v2PolicyWithProvenance,
+    opportunities: [opportunityOf("commercial-2"), opportunityOf("commercial-1")],
+    plannedV2: [handoffOf("commercial-1", 2), handoffOf("commercial-2", 1)],
+  });
+  const aligned = assertHandoffAlignmentV2(output);
+  assert.equal(aligned.size, 2);
+  assert.equal(aligned.get("commercial-2")?.position, 1, "posição vem do handoff identificado por ID, não do índice do array");
+  assert.equal(aligned.get("commercial-1")?.position, 2);
+});
+
+test("assertHandoffAlignmentV2: ausente, duplicado, posição divergente, comprimento divergente e blueprint ausente falham fechado", () => {
+  assert.throws(() => assertHandoffAlignmentV2(engineResultOf({
+    v2Policy: v2PolicyWithProvenance,
+    opportunities: [opportunityOf("commercial-1"), opportunityOf("commercial-2")],
+    plannedV2: [handoffOf("commercial-1", 1), handoffOf("commercial-9", 2)],
+  })), /handoff ausente/);
+  assert.throws(() => assertHandoffAlignmentV2(engineResultOf({
+    v2Policy: v2PolicyWithProvenance,
+    opportunities: [opportunityOf("commercial-1"), opportunityOf("commercial-2")],
+    plannedV2: [handoffOf("commercial-1", 1), handoffOf("commercial-1", 2)],
+  })), /duplicado/);
+  assert.throws(() => assertHandoffAlignmentV2(engineResultOf({
+    v2Policy: v2PolicyWithProvenance,
+    opportunities: [opportunityOf("commercial-1"), opportunityOf("commercial-2")],
+    plannedV2: [handoffOf("commercial-1", 1), handoffOf("commercial-2", 3)],
+  })), /posição divergente/);
+  assert.throws(() => assertHandoffAlignmentV2(engineResultOf({
+    v2Policy: v2PolicyWithProvenance,
+    opportunities: [opportunityOf("commercial-1")],
+    plannedV2: [],
+  })), /diverge de opportunities/);
+  assert.throws(() => assertHandoffAlignmentV2(engineResultOf({
+    v2Policy: v2PolicyWithProvenance,
+    opportunities: [opportunityOf("commercial-1")],
+    plannedV2: [handoffOf("commercial-1", 1, { creativeDirection: undefined })],
+  })), /blueprint/);
+});
+
+const plannerSignalOf = (attention: string) => ({
+  signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1",
+  attentionMechanisms: [attention],
+  psychologicalEffects: ["identification"],
+  narrativeShape: ["setup", "payoff"],
+  format: "pov",
+  productRole: "solution",
+  commercialEffects: ["resolve o dia a dia"],
+});
+
+test("plannerMemorySignalsFor: V2 usa snapshot canônico cumulativo com merge deduplicado idempotente", () => {
+  const previous = { signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1", signals: [plannerSignalOf("curiosity")] };
+  const envelope = plannerMemorySignalsFor(previous, engineResultOf({
+    v2Policy: v2PolicyWithProvenance,
+    memorySignals: { plannerSignals: [plannerSignalOf("contrast")] },
+  }));
+  assert.equal(envelope.signalsSchemaVersion, "PLANNER_MEMORY_SIGNALS_V1");
+  assert.ok(Array.isArray(envelope.signals) && envelope.signals.length === 2, "acumula: 1 anterior + 1 entregue");
+  const repeated = plannerMemorySignalsFor(previous, engineResultOf({
+    v2Policy: v2PolicyWithProvenance,
+    memorySignals: { plannerSignals: [plannerSignalOf("curiosity")] },
+  }));
+  assert.ok(Array.isArray(repeated.signals) && repeated.signals.length === 1, "sinal re-entregue não duplica (dedup idempotente)");
+  const fromLegacy = plannerMemorySignalsFor({ deliveredHookMechanisms: ["demo"] }, engineResultOf({
+    v2Policy: v2PolicyWithProvenance,
+    memorySignals: { plannerSignals: [plannerSignalOf("contrast")] },
+  }));
+  assert.ok(Array.isArray(fromLegacy.signals) && fromLegacy.signals.length === 1, "snapshot legado sem envelope é tratado como vazio, sem retrofabricar");
+});
+
+test("plannerMemorySignalsFor: V2 exige sinais canônicos; fora de V2 o fallback legado permanece", () => {
+  assert.throws(() => plannerMemorySignalsFor({}, engineResultOf({
+    v2Policy: v2PolicyWithProvenance,
+    memorySignals: { plannerSignals: "não-array" },
+  })), /sinais canônicos/);
+  assert.deepEqual(
+    plannerMemorySignalsFor({ deliveredHookMechanisms: ["antigo"] }, engineResultOf({ memorySignals: { plannerSignals: [{ envelope: "v2" }] } })),
+    { signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1", signals: [{ envelope: "v2" }] },
+    "fora de V2, plannerSignals não vazio mantém o envelope legado atual",
+  );
+  assert.deepEqual(
+    plannerMemorySignalsFor({ deliveredHookMechanisms: ["antigo"] }, engineResultOf({ memorySignals: { deliveredAngles: ["a2"] } })),
+    { deliveredHookMechanisms: ["antigo"], deliveredAngles: ["a2"], generatedCount: 0, deliveredCtaFunctions: [] },
+    "fora de V2, sem plannerSignals cai no merge legado existente",
+  );
 });

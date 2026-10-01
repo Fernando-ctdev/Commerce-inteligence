@@ -29,23 +29,23 @@ import { canonicalSerialization, harnessSeedForFixture, sha256Hex } from "./plan
 import {
   PLANNER_MEMORY_SIGNALS_V1,
   isEmptyMemorySnapshot,
+  mergeMemorySignalsCanonical,
   planPortfolio,
   type EvidenceRef,
   type MemorySnapshotInput,
   type PlannerInput,
 } from "./planner-harness/plan-portfolio";
-import type { CommercialDiscoveryPool, CreativeBlueprint, CreatorConstraints, PlannedOpportunityV2, ProductFactsProjection } from "./planner-harness/types";
+import type { CommercialDiscoveryPool, CreativeBlueprint, CreatorConstraints, PlannerMemorySignals, PlannedOpportunityV2, ProductFactsProjection } from "./planner-harness/types";
+import { CREATIVE_COMPATIBILITY_V2 } from "./planner-harness/types";
 import type { SceneSetOutcome } from "./engine";
 
 export const BRIEF_GENERATION_POLICY_V2 = "BRIEF_GENERATION_POLICY_V1" as const;
 
-// Binding do harness congelado (único aceito por planPortfolio) — fixture,
-// nunca provenance live (ADR-033 §7). A Skill única do runtime é carregada por
-// loadPlatformSkill() (default @1.3); provenance de Strategy/Run usa essa.
+// Binding da Skill real do runtime; fixture congelada permanece exclusiva do V1.
 export const ENGINE_V2_SKILL_BINDING = {
   platformSkillVersion: "tiktok-commerce@1.3",
   creativeSystemVersion: "1.3",
-  source: "frozen-harness-fixture",
+  source: "runtime-skill",
 } as const;
 
 // ─── Evidência: refs tipadas do harness ─────────────────────────────────────
@@ -92,10 +92,11 @@ export function validateV2DevelopmentBullets(value: unknown): DevelopmentBullet[
     const record = bullet as Record<string, unknown>;
     if (typeof record.text !== "string" || !record.text.trim())
       throw new ContractError("GEN-SCHEMA", "Brief v2 com bullet sem texto", "development");
-    if (typeof record.action !== "string" || !record.action.trim())
-      throw new ContractError("GEN-SCHEMA", "Brief v2 com bullet sem ação", "development");
-    if (typeof record.rationale !== "string" || !record.rationale.trim())
-      throw new ContractError("GEN-SCHEMA", "Brief v2 com bullet sem razão", "development");
+    // Projeções lexicais são advisory: ausência semântica não invalida o wire.
+    if (typeof record.action !== "string")
+      throw new ContractError("GEN-SCHEMA", "Brief v2 com ação inválida", "development");
+    if (typeof record.rationale !== "string")
+      throw new ContractError("GEN-SCHEMA", "Brief v2 com razão inválida", "development");
     if (!Array.isArray(record.factRefs) || record.factRefs.length === 0 || record.factRefs.some((ref) => typeof ref !== "string" || !ref.trim()))
       throw new ContractError("GEN-SCHEMA", "Brief v2 com bullet sem factRefs", "development");
     if (typeof record.cta !== "string" || !record.cta.trim())
@@ -146,7 +147,8 @@ export type PlannerV2Source = {
   jobId: string;
   productId: string;
   targetContentCount: number;
-  commercialOpportunities: readonly CommercialOpportunity[];
+  // Etapa 3: pool EXATO projetado da Discovery (somente selecionados, ordem persistida).
+  discoveryPool: CommercialDiscoveryPool;
   evidence: EvidenceSnapshot;
   memory?: unknown;
   // Restrições reais do creator quando existirem; ausentes → allowlist do
@@ -156,48 +158,26 @@ export type PlannerV2Source = {
 
 // Snapshot de produção é legado (D11: sem signalsSchemaVersion) → snapshot
 // vazio; envelope PLANNER_MEMORY_SIGNALS_V1 explícito passa integralmente.
-// Nenhuma retrofabricação de sinais.
+// Envelope versionado (qualquer versão) ou malformado passa CRU — a validação
+// do Planner falha GEN-PLANNER-MEMORY; nenhuma retrofabricação/engolimento.
 export function memorySnapshotV2(memory: unknown): MemorySnapshotInput {
   if (typeof memory !== "object" || memory === null || Array.isArray(memory) || Object.keys(memory).length === 0) return {};
   const record = memory as Record<string, unknown>;
-  if (record.signalsSchemaVersion === PLANNER_MEMORY_SIGNALS_V1 && Array.isArray(record.signals))
-    return memory as MemorySnapshotInput;
-  return {};
+  // Legado real (D11): sem signalsSchemaVersion → vazio, sem retrofabricar.
+  if (!("signalsSchemaVersion" in record)) return {};
+  // Versionado: passa cru — versão desconhecida ou malformado é GEN-PLANNER-MEMORY no harness.
+  return memory as MemorySnapshotInput;
 }
 
-export function buildPlannerInputV2(source: PlannerV2Source): PlannerInput {
-  if (source.commercialOpportunities.length === 0)
-    throw new ContractError("GEN-SCHEMA", "Sem oportunidades comerciais para o Planner V2", "opportunities");
-  const catalog = evidenceRefCatalog(source.evidence);
+export function buildPlannerInputV2(source: PlannerV2Source): Extract<PlannerInput, { plannerPolicyVersion: "PLANNER_POLICY_V2" }> {
+  const catalog = source.discoveryPool.evidenceCatalog.refs;
   if (catalog.length === 0)
     throw new ContractError("GEN-SCHEMA", "Evidência autorizada ausente para o Planner V2", "evidenceRefsCatalog");
-  const valueByRef = new Map(source.evidence.refs.map((ref, index) => [ref, String(source.evidence.facts[index] ?? "")]));
-  const typedRefs = (opportunity: CommercialOpportunity): EvidenceRef[] =>
-    opportunity.evidenceRefs.flatMap((ref) => {
-      const value = valueByRef.get(ref);
-      return value === undefined ? [] : [evidenceRefFor(ref, value)];
-    });
   return {
     fixtureId: source.jobId,
     targetContentCount: source.targetContentCount,
     productFacts: v2ProductFactsProjection(source.evidence),
-    commercialDiscovery: {
-      evidenceCatalog: { refs: catalog },
-      opportunities: source.commercialOpportunities.map((opportunity) => ({
-        sourceOpportunityId: opportunity.id,
-        // Mapeamento determinístico 1:1 com campos validados do Mapping; nada é
-        // inventado: fallbacks são campos obrigatórios do próprio contrato v1.
-        commercialObjective: opportunity.desire ?? opportunity.desiredOutcome ?? opportunity.sellingArgument,
-        angle: opportunity.benefits[0] ?? opportunity.relevantCapabilities[0] ?? opportunity.sellingArgument,
-        coreMessage: opportunity.sellingArgument,
-        commercialEffects: opportunity.benefits,
-        ...(opportunity.audience !== undefined || opportunity.situation !== undefined
-          ? { audienceContext: opportunity.audience ?? opportunity.situation }
-          : {}),
-        ...(opportunity.proofOptions.length > 0 ? { proofPattern: opportunity.proofOptions[0] } : {}),
-        evidenceRefs: typedRefs(opportunity),
-      })),
-    },
+    commercialDiscovery: source.discoveryPool,
     // Restrições explícitas do creator quando existirem; default neutro = todos
     // os formatos/papéis do Creative System congelado (nada inventado).
     creatorConstraints: source.creatorConstraints ?? v2NeutralConstraints(),
@@ -207,35 +187,55 @@ export function buildPlannerInputV2(source: PlannerV2Source): PlannerInput {
     seed: harnessSeedForFixture({
       fixtureId: source.jobId,
       targetContentCount: source.targetContentCount,
-      plannerPolicyVersion: "PLANNER_POLICY_V1",
+      plannerPolicyVersion: "PLANNER_POLICY_V2",
       skillBinding: { ...ENGINE_V2_SKILL_BINDING },
       inputFingerprint: sha256Hex(catalog.map((ref) => ref.valueHash).join("|")),
     }),
-    plannerPolicyVersion: "PLANNER_POLICY_V1",
+    plannerPolicyVersion: "PLANNER_POLICY_V2",
+    compatibilityPolicyVersion: CREATIVE_COMPATIBILITY_V2,
+    creativeSystemHash: sha256Hex(canonicalSerialization(loadCreativeSystem(ENGINE_V2_SKILL_BINDING.platformSkillVersion))),
   };
 }
 
 export type PortfolioResultV2 = {
   planned: PlannedOpportunityV2[];
-  plannerPolicyVersion: "PLANNER_POLICY_V1";
+  plannerPolicyVersion: "PLANNER_POLICY_V2";
+  compatibilityPolicyVersion: typeof CREATIVE_COMPATIBILITY_V2;
+  creativeSystemHash: string;
   seed: string;
-  binding: { platformSkillVersion: string; creativeSystemVersion: string };
+  binding: { platformSkillVersion: string; creativeSystemVersion: string; source: string };
+  /** sha256 hex-64 do canonicalSerialization do PlannerInput efetivo (D3). */
+  plannerInputHash: string;
+  /** Binding efetivo sem source — exposto ao EngineResult.v2Policy. */
+  plannerBinding: { platformSkillVersion: string; creativeSystemVersion: string };
   outputHash: string;
 };
 
 export function runPlannerV2(source: PlannerV2Source): PortfolioResultV2 {
-  const result = planPortfolio(buildPlannerInputV2(source));
+  const plannerInput = buildPlannerInputV2(source);
+  // D3: hash do PlannerInput EFETIVO (pré-execução, determinístico).
+  const plannerInputHash = sha256Hex(canonicalSerialization(plannerInput));
+  const result = planPortfolio(plannerInput);
   if (!result.ok)
     throw new GenerationError(result.error.code, result.error.message, false, {
       phase: result.error.phase,
       field: result.error.field ?? "",
       plannerPolicyVersion: result.error.plannerPolicyVersion,
     });
+  if (result.value.plannerPolicyVersion !== "PLANNER_POLICY_V2")
+    throw new ContractError("GEN-SCHEMA", "Planner retornou policy divergente");
   return {
     planned: [...result.value.opportunities],
     plannerPolicyVersion: result.value.plannerPolicyVersion,
+    compatibilityPolicyVersion: plannerInput.compatibilityPolicyVersion,
+    creativeSystemHash: plannerInput.creativeSystemHash,
     seed: result.value.seed,
     binding: { ...ENGINE_V2_SKILL_BINDING },
+    plannerBinding: {
+      platformSkillVersion: ENGINE_V2_SKILL_BINDING.platformSkillVersion,
+      creativeSystemVersion: ENGINE_V2_SKILL_BINDING.creativeSystemVersion,
+    },
+    plannerInputHash,
     outputHash: sha256Hex(canonicalSerialization(result.value.opportunities)),
   };
 }
@@ -326,8 +326,11 @@ function assertBulletWireV2(bullet: unknown): void {
     throw new ContractError("GEN-SCHEMA", "Brief V2 com bullet inválido", "development");
   const record = bullet as Record<string, unknown>;
   rejectUnknownKeysV2(record, BULLET_KEYS_V2, "bullet V2");
-  for (const key of ["text", "action", "rationale", "cta"] as const)
+  for (const key of ["text", "cta"] as const)
     if (!nonEmptyStringV2(record[key]))
+      throw new ContractError("GEN-SCHEMA", `Brief V2 com bullet ${key} inválido`, "development");
+  for (const key of ["action", "rationale"] as const)
+    if (typeof record[key] !== "string")
       throw new ContractError("GEN-SCHEMA", `Brief V2 com bullet ${key} inválido`, "development");
   if (!Array.isArray(record.factRefs) || record.factRefs.length === 0 || record.factRefs.some((ref) => !nonEmptyStringV2(ref)))
     throw new ContractError("GEN-SCHEMA", "Brief V2 com bullet factRefs inválido", "development");
@@ -456,32 +459,6 @@ export function parseDiscoveryEnvelopeV2(
   return { discoveryContractVersion: "2", hypotheses };
 }
 
-// Ponte versionada para o harness frozen — CommercialDiscoveryPool.
-export function discoveryPoolV2(
-  discovery: DiscoveryEnvelopeV2,
-  evidence: EvidenceSnapshot,
-): CommercialDiscoveryPool {
-  const catalog = evidenceRefCatalog(evidence);
-  const knownRefs = new Map(catalog.map((ref) => [ref.id, ref]));
-  return {
-    evidenceCatalog: { refs: catalog },
-    opportunities: discovery.hypotheses.map((h, index) => ({
-      sourceOpportunityId: `discovery-${index + 1}`,
-      commercialObjective: h.commercialObjective,
-      angle: h.angle,
-      coreMessage: h.coreMessage,
-      ...(h.desiredViewerResponse !== null ? { desiredViewerResponse: h.desiredViewerResponse } : {}),
-      commercialEffects: [...h.commercialEffects],
-      ...(h.audience !== null ? { audienceContext: h.audience } : {}),
-      ...(h.proofOptions.length > 0 ? { proofPattern: h.proofOptions[0] } : {}),
-      evidenceRefs: h.evidenceRefs.map((ref) => {
-        const known = knownRefs.get(ref);
-        return known ?? { id: ref, field: ref, valueHash: sha256Hex(ref) };
-      }),
-    })),
-  };
-}
-
 // Adiciona blueprint canônico + contract version ao ContentOpportunity V2.
 export function enrichContentOpportunity(
   base: ContentOpportunity,
@@ -595,14 +572,41 @@ export function buildRealizationInput(
   extras?: { productFacts?: ProductFactsProjection; creatorConstraints?: CreatorConstraints; platformRules?: Readonly<Record<string, string | number | boolean>> },
 ): BriefRealizationInput {
   const snapshot = memorySnapshotV2(memory);
-  const memoryConstraints = isEmptyMemorySnapshot(snapshot) ? [] : [`signalsSchemaVersion:${PLANNER_MEMORY_SIGNALS_V1}`];
+  const system = loadCreativeSystem(CREATIVE_SYSTEM_SKILL_VERSION);
+  const history = new Map<string, Set<string>>();
+  const remember = (dimension: string, values: readonly string[]) => {
+    if (values.length === 0) return;
+    const used = history.get(dimension) ?? new Set<string>();
+    for (const value of values) used.add(value);
+    history.set(dimension, used);
+  };
+  // Somente dimensões fechadas do Creative System; textos livres e recipeId
+  // ficam no Planner/Risk. O histórico orienta execução, não muda o Blueprint.
+  if (!isEmptyMemorySnapshot(snapshot) && snapshot.signalsSchemaVersion === PLANNER_MEMORY_SIGNALS_V1 && Array.isArray(snapshot.signals)) {
+    for (const signal of snapshot.signals) {
+      if (!signal || typeof signal !== "object" || signal.signalsSchemaVersion !== PLANNER_MEMORY_SIGNALS_V1) continue;
+      for (const [dimension, values, allowed] of [
+        ["attentionMechanisms", signal.attentionMechanisms, system.attentionMechanisms],
+        ["psychologicalEffects", signal.psychologicalEffects, system.psychologicalEffects],
+        ["format", [signal.format], system.formats],
+        ["productRole", [signal.productRole], system.productRoles],
+      ] as const) {
+        if (Array.isArray(values)) remember(dimension, values.filter((value): value is string => typeof value === "string" && allowed.includes(value)));
+      }
+      if (Array.isArray(signal.narrativeShape) && signal.narrativeShape.length > 0 && signal.narrativeShape.every((move: unknown) => typeof move === "string" && system.narrativeMoves.includes(move)))
+        remember("narrativeShape", [signal.narrativeShape.join(">")]);
+    }
+  }
+  const memoryConstraints = [...history].map(([dimension, values]) =>
+    `Histórico de ${dimension}: ${[...values].join(", ")}. Evite saturar essa dimensão na execução criativa; preserve o Blueprint selecionado e crie situações, falas e payoff novos.`,
+  );
   return {
     commercialObjective: planned.commercialObjective,
     angle: planned.angle,
     coreMessage: planned.coreMessage,
     ...(planned.desiredViewerResponse !== undefined ? { desiredViewerResponse: planned.desiredViewerResponse } : {}),
     hookMechanism: planned.hookMechanism,
-    blueprint: resolveBlueprint(loadCreativeSystem(CREATIVE_SYSTEM_SKILL_VERSION), planned.blueprint.blueprint),
+    blueprint: resolveBlueprint(system, planned.blueprint.blueprint),
     validatedEvidenceRefs: [...planned.evidenceRefs],
     productFacts: extras?.productFacts ?? v2ProductFactsProjection(evidence),
     creatorConstraints: extras?.creatorConstraints ?? v2NeutralConstraints(),
@@ -636,8 +640,21 @@ export function buildRealizationContext(input: BriefRealizationInput): Record<st
 export type SceneSetOutcomeV2 = SceneSetOutcome & { gatePolicyVersion: typeof GATE_POLICY_VERSION };
 
 const SCENE_SKELETON_VERBS = ["Mostre", "Teste", "Compare", "Ajuste", "Gire"] as const;
+const SCENE_MOVE_ACTION: Record<string, string> = {
+  setup: "Mostre",
+  failure: "Mostre o contexto em torno de",
+  reaction: "Mostre uma reação ao apresentar",
+  reveal: "Mostre de perto",
+  test: "Teste visualmente",
+  comparison: "Compare enquadramentos de",
+  transformation: "Gire para outro plano de",
+  product_entry: "Mostre a entrada de",
+  resolution: "Mostre novamente",
+  payoff: "Mostre em destaque",
+  verdict: "Aponte para",
+};
 
-export function buildSceneSkeleton(brief: ContentBriefVersion, evidence: EvidenceSnapshot): SceneIdea[] {
+export function buildSceneSkeleton(brief: ContentBriefVersion, evidence: EvidenceSnapshot, blueprint?: CreativeBlueprint): SceneIdea[] {
   const product = evidence.facts[evidence.refs.indexOf("product:name")] ?? brief.angle;
   const grounding = evidence.facts.filter((_fact, index) => evidence.refs[index] !== "product:name");
   const seen = new Set<string>();
@@ -649,9 +666,18 @@ export function buildSceneSkeleton(brief: ContentBriefVersion, evidence: Evidenc
       scenes.push({ description });
     }
   };
-  grounding.slice(0, 5).forEach((fact, index) => {
-    push(`${SCENE_SKELETON_VERBS[index % SCENE_SKELETON_VERBS.length]} ${product} revelando ${fact}`);
-  });
+  if (blueprint && grounding.length > 0) {
+    // Cada movimento ocupa sua posição; repetir um fato confirmado é mais seguro
+    // que fabricar uma mudança, falha ou resultado quando só há uma evidência.
+    blueprint.narrativeMoves.slice(0, 6).forEach((move, index) => {
+      const action = SCENE_MOVE_ACTION[move];
+      if (!action) throw new ContractError("GEN-SCHEMA", "Movimento narrativo desconhecido no Scene Skeleton");
+      push(`${action} ${product} destacando ${grounding[index % grounding.length]}`);
+    });
+  } else {
+    grounding.slice(0, 5).forEach((fact, index) =>
+      push(`${SCENE_SKELETON_VERBS[index % SCENE_SKELETON_VERBS.length]} ${product} revelando ${fact}`));
+  }
   if (scenes.length < 2 && product) push(`Mostre ${product} em close simples, com o celular na mão`);
   if (scenes.length < 2 && product) push(`Teste ${product} na palma da mão, sem fala`);
   return scenes.slice(0, 6);
@@ -661,10 +687,13 @@ export function buildSceneSkeletonSets(
   briefs: readonly ContentBriefVersion[],
   evidence: EvidenceSnapshot,
   creatorContext: Record<string, unknown>,
+  blueprints?: readonly CreativeBlueprint[],
 ): SceneSetOutcomeV2[] {
+  if (blueprints && blueprints.length !== briefs.length)
+    throw new ContractError("GEN-SCHEMA", "Scene Skeleton sem Blueprint para cada Brief");
   const recordsAlone = creatorContext["recordsAlone"] === true ? { recordsAlone: true } : {};
-  return briefs.map((brief) => {
-    const raw = buildSceneSkeleton(brief, evidence);
+  return briefs.map((brief, index) => {
+    const raw = buildSceneSkeleton(brief, evidence, blueprints?.[index]);
     const gated = gateSceneSet(raw, brief, evidence, recordsAlone);
     const status = gated.kept.length >= 2 ? "AVAILABLE" : gated.kept.length > 0 ? "FILTERED" : "ERROR";
     return {
@@ -755,13 +784,16 @@ export function enrichOpportunityV2(
 // Legacy snapshots (sem envelope) são ignorados — sem retrofabricar sinais.
 export function buildPlannerMemorySnapshot(
   previousSignals: unknown,
-  deliveredRecords: readonly ReturnType<typeof projectMemorySignalsForPlanner>[number][],
+  deliveredRecords: readonly PlannerMemorySignals[],
 ): { signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1"; signals: readonly Record<string, unknown>[] } {
   const snapshot = memorySnapshotV2(previousSignals);
   if (isEmptyMemorySnapshot(snapshot) && deliveredRecords.length === 0)
     return { signalsSchemaVersion: PLANNER_MEMORY_SIGNALS_V1, signals: [] };
-  // Se legacy (sem envelope), o planner recebe empty — sem retrofabricar.
-  if (isEmptyMemorySnapshot(snapshot)) return { signalsSchemaVersion: PLANNER_MEMORY_SIGNALS_V1, signals: deliveredRecords };
-  // Envelope V1 válido → merge canônico via harness.
-  return { signalsSchemaVersion: PLANNER_MEMORY_SIGNALS_V1, signals: [...snapshot.signals, ...deliveredRecords] };
+  // Merge canônico TAMBÉM no primeiro snapshot e com anterior legacy: dedup
+  // por chave com ordem estável (nunca concat manual).
+  if (isEmptyMemorySnapshot(snapshot))
+    return { signalsSchemaVersion: PLANNER_MEMORY_SIGNALS_V1, signals: mergeMemorySignalsCanonical([], deliveredRecords) };
+  // Envelope V1 válido → merge canônico do harness: dedup por chave, ordem
+  // estável e idempotência (nunca concat manual).
+  return { signalsSchemaVersion: PLANNER_MEMORY_SIGNALS_V1, signals: mergeMemorySignalsCanonical(snapshot.signals, deliveredRecords) };
 }

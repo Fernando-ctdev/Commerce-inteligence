@@ -53,7 +53,7 @@ test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, parcial 3/
           development: developmentOk.map((b) => ({ text: b.text, action: b.action, factRefs: b.factRefs, cta: b.cta, rationale: b.rationale })),
           // Vazamento registrado na rodada real: instrução de objeto destinada a
           // cenas no script do Content 02 — hoje detectada pelo hard gate (§5).
-          script: position === 2 ? "[mostra a etiqueta por dentro] Tecido respiravel" : "Tecido respiravel",
+          script: position === 2 ? "[mostra a etiqueta por dentro] Tecido respiravel" : "Mostre o Produto",
           cta: `cta ${position}`,
         };
       }) };
@@ -61,7 +61,7 @@ test("ADR-025 avaliação (rodada 0e94549e): batching reduz chamadas, parcial 3/
     if (task === "CONTENT_BRIEF_REPAIR") {
       briefRepairContexts.push(recordOf(input?.trustedContext) ?? {});
       // Contrato do repair (adendo 2): development estruturado {text, action, factRef, rationale}.
-      return { developmentSchemaVersion: 2, angle: "a2", hook: "Gancho 2", development: [{ text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }, { text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }], script: "Tecido respiravel", cta: "cta 2" };
+      return { developmentSchemaVersion: 2, angle: "a2", hook: "Gancho 2", development: [{ text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }, { text: developmentOk[0].text, action: "Destaque", factRefs: ["product:description"], cta: "Confira o produto na página.", rationale: "para explicar como o tecido respiravel afeta o uso no dia a dia" }], script: "Mostre o Produto", cta: "cta 2" };
     }
     if (task === "CONTENT_QUALITY_JUDGE") {
       const items = judgeItems(input);

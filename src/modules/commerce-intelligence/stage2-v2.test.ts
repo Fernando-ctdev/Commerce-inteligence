@@ -11,7 +11,6 @@ import {
   parseDiscoveryEnvelopeV2,
   plannedHandoffV2,
   projectMemorySignalsForPlanner,
-  discoveryPoolV2,
   enrichContentOpportunity,
 } from "./engine-v2";
 import { mergeMemorySignalsCanonical } from "./planner-harness/plan-portfolio";
