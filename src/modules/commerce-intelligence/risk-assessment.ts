@@ -225,7 +225,10 @@ export type PreJudgeRiskInputV2 = {
     & { readonly attentionMechanisms: readonly string[]; readonly psychologicalEffects: readonly string[]; readonly narrativeMoves: readonly string[] }) | undefined;
   blueprintStructureCovered: boolean | undefined;
   scenes: { status: "AVAILABLE" | "FILTERED" | "ERROR" };
-  memory: { status: "AVAILABLE" | "EMPTY" | "UNAVAILABLE"; priorMechanisms?: readonly string[]; priorEffects?: readonly string[]; priorRecipes?: readonly string[]; priorStructures?: readonly string[] };
+  // commercialEffects do candidato = IDs da própria hipótese Discovery;
+  // ausente ⇒ detector de repetição comercial inaplicável (nunca inventa).
+  commercialEffects?: readonly string[];
+  memory: { status: "AVAILABLE" | "EMPTY" | "UNAVAILABLE"; priorMechanisms?: readonly string[]; priorEffects?: readonly string[]; priorCommercialEffects?: readonly string[]; priorRecipes?: readonly string[]; priorStructures?: readonly string[] };
   productTerms: readonly string[] | undefined;
   production: { signals: readonly string[] } | undefined;
   selectionPolicy: JudgeSelectionPolicyV1;
@@ -315,7 +318,11 @@ export function buildPreJudgeRiskAssessment(input: PreJudgeRiskInputV2): { asses
     const priorRecipes = prior(input.memory.priorRecipes);
     const priorStructures = prior(input.memory.priorStructures);
     if (blueprint.attentionMechanisms.some((mechanism) => priorMechanisms.has(fold(mechanism)))) addFinding(findings, "ATTENTION_MECHANISM_REPEAT");
+    // priorEffects é o espaço PSICOLÓGICO (mesmo espaço do Blueprint);
+    // priorCommercialEffects é o espaço comercial (hipóteses Discovery).
     if (blueprint.psychologicalEffects.some((effect) => priorEffects.has(fold(effect)))) addFinding(findings, "PSYCHOLOGICAL_EFFECT_REPEAT");
+    const priorCommercial = prior(input.memory.priorCommercialEffects);
+    if (input.commercialEffects?.some((effect) => priorCommercial.has(fold(effect)))) addFinding(findings, "COMMERCIAL_EFFECT_REPEAT");
     const recipeId = (blueprint as { recipeId?: string }).recipeId;
     if (recipeId && priorRecipes.has(fold(recipeId))) addFinding(findings, "RECIPE_SATURATION");
     const structureKey = blueprint.narrativeMoves.join(">");

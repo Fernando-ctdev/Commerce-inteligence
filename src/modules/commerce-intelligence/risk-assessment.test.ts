@@ -105,10 +105,11 @@ test("pré-Judge V2: repetições de mechanism/effect/recipe/structure viram fin
   const repeats = buildPreJudgeRiskAssessment({
     ...baseInput,
     blueprint: { ...blueprintOk, recipeId: "recipe-1" },
-    memory: { status: "AVAILABLE", priorMechanisms: ["curiosity"], priorEffects: ["identification"], priorRecipes: ["recipe-1"], priorStructures: ["setup>product_entry>payoff"] },
+    commercialEffects: ["desejo"],
+    memory: { status: "AVAILABLE", priorMechanisms: ["curiosity"], priorEffects: ["identification"], priorCommercialEffects: ["desejo"], priorRecipes: ["recipe-1"], priorStructures: ["setup>product_entry>payoff"] },
   });
   const codes = repeats.assessment.findings.map(({ code }) => code);
-  for (const expected of ["ATTENTION_MECHANISM_REPEAT", "PSYCHOLOGICAL_EFFECT_REPEAT", "RECIPE_SATURATION", "STRUCTURE_REPEAT"] as const) {
+  for (const expected of ["ATTENTION_MECHANISM_REPEAT", "COMMERCIAL_EFFECT_REPEAT", "PSYCHOLOGICAL_EFFECT_REPEAT", "RECIPE_SATURATION", "STRUCTURE_REPEAT"] as const) {
     assert.ok(codes.includes(expected), `esperado ${expected}`);
   }
   assert.equal(new Set(codes).size, codes.length, "findings deduplicados");
@@ -141,6 +142,32 @@ test("pré-Judge V2: repetição estrutural preserva a sequência narrativa, nã
   const reversed = buildPreJudgeRiskAssessment({ ...baseInput, memory }).assessment;
   assert.ok(exact.findings.some(({ code }) => code === "STRUCTURE_REPEAT"));
   assert.equal(reversed.findings.some(({ code }) => code === "STRUCTURE_REPEAT"), false);
+});
+
+test("pré-Judge V2: espaços de IDs distintos nunca cruzam; comercial repetido dispara COMMERCIAL_EFFECT_REPEAT", () => {
+  // priorEffects é espaço psicológico; priorCommercialEffects é comercial.
+  const repeated = buildPreJudgeRiskAssessment({
+    ...baseInput,
+    commercialEffects: ["desejo"],
+    memory: { status: "AVAILABLE", priorEffects: ["identification"], priorCommercialEffects: ["desejo"] },
+  });
+  const repeatedCodes = repeated.assessment.findings.map(({ code }) => code);
+  assert.ok(repeatedCodes.includes("PSYCHOLOGICAL_EFFECT_REPEAT"));
+  assert.ok(repeatedCodes.includes("COMMERCIAL_EFFECT_REPEAT"));
+
+  const disjoint = buildPreJudgeRiskAssessment({
+    ...baseInput,
+    commercialEffects: ["desejo"],
+    memory: { status: "AVAILABLE", priorEffects: ["aspiration"], priorCommercialEffects: ["urgência"] },
+  });
+  const disjointCodes = disjoint.assessment.findings.map(({ code }) => code);
+  assert.equal(disjointCodes.some((code) => code.endsWith("_REPEAT")), false, "IDs de espaços distintos não geram falso positivo");
+
+  const absent = buildPreJudgeRiskAssessment({
+    ...baseInput,
+    memory: { status: "AVAILABLE", priorCommercialEffects: ["desejo"] },
+  });
+  assert.equal(absent.assessment.findings.some(({ code }) => code === "COMMERCIAL_EFFECT_REPEAT"), false, "sem commercialEffects do candidato o detector é inaplicável");
 });
 
 test("cenas automáticas não sustentam realização: setup/test sem teste é PARTIAL, não rejeição lexical", () => {

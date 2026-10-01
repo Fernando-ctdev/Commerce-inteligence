@@ -398,6 +398,29 @@ test("Risk pré-Judge registra PARTIAL e fail-safe seleciona e executa Judge par
   assert.equal(result.judgeExecutionRecords[0]?.execution, "EXECUTED");
 });
 
+test("pipeline candidata: memória de entrega alimenta PSYCHOLOGICAL_EFFECT_REPEAT e COMMERCIAL_EFFECT_REPEAT nos espaços corretos", async () => {
+  const baseInput = {
+    productId: "p", name: "Produto",
+    description: "Tecido respirável", facts: { features: ["cós elástico com cordão"] }, targetContentCount: 1,
+  };
+  const first = await runFirstGeneration({ ...baseInput, jobId: "job-risk-mem-1", router: v2RouterState(providerHypotheses).router });
+  const deliveredSignals = first.memorySignals.plannerSignals as Array<{ psychologicalEffects?: readonly string[]; commercialEffects?: readonly string[] }>;
+  assert.ok(deliveredSignals.length > 0);
+  const second = await runFirstGeneration({
+    ...baseInput, jobId: "job-risk-mem-2", router: v2RouterState(providerHypotheses).router,
+    memory: { signalsSchemaVersion: "PLANNER_MEMORY_SIGNALS_V1", signals: deliveredSignals },
+  });
+  const codes = second.preJudgeRiskAssessments.flatMap((assessment) => assessment.findings.map((finding) => finding.code));
+  assert.ok(codes.includes("COMMERCIAL_EFFECT_REPEAT"), "efeito comercial da hipótese da origem repete no espaço correto");
+  // O planner pode divergir do blueprint anterior (novidade vs. memória é soft):
+  // o detector psicológico deve casar EXATAMENTE com a repetição real — nunca
+  // cruzar com commercialEffects (espaços distintos).
+  const fedPsy = new Set(deliveredSignals.flatMap((signal) => signal.psychologicalEffects ?? []));
+  const deliveredPsy = new Set((second.memorySignals.plannerSignals as Array<{ psychologicalEffects?: readonly string[] }>).flatMap((signal) => signal.psychologicalEffects ?? []));
+  const psyOverlap = [...fedPsy].some((effect) => deliveredPsy.has(effect));
+  assert.equal(codes.includes("PSYCHOLOGICAL_EFFECT_REPEAT"), psyOverlap, "detector psicológico reflete somente repetição real no espaço psicológico");
+});
+
 test("pipeline candidata: communicationPrinciples deriva da Skill carregada", async () => {
   const { calls, router } = v2RouterState(providerHypotheses);
   const result = await runFirstGeneration({

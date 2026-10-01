@@ -1906,11 +1906,20 @@ export async function runFirstGeneration(
   const riskMemory = memorySnapshotV2(input.memory);
   const priorSignals = "signals" in riskMemory && Array.isArray(riskMemory.signals) ? riskMemory.signals : [];
   const memoryStatus = priorSignals.length ? "AVAILABLE" : "EMPTY";
-  const priorEffects = priorSignals.flatMap((signal) => signal.commercialEffects ?? []);
+  // priorEffects é o espaço PSICOLÓGICO (casa com Blueprint.psychologicalEffects);
+  // commercialEffects do candidato casa com priorCommercialEffects (hipóteses Discovery).
+  const priorEffects = priorSignals.flatMap((signal) => signal.psychologicalEffects ?? []);
+  const priorCommercialEffects = priorSignals.flatMap((signal) => signal.commercialEffects ?? []);
   const priorMechanisms = priorSignals.flatMap((signal) => signal.attentionMechanisms);
   const priorRecipes = priorSignals.flatMap((signal) => signal.recipeId ? [signal.recipeId] : []);
   const priorStructures = priorSignals.map((signal) => signal.narrativeShape.join(">"));
   const productTerms = evidence.facts.flatMap(developmentGroundingTerms).filter((term) => term !== "produto" && term !== "product").slice(0, 30);
+  // commercialEffects do candidato vêm da PRÓPRIA hipótese Discovery canônica
+  // (mesma derivação de signalEnvelope); CommercialOpportunity não as carrega.
+  const riskEnvelope = discoveryCanonicalResult?.origin === "fresh" ? discoveryCanonicalResult.envelope : reuseEnvelopeForSignals;
+  const commercialEffectsByOpportunity = new Map(
+    riskEnvelope === undefined ? [] : canonicalHypothesesOf(riskEnvelope).map((hypothesis) => [hypothesis.sourceOpportunityId, hypothesis.commercialEffects as readonly string[]]),
+  );
   const preJudgeRiskAssessments: PreJudgeRiskAssessmentV2[] = [];
   const judgeSelectionDecisions: JudgeSelectionDecisionV1[] = [];
   for (const [index, candidate] of hard.entries()) {
@@ -1928,7 +1937,8 @@ export async function runFirstGeneration(
           && scene.scenes.length === blueprint.narrativeMoves.length
           && scene.dropped === 0,
         scenes: { status: scene.status },
-        memory: { status: memoryStatus, priorMechanisms, priorEffects, priorRecipes, priorStructures },
+        commercialEffects: commercialEffectsByOpportunity.get(candidate.opportunity.sourceOpportunityId ?? ""),
+        memory: { status: memoryStatus, priorMechanisms, priorEffects, priorCommercialEffects, priorRecipes, priorStructures },
         productTerms,
         production: { signals: scene.status === "AVAILABLE" ? [] : [scene.status] },
         selectionPolicy: PRE_JUDGE_SELECTION_POLICY_V2,
