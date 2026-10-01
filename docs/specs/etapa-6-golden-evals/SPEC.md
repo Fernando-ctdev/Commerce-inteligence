@@ -4,28 +4,28 @@
 
 **Natureza:** precondição documental transversal do Slice 003; não é Slice de produto e não altera o Slice 004.
 
-**Status:** `DOCUMENTATION_ONLY` — define o protocolo de aceitação; não executa dataset, fixture, provider, anotação, benchmark, E6, relatório ou cutover.
+**Status:** `APPROVED_FOR_CANDIDATE_INTEGRATION` — autoriza o Maestro/time a preparar e executar E2E/E6 sob os gates abaixo; não registra freeze, coleta, resultado, aprovação ou cutover realizados.
 
 **Runtime atual:** Engine V2 default por decisão do usuário, efetiva no commit `8d1833b`, no estado `V2_DEFAULT_PENDING_ACCEPTANCE`. ADR-029/`@1.2` permanece baseline histórico/experimental reproduzível. Esta SPEC não declara resultado, não-regressão, aprovação ou rollback.
 
-O loader de Skill da V2 no commit `8d1833b` usa `@1.2`; `@1.3` no Planner provém de fixture congelada do harness, **não** é binding operacional comprovado. A consistência `@1.3` permanece contrato-alvo de aceite, conforme [ADR-033 §7](../../architecture/adr-033-determinismo-llm-e-creative-system.md).
+**Histórico `8d1833b`:** o loader de Skill usava `@1.2` e o Planner recebia `@1.3` de fixture congelada. **Candidata atual nesta branch:** o código usa Skill `@1.3` e binding `runtime-skill`; isso não comprova consistência operacional observada com provider vivo nem aceite, conforme [ADR-033 §7](../../architecture/adr-033-determinismo-llm-e-creative-system.md).
 
 ## 1. Objetivo e fronteira
 
 E6 deve produzir evidência auditável, após concluir as Etapas 2–6, para:
 
-1. comparar end-to-end ADR-029/`@1.2` e V2 final/`@1.3`, em A/B conduzida pelo usuário contra todas as premissas da nota conectada;
+1. comparar end-to-end ADR-029/`@1.2` e V2 final/`@1.3`, em A/B conduzida pelo Maestro/time contra todas as premissas da nota conectada;
 2. avaliar primeira geração e recorrência;
 3. medir invariantes, qualidade, custo, latência e cobertura, inclusive o efeito agregado das migrações LLM → código;
 4. permitir ao Review reprovar protocolo, execução, relatório ou candidato antes de qualquer correção de runtime.
 
-Nenhuma A/B será executada por nós agora. Atribuições individuais podem ser solicitadas depois pelo usuário para diagnóstico, mas não integram o gate obrigatório de `V2_ACCEPTED`.
+Por instrução expressa do usuário, o Maestro/time assume a operação dos scripts, DB/app/worker em ambiente de avaliação isolado, validações offline, coleta live autorizada, assignments e relatório. Esta direção substitui as restrições anteriores de A/B exclusiva pelo usuário ou de não execução pelo time. Antes de qualquer chamada externa, o usuário ou autoridade humana responsável deve aprovar thresholds, exceções explícitas e teto de gasto, além de autorizar a coleta sobre o freeze pré-coleta revisado por Review e Software Architect. Credenciais nunca são solicitadas ou expostas em chat, logs ou artefatos; são disponibilizadas por ambiente/secret store seguro. Atos que exijam autoridade humana ou não devam ser executados pelo time são sinalizados explicitamente. Atribuições individuais continuam opcionais para diagnóstico solicitado, não gate de `V2_ACCEPTED`.
 
 Esta SPEC não cria capability, endpoint, estado de Job, worker, serviço, tabela, migration, adapter, flag ou persistência. Não corrige writer, memória, Skill, prompt, Risk ou Judge.
 
 ## 2. Fontes e precedência
 
-1. Nota imutável “Plano de recalibração da commerce inteligence”, com a instrução expressa mais recente do usuário prevalecendo apenas quanto ao momento e à obrigatoriedade do A/B individual: nenhuma A/B por nós agora; A/B end-to-end pelo usuário após as Etapas 2–6.
+1. Pedido expresso atual do usuário: execução E2E/E6 pelo Maestro/time sob os gates desta SPEC; supersede as restrições anteriores de ownership da nota imutável “Plano de recalibração da commerce inteligence”, sem alterar a nota nem dispensar aprovação humana, critérios ou aceite final.
 2. PRDs vigentes.
 3. [SYSTEM-DESIGN](../../architecture/SYSTEM-DESIGN.md).
 4. [ADR-013](../../architecture/adr-013-model-router-e-intelligence-tier.md), [ADR-019](../../architecture/adr-019-gate-versionada-e-cenas.md), [ADR-021](../../architecture/adr-021-geracao-parcial-declarada-e-retry-de-faltantes.md), [ADR-029](../../architecture/adr-029-pipeline-hibrida-deterministica-e-criativa.md) e [ADR-033](../../architecture/adr-033-determinismo-llm-e-creative-system.md).
@@ -204,14 +204,14 @@ O mesmo `jobSeed` é usado no par quando a variável avaliada não é seed. Time
 
 ## 7. Avaliação A/B end-to-end final
 
-Após concluir todas as Etapas 2–6, o usuário fará a comparação A/B:
+Após concluir todas as Etapas 2–6 e aprovar o freeze pré-coleta, o Maestro/time executará a comparação A/B:
 
 - ADR-029/`@1.2` por commit versus V2 final/`@1.3` por commit;
 - primeira geração e recorrência;
 - execução offline dos invariantes e execução com provider vivo das métricas operacionais/semânticas;
 - todas as premissas da nota conectada, inclusive qualidade comercial e criativa, diversidade, ausência de dor obrigatória e templating, factualidade, redução de chamadas, custo, latência, repairs e falhas.
 
-Antes disso, apenas validações comportamentais por etapa e preparação do protocolo; nenhuma A/B por migração ou A/B executada por nós agora. Atribuições de PU/Strategy, Plan, cenas, Judge, catálogo/Blueprint, recipe/free composition, Skill ou tiers são diagnósticos opcionais posteriores, se solicitados pelo usuário. A/B end-to-end é gate de aceite; atribuição individual não a substitui nem é condição obrigatória.
+Antes da coleta, executar validações comportamentais por etapa e preparar o protocolo; chamadas externas permanecem bloqueadas até as aprovações previstas nesta SPEC. Atribuições de PU/Strategy, Plan, cenas, Judge, catálogo/Blueprint, recipe/free composition, Skill ou tiers são diagnósticos opcionais posteriores, se solicitados pelo usuário. A/B end-to-end é gate de aceite; atribuição individual não a substitui nem é condição obrigatória.
 
 ## 8. Rubricas subjetivas auditáveis
 
@@ -260,7 +260,7 @@ Para cada dimensão, o protocolo fixa antes da coleta:
 
 ## 9. Cegamento, independência e adjudicação
 
-Cada unidade recebe no mínimo duas avaliações humanas independentes e cegas. O anotador não recebe braço, commit, provider, modelo, tier, reasoning, custo, latência, retries, Risk, Judge runtime ou resultado esperado.
+Cada unidade recebe no mínimo duas avaliações humanas independentes e cegas, com adjudicação humana dos conflitos conforme a policy pré-registrada; agentes/LLMs não substituem esses julgamentos. O time organiza assignments, coleta as avaliações e consolida o relatório; os avaliadores não precisam ser o usuário. O anotador não recebe braço, commit, provider, modelo, tier, reasoning, custo, latência, retries, Risk, Judge runtime ou resultado esperado.
 
 ```ts
 type BlindAssignmentV1 = {
@@ -406,7 +406,7 @@ O relatório referencia artefatos/hashes suficientes para reprodução e não pe
 
 `APPROVED` exige:
 
-1. protocolo e thresholds aprovados antes da coleta;
+1. freeze pré-coleta revisado por Review e Software Architect, com thresholds, exceções explícitas e teto de gasto aprovados pelo usuário ou autoridade humana responsável antes de qualquer chamada externa;
 2. evidence offline e live completas nos critérios correspondentes;
 3. revisão formal do Software Architect;
 4. Review sem findings bloqueantes;
@@ -431,12 +431,14 @@ Esta SPEC não fornece nenhum desses resultados.
 
 Antes de execução:
 
-1. Review aprova SPEC, PLAN e **novas versões full E6** de manifesto/cases, rubricas, aggregation e threshold policies, com hashes, pré-registro e diferenças explícitas para v1; o pacote Judge reduction v1 `FROZEN` permanece intacto e não supre esse gate;
+1. Review e Software Architect revisam SPEC, PLAN e **novas versões full E6** de manifesto/cases, rubricas, aggregation e threshold policies, com hashes, pré-registro e diferenças explícitas para v1; o pacote Judge reduction v1 `FROZEN` permanece intacto e não supre esse gate;
 2. dataset e fixtures full E6 ficam `FROZEN` antes da coleta;
 3. protocolo e manifest de diferenças são hashados;
 4. provider/model/tier/params e artefatos de prompt/contexto são congelados;
 5. assignments/cegamento/adjudicação são validados;
 6. executor confirma separação offline/live;
 7. nenhuma coleta ocorreu antes do pré-registro.
+8. usuário ou autoridade humana responsável aprova thresholds, exceções explícitas e teto de gasto e autoriza a coleta antes de qualquer chamada externa; o executor bloqueia chamadas sem essas aprovações e interrompe a coleta ao atingir o teto, registrando incompletude, sem ampliar orçamento ou reduzir escopo silenciosamente;
+9. credenciais ficam exclusivamente em ambiente/secret store seguro, nunca em chat, logs ou artefatos; avaliações e adjudicação permanecem humanas, independentes e cegas.
 
 Até relatório e aceite explícito, o estado permanece `V2_DEFAULT_PENDING_ACCEPTANCE`.
