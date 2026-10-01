@@ -70,7 +70,7 @@ function buildPool(opportunityCount: number): CommercialDiscoveryPool {
   });
 }
 
-function baseInput(overrides: Partial<PlannerInput> = {}): PlannerInput {
+function baseInput(overrides: Partial<Extract<PlannerInput, { plannerPolicyVersion: "PLANNER_POLICY_V1" }>> = {}): PlannerInput {
   return {
     fixtureId: "fixture-base-v1",
     targetContentCount: 5,

@@ -90,13 +90,13 @@ export function isEmptyMemorySnapshot(value: unknown): value is EmptyMemorySnaps
 export type HarnessSkillBinding = {
   platformSkillVersion: string;
   creativeSystemVersion: string;
-  source: "frozen-harness-fixture";
+  source: "frozen-harness-fixture" | "runtime-skill";
 };
 
 export type AcceptedHarnessSkillBinding = {
   platformSkillVersion: "tiktok-commerce@1.3";
   creativeSystemVersion: "1.3";
-  source: "frozen-harness-fixture";
+  source: "frozen-harness-fixture" | "runtime-skill";
 };
 
 // Blueprint estrutural — decision data, nunca texto final. `noveltyTargets`
@@ -134,9 +134,11 @@ export type PlannedOpportunityV2 = {
 
 // Policy fechada: único valor registrado; desconhecido falha
 // GEN-PLANNER-POLICY antes da enumeração.
-export type PlannerPolicyVersion = "PLANNER_POLICY_V1";
+export type PlannerPolicyVersion = "PLANNER_POLICY_V1" | "PLANNER_POLICY_V2";
 
-export type PlannerInput = {
+export const CREATIVE_COMPATIBILITY_V2 = "CREATIVE_COMPATIBILITY_V2";
+
+type PlannerInputCommon = {
   fixtureId: string;
   targetContentCount: number;
   productFacts: ProductFactsProjection;
@@ -146,8 +148,15 @@ export type PlannerInput = {
   skillBinding: HarnessSkillBinding;
   inputMemorySnapshot: MemorySnapshotInput;
   seed: string;
-  plannerPolicyVersion: PlannerPolicyVersion;
 };
+
+export type PlannerInput = PlannerInputCommon & ({
+  plannerPolicyVersion: "PLANNER_POLICY_V1";
+} | {
+  plannerPolicyVersion: "PLANNER_POLICY_V2";
+  compatibilityPolicyVersion: typeof CREATIVE_COMPATIBILITY_V2;
+  creativeSystemHash: string;
+});
 
 export type PlannerOutput = {
   opportunities: readonly PlannedOpportunityV2[];

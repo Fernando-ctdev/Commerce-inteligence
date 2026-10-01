@@ -16,6 +16,10 @@ export const PLANNER_POLICY_REGISTRY = deepFreeze({
     enumeration: "ENUMERATION_POLICY_V1",
     candidateCap: "CANDIDATE_CAP_POLICY_V1",
   },
+  PLANNER_POLICY_V2: {
+    enumeration: "ENUMERATION_POLICY_V2",
+    selection: "LEXICOGRAPHIC_MMR_V2",
+  },
 });
 
 export function isRegisteredPlannerPolicyVersion(value: string): value is PlannerPolicyVersion {
@@ -25,6 +29,7 @@ export function isRegisteredPlannerPolicyVersion(value: string): value is Planne
 // Pré-dedup e pré-cap. Exceder 4096 raw candidates falha
 // GEN-PLANNER-ENUMERATION-LIMIT — nunca trunca.
 export const ENUMERATION_POLICY_V1 = deepFreeze({ maxRawCandidates: 4096 });
+export const ENUMERATION_POLICY_V2 = deepFreeze({ maxRawCandidates: 65_536 });
 
 // candidateCap(N) >= N para todo N ∈ [1, 10]; cap < N é policy inválida.
 export function candidateCap(targetContentCount: number): number {

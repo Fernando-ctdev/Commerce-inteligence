@@ -7,6 +7,7 @@
 // persistência, relógio ou aleatoriedade global.
 import {
   assertEligibleFormat,
+  assertFreeCompositionCooccurrence,
   loadCreativeSystem,
   resolveBlueprint,
   type CreativeSystem,
@@ -26,6 +27,7 @@ import {
   candidateCap,
   CREATIVE_BLUEPRINT_CARDINALITY_POLICY_V1,
   ENUMERATION_POLICY_V1,
+  ENUMERATION_POLICY_V2,
   FORMAT_COMPLEXITY_V1,
   HOOK_MECHANISM_PROJECTION_POLICY_V1,
   isRegisteredPlannerPolicyVersion,
@@ -303,7 +305,7 @@ function validatePlannerInput(input: PlannerInput): ValidatedInputFull {
   if (!isRecord(input.skillBinding)
     || !isNonEmptyString((input.skillBinding as HarnessSkillBinding).platformSkillVersion)
     || !isNonEmptyString((input.skillBinding as HarnessSkillBinding).creativeSystemVersion)
-    || (input.skillBinding as HarnessSkillBinding).source !== "frozen-harness-fixture")
+    || (input.skillBinding as HarnessSkillBinding).source !== (input.plannerPolicyVersion === "PLANNER_POLICY_V2" ? "runtime-skill" : "frozen-harness-fixture"))
     throw inputFailure("skillBinding", "skillBinding inválido");
   return {
     fixtureId: input.fixtureId,
@@ -482,6 +484,8 @@ export function evaluateCandidateEligibility(candidate: RawCandidate, context: E
       narrativeMoves: candidate.blueprint.narrativeMoves,
       productRole: candidate.blueprint.productRole,
     });
+    if (context.policyVersion === "PLANNER_POLICY_V2" && candidate.blueprint.recipeId === undefined)
+      assertFreeCompositionCooccurrence(context.creativeSystemValue, candidate.blueprint);
     if (FORMAT_COMPLEXITY_V1[candidate.blueprint.format] === undefined) {
       const formatInSkill = context.creativeSystemValue.formats.includes(candidate.blueprint.format);
       throw fail(formatInSkill ? "GEN-CS-ELIGIBILITY" : "GEN-CS-REF", "format", "formato sem production policy");
@@ -844,6 +848,7 @@ function deepFreeze<T>(value: T): T {
 export function planPortfolio(input: PlannerInput): { ok: true; value: PlannerOutput } | { ok: false; error: PlannerFailure } {
   try {
     const validated = validatePlannerInput(input);
+    if (input.plannerPolicyVersion === "PLANNER_POLICY_V2") return planPortfolioV2(input, validated);
     if (input.skillBinding.platformSkillVersion !== ACCEPTED_SKILL_BINDING.platformSkillVersion
       || input.skillBinding.creativeSystemVersion !== ACCEPTED_SKILL_BINDING.creativeSystemVersion)
       throw harnessFailure("GEN-CS-VERSION", "skill", input.plannerPolicyVersion, input.skillBinding,
@@ -988,4 +993,190 @@ export function scoreCandidateForHarnessTest(parts: {
     parts.creatorConstraints,
   );
   return { inputs: scored.inputs, rankScore: scored.rankScore };
+}
+
+// V2 não altera o percurso V1: enumera todas as combinações sustentadas, antes
+// de dedup/creator, e seleciona no pool elegível inteiro sem quotas artificiais.
+function subsets(ids: readonly string[], max: number, ordered: boolean): string[][] {
+  const results: string[][] = [];
+  const visit = (picked: string[]): void => {
+    if (picked.length) results.push([...picked]);
+    if (picked.length === max) return;
+    for (const id of ids) {
+      if (picked.includes(id) || (!ordered && picked.length && compareUtf8(id, picked[picked.length - 1]!) <= 0)) continue;
+      visit([...picked, id]);
+    }
+  };
+  visit([]);
+  return results;
+}
+
+export function enumerateV2(input: PlannerInput, system: CreativeSystem): RawCandidate[] {
+  const variants: CreativeBlueprint[] = [];
+  const narratives = new Map<string, string[]>();
+  for (const recipe of system.recipes) {
+    const attentionVariants = subsets(recipe.attentionMechanisms, 2, true);
+    const effectVariants = subsets([...recipe.psychologicalEffects].sort(compareUtf8), 3, false);
+    narratives.set(canonicalSerialization(recipe.narrativeMoves), [...recipe.narrativeMoves]);
+    for (const a of attentionVariants)
+      for (const e of effectVariants)
+        for (const format of recipe.formats)
+          for (const productRole of recipe.productRoles)
+            if (system.compatibility.formatsByProductRole[productRole]?.includes(format))
+              variants.push({ recipeId: recipe.id, attentionMechanisms: a, psychologicalEffects: e,
+                format, productRole, narrativeMoves: recipe.narrativeMoves });
+  }
+  const supported = (left: "attentionMechanisms" | "psychologicalEffects" | "formats" | "productRoles" | "narrativeMoves",
+    a: string, right: "attentionMechanisms" | "psychologicalEffects" | "formats" | "productRoles" | "narrativeMoves",
+    b: string): boolean => system.recipes.some((recipe) => recipe[left].includes(a) && recipe[right].includes(b));
+  const roles = Object.keys(system.compatibility.formatsByProductRole).sort(compareUtf8);
+  for (const productRole of roles)
+    for (const format of system.compatibility.formatsByProductRole[productRole]!)
+      for (const narrativeMoves of narratives.values()) {
+        if (narrativeMoves.some((move) =>
+          !supported("formats", format, "narrativeMoves", move)
+          || !supported("productRoles", productRole, "narrativeMoves", move))) continue;
+        const viable = (dimension: "attentionMechanisms" | "psychologicalEffects", id: string) =>
+          supported(dimension, id, "formats", format)
+          && supported(dimension, id, "productRoles", productRole)
+          && narrativeMoves.every((move) => supported(dimension, id, "narrativeMoves", move));
+        const att = system.attentionMechanisms.filter((id) => viable("attentionMechanisms", id));
+        const psy = system.psychologicalEffects.filter((id) => viable("psychologicalEffects", id));
+        for (const a of subsets(att, 2, true))
+          for (const e of subsets([...psy].sort(compareUtf8), 3, false))
+            if (a.every((id) => e.every((effect) =>
+              supported("attentionMechanisms", id, "psychologicalEffects", effect))))
+              variants.push({ attentionMechanisms: a, psychologicalEffects: e, format, productRole, narrativeMoves });
+      }
+  const raw: RawCandidate[] = [];
+  for (const source of [...input.commercialDiscovery.opportunities].sort((a, b) => compareUtf8(a.sourceOpportunityId, b.sourceOpportunityId)))
+    for (const blueprint of variants) {
+      raw.push({ sourceOpportunityId: source.sourceOpportunityId, source,
+        evidenceRefs: source.evidenceRefs, blueprint, noveltyTargets: [] });
+      if (raw.length > ENUMERATION_POLICY_V2.maxRawCandidates)
+        throw harnessFailure("GEN-PLANNER-ENUMERATION-LIMIT", "enumeration", input.plannerPolicyVersion, input.skillBinding,
+          { message: "maxRawCandidates V2 excedido antes de dedup/elegibilidade",
+            sanitized: { rawCandidates: raw.length, maxRawCandidates: ENUMERATION_POLICY_V2.maxRawCandidates } });
+    }
+  return raw;
+}
+
+export function similarityV2(left: PlannerMemorySignals, right: PlannerMemorySignals): number {
+  const w = SIMILARITY_WEIGHTS_V1;
+  const dimensions: Array<[number, boolean, boolean]> = [
+    [w.commercialEffect, !!left.commercialEffects?.length && !!right.commercialEffects?.length,
+      setsEqualCanonical(left.commercialEffects ?? [], right.commercialEffects ?? [])],
+    [w.psychologicalEffect, !!left.psychologicalEffects.length && !!right.psychologicalEffects.length,
+      setsEqualCanonical(left.psychologicalEffects, right.psychologicalEffects)],
+    [w.recipe, !!left.recipeId && !!right.recipeId, left.recipeId === right.recipeId],
+    [w.attentionMechanism, !!left.attentionMechanisms[0] && !!right.attentionMechanisms[0],
+      left.attentionMechanisms[0] === right.attentionMechanisms[0]],
+    [w.format, !!left.format && !!right.format, left.format === right.format],
+    [w.productRole, !!left.productRole && !!right.productRole, left.productRole === right.productRole],
+    [w.narrativeShape, !!left.narrativeShape.length && !!right.narrativeShape.length,
+      arraysEqualCanonical(left.narrativeShape, right.narrativeShape)],
+  ];
+  const applicable = dimensions.reduce((sum, [weight, present]) => sum + (present ? weight : 0), 0);
+  return applicable === 0 ? 0 : Math.floor(
+    dimensions.reduce((sum, [weight, present, match]) => sum + (present && match ? weight * SCALE : 0), 0) / applicable + 0.5);
+}
+
+function planPortfolioV2(input: Extract<PlannerInput, { plannerPolicyVersion: "PLANNER_POLICY_V2" }>, validated: ValidatedInputFull):
+  { ok: true; value: PlannerOutput } {
+  if (input.skillBinding.platformSkillVersion !== ACCEPTED_SKILL_BINDING.platformSkillVersion
+    || input.skillBinding.creativeSystemVersion !== ACCEPTED_SKILL_BINDING.creativeSystemVersion)
+    throw harnessFailure("GEN-CS-VERSION", "skill", input.plannerPolicyVersion, input.skillBinding,
+      { field: "skillBinding", message: "Skill binding V2 incompatível" });
+  const system = loadCreativeSystem(input.skillBinding.platformSkillVersion);
+  if (input.compatibilityPolicyVersion !== "CREATIVE_COMPATIBILITY_V2"
+    || input.creativeSystemHash !== sha256Hex(canonicalSerialization(system)))
+    throw harnessFailure("GEN-CS-VERSION", "skill", input.plannerPolicyVersion, input.skillBinding,
+      { field: "creativeSystemHash", message: "Proveniência de compatibilidade V2 divergente" });
+  const raw = enumerateV2(input, system);
+  const context: EligibilityContext = {
+    pool: new Map(input.commercialDiscovery.opportunities.map((source) => [source.sourceOpportunityId, source])),
+    catalogRefs: [...input.commercialDiscovery.evidenceCatalog.refs, ...input.productFacts.evidenceRefs],
+    creatorConstraints: input.creatorConstraints, creativeSystemValue: system,
+    policyVersion: input.plannerPolicyVersion, skillBinding: input.skillBinding,
+  };
+  const eligible: EligibleCandidate[] = [];
+  const seen = new Set<string>();
+  for (const candidate of raw) {
+    const result = evaluateCandidateEligibility(candidate, context);
+    if (result && !seen.has(result.candidateKey)) {
+      eligible.push(result);
+      seen.add(result.candidateKey);
+    }
+  }
+  if (eligible.length === 0)
+    throw harnessFailure(raw.length === 0 ? "GEN-CS-COMPAT" : "GEN-PLANNER-NO-CANDIDATES",
+      "selection", input.plannerPolicyVersion, input.skillBinding, { message: "nenhum candidate elegível" });
+  if (new Set(eligible.map((item) => item.sourceOpportunityId)).size < validated.targetContentCount)
+    throw harnessFailure("GEN-PLANNER-DIVERSITY", "selection", input.plannerPolicyVersion, input.skillBinding,
+      { message: "menos de N origens elegíveis" });
+  const refs = new Set(input.productFacts.evidenceRefs.map(evidenceRefKey));
+  const ranks = eligible.map((candidate) => {
+    const signal = selectionSignal(candidate);
+    const matches = memoryDimensionMatches(candidate, validated.memory.signals).filter(Boolean).length;
+    const memoryMax = validated.memory.signals.reduce((max, historic) => Math.max(max, similarityV2(signal, historic)), 0);
+    return {
+      candidate, signal,
+      relevance: ratio(candidate.validatedEvidenceRefs.filter((ref) => refs.has(evidenceRefKey(ref))).length,
+        candidate.validatedEvidenceRefs.length),
+      commercialFit: ratio(new Set(candidate.source.commercialEffects.map(nfc)).size, 3),
+      novelty: norm(1 - matches / 9),
+      memoryDistance: SCALE - memoryMax,
+      tie: tieHash(validated.seed, candidate.candidateKey),
+    };
+  });
+  const selected: typeof ranks = [];
+  const usedSources = new Set<string>();
+  const usedIds = new Set<string>();
+  while (selected.length < validated.targetContentCount) {
+    let best: (typeof ranks)[number] | undefined;
+    let bestOrder: readonly (number | string)[] | undefined;
+    for (const entry of ranks) {
+      if (usedSources.has(entry.candidate.sourceOpportunityId)) continue;
+      const blueprint = entry.candidate.blueprint;
+      const fresh = [...blueprint.attentionMechanisms, blueprint.format,
+        ...(blueprint.recipeId ? [blueprint.recipeId] : [])].filter((id) => !usedIds.has(id)).length;
+      const mmr = SCALE - selected.reduce((max, prior) => Math.max(max, similarityV2(entry.signal, prior.signal)), 0);
+      // Recipe preference breaks only commercial/memory/diversity ties; free exploration stays eligible.
+      const recipeFit = blueprint.recipeId === undefined ? 0 : 1;
+      const order = [-entry.relevance, -entry.commercialFit, -entry.novelty, -entry.memoryDistance,
+        -fresh, -mmr, -recipeFit, entry.tie, entry.candidate.candidateKey] as const;
+      const previous = bestOrder;
+      const before = previous ? order.findIndex((value, index) => value !== previous[index]) : -1;
+      if (!previous || (before >= 0
+        && (typeof order[before] === "number"
+          ? (order[before] as number) < (previous[before] as number)
+          : compareUtf8(String(order[before]), String(previous[before])) < 0))) {
+        best = entry;
+        bestOrder = order;
+      }
+    }
+    if (!best) throw harnessFailure("GEN-PLANNER-DIVERSITY", "selection", input.plannerPolicyVersion, input.skillBinding,
+      { message: "menos de N origens distintas" });
+    selected.push(best);
+    usedSources.add(best.candidate.sourceOpportunityId);
+    for (const id of [...best.candidate.blueprint.attentionMechanisms, best.candidate.blueprint.format,
+      ...(best.candidate.blueprint.recipeId ? [best.candidate.blueprint.recipeId] : [])]) usedIds.add(id);
+  }
+  const opportunities: PlannedOpportunityV2[] = selected.map(({ candidate }, index) => ({
+    opportunityContractVersion: "2", candidateKey: candidate.candidateKey,
+    position: index + 1, sourceOpportunityId: candidate.sourceOpportunityId,
+    evidenceRefs: [...candidate.validatedEvidenceRefs],
+    commercialObjective: candidate.source.commercialObjective,
+    angle: candidate.source.angle, coreMessage: candidate.source.coreMessage,
+    ...(candidate.source.desiredViewerResponse === undefined ? {} : { desiredViewerResponse: candidate.source.desiredViewerResponse }),
+    noveltyTargets: [],
+    blueprint: { blueprintContractVersion: "1",
+      blueprint: { ...candidate.blueprint, attentionMechanisms: [...candidate.blueprint.attentionMechanisms],
+        psychologicalEffects: [...candidate.blueprint.psychologicalEffects], narrativeMoves: [...candidate.blueprint.narrativeMoves] },
+      creativeSystemVersion: "1.3", platformSkillVersion: "tiktok-commerce@1.3" },
+    hookMechanism: candidate.hookMechanism,
+  }));
+  return { ok: true, value: deepFreeze({ opportunities, plannerPolicyVersion: "PLANNER_POLICY_V2",
+    skillBinding: { ...input.skillBinding, platformSkillVersion: "tiktok-commerce@1.3", creativeSystemVersion: "1.3" },
+    seed: input.seed }) };
 }
