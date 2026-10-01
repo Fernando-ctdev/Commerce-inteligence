@@ -1,0 +1,39 @@
+{
+  "rubricVersion": "full-e6-rubric.v1-draft",
+  "status": "DRAFT",
+  "blind": true,
+  "minimumIndependentAnnotators": 2,
+  "missingLabel": "NOT_ANNOTATED",
+  "labels": ["LEFT_BETTER", "EQUIVALENT", "RIGHT_BETTER", "NOT_ANNOTATED", "NOT_APPLICABLE"],
+  "candidateOnlyLabels": ["SATISFIED", "NOT_SATISFIED", "NOT_ANNOTATED", "NOT_APPLICABLE"],
+  "candidateOnlyDimensions": ["BLUEPRINT_REALIZATION", "RECIPE_COHERENCE", "FREE_COMPOSITION_COHERENCE"],
+  "candidateOnlyBoundaryAnchor": "SATISFIED atende à direção permitida; NOT_SATISFIED não atende. Nota absoluta do target, nunca equivalência ou melhoria contra baseline.",
+  "dimensions": [
+    { "id": "NATURALNESS", "unit": "CONTENT", "question": "Um creator publicaria este conteúdo com fala natural?", "positiveAnchor": "Fala fluente em primeira pessoa sem instruções de edição no script.", "negativeAnchor": "Texto com metainstrução ou frase artificial." },
+    { "id": "ORIGINALITY", "unit": "CONTENT", "question": "Há uma ideia própria além da troca de substantivos?", "positiveAnchor": "Situação ou ação específica do produto sustenta uma ideia distinta.", "negativeAnchor": "Mesma estrutura com produto substituído." },
+    { "id": "PRODUCT_SPECIFICITY", "unit": "CONTENT", "question": "O conceito depende dos fatos deste produto?", "positiveAnchor": "Detalhe comprovado muda a execução.", "negativeAnchor": "Funciona sem alteração para produto não relacionado." },
+    { "id": "PERSUASION", "unit": "CONTENT", "question": "Cria interesse comercial sem alegar benefício não comprovado?", "positiveAnchor": "Demonstração ou desejo ligado a fato autorizado.", "negativeAnchor": "Promessa inventada ou CTA desconectado." },
+    { "id": "ATTENTION", "unit": "CONTENT", "question": "O início oferece motivo para continuar assistindo?", "positiveAnchor": "Abertura visual ou narrativa concreta.", "negativeAnchor": "Abertura genérica sem progressão." },
+    { "id": "PRODUCT_INTEGRATION", "unit": "CONTENT", "question": "O produto participa naturalmente da ação?", "positiveAnchor": "Uso concreto do produto na cena.", "negativeAnchor": "Produto citado apenas na conclusão." },
+    { "id": "BLUEPRINT_REALIZATION", "unit": "CONTENT", "question": "A realização corresponde à direção planejada apresentada?", "positiveAnchor": "Movimentos narrativos, formato e papel do produto reconhecíveis na execução.", "negativeAnchor": "Formato e papel do produto ignorados." },
+    { "id": "PSYCHOLOGICAL_DIVERSITY", "unit": "JOB", "question": "Os conteúdos criam reações humanas diferentes?", "positiveAnchor": "Desejo, identificação e curiosidade observáveis em abordagens distintas.", "negativeAnchor": "Todos apelam ao mesmo motivo." },
+    { "id": "CREATIVE_DIVERSITY", "unit": "JOB", "question": "As execuções são materialmente diferentes?", "positiveAnchor": "Ações, enquadramentos e sequências narrativas distintos.", "negativeAnchor": "Apenas gancho ou CTA parafraseados." },
+    { "id": "PERCEIVED_TEMPLATING", "unit": "JOB", "question": "O conjunto parece gerado por um template repetido?", "positiveAnchor": "Não há moldura recorrente previsível.", "negativeAnchor": "Mesma receita superficial em todos os vídeos." },
+    { "id": "PLATFORM_FIT", "unit": "CONTENT", "question": "A execução cabe no formato da plataforma e restrições do creator?", "positiveAnchor": "Ações graváveis dentro das restrições declaradas.", "negativeAnchor": "Exige equipamento ou pessoa não disponível." },
+    { "id": "RECIPE_COHERENCE", "unit": "CONTENT", "question": "A composição realiza de modo coerente a direção apresentada?", "positiveAnchor": "Mecanismos e narrativa reforçam a execução.", "negativeAnchor": "Elementos se contradizem." },
+    { "id": "FREE_COMPOSITION_COHERENCE", "unit": "CONTENT", "question": "A composição realiza de modo coerente a direção apresentada?", "positiveAnchor": "Os mecanismos combinam de modo inteligível.", "negativeAnchor": "Combinação formalmente válida, mas sem sentido editorial." }
+  ],
+  "adjudication": "Conflitos preservam ambas as notas brutas; terceira avaliação cega adjudica sem acesso ao braço.",
+  "evidenceRequired": true,
+  "boundaryAnchor": "EQUIVALENT quando não há diferença material observável na dimensão; ausência de evidência é NOT_ANNOTATED, nunca empate.",
+  "applicability": {
+    "RECIPE_COHERENCE": "ONLY_OBSERVED_RECIPE_BACKED_CONTENT",
+    "FREE_COMPOSITION_COHERENCE": "ONLY_OBSERVED_FREE_COMPOSITION_CONTENT",
+    "BLUEPRINT_REALIZATION": "REQUIRES_REDACTED_SEMANTIC_BLUEPRINT",
+    "PSYCHOLOGICAL_DIVERSITY": "DELIVERED_JOB_WITH_AT_LEAST_TWO_CONTENTS",
+    "CREATIVE_DIVERSITY": "DELIVERED_JOB_WITH_AT_LEAST_TWO_CONTENTS",
+    "PERCEIVED_TEMPLATING": "DELIVERED_JOB_WITH_AT_LEAST_TWO_CONTENTS"
+  },
+  "aggregation": "full-e6-aggregation.v1-draft: mean resolved applicable units per case, equal cases micro / equal categories macro; paired dimensions use signed comparison; unary target-only dimensions use absolute satisfaction 0/1 separately; no baseline imputation; no offline subjective evidence.",
+  "thresholds": null
+}
