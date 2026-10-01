@@ -33,11 +33,12 @@ function bumped(calls: Record<string, number>, task: string): void {
 }
 // Fixtures canônicas de 1 conteúdo (mesma família factual da suíte).
 function oneContentCalls(): Record<string, number> {
-  // Detecção é hard gate determinístico; PU retirado e Risk não seleciona Judge
-  // após o repair limpo deste fixture.
+  // Detecção é hard gate determinístico; PU retirado. Script reparado tem 1
+  // oração → risk PARTIAL → fail-safe RISK_PARTIAL_FAILSAFE seleciona o Judge.
   return {
     COMMERCIAL_OPPORTUNITY_MAPPING: 1,
     CONTENT_BRIEF_GENERATION: 1,
+    CONTENT_QUALITY_JUDGE: 1,
   };
 }
 

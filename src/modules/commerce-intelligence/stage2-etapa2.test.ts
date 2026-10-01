@@ -24,6 +24,7 @@ import { buildPlannerMemorySnapshot, memorySnapshotV2 } from "./engine-v2";
 import { loadPlatformSkill } from "./platform-skill";
 import { validateProductStrategy, type EvidenceSnapshot } from "./contract";
 import { canonicalSerialization, sha256Hex } from "./planner-harness/canonical";
+import { FAILSAFE_PARTIAL_TRIGGER } from "./risk-assessment";
 
 const evidence: EvidenceSnapshot = {
   facts: ["Produto V2", "Tecido respirável", "cós elástico com cordão"],
@@ -368,7 +369,7 @@ test("pipeline candidata: Discovery canônica + hash + Strategy versionada no re
   assert.deepEqual(strategy.sourceOpportunityIds, discovery!.sourceOpportunityIds);
 });
 
-test("Risk pré-Judge registra decisão limpa e não chama Judge para item não selecionado", async () => {
+test("Risk pré-Judge registra PARTIAL e fail-safe seleciona e executa Judge para script pouco observável", async () => {
   const { calls, router } = v2RouterState(providerHypotheses);
   const complete = router.complete;
   const cleanRouter = { ...router, complete: async (task: string, input?: { trustedContext?: unknown }) => {
@@ -387,10 +388,14 @@ test("Risk pré-Judge registra decisão limpa e não chama Judge para item não 
     productId: "p", jobId: "job-risk-clean", name: "Produto",
     description: "Tecido respirável", facts: { features: ["cós elástico com cordão"] }, targetContentCount: 1, router: cleanRouter,
   });
-  assert.equal(calls.includes("CONTENT_QUALITY_JUDGE"), false);
-  assert.equal(result.judgeExecutionRecords[0]?.execution, "NOT_EXECUTED");
-  assert.equal(result.judgeSelectionDecisions[0]?.selected, false);
-  assert.equal(result.preJudgeRiskAssessments[0]?.assessmentStatus, "AVAILABLE");
+  // Script de 1 oração não atinge cues de baixo risco → PARTIAL; fail-safe
+  // seleciona e executa o Judge (caminho AVAILABLE→sem Judge fica na suíte de
+  // routing, "atenção e resposta sustentadas...").
+  assert.equal(result.preJudgeRiskAssessments[0]?.assessmentStatus, "PARTIAL");
+  assert.ok(result.judgeSelectionDecisions[0]?.triggerCodes.includes(FAILSAFE_PARTIAL_TRIGGER));
+  assert.equal(result.judgeSelectionDecisions[0]?.selected, true);
+  assert.equal(calls.filter((task) => task === "CONTENT_QUALITY_JUDGE").length, 1);
+  assert.equal(result.judgeExecutionRecords[0]?.execution, "EXECUTED");
 });
 
 test("pipeline candidata: communicationPrinciples deriva da Skill carregada", async () => {
