@@ -41,7 +41,7 @@ Esta SPEC não cria capability, endpoint, estado de Job, worker, serviço, tabel
 | Runtime default | Engine V2 |
 | Aceitação formal | pendente |
 | Baseline E6 | ADR-029/`@1.2`, fixada por commit |
-| Candidato E6 integral | V2 final com `@1.3` operacional consistente, alvo pendente fixado por commit; não confundir com o binding atual da fixture Planner |
+| Candidato E6 integral | Runtime candidato nesta feature branch usa Skill `@1.3` em Strategy/Planner/Run e requer fixação por commit e comparação end-to-end com provider vivo; a fixture congelada do Planner isoladamente não demonstra proveniência operacional |
 | Rollback | somente por decisão explícita do usuário |
 | Supersessão formal do ADR-029 | somente em `V2_ACCEPTED` |
 
@@ -88,6 +88,8 @@ Provider vivo não substitui testes determinísticos. As classes são complement
 **Artefatos existentes preservados:** [`manifest.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/manifest.json) declara `golden-dataset.v1`/`golden-case.v1`, rubrica `golden-rubric.v1`, threshold `THRESHOLD_POLICY_GOLDEN_V1` e `FROZEN`; [`rubrics.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/rubrics.json) cobre somente `NATURALNESS` por `CONTENT`; [`threshold-policy.json`](../../../src/modules/commerce-intelligence/evaluation/golden-dataset/threshold-policy.json) usa `risk-assessment.v1`, `JUDGE_EXECUTED_CONTENTS` e thresholds de Judge reduction. Esse congelamento preserva apenas a evidência offline parcial do experimento de atribuição do Judge; não congela o pacote full E6, não contém execução live e não aprova o pipeline. Nenhum artefato v1 é reescrito ou revalidado retroativamente pelo contrato abaixo.
 
 **Diferença de contrato para E6 integral:** versionar e hashar novos manifesto/cases/fixtures, rubricas por dimensão/unidade com âncoras e dupla anotação cega, aggregation policy por categoria, threshold policy para end-to-end, protocolo/comparabilidade de provider e classes de evidência. Aprovar e congelar esse **novo conjunto** antes da coleta; registrar relação e diferenças explícitas com v1. `FROZEN` de v1 não é herança de cobertura, thresholds ou aprovação full.
+
+**Preparação offline em 2026-09-30:** [`full-e6/draft.json`](../../../src/modules/commerce-intelligence/evaluation/full-e6/draft.json) contém oito entradas redigidas cobrindo seis categorias de compra, N=10 e injeção adversarial; [`full-e6/rubrics.json`](../../../src/modules/commerce-intelligence/evaluation/full-e6/rubrics.json) descreve treze dimensões com âncoras e anotação cega dupla. `npx tsx scripts/eval-full-e6.mts verify` valida e calcula SHA-256 canônico dos insumos. O pacote permanece `DRAFT`, `OFFLINE_INPUT_ONLY` e **não** habilita coleta live: commits dos braços, provider/model/params, agregação, thresholds, avaliações humanas, revisão Architect e aceite do usuário continuam ausentes. O verificador rejeita promoção implícita; o pacote v1 `FROZEN` permanece intacto e não supre essas lacunas.
 
 O shape a seguir descreve o alvo documental de E6 integral, não a representação já congelada de `golden-dataset.v1`:
 
