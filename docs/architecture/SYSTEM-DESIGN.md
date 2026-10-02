@@ -46,17 +46,18 @@ Creator → Web/API → Application Use Cases → Domain Modules
                                    ↓
                     Model Router → LLM Gateway → Provider
 ```
+
 ## 3. Mapa de módulos
 
-| Módulo | Responsabilidade | Não possui |
-|---|---|---|
-| **Identity / Tenant** | sessão server-side, usuário, Tenant/workspace pessoal, autorização | colaboração, RBAC, SSO, billing |
-| **Product (entrada vigente)** | cadastro manual de fatos em `/products/new` com validação server-side, origem/proveniência, correções do creator, readiness derivada (PENDING/ANALYZING/READY/FAILED) | decisão comercial, descoberta automática de fatos |
-| **Product Import (Slice 012, ADR-027/028)** | validar URL, chamar CaptAPI HTTP, normalizar `ProductCandidate`, expor lacunas no formulário e encaminhar confirmação ao caso de uso manual | persistência prematura, fatos sem confirmação humana, Browser/portal/MCP, contexto estratégico |
-| **Commerce Intelligence** | `CommerceIntelligenceJob`, `IntelligenceRun`, orchestrator e capabilities versionadas da Engine V2, contratos/gates preservados, Planner/Blueprint e Brief Generator; `ProductMemorySnapshot` e Platform Skill seguem contratos versionados. Runner isolado ADR-029 é previsto somente para baseline E6, sem presumir sua implementação | revisão/aprovação, lotes, gravação |
-| **Content Operations** | `Content`, `ContentBriefVersion`, revisão/edição/regeneração/aprovação/descarte, `RecordingBatch` + `RecordingBatchItem`, Agenda e Estúdio | estratégia, chamada direta a modelo |
-| **Entitlements** | limites por plano, reserva/confirmação/liberação transacional, virada mensal | qualidade diferente por plano, cobrança |
-| **Model Router / LLM Gateway** | tarefas lógicas → `IntelligenceTier` → provider adapter, validação de saída | decisão estratégica, regra de negócio |
+| Módulo                                      | Responsabilidade                                                                                                                                                                                                                                                                                                                        | Não possui                                                                                     |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Identity / Tenant**                       | sessão server-side, usuário, Tenant/workspace pessoal, autorização                                                                                                                                                                                                                                                                      | colaboração, RBAC, SSO, billing                                                                |
+| **Product (entrada vigente)**               | cadastro manual de fatos em `/products/new` com validação server-side, origem/proveniência, correções do creator, readiness derivada (PENDING/ANALYZING/READY/FAILED)                                                                                                                                                                   | decisão comercial, descoberta automática de fatos                                              |
+| **Product Import (Slice 012, ADR-027/028)** | validar URL, chamar CaptAPI HTTP, normalizar `ProductCandidate`, expor lacunas no formulário e encaminhar confirmação ao caso de uso manual                                                                                                                                                                                             | persistência prematura, fatos sem confirmação humana, Browser/portal/MCP, contexto estratégico |
+| **Commerce Intelligence**                   | `CommerceIntelligenceJob`, `IntelligenceRun`, orchestrator e capabilities versionadas da Engine V2, contratos/gates preservados, Planner/Blueprint e Brief Generator; `ProductMemorySnapshot` e Platform Skill seguem contratos versionados. Runner isolado ADR-029 é previsto somente para baseline E6, sem presumir sua implementação | revisão/aprovação, lotes, gravação                                                             |
+| **Content Operations**                      | `Content`, `ContentBriefVersion`, revisão/edição/regeneração/aprovação/descarte, `RecordingBatch` + `RecordingBatchItem`, Agenda e Estúdio                                                                                                                                                                                              | estratégia, chamada direta a modelo                                                            |
+| **Entitlements**                            | limites por plano, reserva/confirmação/liberação transacional, virada mensal                                                                                                                                                                                                                                                            | qualidade diferente por plano, cobrança                                                        |
+| **Model Router / LLM Gateway**              | tarefas lógicas → `IntelligenceTier` → provider adapter, validação de saída                                                                                                                                                                                                                                                             | decisão estratégica, regra de negócio                                                          |
 
 Módulos são limites de código, não serviços. O Product Import é um componente do monólito que chama a CaptAPI por HTTP; não há Browser Service, portal, MCP em runtime, container adicional ou microserviço para esta entrada.
 
@@ -64,22 +65,23 @@ Módulos são limites de código, não serviços. O Product Import é um compone
 
 ```text
 Cadastro manual dos fatos + preparação (/products/new)
-                                                                                         ↓
-                                                                              Product salvo (sem job)
-                                                                                         ↓
-                                                        ação explícita `Analisar produto`
-                                                                                         ↓
-                                                                             CommerceIntelligenceJob
-                                                                                         ↓
-                                         ProductStrategy → ContentPlan → ContentOpportunity
-                                                                                         ↓
-                                                     Content + ContentBriefVersion (DRAFT)
-                                                                                         ↓
-                                                   revisão → APPROVED → RecordingBatch
-                                                                                         ↓
-                                                         Agenda / Estúdio → Execução
-                                                                                         ↓
-                                                       Histórico / Product Memory
+        ↓
+Product salvo (sem job)
+        ↓
+ação explícita `Analisar produto`
+        ↓
+CommerceIntelligenceJob
+        ↓
+ProductStrategy → ContentPlan → ContentOpportunity
+        ↓
+Content + ContentBriefVersion (DRAFT)
+        ↓
+revisão → APPROVED → RecordingBatch
+        ↓
+Agenda / Estúdio → Execução
+        ↓
+Histórico / Product Memory
+```
 
 1. **Cadastro:** o creator preenche os fatos do Produto e a preparação em `/products/new`; validação server-side; `targetContentCount` é resolvido no cadastro.
 2. **Salvamento:** persiste o `Product` ativo, escopado ao Tenant, sem criar job.
@@ -121,6 +123,7 @@ Worker ────────┼──> Application Use Cases ───> Domai
 - Fatos do Produto informados pelo creator em `/products/new` e validados server-side; nenhum campo estratégico; proveniência declarada (`submittedUrl`/`sourceUrl` informados, não verificados).
 - Salvamento nunca cria job; a ação explícita `Analisar produto` é o único momento de criação do `CommerceIntelligenceJob`.
 - URL e manual convergem em `/products/new`; a importação retorna Candidate e não persiste.
+- A extração por URL (CaptAPI) não é `Analisar produto`: não cria job nem reserva Entitlement. Só a ação explícita `Analisar produto` cria o `CommerceIntelligenceJob`.
 - A confirmação humana no mesmo formulário usa o serviço manual e valida todos os campos do contrato vigente.
 
 ### Importação por CaptAPI HTTP (Slice 012, ADR-027/028)
@@ -164,6 +167,7 @@ Engine Capability → Logical Intelligence Task → Model Router
 ### Persistência
 
 PostgreSQL é a fonte de registro: tenants/sessions, products, strategy versions, plans/opportunities, contents/brief versions, recording batches/items, intelligence jobs/runs, memory stats, entitlements/uso. O Slice 012 não cria tabela de Candidate nem altera schema: a consulta é transitória e só o Product confirmado é persistido pelo serviço manual. `product_import_attempts` permanece como remanescente legado até decisão própria.
+
 ### Autorização e isolamento
 
 Cookie opaco → sessão server-side → usuário + Tenant. Todo caso de uso aplica escopo; `tenantId` do cliente nunca é autoridade. Candidate e Product são escopados ao Tenant da sessão. A importação valida URL/egress, limita timeout e tamanho da resposta e chama somente a CaptAPI HTTP allowlisted; não executa Browser, portal ou MCP.
@@ -175,6 +179,7 @@ não confiável; schema, tamanho, cardinalidade, preço, moeda, imagens e sinais
 são validados antes de aparecer no Candidate. Falha de URL, configuração, rede,
 HTTP, JSON ou shape é recuperável e mantém o fallback manual. Nenhum browser,
 portal, MCP, cookie ou login é necessário ou permitido no runtime.
+
 ### Processamento assíncrono
 
 O salvamento do cadastro manual persiste o Product **sem** criar job. A ação explícita `Analisar produto` executa uma transação curta que cria o `CommerceIntelligenceJob`, reserva Entitlement e devolve; o worker reivindica com lease, executa a engine fora de transação e finaliza em transação curta. `job.id` é a chave idempotente compartilhada com a reserva; retry técnico não duplica Strategy/Plan/Briefings nem consumo. MVP: um job ativo por usuário — `Analisar produto` fica desabilitado com explicação enquanto `QUEUED`/`RUNNING`. O job sobrevive a navegação e fechamento de aba; reabrir restaura o indicador global. Falha preserva Product e fatos; retry reutiliza o contexto confirmado.
@@ -198,30 +203,30 @@ Fila visual de análises e central de atividades (após validação); notificaç
 
 ## 11. Relação com os ADRs
 
-| Documento | Papel neste desenho |
-|---|---|
-| ADR-001 | monólito modular, stack e deploy |
-| ADR-002 | engine como core estratégico (contrato v1 superseded pelo ADR-012) |
-| ADR-003 | PostgreSQL, memória e rastreabilidade |
-| ADR-004 | variedade por memória estruturada |
-| ADR-005 | processamento assíncrono durável — `CommerceIntelligenceJob`, um job ativo por usuário, indicador global |
-| ADR-006 | Entitlements e reserva transacional |
-| ADR-007 | fronteira de produção de mídia futura |
-| ADR-008 | superseded pelo ADR-022/ADR-027 — confirmação humana e segurança de URL permanecem referência |
-| ADR-022 | decisão anterior de entrada manual; substituído para URL-first pelo Slice 012/ADR-027 |
-| ADR-027 | integração URL-first por CaptAPI HTTP |
-| ADR-028 | Candidate transitório, confirmação no formulário e limites do Slice 012 |
-| ADR-009 | identidade, Tenant e autorização |
-| ADR-010 | superseded (API oficial) |
-| ADR-011 | superseded — arquitetura Browser Service/portal/HITL removida |
-| [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md) | contratos canônicos da engine, gates, repair, memória e rastreabilidade |
-| [ADR-013](./adr-013-model-router-e-intelligence-tier.md) | Model Router, `IntelligenceTier` e independência de provider |
-| [ADR-014](./adr-014-platform-skill-versionada.md) | Platform Skill versionada (TikTok Commerce Creative Skill) |
-| [ADR-016](./adr-016-projecao-de-acao-de-geracao.md) | projeção server-authoritative de `generationAction` para Product ativo |
-| [ADR-015](./adr-015-content-operations-e-recording-batch.md) | Content Operations: versões de briefing, aprovação, `RecordingBatch`, estados derivados |
-| [ADR-017](./adr-017-correlacao-sanitizada-de-provider.md) | correlação sanitizada de chamadas ao provider |
-| [ADR-029](./adr-029-pipeline-hibrida-deterministica-e-criativa.md) | fronteira híbrida: gates e skeleton determinísticos; plano, cenas e copy criativos; judge/repair semânticos limitados |
-| [ADR-033](./adr-033-determinismo-llm-e-creative-system.md) | Engine V2 default pendente de aceitação, Creative System/Blueprint, matriz de autoridade, Risk antes do Judge seletivo e E6 integral; preserva ADR-029 como baseline |
+| Documento                                                            | Papel neste desenho                                                                                                                                                  |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ADR-001                                                              | monólito modular, stack e deploy                                                                                                                                     |
+| ADR-002                                                              | engine como core estratégico (contrato v1 superseded pelo ADR-012)                                                                                                   |
+| ADR-003                                                              | PostgreSQL, memória e rastreabilidade                                                                                                                                |
+| ADR-004                                                              | variedade por memória estruturada                                                                                                                                    |
+| ADR-005                                                              | processamento assíncrono durável — `CommerceIntelligenceJob`, um job ativo por usuário, indicador global                                                             |
+| ADR-006                                                              | Entitlements e reserva transacional                                                                                                                                  |
+| ADR-007                                                              | fronteira de produção de mídia futura                                                                                                                                |
+| ADR-008                                                              | superseded pelo ADR-022/ADR-027 — confirmação humana e segurança de URL permanecem referência                                                                        |
+| ADR-022                                                              | decisão anterior de entrada manual; substituído para URL-first pelo Slice 012/ADR-027                                                                                |
+| ADR-027                                                              | integração URL-first por CaptAPI HTTP                                                                                                                                |
+| ADR-028                                                              | Candidate transitório, confirmação no formulário e limites do Slice 012                                                                                              |
+| ADR-009                                                              | identidade, Tenant e autorização                                                                                                                                     |
+| ADR-010                                                              | superseded (API oficial)                                                                                                                                             |
+| ADR-011                                                              | superseded — arquitetura Browser Service/portal/HITL removida                                                                                                        |
+| [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md) | contratos canônicos da engine, gates, repair, memória e rastreabilidade                                                                                              |
+| [ADR-013](./adr-013-model-router-e-intelligence-tier.md)             | Model Router, `IntelligenceTier` e independência de provider                                                                                                         |
+| [ADR-014](./adr-014-platform-skill-versionada.md)                    | Platform Skill versionada (TikTok Commerce Creative Skill)                                                                                                           |
+| [ADR-016](./adr-016-projecao-de-acao-de-geracao.md)                  | projeção server-authoritative de `generationAction` para Product ativo                                                                                               |
+| [ADR-015](./adr-015-content-operations-e-recording-batch.md)         | Content Operations: versões de briefing, aprovação, `RecordingBatch`, estados derivados                                                                              |
+| [ADR-017](./adr-017-correlacao-sanitizada-de-provider.md)            | correlação sanitizada de chamadas ao provider                                                                                                                        |
+| [ADR-029](./adr-029-pipeline-hibrida-deterministica-e-criativa.md)   | fronteira híbrida: gates e skeleton determinísticos; plano, cenas e copy criativos; judge/repair semânticos limitados                                                |
+| [ADR-033](./adr-033-determinismo-llm-e-creative-system.md)           | Engine V2 default pendente de aceitação, Creative System/Blueprint, matriz de autoridade, Risk antes do Judge seletivo e E6 integral; preserva ADR-029 como baseline |
 
 Se a implementação contrariar um ADR, o ADR é revisado antes. Se apenas conectar decisões já aceitas, este documento pode ser atualizado sem novo ADR.
 
@@ -230,3 +235,15 @@ Se a implementação contrariar um ADR, o ADR é revisado antes. Se apenas conec
 Novos: [ADR-012](./adr-012-contratos-canonicos-da-commerce-intelligence.md), [ADR-013](./adr-013-model-router-e-intelligence-tier.md), [ADR-014](./adr-014-platform-skill-versionada.md), [ADR-015](./adr-015-content-operations-e-recording-batch.md), [ADR-029](./adr-029-pipeline-hibrida-deterministica-e-criativa.md) e [ADR-033](./adr-033-determinismo-llm-e-creative-system.md). O ADR-033 registra a Engine V2 como default no estado `V2_DEFAULT_PENDING_ACCEPTANCE`; o ADR-029 permanece histórico/experimental até a aceitação formal. ADR-028 complementa ADR-027 de importação para formalizar Candidate transitório, confirmação explícita e limites do Slice 012.
 
 Revisões in-place: ADR-002 (contrato v1 superseded), ADR-004 (pesos de sinal e descarte como sinal), ADR-005 (`CommerceIntelligenceJob`, um job ativo por usuário, indicador global). ADR-008 foi alinhado ao Product Importer. ADR-011 foi superseded após a remoção do Browser Service, portal, HITL e profiles por usuário.
+
+Revisão de coerência de 2026-10-02: corrigidos os blocos de código do §4; esclarecida a distinção entre extração por URL e `Analisar produto`; adicionados os pontos em aberto do §13.
+
+## 13. Pontos em aberto
+
+Itens que este documento não decide e dos quais a interface depende (`DESIGN.md` §15). Cada decisão relevante exige ADR antes de implementar.
+
+- **Cancelar e tentar novamente:** `Cancelar` libera a reserva de Entitlement? `Tentar novamente` após `FAILED`/`CANCELLED` e `Gerar os faltantes` após `SUCCEEDED_PARTIAL` criam novo `CommerceIntelligenceJob` com nova reserva ou reaproveitam o mesmo `job.id`? A idempotência por `job.id` (§8) cobre retry técnico, não a decisão do usuário.
+- **Status para a UI:** mecanismo de atualização do job (polling ou push) e catálogo de `stage` com as mensagens humanas.
+- **Arquivamento:** efeito de arquivar um Produto sobre `RecordingBatch` e Agenda existentes.
+- **Conclusão reversível:** se `RecordingBatchItem` concluído pode ser revertido e como isso afeta os pesos da memória.
+- **Justificativa de estratégia por Conteúdo:** campo canônico para a frase exibida na UI; depende de `creativeDirection` no `ContentOpportunity` v2, pendência de `V2_ACCEPTED`.

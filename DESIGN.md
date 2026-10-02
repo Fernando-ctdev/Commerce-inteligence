@@ -1,7 +1,7 @@
 # Design System — Commerce Intelligence
 
 **Status:** fonte de verdade visual do produto  
-**Versão:** 1.8
+**Versão:** 1.9
 **Locale do MVP:** `pt-BR`  
 **Escopo:** decisões de produto visual, tokens, comportamento responsivo, estados e contratos de componentes. Este documento **não implementa telas, componentes ou dependências**.
 
@@ -61,7 +61,7 @@ macOS/iPadOS, Things e Linear são referências de sensação, clareza e discipl
 10. **Cor tem semântica.** `color.action.filled` sinaliza ações preenchidas; `color.brand.accent` sinaliza marca, seleção e acentos secundários. `color.intelligence` sinaliza inteligência ou geração. Tags, ângulos e categorias são neutros.
 11. **Light é o padrão.** Dark usa os mesmos nomes de tokens semânticos e muda somente seus valores de tema definidos aqui.
 12. **Acessibilidade é parte do visual.** Foco, erro, contraste, teclado, toque e redução de movimento não são estados posteriores.
-13. **Componentes servem à jornada; não limitam o design.** Os componentes já existentes, incluindo shadcn/ui, são primitives reutilizáveis e não fronteiras da solução. A cada jornada, escolher o padrão que melhor resolve hierarquia, densidade, compreensão, responsividade, acessibilidade e qualidade percebida; criar componentes novos quando os existentes não atenderem a esses critérios. Não forçar `Tabs`, cards, accordions ou qualquer outro padrão somente porque já existe no projeto. Componentes novos devem reutilizar os tokens, contratos de acessibilidade e comportamento responsivo deste documento, sem duplicar uma capacidade que o componente existente já resolve adequadamente.
+13. **Componentes servem à jornada; não limitam o design.** Os componentes já existentes, incluindo shadcn/ui, são primitives reutilizáveis e não fronteiras da solução. A cada jornada, escolher o padrão que melhor resolve hierarquia, densidade, compreensão, responsividade, acessibilidade e qualidade percebida; criar componentes novos quando os existentes não atenderem a esses critérios. Não forçar `Tabs`, cards, accordions ou qualquer outro padrão somente porque já existe no projeto. Componentes novos devem reutilizar os tokens, contratos de acessibilidade e comportamento responsivo deste documento, sem duplicar uma capacidade que o componente existente já resolve adequadamente. Ordem de decisão: (1) reutilizar o componente existente que atenda aos critérios; (2) adaptar um primitive de shadcn/ui; (3) criar um componente novo somente quando (1) e (2) não atenderem, registrando o motivo na descrição do PR.
 
 ### Método 3S: Simples, Sexy, Surpreendente
 
@@ -72,6 +72,24 @@ Avalie estados e superfícies na ordem Simples → Sexy → Surpreendente; uma c
 - **Surpreendente:** no máximo um detalhe memorável por região, sempre honesto (derivado de estado real); o que for decorativo é silencioso para tecnologia assistiva, que continua recebendo o significado por texto.
 
 Acessibilidade, tokens, `prefers-reduced-motion` e ausência de dados falsos não são negociáveis em nenhuma das camadas.
+
+### Instâncias do Método 3S (propostas para aprovação)
+
+Cada instância usa somente tokens existentes, deriva de estado real e tem equivalente textual.
+
+**Sexy — assinatura visual**
+
+- **Hook como protagonista no modo de gravação:** o hook usa `type.display` (`24px / 30px` no mobile quando competir com a ação), com respiro `space.xl` e nenhum chrome adicional ao redor.
+- **Marca de geração:** Conteúdo e briefing gerados levam um filete de `color.intelligence` (borda ou ícone, nunca texto normal) na lateral do bloco; o texto continua em `color.text.primary`.
+- **Home com o próximo passo concreto:** `Continuar gravação` mostra o hook do próximo Conteúdo pendente do lote e o progresso real, como `3 de 8 concluídos`.
+
+**Surpreendente — no máximo um por região, sempre honesto**
+
+- **Indicador global:** a etapa real atual troca com `motion.short` (opacidade e deslocamento curto). Só anima quando a etapa de fato muda; nunca mostra percentual.
+- **Estúdio:** ao concluir um Conteúdo, a barra do lote avança com `motion.medium` e o foco vai para `Próximo`. O contador muda sem contagem animada.
+- **Content card:** frase de uma linha explicando a estratégia do vídeo, quando existir campo canônico (ver §11).
+
+Todas as animações desaparecem com `prefers-reduced-motion` (mudança de estado instantânea). Elementos decorativos ficam silenciosos para tecnologia assistiva.
 
 ### Riscos deliberados e por que valem a pena
 
@@ -195,7 +213,7 @@ A Home é a entrada operacional e não um dashboard de analytics.
 Ordem de prioridade:
 
 1. **próxima ação urgente**, quando existir lote de gravação para hoje ou em andamento;
-2. **Adicionar produto**, com URL e `Analisar produto`;
+2. **Adicionar produto**, com URL e `Buscar dados do produto`;
 3. **Gravações de hoje**, mostrando lotes reais e seu progresso;
 4. **Próximas gravações**, mostrando os próximos lotes já agendados.
 
@@ -242,6 +260,30 @@ Histórico
 - **Histórico:** lotes e Conteúdos já concluídos, mantendo a memória operacional sem expor `Vault` como destino global.
 
 O termo `Briefing do Conteúdo` permanece reservado ao briefing de um Conteúdo individual. Não chamar a página inteira do Produto de briefing.
+
+### Readiness do Produto e ação `Analisar produto`
+
+`Analisar produto` é a única ação que cria o `CommerceIntelligenceJob` e reserva Entitlement (SYSTEM-DESIGN §4). Salvar ou confirmar um Produto nunca cria job. A extração por URL usa outro rótulo, `Buscar dados do produto`, para não ser confundida com a análise.
+
+Mapeamento entre a readiness derivada do domínio e o que a interface mostra:
+
+| Readiness / lifecycle | Rótulo visível                  | Filtro       | Ação primária no card e na página |
+| --------------------- | ------------------------------- | ------------ | --------------------------------- |
+| `PENDING`             | `Pendente` — aguardando análise | `Pendentes`  | `Analisar produto`                |
+| `ANALYZING`           | `Analisando`                    | `Pendentes`  | `Ver andamento`                   |
+| `FAILED`              | `Falhou` — recuperável          | `Pendentes`  | `Tentar novamente`                |
+| `READY`               | `Ativo`                         | `Ativos`     | `Abrir produto`                   |
+| `ARCHIVED`            | `Arquivado`                     | `Arquivados` | `Reativar`                        |
+
+`Ativos` lista Produtos com análise pronta; `Pendentes` lista Produtos ativos que ainda não têm resultado pronto.
+
+Regras de `generationAction` (ADR-016) para Produto ativo:
+
+- `AVAILABLE`: `Analisar produto` habilitado;
+- `BLOCKED` com `GEN-ACTIVE` / `VIEW_ACTIVE_ANALYSIS`: botão visível e desabilitado, com explicação de que já existe uma análise em andamento e a ação `Ver análise em andamento`;
+- `BLOCKED` com `GEN-CAPACITY` / `WAIT_FOR_CAPACITY`: botão visível e desabilitado, com explicação de que o plano não tem capacidade para uma nova análise agora e o próximo caminho possível, sem ocultar o conteúdo já existente;
+- Produto `ARCHIVED` não tem `generationAction`: a interface mostra `Reativar`, nunca `Analisar produto`;
+- a interface não cria códigos de bloqueio novos nem interpreta quota localmente; o `POST` revalida no servidor. A copy final dos motivos está em aberto (§15).
 
 ### Estúdio
 
@@ -366,7 +408,7 @@ Não criar cores ad hoc para telas, categorias, ângulos, tipos de Content ou pl
 | `color.canvas`             | `#F7F7F8` | `#0F1115` | fundo geral                                                 |
 | `color.surface.default`    | `#FFFFFF` | `#161A20` | conteúdo principal sólido                                   |
 | `color.surface.secondary`  | `#F1F2F4` | `#1D222A` | agrupamentos e campos neutros                               |
-| `color.border.default`     | `#E4E6E8` | `#2A3039` | divisores e contornos                                       |
+| `color.border.default`     | `#E4E6E8` | `#2A3039` | divisores e contornos de card; não delimita controles       |
 | `color.text.primary`       | `#17191C` | `#F4F6F8` | títulos, corpo e instruções                                 |
 | `color.text.secondary`     | `#666B73` | `#A7ADB7` | contexto e metadados                                        |
 | `color.text.muted`         | `#969CA5` | `#6F7782` | informação auxiliar não essencial                           |
@@ -383,26 +425,28 @@ Não criar cores ad hoc para telas, categorias, ângulos, tipos de Content ou pl
 
 Critério usado: texto normal exige contraste mínimo de `4.5:1`; texto grande e gráficos/contornos não textuais exigem `3:1`. Um par não listado como permitido é proibido por padrão. Os valores abaixo são contraste WCAG arredondado para duas casas.
 
-| Tema  | Foreground                | Background              | Contraste | Texto normal | Grande/gráfico | Política                                  |
-| ----- | ------------------------- | ----------------------- | --------: | -----------: | -------------: | ----------------------------------------- |
-| Light | `color.text.primary`      | `color.surface.default` | `17.61:1` |          Sim |            Sim | corpo e títulos                           |
-| Light | `color.text.secondary`    | `color.surface.default` |  `5.36:1` |          Sim |            Sim | contexto legível                          |
-| Light | `color.text.muted`        | `color.surface.default` |  `2.76:1` |          Não |            Não | somente auxiliar não textual              |
-| Light | `color.brand.accent`      | `color.surface.default` |  `4.17:1` |          Não |            Sim | borda, foco, ícone ou texto grande        |
-| Light | `color.content.on-action` | `color.action.filled`   |  `6.89:1` |          Sim |            Sim | ação preenchida segura                    |
-| Light | `color.intelligence`      | `color.surface.default` |  `4.38:1` |          Não |            Sim | ícone, borda ou texto grande              |
-| Light | `color.feedback.success`  | `color.surface.default` |  `3.50:1` |          Não |            Sim | sempre acompanhado de texto               |
-| Light | `color.feedback.warning`  | `color.surface.default` |  `2.96:1` |          Não |            Não | nunca como único sinal visual             |
-| Light | `color.feedback.danger`   | `color.surface.default` |  `4.56:1` |          Sim |            Sim | mensagem pode usar o token                |
-| Dark  | `color.text.primary`      | `color.canvas`          | `17.44:1` |          Sim |            Sim | corpo e títulos                           |
-| Dark  | `color.text.secondary`    | `color.surface.default` |  `7.74:1` |          Sim |            Sim | contexto legível                          |
-| Dark  | `color.text.muted`        | `color.surface.default` |  `3.86:1` |          Não |            Sim | auxiliar ou texto grande                  |
-| Dark  | `color.brand.accent`      | `color.surface.default` |  `5.49:1` |          Sim |            Sim | acento textual em superfície              |
-| Dark  | `color.content.on-action` | `color.action.filled`   |  `5.94:1` |          Sim |            Sim | ação preenchida segura                    |
-| Dark  | `color.intelligence`      | `color.surface.default` |  `3.99:1` |          Não |            Sim | ícone, borda ou texto grande              |
-| Dark  | `color.feedback.success`  | `color.surface.default` |  `4.99:1` |          Sim |            Sim | mensagem semântica                        |
-| Dark  | `color.feedback.warning`  | `color.surface.default` |  `5.90:1` |          Sim |            Sim | mensagem semântica                        |
-| Dark  | `color.feedback.danger`   | `color.surface.default` |  `3.83:1` |          Não |            Sim | texto explicativo em `color.text.primary` |
+| Tema  | Foreground                | Background              | Contraste | Texto normal | Grande/gráfico | Política                                                   |
+| ----- | ------------------------- | ----------------------- | --------: | -----------: | -------------: | ---------------------------------------------------------- |
+| Light | `color.text.primary`      | `color.surface.default` | `17.61:1` |          Sim |            Sim | corpo e títulos                                            |
+| Light | `color.text.secondary`    | `color.surface.default` |  `5.36:1` |          Sim |            Sim | contexto legível                                           |
+| Light | `color.text.muted`        | `color.surface.default` |  `2.76:1` |          Não |            Não | somente auxiliar não textual                               |
+| Light | `color.brand.accent`      | `color.surface.default` |  `4.17:1` |          Não |            Sim | borda, foco, ícone ou texto grande                         |
+| Light | `color.content.on-action` | `color.action.filled`   |  `6.89:1` |          Sim |            Sim | ação preenchida segura                                     |
+| Light | `color.intelligence`      | `color.surface.default` |  `4.38:1` |          Não |            Sim | ícone, borda ou texto grande                               |
+| Light | `color.feedback.success`  | `color.surface.default` |  `3.50:1` |          Não |            Sim | sempre acompanhado de texto                                |
+| Light | `color.feedback.warning`  | `color.surface.default` |  `2.96:1` |          Não |            Não | nunca como único sinal visual                              |
+| Light | `color.feedback.danger`   | `color.surface.default` |  `4.56:1` |          Sim |            Sim | mensagem pode usar o token                                 |
+| Light | `color.border.default`    | `color.surface.default` |  `1.25:1` |          Não |            Não | divisor e contorno de card; nunca limite único de controle |
+| Dark  | `color.text.primary`      | `color.canvas`          | `17.44:1` |          Sim |            Sim | corpo e títulos                                            |
+| Dark  | `color.text.secondary`    | `color.surface.default` |  `7.74:1` |          Sim |            Sim | contexto legível                                           |
+| Dark  | `color.text.muted`        | `color.surface.default` |  `3.86:1` |          Não |            Sim | auxiliar ou texto grande                                   |
+| Dark  | `color.brand.accent`      | `color.surface.default` |  `5.49:1` |          Sim |            Sim | acento textual em superfície                               |
+| Dark  | `color.content.on-action` | `color.action.filled`   |  `5.94:1` |          Sim |            Sim | ação preenchida segura                                     |
+| Dark  | `color.intelligence`      | `color.surface.default` |  `3.99:1` |          Não |            Sim | ícone, borda ou texto grande                               |
+| Dark  | `color.feedback.success`  | `color.surface.default` |  `4.99:1` |          Sim |            Sim | mensagem semântica                                         |
+| Dark  | `color.feedback.warning`  | `color.surface.default` |  `5.90:1` |          Sim |            Sim | mensagem semântica                                         |
+| Dark  | `color.feedback.danger`   | `color.surface.default` |  `3.83:1` |          Não |            Sim | texto explicativo em `color.text.primary`                  |
+| Dark  | `color.border.default`    | `color.surface.default` |  `1.31:1` |          Não |            Não | divisor e contorno de card; nunca limite único de controle |
 
 Regras de aplicação:
 
@@ -411,6 +455,7 @@ Regras de aplicação:
 - `color.feedback.warning`, `color.feedback.success`, `color.intelligence` e qualquer par abaixo de `4.5:1` não podem ser texto normal isolado;
 - cor sem texto, ícone, contorno estrutural ou estado não comunica nada sozinha;
 - foco usa `color.focus.ring` com offset visível e deve ser validado contra a superfície real;
+- contornos que delimitam controles (input, select, checkbox, radio, switch) exigem `3:1` contra a superfície (WCAG 1.4.11). `color.border.default` mede `1.25:1` no Light e `1.31:1` no Dark, então serve só a divisores e contornos de card. O contorno de controle usa `color.text.secondary` (`5.36:1` no Light, `7.74:1` no Dark);
 - gradientes são condicionais, não proibidos: permitidos quando comunicam algo real — foco, profundidade, marca ou estado — sempre derivados dos tokens semânticos existentes (interpolação entre cores de token, inclusive com transparência, sem cor nova ou intermediária arbitrária), com contraste validado contra a superfície real, em área contida (sem lavar a página inteira) e sem ruído; uso decorativo sem significado permanece proibido.
 
 ### Glass e superfícies
@@ -529,12 +574,12 @@ Não arredondar todas as superfícies. Cards sem objeto real não existem; logo,
 
 **Abordagem:** minimal-functional. Movimento explica causa e efeito; não entretém.
 
-| Token           | Duração | Uso                                             |
-| --------------- | ------: | ----------------------------------------------- |
-| `motion.micro`  |  `80ms` | foco, cor de controle e feedback imediato       |
-| `motion.short`  | `160ms` | seleção, hover, expansão pequena                |
-| `motion.medium` | `240ms` | disclosure, troca de estado e reordenação local |
-| `motion.long`   | `360ms` | sheet, modal e transição de região              |
+| Token           | Duração | Uso                                                                              |
+| --------------- | ------: | -------------------------------------------------------------------------------- |
+| `motion.micro`  |  `80ms` | foco, cor de controle e feedback imediato                                        |
+| `motion.short`  | `160ms` | seleção, hover, expansão pequena                                                 |
+| `motion.medium` | `240ms` | disclosure, troca de estado, reordenação local e overlays (drawer, sheet, modal) |
+| `motion.long`   | `360ms` | transição de região inteira (troca de página ou painel); não usar em overlays    |
 
 - entrada: `ease-out`;
 - saída: `ease-in`;
@@ -558,9 +603,9 @@ A máquina abaixo descreve estados visíveis de um Conteúdo dentro de um lote d
 | `ready` / Aguardando conclusão | abrir Conteúdo ainda não concluído | `Concluir conteúdo`, `Próximo`, `Anterior`       | `Concluir conteúdo` inicia `marking`; `Próximo` não conclui implicitamente                |
 | `next-confirmation`            | tocar `Próximo` antes de concluir  | `Continuar sem concluir`, `Ficar neste conteúdo` | continuar mantém o item pendente e move para o próximo; ficar retorna foco ao CTA         |
 | `marking`                      | tocar `Concluir conteúdo`          | nenhuma ação duplicada                           | botão fica loading e bloqueado; não há duplo toque                                        |
-| `completed` / Concluído        | confirmação da conclusão           | `Próximo`, `Anterior`, editar quando permitido   | mantém o Conteúdo visível, atualiza o lote e move foco para `Próximo`; não avança sozinho |
+| `completed` / Concluído        | confirmação da conclusão           | `Próximo`, `Anterior`                            | mantém o Conteúdo visível, atualiza o lote e move foco para `Próximo`; não avança sozinho |
 | `mark-error`                   | falha ao concluir                  | `Tentar novamente`, `Ficar neste conteúdo`       | preserva hook, roteiro/cenas e CTA; foco vai para o erro inline e depois para Retry       |
-| `already-completed`            | abrir Conteúdo já concluído        | `Próximo`, `Anterior`, editar quando permitido   | não oferece segunda conclusão; foco começa no estado e segue para `Próximo`               |
+| `already-completed`            | abrir Conteúdo já concluído        | `Próximo`, `Anterior`                            | não oferece segunda conclusão; foco começa no estado e segue para `Próximo`               |
 
 Regras de transição:
 
@@ -585,7 +630,7 @@ A lista abaixo define linguagem e comportamento, não implementação. Component
 
 ### Navegação principal
 
-- cinco destinos: Home, Produtos, Estúdio, Agenda e Configurações;
+- cinco destinos: Home, Vitrine, Estúdio, Agenda e Configurações;
 - item ativo usa `color.brand.accent`/`color.focus.ring` e indicador estrutural adicional, como peso, fundo Surface Secondary ou linha;
 - ícone de traço simples, 16–20px; o label pode ficar visualmente oculto no tablet, mas o nome acessível permanece sempre presente;
 - não usar bolhas coloridas, ícones decorativos em círculos ou badges para criar urgência falsa;
@@ -600,7 +645,7 @@ A lista abaixo define linguagem e comportamento, não implementação. Component
 
 ### Indicador global de atividade
 
-O `Global Activity Indicator` pertence ao App Shell e representa `CommerceIntelligenceJob` ativo, concluído com ação pendente ou falha recuperável.
+O `Global Activity Indicator` pertence ao App Shell e representa `CommerceIntelligenceJob` ativo, concluído com ação pendente, concluído parcialmente ou com falha recuperável.
 
 Posicionamento:
 
@@ -621,16 +666,17 @@ Regras:
 - `queued` e `running` mostram atividade sem percentual inventado;
 - `succeeded` pode permanecer temporariamente acionável até o usuário abrir o resultado;
 - `failed` preserva contexto e mostra recuperação;
+- `partial` mantém o indicador acionável, diz quantos itens estão prontos e oferece `Revisar conteúdos` e `Gerar os faltantes`;
 - nunca mostrar ETA falso, logs, tokens, prompt, provider, modelo, `LOW/MID/HIGH` ou detalhes internos da engine;
 - tocar no indicador no mobile pode abrir uma sheet de contexto, sem criar uma página permanente de Análise;
 - o indicador não bloqueia o restante da aplicação;
-- enquanto existir um único job ativo permitido pelo MVP, `Analisar produto` permanece visível porém desabilitado com explicação do motivo.
+- enquanto existir um único job ativo permitido pelo MVP, `Analisar produto` permanece visível porém desabilitado com explicação do motivo; `Buscar dados do produto` e `Adicionar manualmente` continuam disponíveis, pois não criam job.
 
 ### Action button
 
-- rótulo é verbo + resultado: `Analisar produto`, `Começar gravação`, `Continuar gravação`, `Concluir conteúdo`, `Reagendar`;
+- rótulo é verbo + resultado: `Buscar dados do produto`, `Analisar produto`, `Começar gravação`, `Continuar gravação`, `Concluir conteúdo`, `Reagendar`;
 - um único primary action por região; ações secundárias são neutras ou textuais; ações preenchidas usam `color.action.filled`;
-- não usar gradiente;
+- sem gradiente no preenchimento, como exceção deliberada ao Método 3S: o texto sobre `color.action.filled` precisa de contraste garantido em toda a área. A expressividade da ação vem de tipo, ritmo e estado;
 - estados: default, hover, pressed, focus-visible, disabled, loading, success e error;
 - loading preserva o rótulo e informa atividade sem trocar a ação por um spinner solto;
 - destructive exige confirmação e usa `color.feedback.danger` apenas como semântica, nunca como decoração.
@@ -644,7 +690,7 @@ Card permitido porque representa o objeto Product. Exibe apenas o necessário pa
 - contexto curto ou categoria neutra;
 - estado real do fluxo, como `Ativo`, `Pendente` ou `Arquivado` quando essa informação for necessária;
 - quantidade de Conteúdos somente quando ajudar na decisão;
-- ação primária contextual, como `Abrir produto` ou `Continuar`;
+- ação primária contextual, como `Abrir produto`, `Continuar`, `Analisar produto` (Produto `Pendente`) ou `Reativar` (Produto `Arquivado`);
 - metadados secundários sob demanda.
 
 Não transformar Product card em painel de analytics, não adicionar mini-gráficos e não pintar cada categoria.
@@ -660,6 +706,8 @@ A página do Produto usa tabs ou navegação interna para:
 
 A página não se chama `Briefing`. `Briefing do Conteúdo` pertence a um Conteúdo individual.
 
+Ações de ciclo de vida: `Arquivar` (reversível, sem confirmação destrutiva) e `Reativar`. Produto arquivado não exibe `Analisar produto`. O efeito do arquivamento sobre lotes e Agenda já existentes está em aberto (§15).
+
 Conteúdos aprovados podem ser selecionados para formar um lote de gravação. Ao preparar o lote, o usuário define a data pretendida de gravação antes de enviá-lo ao Estúdio/Agenda.
 
 ### Content card
@@ -673,6 +721,16 @@ Card permitido porque representa o objeto Content. Ordem recomendada:
 5. estratégia, cenas, CTA e proveniência em disclosure.
 
 No mobile, mostrar hook, roteiro/cenas, CTA e ação de avanço. Desktop pode revelar dimensões de variedade e explicabilidade. Seleção múltipla só pode alimentar ações operacionais previstas, como aprovação e montagem de lote; edição em massa não faz parte do MVP.
+
+### Versões, aprovação e descarte do Conteúdo
+
+Segue o SYSTEM-DESIGN §7 (Content Operations, ADR-015):
+
+- editar ou regenerar cria uma nova versão do briefing; as versões anteriores permanecem imutáveis. A versão atual é a que aparece, e o histórico de versões fica em disclosure (camada 4);
+- aprovar fixa a versão exata. Se o creator editar um Conteúdo já aprovado, o card mostra `Editado após aprovação` e a ação `Aprovar novamente`, necessária para futuras execuções;
+- lotes montados guardam a versão aprovada de cada item. A interface mostra essa versão e informa que edições posteriores valem só para futuras gravações;
+- por isso o modo de gravação exibe a versão aprovada do item e **não oferece edição do briefing**; correções são feitas no Conteúdo, dentro do Produto;
+- `Descartar` exige confirmação e tira o Conteúdo da revisão sem apagar o histórico que ajuda a variar as próximas gerações; o texto da confirmação diz isso.
 
 ### Lote do Estúdio
 
@@ -734,11 +792,12 @@ Ao abrir um evento, oferecer `Abrir no Estúdio` e `Reagendar`. A Agenda do MVP 
 - descrição curta só quando muda a decisão;
 - erro aparece junto do campo, explica como corrigir e mantém o valor digitado;
 - foco visível em teclado e toque;
+- contorno do campo usa o contorno de controle definido nas regras de contraste, não `color.border.default`;
 - área tocável mínima de `44px`;
-- entrada de Product começa por URL com a ação primária `Analisar produto`;
-- `Analisar produto` mostra loading, preview, origem, lacunas e falha recuperável; extração nunca aparece como fato confirmado automaticamente;
+- entrada de Product começa por URL com a ação primária `Buscar dados do produto`;
+- `Buscar dados do produto` mostra loading, preview, origem, lacunas e falha recuperável; extração nunca aparece como fato confirmado automaticamente; não cria job, não reserva Entitlement e continua disponível mesmo com uma análise ativa;
 - `Adicionar manualmente` permanece visível como fallback quando não houver URL, a análise falhar ou o creator preferir informar os fatos;
-- a confirmação humana cria o Product ativo; antes dela, o preview pode ser corrigido campo a campo;
+- a confirmação humana cria o Product ativo, sem criar job; antes dela, o preview pode ser corrigido campo a campo; depois de salvar, o creator inicia a análise com `Analisar produto` no próprio Produto;
 - a confirmação resolve também a quantidade inicial de Conteúdos (`targetContentCount`) por preferência do creator, valor padrão ou seletor compacto na própria confirmação — sem criar etapa de navegação;
 - depois de confirmado, edição de fatos é uma ação excepcional e explícita, sem formulário de público, Strategy ou contexto estratégico no cadastro;
 - labels, erros, foco, `aria-busy`, teclado, alvos de `44×44px` e estados de confirmação seguem as regras deste documento.
@@ -766,7 +825,7 @@ Ao abrir um evento, oferecer `Abrir no Estúdio` e `Reagendar`. A Agenda do MVP 
 ### Empty, loading e error
 
 - **Empty Home:** prioriza `Adicionar produto` quando o usuário ainda não possui trabalho ativo;
-- **Empty Vitrine:** explica que ainda não há Produto e oferece URL + `Analisar produto`;
+- **Empty Vitrine:** explica que ainda não há Produto e oferece URL + `Buscar dados do produto`;
 - **Empty Estúdio:** informa que não existem lotes de gravação e aponta para os Conteúdos aprovados dentro da Vitrine;
 - **Empty Agenda:** informa que ainda não existem gravações planejadas; não cria bloco `Ainda sem data`;
 - **Loading:** preserva estrutura esperada e informa o estado; não simular conteúdo estratégico ainda inexistente;
@@ -776,17 +835,18 @@ Ao abrir um evento, oferecer `Abrir no Estúdio` e `Reagendar`. A Agenda do MVP 
 
 Esta matriz descreve somente a experiência visível de geração.
 
-| Estado      | Representação                                   | Ações do usuário                               | Feedback                                                         |
-| ----------- | ----------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------- |
-| `queued`    | Na fila, com contexto do pedido                 | `Cancelar`, consultar status                   | confirmação de que o pedido foi recebido; nenhum Content parcial |
-| `running`   | Gerando, com atividade sem percentual inventado | consultar status; `Cancelar` quando disponível | atividade visível; nenhum Content parcial                        |
-| `succeeded` | Concluído                                       | consultar resultado, editar, iniciar novo lote | resultado completo disponível                                    |
-| `failed`    | Falhou                                          | `Tentar novamente`, consultar detalhes         | erro compreensível e recuperação clara                           |
-| `cancelled` | Cancelado                                       | consultar histórico, `Gerar novamente`         | cancelamento confirmado; nenhum resultado parcial                |
+| Estado      | Representação                                                 | Ações do usuário                               | Feedback                                                                |
+| ----------- | ------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------- |
+| `queued`    | Na fila, com contexto do pedido                               | `Cancelar`, consultar status                   | confirmação de que o pedido foi recebido; nenhum Content parcial        |
+| `running`   | Gerando, com atividade sem percentual inventado               | consultar status; `Cancelar` quando disponível | atividade visível; nenhum Content parcial                               |
+| `succeeded` | Concluído                                                     | consultar resultado, editar, iniciar novo lote | resultado completo disponível                                           |
+| `partial`   | Concluído parcialmente: `N de M conteúdos prontos`, declarado | `Revisar conteúdos`, `Gerar os faltantes`      | somente itens que passaram nos gates; o que falta é dito explicitamente |
+| `failed`    | Falhou                                                        | `Tentar novamente`, consultar detalhes         | erro compreensível e recuperação clara                                  |
+| `cancelled` | Cancelado                                                     | consultar histórico, `Gerar novamente`         | cancelamento confirmado; nenhum resultado parcial                       |
 
 `Retry` é uma ação de recuperação disponível após `failed` ou `cancelled`; a interface volta a exibir `queued` enquanto aguarda o resultado. `Cancel` é uma ação explícita em `queued` e, quando disponível, em `running`; a confirmação evita cancelamento acidental.
 
-Enquanto uma geração estiver ativa, o controle de iniciar outra fica desabilitado para evitar duplo toque. Falhas, cancelamentos e retries nunca apresentam conteúdo parcial como sucesso.
+Enquanto uma geração estiver ativa, o controle de iniciar outra fica desabilitado para evitar duplo toque. Falhas, cancelamentos e retries nunca apresentam conteúdo parcial como sucesso. `partial` é o único caso com resultado incompleto e é sempre declarado (quantos itens estão prontos e quantos faltam), nunca silencioso (SYSTEM-DESIGN §8, ADR-021). Mapeamento dos status do job: `QUEUED` → `queued`, `RUNNING` → `running`, `SUCCEEDED` → `succeeded`, `SUCCEEDED_PARTIAL` → `partial`, `FAILED` → `failed`, `CANCELLED` → `cancelled`.
 
 ### Modal, sheet e menu
 
@@ -835,12 +895,14 @@ Estado desabilitado reduz ação sem apagar a razão. Estado de erro não limpa 
 - usar verbos curtos, concretos e orientados a resultado;
 - `Home`, `Vitrine`, `Estúdio`, `Agenda` e `Configurações` são os nomes oficiais da navegação principal;
 - `Vitrine` é rótulo de UI para a navegação e listagem; `Product` permanece linguagem de domínio, com rotas e contratos em `/products`.
+- `Analisar produto` nomeia somente a ação que cria o job de análise; a extração por URL se chama `Buscar dados do produto`;
 - `Content` é o conceito de domínio; a interface usa `conteúdo` para leitura humana;
 - `Briefing do Conteúdo` significa o briefing de um Conteúdo individual, não a página inteira do Produto;
 - estados visíveis de lote no Estúdio são `Aguardando`, `Gravando` e `Concluído`;
 - `Concluído` em lote significa que todos os Conteúdos daquele lote foram concluídos;
 - `Vault` pode permanecer como conceito técnico/memória de domínio, mas não é nomenclatura de navegação do MVP;
 - explicar estratégia em uma frase quando necessário, por exemplo: “Este vídeo trabalha a objeção de que o produto é fraco.”;
+- a frase de justificativa só aparece quando vem de campo canônico validado (`creativeDirection` do `ContentOpportunity` v2, ainda pendente conforme SYSTEM-DESIGN §1); até lá o espaço não é preenchido com texto livre não validado;
 - evitar “gerar mais conteúdo” como ação genérica quando o resultado puder ser nomeado: `Gerar novo lote`, `Gerar novo hook`, `Trocar CTA`;
 - usar `Começar gravação`, `Continuar gravação`, `Concluir conteúdo` e `Reagendar` em vez de ações genéricas como `Abrir` quando a intenção for conhecida.
 
@@ -885,34 +947,59 @@ A **Agenda interna de gravação** faz parte do MVP e não deve ser confundida c
 - [ ] Estados de foco, erro, loading, empty, geração e reduced motion foram definidos.
 - [ ] CommerceIntelligenceJob ativo/concluído/falho possui Global Activity Indicator coerente no App Shell.
 - [ ] Nenhuma métrica ou decoração foi adicionada sem melhorar uma decisão operacional.
+- [ ] `Analisar produto` só nomeia a ação que cria o job; a extração por URL usa `Buscar dados do produto`.
+- [ ] O estado `partial` (`SUCCEEDED_PARTIAL`) está tratado na matriz de geração e no indicador global.
+- [ ] Contornos de controles interativos têm contraste mínimo de `3:1`.
+- [ ] O modo de gravação exibe a versão aprovada do item e não oferece edição de briefing.
+- [ ] Cada região tem no máximo um detalhe "surpreendente", derivado de estado real.
 
 ## 14. Registro de decisões
 
-| Data       | Decisão                                                                                                 | Rationale                                                                                                                                                                                                     |
-| ---------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-24 | Light mode é o tema de referência e padrão                                                              | A interface precisa ser legível e familiar como ferramenta de produtividade; Dark é uma variação dos mesmos tokens, não um redesign.                                                                          |
-| 2026-08-24 | Mobile é a superfície principal completa, com execução prioritária                                      | O creator precisa adicionar Produto, revisar/editar Content, montar lote e gravar sem depender do desktop.                                                                                                    |
-| 2026-08-24 | Desktop é experiência expandida para planejamento em escala                                             | Mais espaço suporta organização, comparação e operações densas, mas não cria capacidades exclusivas.                                                                                                          |
-| 2026-08-24 | Instrument Sans é a família principal; Geist Mono é técnico                                             | Uma família única mantém coerência entre headings, body, UI e números; a mono fica restrita à proveniência técnica.                                                                                           |
-| 2026-08-24 | `#5B6CFF` é brand/accent e `#3D4CC6` é ação preenchida Light                                            | O azul original permanece na identidade; a variação mais escura garante texto normal acessível em ações preenchidas.                                                                                          |
-| 2026-08-24 | Grid de 4px, layout híbrido e raios hierárquicos                                                        | Mantém disciplina e densidade confortável sem arredondar ou decorar tudo.                                                                                                                                     |
-| 2026-08-24 | Cards restritos a objetos reais e glass restrito à periferia                                            | Protege a diferença entre interface operacional e dashboard SaaS decorativo.                                                                                                                                  |
-| 2026-08-24 | Motion minimal-functional                                                                               | Movimento deve explicar seleção, disclosure, fila e feedback, respeitando redução de movimento.                                                                                                               |
-| 2026-08-26 | Home volta a ser a entrada principal                                                                    | O creator entende `Home` imediatamente; a tela permanece operacional e minimalista, sem virar dashboard analítico.                                                                                            |
-| 2026-08-26 | Navegação principal passa a ser Home, Produtos, Estúdio, Agenda e Configurações                         | Os destinos passam a representar tarefas naturais do creator em vez de conceitos internos de domínio.                                                                                                         |
-| 2026-09-21 | `Produtos` passa a se chamar `Vitrine` na navegação e listagem                                           | Decisão explícita de UI-only: preserva ordem dos destinos, `Product` como domínio e as rotas/contratos em `/products`; não requer ADR arquitetural.                                                           |
-| 2026-08-26 | Conteúdos e Vault deixam de ser destinos globais                                                        | Conteúdos pertencem ao Produto e aos lotes; histórico/memória aparece no contexto do Produto, reduzindo duplicação de navegação.                                                                              |
-| 2026-08-26 | Produção passa a ser apresentada como Estúdio                                                           | `Estúdio` comunica execução e gravação de forma mais natural para creators sem alterar o domínio interno de produção.                                                                                         |
-| 2026-08-26 | Estúdio usa lotes com estados Aguardando, Gravando e Concluído                                          | O status é consequência do número real de Conteúdos concluídos e não exige gerenciamento manual.                                                                                                              |
-| 2026-08-26 | Progresso percentual de lote é permitido                                                                | Percentual representa conclusão operacional real do lote, não analytics ou performance comercial.                                                                                                             |
-| 2026-08-26 | Agenda interna de gravação entra no MVP                                                                 | O creator escolhe quando pretende gravar um lote; isso fecha o intervalo entre aprovação e execução sem introduzir social scheduling.                                                                         |
-| 2026-08-26 | Integrações de calendário permanecem futuras                                                            | Google Calendar e outros calendários poderão receber eventos/lembretes depois, mas não fazem parte do MVP.                                                                                                    |
-| 2026-08-26 | Home não mostra `Ainda sem data`                                                                        | A entrada deve mostrar somente ação útil, gravações de hoje e próximas gravações já planejadas.                                                                                                               |
-| 2026-08-26 | Job assíncrono usa indicador global no App Shell                                                        | A análise continua durante a navegação; o usuário precisa ver Produto, etapa, sucesso/falha e próxima ação sem entrar numa página técnica de análise.                                                         |
-| 2026-08-26 | `Pendente` é readiness operacional, não lifecycle do Produto                                            | Evita misturar análise em andamento com estados persistentes como Ativo/Arquivado.                                                                                                                            |
-| 2026-08-27 | Realinhamento aos PRDs vigentes (engine, job assíncrono, briefing/lotes, model router)                  | O design v1.3 já refletia o core loop e o indicador global; a revisão atualizou as fontes canônicas, incluiu a resolução da quantidade inicial na confirmação e manteu tokens, estética e navegação vigentes. |
-| 2026-08-28 | Navegação mobile substitui a bottom nav pela Sidebar shadcn/ui (drawer off-canvas)                      | Com cinco destinos, a barra inferior empilha botões e prejudica a navegação; a Sidebar uniformiza o shell nas três superfícies e aproveita componente de biblioteca em vez de navegação custom.               |
-| 2026-08-28 | Componentes de UI nascem de shadcn/ui: buscar componente pronto e adaptá-lo antes de criar algo próprio | Reuso de biblioteca reduz código custom, mantém acessibilidade e consistência; componente custom é exceção com motivo registrado.                                                                             |
-| 2026-09-19 | Adoção do Método 3S (Simples, Sexy, Surpreendente) e regras condicionais para gradientes e movimento | Expressividade com intenção substitui proibições absolutas: gradiente e movimento valem quando comunicam algo real — foco, profundidade, marca ou estado — sempre derivados de tokens, com acessibilidade e reduced-motion; dados falsos (progresso/ETA) continuam proibidos. |
-| 2026-09-21 | Drawers, sheets e modais de sobreposição usam `motion.medium` (240ms) na abertura/fechamento — padrão de plataforma | `motion.long` (360ms) estava lento na prática na abertura do drawer de `Adicionar produto`; 240ms mantém suavidade com resposta mais rápida e passa a valer para todas as sobreposições da plataforma. |
-| 2026-09-22 | `/access` no mobile oculta labels dos campos visualmente (sr-only com label associada) e identifica pelos placeholders; "Esqueci minha senha" vira ação própria abaixo do campo de senha | Composição compacta sem perder acessibilidade: `htmlFor`/id preservado para o leitor de tela, placeholder em cor secundária, alvo de 44px, erro continua imediatamente após o campo; vale para o formulário de acesso no mobile. |
+| Data       | Decisão                                                                                                                                                                                  | Rationale                                                                                                                                                                                                                                                                     |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-24 | Light mode é o tema de referência e padrão                                                                                                                                               | A interface precisa ser legível e familiar como ferramenta de produtividade; Dark é uma variação dos mesmos tokens, não um redesign.                                                                                                                                          |
+| 2026-08-24 | Mobile é a superfície principal completa, com execução prioritária                                                                                                                       | O creator precisa adicionar Produto, revisar/editar Content, montar lote e gravar sem depender do desktop.                                                                                                                                                                    |
+| 2026-08-24 | Desktop é experiência expandida para planejamento em escala                                                                                                                              | Mais espaço suporta organização, comparação e operações densas, mas não cria capacidades exclusivas.                                                                                                                                                                          |
+| 2026-08-24 | Instrument Sans é a família principal; Geist Mono é técnico                                                                                                                              | Uma família única mantém coerência entre headings, body, UI e números; a mono fica restrita à proveniência técnica.                                                                                                                                                           |
+| 2026-08-24 | `#5B6CFF` é brand/accent e `#3D4CC6` é ação preenchida Light                                                                                                                             | O azul original permanece na identidade; a variação mais escura garante texto normal acessível em ações preenchidas.                                                                                                                                                          |
+| 2026-08-24 | Grid de 4px, layout híbrido e raios hierárquicos                                                                                                                                         | Mantém disciplina e densidade confortável sem arredondar ou decorar tudo.                                                                                                                                                                                                     |
+| 2026-08-24 | Cards restritos a objetos reais e glass restrito à periferia                                                                                                                             | Protege a diferença entre interface operacional e dashboard SaaS decorativo.                                                                                                                                                                                                  |
+| 2026-08-24 | Motion minimal-functional                                                                                                                                                                | Movimento deve explicar seleção, disclosure, fila e feedback, respeitando redução de movimento.                                                                                                                                                                               |
+| 2026-08-26 | Home volta a ser a entrada principal                                                                                                                                                     | O creator entende `Home` imediatamente; a tela permanece operacional e minimalista, sem virar dashboard analítico.                                                                                                                                                            |
+| 2026-08-26 | Navegação principal passa a ser Home, Produtos, Estúdio, Agenda e Configurações                                                                                                          | Os destinos passam a representar tarefas naturais do creator em vez de conceitos internos de domínio.                                                                                                                                                                         |
+| 2026-09-21 | `Produtos` passa a se chamar `Vitrine` na navegação e listagem                                                                                                                           | Decisão explícita de UI-only: preserva ordem dos destinos, `Product` como domínio e as rotas/contratos em `/products`; não requer ADR arquitetural.                                                                                                                           |
+| 2026-08-26 | Conteúdos e Vault deixam de ser destinos globais                                                                                                                                         | Conteúdos pertencem ao Produto e aos lotes; histórico/memória aparece no contexto do Produto, reduzindo duplicação de navegação.                                                                                                                                              |
+| 2026-08-26 | Produção passa a ser apresentada como Estúdio                                                                                                                                            | `Estúdio` comunica execução e gravação de forma mais natural para creators sem alterar o domínio interno de produção.                                                                                                                                                         |
+| 2026-08-26 | Estúdio usa lotes com estados Aguardando, Gravando e Concluído                                                                                                                           | O status é consequência do número real de Conteúdos concluídos e não exige gerenciamento manual.                                                                                                                                                                              |
+| 2026-08-26 | Progresso percentual de lote é permitido                                                                                                                                                 | Percentual representa conclusão operacional real do lote, não analytics ou performance comercial.                                                                                                                                                                             |
+| 2026-08-26 | Agenda interna de gravação entra no MVP                                                                                                                                                  | O creator escolhe quando pretende gravar um lote; isso fecha o intervalo entre aprovação e execução sem introduzir social scheduling.                                                                                                                                         |
+| 2026-08-26 | Integrações de calendário permanecem futuras                                                                                                                                             | Google Calendar e outros calendários poderão receber eventos/lembretes depois, mas não fazem parte do MVP.                                                                                                                                                                    |
+| 2026-08-26 | Home não mostra `Ainda sem data`                                                                                                                                                         | A entrada deve mostrar somente ação útil, gravações de hoje e próximas gravações já planejadas.                                                                                                                                                                               |
+| 2026-08-26 | Job assíncrono usa indicador global no App Shell                                                                                                                                         | A análise continua durante a navegação; o usuário precisa ver Produto, etapa, sucesso/falha e próxima ação sem entrar numa página técnica de análise.                                                                                                                         |
+| 2026-08-26 | `Pendente` é readiness operacional, não lifecycle do Produto                                                                                                                             | Evita misturar análise em andamento com estados persistentes como Ativo/Arquivado.                                                                                                                                                                                            |
+| 2026-08-27 | Realinhamento aos PRDs vigentes (engine, job assíncrono, briefing/lotes, model router)                                                                                                   | O design v1.3 já refletia o core loop e o indicador global; a revisão atualizou as fontes canônicas, incluiu a resolução da quantidade inicial na confirmação e manteu tokens, estética e navegação vigentes.                                                                 |
+| 2026-08-28 | Navegação mobile substitui a bottom nav pela Sidebar shadcn/ui (drawer off-canvas)                                                                                                       | Com cinco destinos, a barra inferior empilha botões e prejudica a navegação; a Sidebar uniformiza o shell nas três superfícies e aproveita componente de biblioteca em vez de navegação custom.                                                                               |
+| 2026-08-28 | Componentes de UI nascem de shadcn/ui: buscar componente pronto e adaptá-lo antes de criar algo próprio                                                                                  | Reuso de biblioteca reduz código custom, mantém acessibilidade e consistência; componente custom é exceção com motivo registrado.                                                                                                                                             |
+| 2026-09-19 | Adoção do Método 3S (Simples, Sexy, Surpreendente) e regras condicionais para gradientes e movimento                                                                                     | Expressividade com intenção substitui proibições absolutas: gradiente e movimento valem quando comunicam algo real — foco, profundidade, marca ou estado — sempre derivados de tokens, com acessibilidade e reduced-motion; dados falsos (progresso/ETA) continuam proibidos. |
+| 2026-09-21 | Drawers, sheets e modais de sobreposição usam `motion.medium` (240ms) na abertura/fechamento — padrão de plataforma                                                                      | `motion.long` (360ms) estava lento na prática na abertura do drawer de `Adicionar produto`; 240ms mantém suavidade com resposta mais rápida e passa a valer para todas as sobreposições da plataforma.                                                                        |
+| 2026-09-22 | `/access` no mobile oculta labels dos campos visualmente (sr-only com label associada) e identifica pelos placeholders; "Esqueci minha senha" vira ação própria abaixo do campo de senha | Composição compacta sem perder acessibilidade: `htmlFor`/id preservado para o leitor de tela, placeholder em cor secundária, alvo de 44px, erro continua imediatamente após o campo; vale para o formulário de acesso no mobile.                                              |
+| 2026-10-02 | Extração por URL passa a se chamar `Buscar dados do produto`; `Analisar produto` nomeia só a criação do job                                                                              | Resolve a ambiguidade com SYSTEM-DESIGN §4/§7: salvar nunca cria job, e o limite de um job ativo não deve bloquear o preview de um novo Produto.                                                                                                                              |
+| 2026-10-02 | Matriz de geração ganha o estado `partial` (`SUCCEEDED_PARTIAL`)                                                                                                                         | SYSTEM-DESIGN §8/ADR-021: resultado parcial é declarado, nunca silencioso.                                                                                                                                                                                                    |
+| 2026-10-02 | Contrato de navegação corrigido de `Produtos` para `Vitrine`                                                                                                                             | Alinha o contrato do componente ao log de 2026-09-21.                                                                                                                                                                                                                         |
+| 2026-10-02 | Política de componentes: reutilizar, adaptar shadcn/ui, criar novo com motivo registrado                                                                                                 | Reconcilia o princípio 13 com o log de 2026-08-28; esta entrada prevalece sobre ambos.                                                                                                                                                                                        |
+| 2026-10-02 | Tabela de motion alinhada: overlays usam `motion.medium`; `motion.long` fica para transição de região                                                                                    | Alinha a tabela ao log de 2026-09-21.                                                                                                                                                                                                                                         |
+| 2026-10-02 | Contorno de controle usa `color.text.secondary`; `color.border.default` fica só em divisores e cards                                                                                     | WCAG 1.4.11: `color.border.default` mede `1.25:1` (Light) e `1.31:1` (Dark).                                                                                                                                                                                                  |
+| 2026-10-02 | Sem gradiente no preenchimento do botão, como exceção deliberada ao Método 3S                                                                                                            | O contraste do texto sobre `color.action.filled` precisa valer em toda a área.                                                                                                                                                                                                |
+| 2026-10-02 | Modo de gravação exibe a versão aprovada e não edita o briefing                                                                                                                          | SYSTEM-DESIGN §7/ADR-015: edições posteriores não alteram o lote montado.                                                                                                                                                                                                     |
+| 2026-10-02 | Instâncias concretas do Método 3S propostas                                                                                                                                              | Dá forma verificável a Sexy e Surpreendente, sempre com tokens existentes e estado real; pendente de aprovação.                                                                                                                                                               |
+
+## 15. Decisões em aberto
+
+Itens que os documentos vigentes ainda não decidem. Não implementar por suposição: decidir em PRD ou ADR antes. Os pontos do lado do sistema estão em SYSTEM-DESIGN §13.
+
+- Reverter a conclusão de um Conteúdo: suportado ou apenas por correção explícita? Afeta a memória `gerado < aprovado < concluído`.
+- Efeito de arquivar um Produto sobre lotes e Agenda já existentes.
+- Catálogo de etapas (`stage`) do job, com a copy humana de cada uma, e o mecanismo de atualização (polling ou push).
+- `Cancelar` libera a reserva de Entitlement? `Tentar novamente` e `Gerar os faltantes` criam novo job e nova reserva ou reaproveitam os existentes?
+- Copy final dos motivos de bloqueio `GEN-ACTIVE` e `GEN-CAPACITY`.
+- Como exibir limites do plano (Produtos ativos, Conteúdos por mês) em Configurações e quando avisar antes de bloquear.

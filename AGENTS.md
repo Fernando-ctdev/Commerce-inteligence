@@ -1,103 +1,273 @@
-## Design System
+# AGENTS.md
 
-Sempre leia `DESIGN.md` antes de tomar decisões visuais ou de UI.
-Fontes, cores, espaçamento, comportamento responsivo, acessibilidade e
-direção estética definidos ali são a fonte de verdade. Desvios exigem
-justificativa e aprovação explícita.
+Canonical instructions for agents in this repository. Do not create parallel
+instruction files such as `CLAUDE.md`. Be direct, make the smallest correct
+change, and validate before declaring work done.
 
-Em QA, sinalize qualquer implementação que não corresponda ao `DESIGN.md`.
+---
 
-## Precedência absoluta do usuário
+## 1. Precedence and sources of truth
 
-- O pedido expresso do usuário prevalece sobre qualquer outra instrução,
-  documento ou regra do projeto, incluindo PRD, SPEC, PLAN, ADR e este
-  `AGENTS.md`.
-- Em caso de conflito, cumpra o pedido explícito do usuário.
+### Absolute user precedence
 
-## Fontes canônicas e comportamento dos agentes
+- The user's explicit request takes precedence over any other instruction,
+  document, or project rule (PRD, SPEC, PLAN, ADR, and this `AGENTS.md`).
+- In case of conflict, follow the user's explicit request.
 
-Este `AGENTS.md` é a instrução canônica descoberta pelo projeto.
-Não crie arquivos paralelos de instrução como `CLAUDE.md`.
+### Reading order before implementing
 
-Antes de implementar, consulte nesta ordem:
+1. `docs/product/PRD*.md` — `PRD.md` is the source of truth for functional scope.
+   The front-specific PRDs (`PRD-Importation-product.md`,
+   `PRD-commerce-intelligence-engine.md`, `PRD-product-intelligence-analysis.md`,
+   `PRD-content-briefing.md`, `PRD-model-router-inteligence.md`) detail the
+   behavior of each front without expanding the scope of the main PRD.
+2. `docs/architecture/SYSTEM-DESIGN.md` — current architecture, modules, and dependencies.
+3. `docs/architecture/adr-*.md` — accepted architectural decisions and trade-offs.
+4. `docs/engineering/PRINCIPLES.md` — permanent engineering rules (detail behind
+   section 4 of this file).
+5. `DESIGN.md` — UX/UI, responsiveness, accessibility, states, and visual direction.
+6. `docs/delivery/SLICES.md` — official MVP build map.
+7. `docs/specs/<slice>/SPEC.md`, when it exists — behavior and contract of the current slice.
+8. `docs/specs/<slice>/PLAN.md`, when it exists — approved implementation plan.
 
-1. `docs/product/PRD*.md` — `PRD.md` é a fonte de verdade do escopo funcional; os PRDs de frente (`PRD-Importation-product.md`, `PRD-commerce-intelligence-engine.md`, `PRD-product-intelligence-analysis.md`, `PRD-content-briefing.md`, `PRD-model-router-inteligence.md`) detalham o comportamento de cada frente dentro desse escopo;
-2. `docs/architecture/SYSTEM-DESIGN.md` — arquitetura vigente, módulos e dependências;
-3. `docs/architecture/adr-*.md` — decisões e trade-offs arquiteturais aceitos;
-4. `docs/engineering/PRINCIPLES.md` — regras permanentes de engenharia;
-5. `DESIGN.md` — UX/UI, responsividade, acessibilidade, estados e direção visual;
-6. `docs/delivery/SLICES.md` — mapa oficial de construção do MVP, ordem, dependências e boundaries dos slices;
-7. `docs/specs/<slice>/SPEC.md`, quando existir — comportamento e contrato do slice atual;
-8. `docs/specs/<slice>/PLAN.md`, quando existir — plano de implementação aprovado.
+### Authority of each document
 
-### Autoridade dos documentos
+| Document | Governs |
+|---|---|
+| PRD | product, domain, and scope |
+| Front-specific PRDs | detailed behavior of that front |
+| SYSTEM-DESIGN | current architecture |
+| Accepted ADR | the specific decision it records |
+| PRINCIPLES | permanent engineering practices |
+| DESIGN | UX/UI |
+| SLICES | decomposition and macro sequence of MVP delivery |
+| SPEC | behavior of the current slice |
+| PLAN | implementation strategy of the current slice |
 
-- PRD governa produto, domínio e escopo; os PRDs de frente governam o comportamento detalhado da sua frente, sem ampliar o escopo do PRD principal.
-- SYSTEM-DESIGN representa a arquitetura vigente.
-- ADR aceito governa a decisão arquitetural específica que registra.
-- PRINCIPLES governa práticas permanentes de engenharia.
-- DESIGN governa UX/UI.
-- SLICES governa a decomposição e sequência macro de entrega do MVP.
-- SPEC governa o comportamento do slice atual.
-- PLAN governa a estratégia de implementação do slice atual.
+### Conflicts and inconsistencies
 
-Antes de iniciar um novo slice, consulte `docs/delivery/SLICES.md`.
+- On a relevant conflict between sources, **do not silently pick** an
+  interpretation. Preserve existing behavior and flag the inconsistency before
+  introducing a new decision.
+- Do not change the PRD, ADRs, SYSTEM-DESIGN, DESIGN, PRINCIPLES, or SLICES just
+  to make the current implementation look compatible. Changes to these sources
+  must be deliberate.
+- Re-read the relevant sources whenever the task changes scope, contract,
+  domain, or boundary.
 
-Não implemente comportamento pertencente a slices futuros apenas por conveniência.
-Se a implementação revelar que o mapa precisa ser dividido, unido, reordenado ou corrigido, atualize o mapa deliberadamente antes de expandir o escopo.
+---
 
-Em caso de conflito ou inconsistência relevante entre fontes, não escolha
-silenciosamente uma interpretação. Preserve o comportamento existente e
-sinalize a inconsistência antes de introduzir uma nova decisão.
+## 2. Scope and slices
 
-## Regras operacionais
+- Before starting a slice, consult `docs/delivery/SLICES.md`.
+- Do not implement behavior that belongs to future slices out of convenience.
+- If implementation reveals that the map needs to be split, merged, reordered,
+  or corrected, update the map deliberately **before** expanding scope.
+- Preserve the MVP scope and question features that do not directly contribute
+  to the problem defined in the PRD.
 
-- Preserve o escopo do MVP e questione funcionalidades que não contribuam
-  diretamente para o problema definido no PRD.
+---
 
-- Alinhe UX/UI ao `DESIGN.md`, arquitetura ao SYSTEM-DESIGN/ADRs,
-  implementação ao `PRINCIPLES.md` e comportamento do slice à sua SPEC.
+## 3. Architecture: modular monolith
 
-- Não introduza patterns, abstrações ou infraestrutura por preferência pessoal.
+A single deployable, made of modules with clear boundaries. Each module is a
+*bounded context*.
 
-- Evite overengineering: reutilize o que existe, prefira a menor solução
-  correta e não crie abstrações sem necessidade demonstrada.
+### Folder structure (reference)
 
-- Respeite os limites dos módulos. Não contorne regras de domínio,
-  autorização, tenant, quota ou persistência acessando infraestrutura diretamente.
+> If the repository already uses a different structure, preserve it and follow
+> the existing pattern. Changing the structure requires an ADR.
 
-- Crie ou atualize um ADR antes de implementar mudança relevante de trade-off
-  arquitetural, fronteira de módulo, persistência, segurança, contrato externo,
-  serviço externo ou dependência transversal relevante.
+```
+src/
+├── app/                      # Next.js: routes, layouts, route handlers (thin)
+├── modules/
+│   └── <module>/
+│       ├── domain/           # entities, value objects, aggregates, events,
+│       │                     # domain services, repository interfaces
+│       ├── application/      # use cases (commands/queries), DTOs, ports
+│       ├── infrastructure/   # concrete repositories, external clients, ORM
+│       ├── presentation/     # components, actions, controllers, UI mappers
+│       └── index.ts          # module public API (single entry point)
+├── shared/
+│   ├── kernel/               # base types: Result, Entity, ValueObject, errors
+│   ├── infrastructure/       # db, logger, config, queue, cache (no business rules)
+│   └── ui/                   # design system (per DESIGN.md)
+tests/                        # integration and e2e tests
+docs/                         # PRD, architecture, ADRs, specs, plans
+framework/                    # framework prompts and templates
+```
 
-- Não altere PRD, ADRs, SYSTEM-DESIGN, DESIGN, PRINCIPLES ou SLICES
-  apenas para fazer a implementação atual parecer compatível.
-  Mudanças nessas fontes devem ser deliberadas.
+### Dependency rules
 
-- Releia as fontes relevantes quando a tarefa mudar de escopo, contrato,
-  domínio ou fronteira.
+- Allowed direction: `presentation → application → domain`.
+  `infrastructure` implements interfaces defined in `domain`/`application`.
+- `domain` **must not import** a framework, ORM, external SDK, `next/*`, or React.
+- `application` knows nothing about HTTP, database, or external provider details.
+- `app/` (routes and route handlers) only translates input/output and delegates
+  to a use case.
+- A module **only talks to another module** through its public API (`index.ts`),
+  an interface, or a domain event. Forbidden:
+  - deep imports (`modules/x/domain/...`) from another module;
+  - accessing another module's tables or repositories;
+  - dependency cycles between modules.
+- Do not bypass domain rules, authorization, tenant, quota, or persistence by
+  accessing infrastructure directly.
+- `shared/` must not contain a module's business rules. If something only serves
+  one module, it lives in that module.
 
-- Antes de declarar uma implementação concluída, execute as validações
-  relevantes disponíveis no projeto, incluindo testes, typecheck, lint e build.
-  Informe explicitamente qualquer validação que não tenha sido executada.
+### Multi-tenancy, authorization, and quota
 
-- Commits devem seguir `feat(identificador-da-tarefa): descrição`, com
-  descrição objetiva das mudanças e mensagem completa de no máximo 300
-  caracteres, salvo quando outro tipo Conventional Commit for claramente mais
-  correto (`fix`, `docs`, `chore`, etc.).
+- Every read/write is **tenant-scoped**; never trust a client-supplied tenant
+  without validating it against the session.
+- Authorization and quota are checked in the `application` layer, not in the UI.
 
-- Use um Git Flow básico e leve: `develop` é integração, mudanças não triviais
-  devem sair de branch curta por tarefa (`feat/<identificador>`,
-  `fix/<identificador>`, `chore/<identificador>`). Não criar branch para ajuste
-  mínimo isolado, nem acumular trabalho de features diretamente em `develop`.
+---
 
-  ## Framework operacional
+## 4. Engineering principles
 
-Os prompts e templates do framework ficam em `framework/`.
+### DDD (tactical, only where the domain justifies it)
 
-Quando uma etapa do processo exigir um prompt específico, leia e siga o arquivo correspondente em `framework/prompts/`.
+- Use the **ubiquitous language** from the PRD/glossary in class, function, and
+  module names. Do not invent synonyms.
+- **Entity**: identity and lifecycle. **Value Object**: immutable, validated on
+  creation, compared by value. **Aggregate**: consistency boundary with a single
+  root; only the root is referenced from outside.
+- Invariants live in the domain, not in a controller, component, or query.
+- **Repository**: interface in domain/application, implementation in infrastructure.
+- **Domain event** for side effects across aggregates or modules.
+- **Use case** = one intent of the user/system; it orchestrates and does not
+  contain complex business rules.
+- Simple CRUD **does not need** an aggregate, event, or factory. Do not apply
+  ceremonial DDD where there is no domain rule.
 
-Não duplique esses prompts em arquivos paralelos.
+### SOLID
+
+- **SRP — Single Responsibility.** Each file/class/function has one reason to
+  change. If its description needs an "and" ("validates *and* persists *and*
+  notifies"), split it.
+- **OCP — Open/Closed.** Extend behavior through composition, strategy, or a new
+  adapter without editing stable code. Did an `if/switch` per type/provider
+  start growing? Extract an interface and one implementation per variant.
+- **DIP — Dependency Inversion.** Business rules depend on abstractions (ports),
+  never on concrete implementations. Dependencies come in through the
+  constructor or parameters; wiring happens at the edge (composition root), not
+  inside the use case. Do not instantiate database, HTTP, or AI clients inside
+  the domain.
+- **LSP and ISP.** Implementations must be substitutable without surprises, and
+  interfaces must be small and focused on the consumer.
+
+### Balance against overengineering
+
+- Reuse what exists and prefer the smallest correct solution.
+- Do not create an abstraction without demonstrated need (rule of thumb:
+  confirmed duplication in 3 places, or a real second implementation of a port).
+- Do not introduce patterns, abstractions, or infrastructure out of personal preference.
+
+---
+
+## 5. Size and complexity limits
+
+These are **quality guides**, not mandatory refactoring triggers: when exceeding
+them, split or justify in the PR. Do not refactor code unrelated to the task
+just to meet the limits.
+
+| Item | Target | Limit (justify above) |
+|---|---|---|
+| Code file | ≤ 200 lines | 300 lines |
+| React component | ≤ 150 lines | 200 lines |
+| Function/method | ≤ 30 lines | 50 lines |
+| Parameters per function | ≤ 3 | 4 (above that, use an object) |
+| Cyclomatic complexity | ≤ 8 | 10 |
+| Nesting levels | ≤ 2 | 3 (prefer early returns) |
+
+Exempt: generated code, migrations, fixtures/seed files, and snapshots.
+
+---
+
+## 6. Code conventions
+
+- One main concept per file; the file name reflects its content.
+- Intention-revealing names; no obscure abbreviations.
+- Strict TypeScript: no `any` (use `unknown` + validation), no `@ts-ignore`
+  without a comment explaining why.
+- Validate data at the **edge** (API input, forms, webhooks, external service
+  responses) and work with trusted types inside.
+- Domain errors are explicit and typed; never swallow exceptions silently or use
+  an empty `catch`. Do not leak internal details to the client.
+- Prefer pure functions and immutable data in the domain; side effects live in
+  `application`/`infrastructure`.
+- No comments that repeat the code; comment the **why**, not the what.
+- No dead code, debug `console.log`, or TODO without a task identifier.
+- Secrets only via environment variables; never in code, logs, or commits.
+- A new dependency needs justification; a relevant cross-cutting change requires an ADR.
+
+---
+
+## 7. Tests
+
+- Every new or fixed behavior ships with a test; a fixed bug gets a test that
+  reproduces the failure.
+- **Domain**: pure, fast unit tests with no infrastructure mocks.
+- **Use cases**: tests with in-memory fakes of the ports.
+- **Adapters/infrastructure**: integration tests against a real or equivalent
+  dependency (test database), covering tenant scoping.
+- **Critical flows**: a few e2e tests focused on the main path.
+- Test observable behavior, not implementation details.
+- Deterministic tests: no dependence on clock, network, or execution order.
+
+---
+
+## 8. Design system and UI
+
+Always read `DESIGN.md` before making visual or UI decisions. The fonts, colors,
+spacing, responsive behavior, accessibility, and aesthetic direction defined
+there are the source of truth. Deviations require justification and explicit
+approval.
+
+- UI components contain no business rules; they consume use cases.
+- Cover the states: loading, empty, error, and success.
+- In QA, flag any implementation that does not match `DESIGN.md`.
+
+---
+
+## 9. Workflow
+
+1. Understand the request and consult the relevant sources (section 1).
+2. For non-trivial tasks, present a short plan before coding and confirm
+   ambiguous assumptions instead of guessing.
+3. Make small, focused changes; do not mix opportunistic refactoring with the feature.
+4. Validate before declaring done: tests, typecheck, lint, and build available
+   in the project. **Explicitly report** any validation that was not run and why.
+5. Report what changed, what was validated, and any inconsistency found.
+
+### ADR before implementing
+
+Create or update an ADR before implementing a relevant change to an
+architectural trade-off, module boundary, persistence, security, external
+contract, external service, or cross-cutting dependency.
+
+### Git
+
+- `develop` is the integration branch. Non-trivial changes branch off into a
+  short-lived branch per task: `feat/<identifier>`, `fix/<identifier>`,
+  `chore/<identifier>`.
+- Do not create a branch for a minimal isolated tweak, and do not accumulate
+  feature work directly on `develop`.
+- Commits follow `feat(task-identifier): description`, objective, with the full
+  message at most 300 characters. Use another Conventional Commit type (`fix`,
+  `docs`, `chore`, `refactor`, `test`) when it is clearly more correct.
+- One commit, one purpose.
+
+---
+
+## 10. Operational framework
+
+The framework's prompts and templates live in `framework/`. When a step of the
+process requires a specific prompt, read and follow the corresponding file in
+`framework/prompts/`. Do not duplicate these prompts in parallel files.
+
+---
 
 <!-- BEGIN:nextjs-agent-rules -->
 
