@@ -30,13 +30,14 @@ try {
       await writeFile(outputPath, JSON.stringify(report, null, 2) + "\n", { flag: "wx" });
       console.log(JSON.stringify({ reportHash: report.reportHash, verdict: report.verdict, acceptanceStatus: report.acceptanceStatus }, null, 2));
     } else {
-      const { assignments, views } = prepareFullE6Assignments(input.observations);
+      const { assignments, views, nonExecutedCases } = prepareFullE6Assignments(input.observations);
       await mkdir(outputPath, { recursive: true });
       await writeFile(resolve(outputPath, "coordinator-mapping.json"), JSON.stringify(assignments, null, 2) + "\n", { flag: "wx" });
+      await writeFile(resolve(outputPath, "non-executed-cases.json"), JSON.stringify({ nonExecutedCases, note: "Casos DEFERRED (dependência declarada): nenhuma tarefa humana é gerada; unidades esperadas contam para reconciliação, nunca como zero." }, null, 2) + "\n", { flag: "wx" });
       for (const annotator of new Set(views.map((view) => view.annotatorId))) {
         await writeFile(resolve(outputPath, `${annotator}.json`), JSON.stringify(views.filter((view) => view.annotatorId === annotator), null, 2) + "\n", { flag: "wx" });
       }
-      console.log(JSON.stringify({ assignments: assignments.length, mapping: "Keep coordinator-mapping.json private; distribute only each annotator's file." }, null, 2));
+      console.log(JSON.stringify({ assignments: assignments.length, annotatorViews: views.length, nonExecutedCases: nonExecutedCases.length, mapping: "Keep coordinator-mapping.json private; distribute only each annotator's file." }, null, 2));
     }
   } else {
     throw new Error("E6-BLOCKED: commands: verify | preflight [freeze.json] | prepare <directory> | assign <collection.json> <directory> | report <collection.json> <report.json>. Live A/B is reserved for the user after approved freeze.");

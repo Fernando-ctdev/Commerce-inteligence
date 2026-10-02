@@ -4,7 +4,7 @@
 
 **Natureza:** precondição documental transversal do Slice 003; não é Slice de produto e não altera o Slice 004.
 
-**Status:** `APPROVED_FOR_CANDIDATE_INTEGRATION` — autoriza o Maestro/time a preparar e executar E2E/E6 sob os gates abaixo; não registra freeze, coleta, resultado, aprovação ou cutover realizados.
+**Status:** `APPROVED_FOR_CANDIDATE_INTEGRATION` — autoriza a preparação E2E/E6 e a execução futura da primeira geração pelo Maestro/time sob os gates abaixo; recorrência permanece `NOT_EXECUTED`, dependente do Slice 008 nesta fase. A implementação offline do evaluator v2 descrita nesta SPEC foi revisada e verificada por testes; isso não constitui coleta live, resultado, aprovação de V2 ou cutover realizado.
 
 **Runtime atual:** Engine V2 default por decisão do usuário, efetiva no commit `8d1833b`, no estado `V2_DEFAULT_PENDING_ACCEPTANCE`. ADR-029/`@1.2` permanece baseline histórico/experimental reproduzível. Esta SPEC não declara resultado, não-regressão, aprovação ou rollback.
 
@@ -15,11 +15,13 @@
 E6 deve produzir evidência auditável, após concluir as Etapas 2–6, para:
 
 1. comparar end-to-end ADR-029/`@1.2` e V2 final/`@1.3`, em A/B conduzida pelo Maestro/time contra todas as premissas da nota conectada;
-2. avaliar primeira geração e recorrência;
+2. avaliar primeira geração e manter recorrência como requisito obrigatório de E6 integral para `V2_ACCEPTED`, indisponível nesta fase (`NOT_EXECUTED`, dependência `SLICE_008`);
 3. medir invariantes, qualidade, custo, latência e cobertura, inclusive o efeito agregado das migrações LLM → código;
 4. permitir ao Review reprovar protocolo, execução, relatório ou candidato antes de qualquer correção de runtime.
 
 Por instrução expressa do usuário, o Maestro/time assume a operação dos scripts, DB/app/worker em ambiente de avaliação isolado, validações offline, coleta live autorizada, assignments e relatório. Esta direção substitui as restrições anteriores de A/B exclusiva pelo usuário ou de não execução pelo time. Antes de qualquer chamada externa, o usuário ou autoridade humana responsável deve aprovar thresholds, exceções explícitas e teto de gasto, além de autorizar a coleta sobre o freeze pré-coleta revisado por Review e Software Architect. Credenciais nunca são solicitadas ou expostas em chat, logs ou artefatos; são disponibilizadas por ambiente/secret store seguro. Atos que exijam autoridade humana ou não devam ser executados pelo time são sinalizados explicitamente. Atribuições individuais continuam opcionais para diagnóstico solicitado, não gate de `V2_ACCEPTED`.
+
+**Fronteira desta fase:** a autorização atual pavimenta E6 sem implementar Slice 008 nem executar recorrência. `complete-after-partial` é recuperação de faltantes do [ADR-021](../../architecture/adr-021-geracao-parcial-declarada-e-retry-de-faltantes.md), nunca recurrence nem evidência substituta de recorrência. Esta emenda altera somente SPEC/PLAN E6 e ADR-033, sem fetch, chamada externa, provider ou coleta. O escopo documental não descreve o diff combinado da branch: código/testes do evaluator foram revisados e verificados separadamente em modo offline, sem registro de freeze, coleta ou aceite.
 
 Esta SPEC não cria capability, endpoint, estado de Job, worker, serviço, tabela, migration, adapter, flag ou persistência. Não corrige writer, memória, Skill, prompt, Risk ou Judge.
 
@@ -204,10 +206,10 @@ O mesmo `jobSeed` é usado no par quando a variável avaliada não é seed. Time
 
 ## 7. Avaliação A/B end-to-end final
 
-Após concluir todas as Etapas 2–6 e aprovar o freeze pré-coleta, o Maestro/time executará a comparação A/B:
+Após concluir todas as Etapas 2–6 e aprovar o freeze pré-coleta, o Maestro/time poderá executar a comparação A/B da primeira geração; esta fase não atribui execução recorrente ao time:
 
 - ADR-029/`@1.2` por commit versus V2 final/`@1.3` por commit;
-- primeira geração e recorrência;
+- primeira geração; recorrência continua obrigatória para o aceite integral, mas é `NOT_EXECUTED` nesta fase, dependente do Slice 008;
 - execução offline dos invariantes e execução com provider vivo das métricas operacionais/semânticas;
 - todas as premissas da nota conectada, inclusive qualidade comercial e criativa, diversidade, ausência de dor obrigatória e templating, factualidade, redução de chamadas, custo, latência, repairs e falhas.
 
@@ -279,6 +281,7 @@ type BlindAssignmentV1 = {
 Regras:
 
 - mapeamento do braço fica separado da anotação;
+- Views para anotadores só são geradas quando os conteúdos/direção necessários estão disponíveis; unidades sem evidência permanecem no mapping privado e nos denominadores, sem distribuir conteúdo nulo.
 - avaliação bruta nunca é sobrescrita;
 - conflito segue policy pré-registrada;
 - adjudicador não vê custo/latência nem deve receber o braço quando tecnicamente possível;
@@ -377,6 +380,98 @@ NOT_EXECUTED | FAILED | NOT_ANNOTATED | INVALID
 
 Hash, seed, assignment, fingerprint ou control mismatch crítico produz `INVALID`. Missing não crítico é reportado por case, categoria, braço, motivo e denominador. Exclusão pós-hoc é proibida.
 
+### 13.1 Contrato-alvo do evaluator v2 — recorrência diferida
+
+Nomenclatura confirmada com BackDev; estes requisitos descrevem o contrato aprovado do target/v2. A implementação offline do evaluator E6 foi revisada e verificada por testes; não há evidência de execução live nem aceitação.
+
+- No freeze, recorrência usa `executionPolicy: DEFERRED`, `dependency: SLICE_008` e `requiredForAcceptance: true`.
+- Na evidência, usa `executionStatus: NOT_EXECUTED` e `reason: DEPENDENCY_SLICE_008`; no relatório, `state: NOT_EXECUTED` e blocker `RECURRENCE_DEPENDS_ON_SLICE_008`. Esses valores não criam estados de Job.
+- Métricas recorrentes são `UNAVAILABLE`; enquanto faltar evidência recorrente real, `verdict: INCOMPLETE` e `acceptanceStatus: V2_DEFAULT_PENDING_ACCEPTANCE`. Primeira geração ou recuperação bem-sucedida não removem esse bloqueio.
+- Cases e unidades recorrentes continuam nos denominadores esperados. Não excluir, marcar `NOT_APPLICABLE`, imputar zero, fabricar snapshot/output nem gerar assignments humanos com conteúdo sintético; registrar a ausência das avaliações.
+- Se a dependência for satisfeita ou evidência executada contrariar um freeze `DEFERRED`, esse freeze fica obsoleto: rejeitar fail-closed com `FREEZE_POLICY_CONFLICT`, sem reinterpretar a política, herdar aprovações ou promover o candidato. Exigir novo freeze com hashes, revisão Review/Architect e aprovações humanas pré-coleta.
+- Versionar os contratos-alvo como `full-e6-freeze.v2`, `full-e6-preparation.v2` e `full-e6-report.v2`; preservar os artefatos v1 sem migração/reclassificação silenciosa. O bump não altera `draft.json`, rubrics, thresholds ou matriz, nem significa execução ou aprovação; a implementação offline dos contratos do evaluator foi verificada separadamente, sem declarar freeze, coleta, resultados ou aceitação.
+
+### 13.2 Contrato v2 — manifests de routing e pricing do evaluator E6
+
+Este contrato rege somente os artefatos importados offline pelo evaluator E6; sua validação foi implementada e verificada por testes, sem alterar engine, runtime, router ou provider. O freeze root adiciona `routingManifest`, `routingManifestHash`, `pricingManifest` e `pricingHash`; cada entrada de `arms` guarda somente `commit` e `engineVersion`. Os demais artefatos, controles e gates do freeze permanecem obrigatórios.
+
+```ts
+type ManifestHash = string; // SHA-256 lowercase, 64 caracteres
+type E6Arm = "baseline" | "candidate";
+type E6Tier = "LOW" | "MID" | "HIGH";
+
+type Target = {
+  provider: string;
+  model: string;
+  parametersHash: ManifestHash;
+  priceId: string;
+};
+
+type RoutingManifest = {
+  schemaVersion: "full-e6-routing.v2";
+  routes: Array<{
+    arm: E6Arm;
+    capability: string;
+    tier: E6Tier; // tier lógico solicitado, constante entre primary/fallbacks
+    primary: Target;
+    fallbacks: Target[]; // ordem pré-registrada; [] significa nenhum fallback
+  }>;
+};
+
+type Rate = {
+  numerator: string; // inteiro decimal >= 0
+  denominator: string; // inteiro decimal > 0
+}; // unidades monetárias menores por 1.000.000 de tokens
+
+type PricingManifest = {
+  schemaVersion: "full-e6-pricing.v2";
+  currency: string; // código ISO 4217
+  minorUnitExponent: number; // escala ISO da moeda, inteira
+  prices: Array<{
+    priceId: string;
+    provider: string;
+    model: string;
+    sourceRef: string; // referência local opaca; sem URL, segredo ou fetch
+    rates: {
+      input: Rate | null;
+      output: Rate | null;
+      cache: Rate | null;
+      reasoning: Rate | null;
+    };
+  }>;
+};
+
+type FreezeManifestFields = {
+  routingManifest: RoutingManifest;
+  routingManifestHash: ManifestHash;
+  pricingManifest: PricingManifest;
+  pricingHash: ManifestHash;
+  arms: Record<E6Arm, { commit: string; engineVersion: string }>;
+}; // projeção dos campos afetados; não substitui o restante do freeze
+```
+
+**Shape e referências:** rejeitar campos adicionais ou obrigatórios ausentes; exigir `routes` e `prices` não vazios, enums válidos, hashes lowercase de 64 caracteres e identificadores não vazios. Rotas são únicas por `(arm, capability, tier)`; dentro de cada rota, `(provider, model, parametersHash)` é único entre primary/fallbacks, sem ambiguidade de preço. `priceId` é único em `prices`; todo target resolve um preço existente com o mesmo provider/model. O contrato não amplia a fronteira de um provider do MVP nem autoriza diferenças entre braços não pré-registradas.
+
+**Mesma política aprovada nos dois braços:** é obrigatório que as projeções de `routes` de baseline e candidate, removendo somente `arm` e preservando a ordem relativa das rotas, sejam iguais por `canonicalSerialization`. Isso exige o mesmo conjunto e ordem de rotas, com `capability`, tier lógico, primary e fallbacks ordered idênticos, incluindo provider/model/parametersHash/priceId; não ordenar arrays, retirar outros campos ou dispensar igualdade por pré-registro de diferenças do pipeline. `pricingManifest` é um snapshot único compartilhado pelos dois braços, com o mesmo `pricingHash`, moeda, escala e preços/rates aprovados, sem snapshot independente por braço. Divergência de política produz `INVALID`, sem comparação aprovada. O target efetivo permanece registrado por tentativa e pode diferir entre os braços dentro da mesma política autorizada; matching/fallback declarado não comprova execução nem ordem/motivo do fallback. Este requisito documental não alega suporte implementado; o evaluator v2 permanece sob verificação pelo BackDev.
+
+**Tier e matching por tentativa:** `tier` é o tier lógico solicitado pela task conforme `ROUTER_MAP`, não o tier inferido do modelo de fallback; `Target` não contém tier. Para cada call executado, selecionar exatamente a rota por `(observation.arm, call.capability, call.tier)` e exigir correspondência exata de `(call.provider, call.model, call.parametersHash)` com um primary/fallback. Resolver `priceId` e validar provider/model do preço. O matching verifica admissibilidade e vínculo aos artefatos; não prova ordem, motivo ou legitimidade operacional do fallback, parâmetros realmente enviados ou execução live. Preservar também os checks de case/input, seed, controls e provenance; hash/provenance opacos não substituem a validação dos manifests.
+
+**Moeda, rates e custo:** exigir código ISO 4217 e `minorUnitExponent` correspondente à escala ISO dessa moeda; código/escala desconhecidos ou divergentes são inválidos. Uma moeda por comparação, sem FX, soma entre moedas ou `/100` universal; valores usam a escala `10 ** minorUnitExponent`. Numerator aceita somente `0|[1-9][0-9]*`; denominator somente `[1-9][0-9]*`, sem float, expoente ou divisão por zero. Os quatro campos de rates são obrigatórios; `null` significa tarifa indisponível, nunca zero. Rates são snapshot pré-registrado em unidades monetárias menores por `1e6` tokens, não fórmula para recalcular custo do provider nem pressuposto de contadores disjuntos de input/cache/output/reasoning. Custo permanece `source: REPORTED`; ausência/incompletude de usage/custo mantém a métrica afetada `UNAVAILABLE`, sem imputação. Custo presente deve ter `currency` igual à do manifest e `pricingHash` igual ao hash verificado do manifest completo.
+
+**Hash canônico e invalidade:** reutilizar [CANONICAL_SERIALIZATION_V1](../../../src/modules/commerce-intelligence/planner-harness/canonical.ts), sem JSON direto ou fetch de artefatos externos:
+
+```ts
+const routingManifestHash = sha256Hex(canonicalSerialization(routingManifest));
+const pricingHash = sha256Hex(canonicalSerialization(pricingManifest));
+const { freezeHash, approvals, ...plan } = freeze;
+const expectedFreezeHash = sha256Hex(canonicalSerialization(plan));
+```
+
+Os manifests completos, os quatro campos root e todos os demais artefatos/hashes do plano entram no `freezeHash`; `approvals.frozenPlanHash` deve corresponder a ele. Keys seguem UTF-8/NFC e arrays preservam ordem, inclusive fallbacks; não ordenar, deduplicar ou reclassificar após aprovação. Hash/currency mismatch ou target não autorizado produz `INVALID`, sem delta válido; custo ausente/incompleto não invalida sozinho uma rota íntegra, mas não satisfaz a métrica. Freeze anterior sem os manifests ou alterado exige novo freeze/hashes, Review/Architect e aprovações humanas, sem upgrade silencioso ou aprovação herdada.
+
+Um freeze bloqueado somente por `RECURRENCE_DEPENDS_ON_SLICE_008` pode verificar binding de pares já importados se todo o restante estiver íntegro, sem liberar coleta ou aceite. Observações pareadas de status misto falham primeiro na validação individual (`verifyObservation`); o check de par permanece defesa em profundidade. Nada neste contrato remove os denominadores recorrentes, substitui recorrência por `complete-after-partial` ou altera Slice 008, matriz, `draft.json`, rubrics ou thresholds. Sem URL/secret nos manifests, resolução remota de `sourceRef`, chamada/provider/coleta ou alegação de suporte implementado.
+
+
 ## 14. Relatório e aprovação
 
 ```ts
@@ -407,7 +502,7 @@ O relatório referencia artefatos/hashes suficientes para reprodução e não pe
 `APPROVED` exige:
 
 1. freeze pré-coleta revisado por Review e Software Architect, com thresholds, exceções explícitas e teto de gasto aprovados pelo usuário ou autoridade humana responsável antes de qualquer chamada externa;
-2. evidence offline e live completas nos critérios correspondentes;
+2. evidence offline e live completas nos critérios correspondentes, incluindo recorrência real após satisfazer a dependência do Slice 008; recorrência `NOT_EXECUTED` bloqueia `APPROVED` e `V2_ACCEPTED`;
 3. revisão formal do Software Architect;
 4. Review sem findings bloqueantes;
 5. aceite explícito do usuário referenciando `reportHash`.
@@ -418,7 +513,7 @@ Esta SPEC não fornece nenhum desses resultados.
 
 - **AC6.1:** V2 default e aceitação pendente estão explícitos.
 - **AC6.2:** ADR-029/`@1.2` é baseline fixada por commit.
-- **AC6.3:** A/B end-to-end final é obrigatória após concluir as Etapas 2–6; atribuições individuais são diagnósticos opcionais, não gate de aceite.
+- **AC6.3:** A/B end-to-end final, incluindo recorrência real, é obrigatória para `V2_ACCEPTED`; nesta fase recorrência é `NOT_EXECUTED`, dependente do Slice 008, sem substituição por `complete-after-partial`. Atribuições individuais são diagnósticos opcionais, não gate de aceite.
 - **AC6.4:** evidence offline e provider vivo têm capacidades distintas.
 - **AC6.5:** fixtures não satisfazem custo, latência ou qualidade semântica real.
 - **AC6.6:** cada métrica subjetiva possui rubrica, unidade, labels/âncoras e evidência.
